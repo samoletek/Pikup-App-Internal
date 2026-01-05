@@ -1,0 +1,47 @@
+{
+  "cli": {
+    "version": ">= 16.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "env": {
+        "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+      },
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug --stacktrace --info"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "env": {
+        "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+      },
+      "developmentClient": false,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+      },
+      "developmentClient": false,
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

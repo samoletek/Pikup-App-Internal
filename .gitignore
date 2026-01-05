@@ -1,0 +1,62 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+ios/
+android/
+Pods/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# Environment files with API keys (CRITICAL SECURITY)
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env
+
+# API keys and secrets (CRITICAL SECURITY)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Firebase keys
+google-services.json
+GoogleService-Info.plist
+
+# Build artifacts that may contain keys
+android/app/build/
+ios/build/
+
+# typescript
+*.tsbuildinfo
+
+# Temporary server development files
+server-updates.js
