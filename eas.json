@@ -7,7 +7,8 @@
     "development": {
       "env": {
         "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
-        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN",
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_FILE"
       },
       "developmentClient": true,
       "distribution": "internal",

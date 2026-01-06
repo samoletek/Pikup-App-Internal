@@ -17,7 +17,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 export default function AuthScreen({ navigation, route }) {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail.] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");

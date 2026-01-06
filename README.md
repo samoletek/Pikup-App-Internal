@@ -2,6 +2,15 @@
 
 Pikup is a React Native/Expo application. The app features dual interfaces for customers and drivers, with real-time tracking, payment processing, and AI-powered item analysis.
 
+# Latest Updated
+**Firebase issue** I'm currently getting the following issue "Default FirebaseApp is not initialized in this process com.pikup.main. Make sure to call FirebaseApp.initializeApp(Context) first." which probably means the native Firebase SDK  failed to initialize automatically. This issue is probably link to sign up/login feature not working
+
+**Mabpox issue** While the SDK has been successfully integrated and is able to build without errors, its functionality has not yet been fully verified. This means that while the code compiles and runs, additional testing is necessary to ensure that all features of the Mapbox SDK are working as intended within the application. This step is critical to confirm that the integration is complete and behaves as expected in real-world scenarios.
+
+**Stripe Identity** Stripe Identity, which has been implemented in the project. However, testing for this feature has been blocked due to a user authentication issue. Specifically, users are currently unable to log in or sign up, which prevents the team from verifying the Stripe Identity functionality. Resolving the login/sign-up issue is a prerequisite for testing this feature and ensuring that it operates correctly within the application.
+
+
+
 ## 🏗️ Architecture Overview
 
 ### Core Structure

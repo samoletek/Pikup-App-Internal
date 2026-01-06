@@ -11,6 +11,7 @@
     "eas-build-on-error": "bash -lc 'set -e; echo === MANIFEST FAILURE REPORTS ===; find android -path \"*/outputs/logs/*manifest-merger*failure-report*.txt\" -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,400p\\\" {}\" \\; || true; echo === MANIFEST REPORTS (ALL) ===; find android -path \"*/outputs/logs/*manifest-merger*debug*.txt\" -o -path \"*/outputs/logs/*manifest-merger*release*.txt\" -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,200p\\\" {}\" \\; || true; echo === MERGED MANIFESTS (APP) ===; find android/app/build/intermediates/merged_manifests -name AndroidManifest.xml -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,200p\\\" {}\" \\; || true'"
   },
   "dependencies": {
+    "@expo/metro-runtime": "~5.0.5",
     "@expo/vector-icons": "^14.1.0",
     "@react-native-async-storage/async-storage": "2.1.2",
     "@react-navigation/bottom-tabs": "^7.4.2",
@@ -36,6 +37,7 @@
     "expo-task-manager": "~13.1.6",
     "firebase": "^10.14.1",
     "react": "19.0.0",
+    "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-geolocation-service": "^5.3.1",
     "react-native-gesture-handler": "~2.24.0",
@@ -43,10 +45,8 @@
     "react-native-safe-area-context": "^5.4.0",
     "react-native-screens": "~4.11.1",
     "react-native-vector-icons": "^10.2.0",
-    "socket.io-client": "^4.8.1",
-    "react-dom": "19.0.0",
     "react-native-web": "^0.20.0",
-    "@expo/metro-runtime": "~5.0.5"
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",

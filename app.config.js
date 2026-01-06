@@ -6,8 +6,8 @@ const isDev = profile === "development";
 
 module.exports = {
   expo: {
-    name: "Pikup",
-    slug: "Pikup", 
+    name: "pikup",
+    slug: "pikup-app", 
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -80,15 +80,15 @@ module.exports = {
         },
         mapboxPublicToken: process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
       },
+      googleServicesFile:  process.env.GOOGLE_SERVICES_FILE
     },
-
+    "extra": {
+      "eas": {
+        "projectId": "b8028c4b-62e3-4bfd-a81a-526bf93b3190"
+      }
+    },
+    owner: "pikup-app",
     web: { favicon: "./assets/favicon.png" },
-
-    extra: {
-      eas: { projectId: "7624093e-e57c-43be-a90a-63748fcfcbfe" },
-    },
-
-    owner: "sperez22",
 
     // Include dev client only for development builds
     plugins: [
