@@ -60,3 +60,6 @@ ios/build/
 
 # Temporary server development files
 server-updates.js
+
+# Project checklist
+CHECKLIST.md
