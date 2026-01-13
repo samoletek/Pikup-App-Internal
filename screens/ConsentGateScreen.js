@@ -17,9 +17,9 @@ export default function ConsentGateScreen({ navigation, route }) {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [missingVersions, setMissingVersions] = useState([]);
-  
-  const { acceptTerms, logout, checkTermsAcceptance, currentUser } = useAuth();
-  
+
+  const { acceptTerms, logout, checkTermsAcceptance, currentUser, getDriverProfile } = useAuth();
+
   // Get missing versions from route params
   useEffect(() => {
     if (route?.params?.missingVersions) {
@@ -36,12 +36,24 @@ export default function ConsentGateScreen({ navigation, route }) {
     setLoading(true);
     try {
       await acceptTerms(currentUser.uid, false); // Not during signup
-      
+
+      // Determine where to navigate based on user type
+      const userType = currentUser.userType || route?.params?.returnTo?.replace('Tabs', '').toLowerCase();
+
+      if (userType === 'driver') {
+        // Check if driver completed onboarding
+        const driverProfile = await getDriverProfile(currentUser.uid);
+        if (!driverProfile?.onboardingComplete) {
+          navigation.navigate('DriverOnboardingScreen');
+          return;
+        }
+      }
+
       // Navigate back to where user was trying to go
       if (route?.params?.returnTo) {
         navigation.navigate(route.params.returnTo);
       } else {
-        navigation.navigate(currentUser.userType === 'customer' ? 'CustomerTabs' : 'DriverTabs');
+        navigation.navigate(userType === 'customer' ? 'CustomerTabs' : 'DriverTabs');
       }
     } catch (error) {
       console.error('Error accepting terms:', error);
@@ -83,11 +95,11 @@ export default function ConsentGateScreen({ navigation, route }) {
     if (missingVersions.includes('driverAgreementVersion')) {
       updates.push('Driver Agreement');
     }
-    
+
     if (updates.length === 0) {
       return "Please accept our Terms of Service and Privacy Policy to continue.";
     }
-    
+
     return `We've updated our ${updates.join(' and ')}. Please review and accept the changes to continue using Pikup.`;
   };
 
@@ -102,15 +114,15 @@ export default function ConsentGateScreen({ navigation, route }) {
             <View style={styles.iconContainer}>
               <Ionicons name="document-text-outline" size={80} color="#A77BFF" />
             </View>
-            
+
             <Text style={styles.title}>Updated Terms Required</Text>
-            
+
             <Text style={styles.message}>
               {getUpdateMessage()}
             </Text>
 
             <View style={styles.termsContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setTermsAccepted(!termsAccepted)}
               >
@@ -119,7 +131,7 @@ export default function ConsentGateScreen({ navigation, route }) {
                 </View>
                 <View style={styles.termsTextContainer}>
                   <Text style={styles.termsText}>I agree to the updated </Text>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
                   >
                     <Text style={styles.termsLink}>Terms of Service & Privacy Policy</Text>

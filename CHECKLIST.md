@@ -9,17 +9,17 @@
 - [ ] Test Mapbox Navigation SDK initialization on physical device
 
 ### Stripe Identity Verification
-- [ ] Uncomment `useStripeIdentity` import in `DriverOnboardingScreen.js`
-- [ ] Uncomment `useStripeIdentity` hook (line ~90)
-- [ ] Uncomment verification status useEffect (lines ~93-107)
-- [ ] Uncomment loading indicator (lines ~406-411)
-- [ ] Replace placeholder alert with actual `present()` flow
-- [ ] Test full driver identity verification flow
+- [x] Uncomment `useStripeIdentity` import in `DriverOnboardingScreen.js`
+- [x] Uncomment `useStripeIdentity` hook (line ~90)
+- [x] Uncomment verification status useEffect (lines ~93-107)
+- [x] Uncomment loading indicator (lines ~406-411)
+- [x] Replace placeholder alert with actual `present()` flow
+- [x] Test full driver identity verification flow
 
 ### Document Picker (Claims Screen)
-- [ ] Uncomment document picker import in `CustomerClaimsScreen.js`
-- [ ] Fix the error that caused it to be disabled
-- [ ] Test document upload for insurance claims
+- [x] Uncomment document picker import in `CustomerClaimsScreen.js`
+- [x] Fix the error that caused it to be disabled
+- [x] Test document upload for insurance claims
 
 ## API Verification
 
@@ -31,12 +31,12 @@
 
 ### Stripe Payments
 - [ ] Test customer payment flow end-to-end
-- [ ] Test driver payout via Stripe Connect
+- [/] Test driver payout via Stripe Connect - *Frontend ready, backend returns 500 error*
 - [ ] Verify 70% driver earnings calculation works correctly
 
 ### Environment Variables
 - [x] Confirm `.env.local` loads correctly in Expo
-- [x] Test all Firebase operations (auth, Firestore, Storage) - *Fixed `pass-word` typo in AuthScreen.js*
+- [x] Test all Firebase operations (auth, Firestore, Storage) - [x] Fixed `pass-word` typo in AuthScreen.js
 
 ## New Features
 
@@ -56,7 +56,7 @@
 - [ ] Claims submission flow
 
 ### Cross-Platform
-- [x] iOS Simulator testing - *Build fixed*
+- [x] iOS Simulator testing
 - [ ] iOS physical device testing
 - [ ] Android Emulator testing
 - [ ] Android physical device testing
@@ -82,7 +82,7 @@
 
 ## Working iOS Build Configuration
 
-### Key Package Versions (verified 2026-01-14)
+### Key Package Versions
 ```json
 {
   "react": "19.1.0",
@@ -118,3 +118,28 @@ npx expo run:ios
 - Branch: `Release_1_0_0`
 - Backend: `https://pikup-server.onrender.com`
 - Stripe keys are LIVE (not test) - be careful with payments
+
+---
+
+## Blocking Fixes (Outside Original Scope)
+
+These fixes were required to unblock progress
+
+- [x] Fix iOS build for Xcode 17 beta - updated dependencies, removed `expo-dev-client`
+- [x] Fix driver onboarding navigation - new drivers now redirected to onboarding screen
+- [x] Fix `pass-word` typo in AuthScreen.js that broke registration
+- [x] Fix dateOfBirth parsing (NaN error) - handle both MMDDYYYY and MM/DD/YYYY formats
+- [x] Fix terms acceptance screen skipping - reordered race condition in signup
+
+---
+
+## Out of Scope (Probably for Phase 2)
+
+- Fix layout (top/bottom blocks that content scrolls behind - content should go behind device edges like in popular apps)
+- Scroll on auth screen - unclear why it's needed
+- Logo positioning above search field
+- Auth field validation (password can be 6 identical digits)
+- Full onboarding redesign:
+  - Add dropdown/autocomplete for address (with validation)
+  - Add dynamic pickers for vehicle make, model, year, and color
+  - Add input masks for phone number and date of birth

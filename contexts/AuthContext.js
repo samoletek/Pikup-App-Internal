@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
   const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
   const PROJECT_ID = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID;
   const FIRESTORE_BASE_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
-  
+
   // Payment service configuration - Updated for Android emulator
   // Always use Render server for all environments
   const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
@@ -45,7 +45,7 @@ export function AuthProvider({ children }) {
   // Helper function to convert JavaScript object to Firestore format
   const toFirestoreFormat = (obj) => {
     const fields = {};
-    
+
     Object.keys(obj).forEach(key => {
       const value = obj[key];
       if (value === null || value === undefined) {
@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
         } else {
           // Process non-empty arrays
           const arrayValues = [];
-          
+
           for (const item of value) {
             if (item === null || item === undefined) {
               arrayValues.push({ nullValue: null });
@@ -113,7 +113,7 @@ export function AuthProvider({ children }) {
               arrayValues.push({ stringValue: String(item) });
             }
           }
-          
+
           fields[key] = { arrayValue: { values: arrayValues } };
         }
       } else if (typeof value === 'object' && value !== null) {
@@ -144,7 +144,7 @@ export function AuthProvider({ children }) {
               nestedFields[nestedKey] = { stringValue: String(nestedValue) };
             }
           });
-          
+
           fields[key] = { mapValue: { fields: nestedFields } };
         } catch (err) {
           // Fallback to string representation
@@ -154,20 +154,20 @@ export function AuthProvider({ children }) {
         fields[key] = { stringValue: String(value) };
       }
     });
-    
+
     return { fields };
   };
 
   // Helper function to convert from Firestore format to JavaScript
   const fromFirestoreFormat = (doc) => {
     if (!doc) return {};
-    
+
     const fields = doc.fields || doc;
     const result = {};
-    
+
     Object.keys(fields).forEach(key => {
       const field = fields[key];
-      
+
       if (field.nullValue !== undefined) {
         result[key] = null;
       } else if (field.stringValue !== undefined) {
@@ -218,7 +218,7 @@ export function AuthProvider({ children }) {
         });
       }
     });
-    
+
     return result;
   };
 
@@ -232,9 +232,9 @@ export function AuthProvider({ children }) {
       const manipulatedImage = await ImageManipulator.manipulateAsync(
         uri,
         [{ resize: { width: 1024, height: 1024 } }],
-        { 
-          compress: 0.8, 
-          format: ImageManipulator.SaveFormat.JPEG 
+        {
+          compress: 0.8,
+          format: ImageManipulator.SaveFormat.JPEG
         }
       );
       return manipulatedImage.uri;
@@ -254,25 +254,25 @@ export function AuthProvider({ children }) {
   const uploadPhotoToStorage = async (uri, storagePath, onProgress = null) => {
     try {
       console.log('Starting upload to:', storagePath);
-      
+
       // Compress image before upload
       const compressedUri = await compressImage(uri);
-      
+
       // Convert to blob
       const blob = await uriToBlob(compressedUri);
-      
+
       // Create storage reference
       const storageRef = ref(storage, storagePath);
-      
+
       // Upload file
       const snapshot = await uploadBytes(storageRef, blob);
-      
+
       // Get download URL
       const downloadURL = await getDownloadURL(snapshot.ref);
-      
+
       console.log('Upload successful:', downloadURL);
       return downloadURL;
-      
+
     } catch (error) {
       console.error('Upload failed:', error);
       throw new Error(`Upload failed: ${error.message}`);
@@ -285,9 +285,9 @@ export function AuthProvider({ children }) {
       const uploadPromises = photos.map(async (photo, index) => {
         const photoId = photo.id || `photo_${Date.now()}_${index}`;
         const fullPath = `${basePath}/${photoId}.jpg`;
-        
+
         const downloadURL = await uploadPhotoToStorage(photo.uri, fullPath, onProgress);
-        
+
         return {
           id: photoId,
           url: downloadURL,
@@ -300,7 +300,7 @@ export function AuthProvider({ children }) {
       const results = await Promise.all(uploadPromises);
       console.log(`Successfully uploaded ${results.length} photos`);
       return results;
-      
+
     } catch (error) {
       console.error('Multiple upload failed:', error);
       throw new Error(`Multiple upload failed: ${error.message}`);
@@ -351,7 +351,7 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Fetching trips for driver:', driverId);
-      
+
       const response = await fetch(`${FIRESTORE_BASE_URL}/pickupRequests?key=${API_KEY}`, {
         headers: {
           'Authorization': `Bearer ${currentUser?.accessToken}`
@@ -363,7 +363,7 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json();
-      
+
       if (!data.documents) {
         return [];
       }
@@ -377,19 +377,19 @@ export function AuthProvider({ children }) {
         .map(doc => {
           const id = doc.name.split('/').pop();
           const fields = fromFirestoreFormat(doc);
-          
+
           // Calculate driver earnings if not already stored
           if (!fields.driverEarnings && fields.pricing?.total) {
             fields.driverEarnings = calculateDriverEarnings(fields.pricing.total);
           }
-          
+
           return { id, ...fields };
         })
         .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
 
       console.log(`Found ${driverTrips.length} completed trips for driver`);
       return driverTrips;
-      
+
     } catch (error) {
       console.error('Error getting driver trips:', error);
       return [];
@@ -400,10 +400,10 @@ export function AuthProvider({ children }) {
   const getDriverStats = async (driverId) => {
     try {
       console.log('Getting driver stats for:', driverId);
-      
+
       // Get all completed trips for this driver
       const trips = await getDriverTrips(driverId);
-      
+
       // Calculate current week (Monday to Sunday)
       const now = new Date();
       const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -437,7 +437,7 @@ export function AuthProvider({ children }) {
             'Authorization': `Bearer ${currentUser.accessToken}`
           }
         });
-        
+
         if (profileResponse.ok) {
           const profileDoc = await profileResponse.json();
           driverProfile = fromFirestoreFormat(profileDoc);
@@ -459,7 +459,7 @@ export function AuthProvider({ children }) {
 
       console.log('Driver stats calculated:', stats);
       return stats;
-      
+
     } catch (error) {
       console.error('Error getting driver stats:', error);
       return {
@@ -483,10 +483,10 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Updating driver earnings for:', driverId);
-      
+
       // Calculate earnings for this trip
       const tripEarnings = tripData.driverEarnings || calculateDriverEarnings(tripData.pricing?.total || 0);
-      
+
       // Get current driver profile
       let currentProfile = {};
       try {
@@ -495,7 +495,7 @@ export function AuthProvider({ children }) {
             'Authorization': `Bearer ${currentUser.accessToken}`
           }
         });
-        
+
         if (profileResponse.ok) {
           const profileDoc = await profileResponse.json();
           currentProfile = fromFirestoreFormat(profileDoc);
@@ -534,7 +534,7 @@ export function AuthProvider({ children }) {
 
       console.log('Driver earnings updated successfully');
       return updatedProfile;
-      
+
     } catch (error) {
       console.error('Error updating driver earnings:', error);
       throw error;
@@ -620,7 +620,7 @@ export function AuthProvider({ children }) {
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         // Update driver profile with Connect account ID (same pattern as updateDriverEarnings)
         try {
@@ -662,7 +662,7 @@ export function AuthProvider({ children }) {
           console.error('Failed to save Connect account to drivers collection:', updateError);
           throw updateError;
         }
-        
+
         return { success: true, connectAccountId: result.connectAccountId };
       } else {
         throw new Error(result.error || 'Failed to create Connect account');
@@ -714,7 +714,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(firestoreUpdates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(firestoreUpdates);
 
       const response = await fetch(
@@ -806,11 +806,11 @@ export function AuthProvider({ children }) {
   const requestInstantPayout = async (amount) => {
     try {
       const driverProfile = await getDriverProfile(currentUser.uid);
-      
+
       if (!driverProfile?.connectAccountId) {
         throw new Error('Driver payment account not set up');
       }
-      
+
       const response = await fetch(`${PAYMENT_SERVICE_URL}/instant-payout`, {
         method: 'POST',
         headers: {
@@ -870,10 +870,10 @@ export function AuthProvider({ children }) {
       const trip = await getRequestById(tripId);
       if (trip && trip.assignedDriverId) {
         const driverProfile = await getDriverProfile(trip.assignedDriverId);
-        
+
         if (driverProfile?.connectAccountId && driverProfile?.canReceivePayments) {
           const driverEarnings = calculateDriverEarnings(trip.pricing?.total || 0);
-          
+
           const payoutResult = await processTripPayout({
             tripId,
             driverId: trip.assignedDriverId,
@@ -901,7 +901,7 @@ export function AuthProvider({ children }) {
 
   async function signup(email, password, type, additionalData = {}) {
     setLoading(true);
-    
+
     try {
       // Create user with Firebase Auth REST API
       const signupResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}`, {
@@ -915,15 +915,15 @@ export function AuthProvider({ children }) {
           returnSecureToken: true
         })
       });
-      
+
       const signupData = await signupResponse.json();
-      
+
       if (signupData.error) {
         throw new Error(signupData.error.message);
       }
-      
+
       console.log('Firebase REST signup successful');
-      
+
       // Prepare user data without terms (will be added via acceptTerms)
       const userData = {
         email: email,
@@ -965,7 +965,7 @@ export function AuthProvider({ children }) {
       }
 
       const firestoreData = toFirestoreFormat(userData);
-      
+
       // Save user data to Firestore using REST API
       await fetch(`${FIRESTORE_BASE_URL}/users/${signupData.localId}`, {
         method: 'PATCH',
@@ -975,18 +975,15 @@ export function AuthProvider({ children }) {
         },
         body: JSON.stringify(firestoreData)
       });
-      
+
       console.log('User data saved to Firestore');
-      
+
       const mockUser = {
         uid: signupData.localId,
         email: email,
         accessToken: signupData.idToken
       };
-      
-      setCurrentUser(mockUser);
-      setUserType(type);
-      
+
       // Accept current terms with proper versions and server timestamp
       try {
         await acceptTerms(mockUser.uid, true, signupData.idToken); // Pass token to avoid race condition
@@ -995,9 +992,13 @@ export function AuthProvider({ children }) {
         console.error('Failed to accept terms during signup:', termsError);
         // Don't fail the signup, but log the error
       }
-      
+
+      // Set user state AFTER terms are accepted to prevent race condition in AuthScreen
+      setCurrentUser(mockUser);
+      setUserType(type);
+
       return { user: mockUser };
-      
+
     } catch (error) {
       console.error('Signup error:', error);
       throw error;
@@ -1008,7 +1009,7 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     setLoading(true);
-    
+
     try {
       // Use Firebase Auth REST API
       const loginResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
@@ -1022,42 +1023,42 @@ export function AuthProvider({ children }) {
           returnSecureToken: true
         })
       });
-      
+
       const loginData = await loginResponse.json();
-      
+
       if (loginData.error) {
         throw new Error(loginData.error.message);
       }
-      
+
       console.log('Firebase REST login successful');
-      
+
       const mockUser = {
         uid: loginData.localId,
         email: email,
         accessToken: loginData.idToken
       };
-      
+
       setCurrentUser(mockUser);
       setUserType('customer'); // You can fetch this from Firestore if needed
-      
+
       // Check if user needs to accept terms after login
       try {
         const consentStatus = await checkTermsAcceptance(mockUser.uid);
-        return { 
-          user: mockUser, 
+        return {
+          user: mockUser,
           needsConsent: consentStatus.needsAcceptance,
-          missingVersions: consentStatus.missingVersions 
+          missingVersions: consentStatus.missingVersions
         };
       } catch (consentError) {
         console.error('Error checking consent status:', consentError);
         // Don't fail login if consent check fails, but indicate consent needed
-        return { 
-          user: mockUser, 
+        return {
+          user: mockUser,
           needsConsent: true,
-          missingVersions: ['tosVersion', 'privacyVersion'] 
+          missingVersions: ['tosVersion', 'privacyVersion']
         };
       }
-      
+
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -1080,7 +1081,7 @@ export function AuthProvider({ children }) {
 
     try {
       const docId = `pickup_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Calculate expiry time (4 minutes from now)
       const now = new Date();
       const expiresAt = new Date(now.getTime() + 4 * 60 * 1000).toISOString();
@@ -1089,8 +1090,8 @@ export function AuthProvider({ children }) {
       let customerName = 'Customer';
       try {
         const customerProfile = await getUserProfile();
-        customerName = customerProfile?.name || 
-          [customerProfile?.firstName, customerProfile?.lastName].filter(Boolean).join(' ') || 
+        customerName = customerProfile?.name ||
+          [customerProfile?.firstName, customerProfile?.lastName].filter(Boolean).join(' ') ||
           (currentUser.email ? currentUser.email.split('@')[0] : 'Customer');
       } catch (error) {
         console.log('Could not fetch customer name, using fallback');
@@ -1109,7 +1110,7 @@ export function AuthProvider({ children }) {
         viewingDriverId: null,
         viewedAt: null,
         ...requestData,
-        
+
         // NEW: Insurance data (backward compatible)
         ...(requestData.insurance && typeof requestData.insurance === 'object' ? {
           insurance: requestData.insurance,
@@ -1118,7 +1119,7 @@ export function AuthProvider({ children }) {
       });
 
       console.log('Creating pickup request:', docId);
-      
+
       // Log insurance data if present
       if (requestData.insurance && typeof requestData.insurance === 'object') {
         console.log('✅ Insurance data included:', {
@@ -1129,7 +1130,7 @@ export function AuthProvider({ children }) {
       } else {
         console.log('ℹ️ No insurance data (backward compatible)');
       }
-      
+
       const response = await fetch(`${FIRESTORE_BASE_URL}/pickupRequests/${docId}`, {
         method: 'PATCH',
         headers: {
@@ -1147,7 +1148,7 @@ export function AuthProvider({ children }) {
 
       const result = await response.json();
       console.log('Pickup request created successfully:', result);
-      
+
       return {
         id: docId,
         ...requestData,
@@ -1155,14 +1156,14 @@ export function AuthProvider({ children }) {
         customerEmail: currentUser.email,
         status: 'pending',
         createdAt: new Date().toISOString(),
-        
+
         // Include insurance data in response if present
         ...(requestData.insurance && typeof requestData.insurance === 'object' ? {
           insurance: requestData.insurance,
           itemValue: Math.max(0, Number(requestData.itemValue) || 0)
         } : {})
       };
-      
+
     } catch (error) {
       console.error('Error creating pickup request:', error);
       throw error;
@@ -1187,7 +1188,7 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json();
-      
+
       if (!data.documents) {
         return [];
       }
@@ -1205,7 +1206,7 @@ export function AuthProvider({ children }) {
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
       return userRequests;
-      
+
     } catch (error) {
       console.error('Error fetching pickup requests:', error);
       throw error;
@@ -1234,7 +1235,7 @@ export function AuthProvider({ children }) {
       if (driverResponse.ok) {
         const driverDoc = await driverResponse.json();
         const driverData = fromFirestoreFormat(driverDoc);
-        
+
         // Return empty array if driver is offline
         if (!driverData?.driverStatus?.isOnline) {
           console.log('Driver is offline, returning no requests');
@@ -1252,7 +1253,7 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json();
-      
+
       if (!data.documents) return [];
 
       // Filter for pending requests only and convert to format your UI expects
@@ -1264,7 +1265,7 @@ export function AuthProvider({ children }) {
         .map(doc => {
           const id = doc.name.split('/').pop();
           const fields = fromFirestoreFormat(doc);
-          
+
           // Transform to format your IncomingRequestModal expects
           return {
             id,
@@ -1323,7 +1324,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updates);
 
       const response = await fetch(
@@ -1344,7 +1345,7 @@ export function AuthProvider({ children }) {
 
       const result = await response.json();
       console.log('Request accepted successfully:', result);
-      
+
       // Create conversation for this request
       try {
         // First fetch the request details to get customerId
@@ -1354,14 +1355,14 @@ export function AuthProvider({ children }) {
             'Authorization': `Bearer ${currentUser.accessToken}`
           }
         });
-        
+
         if (requestResponse.ok) {
           const requestData = await requestResponse.json();
           const request = fromFirestoreFormat(requestData.fields);
-          
+
           if (request.customerId) {
             // Safely derive names without cross-reads
-            let customerName = 
+            let customerName =
               request.customerName ||
               (request.customerEmail ? request.customerEmail.split('@')[0] : 'Customer');
 
@@ -1369,7 +1370,7 @@ export function AuthProvider({ children }) {
             try {
               // Current user is the driver - allowed to read own profile
               const driverProfile = await getUserProfile();
-              driverName = 
+              driverName =
                 driverProfile?.name ||
                 [driverProfile?.firstName, driverProfile?.lastName].filter(Boolean).join(' ') ||
                 (currentUser?.email ? currentUser.email.split('@')[0] : 'Driver');
@@ -1398,7 +1399,7 @@ export function AuthProvider({ children }) {
               assignedDriverName: driverName,
               assignedDriverRating: driverRating
             };
-            
+
             const nameFieldPaths = Object.keys(nameUpdates);
             const nameUpdateMaskParams = nameFieldPaths.map(path => `updateMask.fieldPaths=${encodeURIComponent(path)}`).join('&');
 
@@ -1423,7 +1424,7 @@ export function AuthProvider({ children }) {
         console.error('Error creating conversation:', convError);
         // Don't fail the accept if conversation creation fails
       }
-      
+
       return result;
     } catch (error) {
       console.error('Error accepting request:', error);
@@ -1446,7 +1447,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updates);
 
       const response = await fetch(
@@ -1506,7 +1507,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = [
         'driverLocation.latitude',
-        'driverLocation.longitude', 
+        'driverLocation.longitude',
         'lastLocationUpdate',
         'updatedAt'
       ];
@@ -1552,7 +1553,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updatesWithTimestamp);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updatesWithTimestamp);
 
       const response = await fetch(
@@ -1591,7 +1592,7 @@ export function AuthProvider({ children }) {
         updatedAt: new Date().toISOString(),
         ...additionalData
       };
-      
+
       if (location) {
         updates.driverLocation = {
           latitude: location.latitude,
@@ -1652,7 +1653,7 @@ export function AuthProvider({ children }) {
 
     try {
       console.log(`Uploading ${photos.length} ${photoType} photos for request ${requestId}`);
-      
+
       // Define storage path based on photo type to match Firebase rules
       let basePath;
       switch (photoType) {
@@ -1688,7 +1689,7 @@ export function AuthProvider({ children }) {
 
       // Normalize photoType to match DeliveryTrackingScreen expectations
       const normalizedType = photoType === 'delivery' ? 'dropoff' : photoType;
-      
+
       const updates = {
         [`${normalizedType}Photos`]: photoData,
         [`${normalizedType}PhotosUploadedAt`]: new Date().toISOString(),
@@ -1697,7 +1698,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updates);
 
       // Update Firestore with photo metadata
@@ -1739,7 +1740,7 @@ export function AuthProvider({ children }) {
 
     try {
       console.log(`Fetching request with ID: ${requestId}`);
-      
+
       // Validate requestId
       if (!requestId) {
         console.error('getRequestById: Invalid request ID');
@@ -1760,25 +1761,25 @@ export function AuthProvider({ children }) {
 
       const doc = await response.json();
       console.log('getRequestById - Raw doc:', doc);
-      
+
       if (!doc || !doc.fields) {
         console.error('getRequestById: Empty or invalid response from Firestore');
         throw new Error('Invalid response from server');
       }
-      
+
       const fields = fromFirestoreFormat(doc);
       console.log('getRequestById - Processed fields:', fields);
-      
+
       const result = {
         id: requestId,
         ...fields
       };
       console.log(`Successfully fetched request ${requestId}:`, result);
-      
+
       return result;
     } catch (error) {
       console.error('Error fetching request by ID:', error);
-      
+
       // Return a mock object for development to prevent crashes
       if (process.env.NODE_ENV !== 'production') {
         console.warn('Returning mock data for development');
@@ -1794,7 +1795,7 @@ export function AuthProvider({ children }) {
           createdAt: new Date().toISOString()
         };
       }
-      
+
       throw error;
     }
   }
@@ -1816,7 +1817,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updates);
 
       const response = await fetch(
@@ -1852,16 +1853,16 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Finishing delivery for request:', requestId);
-      
+
       // First get the request data to calculate earnings
       const requestData = await getRequestById(requestId);
       const driverEarnings = calculateDriverEarnings(requestData.pricing?.total || 0);
-      
+
       // Upload photos if provided
       if (photos.length > 0) {
         await uploadRequestPhotos(requestId, photos, 'dropoff');
       }
-      
+
       // Complete the delivery with earnings data
       const completionData = {
         driverEarnings,
@@ -1870,25 +1871,25 @@ export function AuthProvider({ children }) {
         finalLocation: driverLocation,
         customerRating: customerRating || 5
       };
-      
+
       const result = await completeDelivery(requestId, completionData);
-      
+
       // Update customer rating if driver rated the customer
       if (customerRating && requestData.customerId) {
         await updateUserRating(requestData.customerId, customerRating, 'customerProfile');
       }
-      
+
       // Update driver's earnings profile
       await updateDriverEarnings(currentUser.uid, {
         ...requestData,
         driverEarnings,
         pricing: requestData.pricing
       });
-      
+
       // Process the payout through payment service
       try {
         const driverProfile = await getDriverProfile(currentUser.uid);
-        
+
         if (driverProfile?.connectAccountId && driverProfile?.canReceivePayments) {
           const payoutResult = await processTripPayout({
             tripId: requestId,
@@ -1897,7 +1898,7 @@ export function AuthProvider({ children }) {
             amount: driverEarnings,
             customerPaymentIntentId: requestData.payment?.paymentIntentId
           });
-          
+
           if (!payoutResult.success) {
             console.error('Failed to process driver payout:', payoutResult.error);
             // Continue with delivery completion - don't fail the entire process
@@ -1911,10 +1912,10 @@ export function AuthProvider({ children }) {
         console.error('Error processing driver payout:', payoutError);
         // Continue with delivery completion - don't fail the entire process
       }
-      
+
       console.log('Delivery completed with earnings:', driverEarnings);
       return result;
-      
+
     } catch (error) {
       console.error('Error finishing delivery:', error);
       throw error;
@@ -1930,22 +1931,22 @@ export function AuthProvider({ children }) {
     try {
       setLoading(true);
       console.log('Uploading profile image to Firebase Storage...');
-      
+
       // Upload to Firebase Storage
       const storagePath = getStoragePath.userProfile(currentUser.uid);
       const downloadURL = await uploadPhotoToStorage(imageUri, storagePath);
-      
+
       // Update user profile in Firestore with new photo URL
       await updateUserProfile({
         profileImageUrl: downloadURL
       });
-      
+
       // Update local state
       setProfileImage(downloadURL);
-      
+
       console.log('Profile image uploaded successfully:', downloadURL);
       return downloadURL;
-      
+
     } catch (error) {
       console.error('Error uploading profile image:', error);
       throw error;
@@ -1971,12 +1972,12 @@ export function AuthProvider({ children }) {
         const doc = await response.json();
         const userData = fromFirestoreFormat(doc);
         const profileUrl = userData.profileImageUrl;
-        
+
         // Update local state
         setProfileImage(profileUrl);
         return profileUrl;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Error getting profile image:', error);
@@ -1992,21 +1993,21 @@ export function AuthProvider({ children }) {
     try {
       setLoading(true);
       console.log('Deleting profile image from Firebase Storage...');
-      
+
       // Delete from Firebase Storage
       const storagePath = getStoragePath.userProfile(currentUser.uid);
       await deletePhotoFromStorage(storagePath);
-      
+
       // Remove from user profile in Firestore
       await updateUserProfile({
         profileImageUrl: null
       });
-      
+
       // Clear local state
       setProfileImage(null);
-      
+
       console.log('Profile image deleted successfully');
-      
+
     } catch (error) {
       console.error('Error deleting profile image:', error);
       throw error;
@@ -2031,7 +2032,7 @@ export function AuthProvider({ children }) {
       if (response.ok) {
         const doc = await response.json();
         const userData = fromFirestoreFormat(doc);
-        
+
         return {
           uid: currentUser.uid,
           email: currentUser.email,
@@ -2039,14 +2040,14 @@ export function AuthProvider({ children }) {
           ...userData
         };
       }
-      
+
       // Fallback if no profile found
       return {
         uid: currentUser.uid,
         email: currentUser.email,
         profileImageUrl: null
       };
-      
+
     } catch (error) {
       console.error('Error getting user profile:', error);
       return null;
@@ -2073,18 +2074,18 @@ export function AuthProvider({ children }) {
 
       const userData = await response.json();
       const userProfile = fromFirestoreFormat(userData);
-      
+
       // Get current rating data
       const profile = userProfile[profileType] || {};
       const currentRating = profile.rating || 5.0;
       const currentCount = profile.ratingCount || 0;
-      
+
       // Calculate new average rating
       const totalRatingPoints = currentRating * currentCount;
       const newTotalPoints = totalRatingPoints + newRating;
       const newCount = currentCount + 1;
       const newAverageRating = newTotalPoints / newCount;
-      
+
       // Update profile with new rating
       const updatedProfile = {
         ...profile,
@@ -2104,7 +2105,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updates);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const updateData = toFirestoreFormat(updates);
 
       // Update user profile in Firebase
@@ -2121,7 +2122,7 @@ export function AuthProvider({ children }) {
       );
 
       console.log(`Updated ${profileType} rating: ${currentRating} -> ${newAverageRating} (${newCount} ratings)`);
-      
+
     } catch (error) {
       console.error('Error updating user rating:', error);
       throw error;
@@ -2132,7 +2133,7 @@ export function AuthProvider({ children }) {
   const createConversation = async (requestId, customerId, driverId, customerName, driverName) => {
     try {
       const conversationId = `${requestId}_${customerId}_${driverId}`;
-      
+
       // Check existence first (avoid overwriting createdAt)
       let createdAt;
       const getRes = await fetch(`${FIRESTORE_BASE_URL}/conversations/${conversationId}`, {
@@ -2155,12 +2156,12 @@ export function AuthProvider({ children }) {
 
       const createOnly = !exists
         ? {
-            createdAt,
-            lastMessage: null,
-            lastMessageAt: null,
-            unreadByCustomer: 0,
-            unreadByDriver: 0,
-          }
+          createdAt,
+          lastMessage: null,
+          lastMessageAt: null,
+          unreadByCustomer: 0,
+          unreadByDriver: 0,
+        }
         : {};
 
       const fields = { ...base, ...createOnly };
@@ -2298,7 +2299,7 @@ export function AuthProvider({ children }) {
           'Authorization': `Bearer ${currentUser?.accessToken}`
         }
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch messages');
       }
@@ -2328,7 +2329,7 @@ export function AuthProvider({ children }) {
 
     // Poll every 2 seconds for new messages
     const interval = setInterval(pollMessages, 2000);
-    
+
     // Initial load
     pollMessages();
 
@@ -2368,22 +2369,22 @@ export function AuthProvider({ children }) {
       if (!response.ok) {
         throw new Error('Failed to fetch pickup requests');
       }
-      
+
       const requestData = await response.json();
-      
+
       for (const doc of (requestData.documents || [])) {
         const request = fromFirestoreFormat(doc.fields);
         const requestId = doc.name.split('/').pop();
-        
+
         // Only for accepted/completed orders with assigned drivers
         if (request.assignedDriverId && request.customerId) {
           const conversationId = `${requestId}_${request.customerId}_${request.assignedDriverId}`;
-          
+
           // Check if conversation exists
           const convResponse = await fetch(
             `${FIRESTORE_BASE_URL}/conversations/${conversationId}?key=${API_KEY}`
           );
-          
+
           if (convResponse.ok) {
             const convData = await convResponse.json();
             // If conversation exists but has no fields
@@ -2420,7 +2421,7 @@ export function AuthProvider({ children }) {
   const checkExpiredRequests = async () => {
     try {
       const now = new Date().toISOString();
-      
+
       // Query for expired requests that are still pending
       const response = await fetch(
         `${FIRESTORE_BASE_URL}/pickupRequests?key=${API_KEY}&structuredQuery=${encodeURIComponent(JSON.stringify({
@@ -2480,7 +2481,7 @@ export function AuthProvider({ children }) {
   const resetExpiredRequest = async (requestId) => {
     try {
       const newExpiresAt = new Date(Date.now() + 4 * 60 * 1000).toISOString(); // 4 minutes from now
-      
+
       const updateData = {
         status: 'pending',
         expiresAt: newExpiresAt,
@@ -2509,18 +2510,18 @@ export function AuthProvider({ children }) {
     try {
       // Get current request
       const response = await fetch(`${FIRESTORE_BASE_URL}/pickupRequests/${requestId}?key=${API_KEY}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to get request');
       }
 
       const data = await response.json();
       const request = fromFirestoreFormat(data.fields);
-      
+
       // Calculate new expiry time
       const currentExpiry = new Date(request.expiresAt);
       const newExpiry = new Date(currentExpiry.getTime() + additionalMinutes * 60 * 1000);
-      
+
       const updateData = {
         expiresAt: newExpiry.toISOString(),
         extendedTimes: (request.extendedTimes || 0) + 1
@@ -2589,13 +2590,13 @@ export function AuthProvider({ children }) {
   // Driver convenience functions
   const driverFunctions = {
     // Start driving to pickup
-    startDriving: (requestId, driverLocation) => 
+    startDriving: (requestId, driverLocation) =>
       updateDriverStatus(requestId, 'inProgress', driverLocation),
-    
+
     // Arrive at pickup location  
-    arriveAtPickup: (requestId, driverLocation, photos = []) => 
+    arriveAtPickup: (requestId, driverLocation, photos = []) =>
       updateDriverStatus(requestId, 'arrivedAtPickup', driverLocation, { arrivedAt: new Date().toISOString() }),
-    
+
     // Confirm pickup with photos
     confirmPickup: async (requestId, photos = [], driverLocation = null) => {
       if (photos.length > 0) {
@@ -2603,13 +2604,13 @@ export function AuthProvider({ children }) {
       }
       return updateDriverStatus(requestId, 'pickedUp', driverLocation);
     },
-    
+
     // Start driving to dropoff
-    startDelivery: (requestId, driverLocation) => 
+    startDelivery: (requestId, driverLocation) =>
       updateDriverStatus(requestId, 'enRouteToDropoff', driverLocation),
-    
+
     // Arrive at dropoff
-    arriveAtDropoff: (requestId, driverLocation) => 
+    arriveAtDropoff: (requestId, driverLocation) =>
       updateDriverStatus(requestId, 'arrivedAtDropoff', driverLocation),
   };
 
@@ -2620,23 +2621,23 @@ export function AuthProvider({ children }) {
   const cancelOrder = async (orderId, reason = 'customer_request') => {
     try {
       console.log('Cancelling order:', orderId);
-      
+
       // Get current order status
       const orderData = await getRequestById(orderId);
       console.log('CancelOrder - orderData:', orderData);
-      
+
       if (!orderData) {
         console.error('CancelOrder - Order data is null/undefined for ID:', orderId);
         throw new Error('Order not found');
       }
-      
+
       // Check if cancellation is allowed
       const cancellationInfo = getCancellationInfo(orderData);
-      
+
       if (!cancellationInfo.canCancel) {
         throw new Error(cancellationInfo.reason);
       }
-      
+
       // Get driver location if available
       let driverLocation = null;
       if (orderData.driverLocation) {
@@ -2645,7 +2646,7 @@ export function AuthProvider({ children }) {
           longitude: orderData.driverLocation.longitude
         };
       }
-      
+
       // Call the payment service to process cancellation
       const response = await fetch(`${PAYMENT_SERVICE_URL}/cancel-order`, {
         method: 'POST',
@@ -2666,11 +2667,11 @@ export function AuthProvider({ children }) {
       }
 
       const cancellationResult = await response.json();
-      
+
       if (!cancellationResult.success) {
         throw new Error(cancellationResult.error || 'Cancellation failed');
       }
-      
+
       // Update order status in Firebase with ACTUAL payment details from server
       await updateRequestStatus(orderId, 'cancelled', {
         cancelledAt: new Date().toISOString(),
@@ -2682,7 +2683,7 @@ export function AuthProvider({ children }) {
         refundId: cancellationResult.refundId || null,
         compensationTransferId: cancellationResult.driverCompensationId || null
       });
-      
+
       console.log('Order cancelled successfully with refund:', cancellationResult);
       return {
         success: true,
@@ -2691,7 +2692,7 @@ export function AuthProvider({ children }) {
         driverCompensation: cancellationResult.driverCompensation || 0,
         refundId: cancellationResult.refundId
       };
-      
+
     } catch (error) {
       console.error('Error cancelling order:', error);
       throw error;
@@ -2700,11 +2701,11 @@ export function AuthProvider({ children }) {
 
   const getCancellationInfo = (orderData) => {
     const status = orderData.status;
-    const timeSinceAccepted = orderData.acceptedAt 
+    const timeSinceAccepted = orderData.acceptedAt
       ? Date.now() - new Date(orderData.acceptedAt).getTime()
       : 0;
     const orderTotal = orderData.pricing?.total || 0;
-    
+
     switch (status) {
       case 'pending':
         return {
@@ -2714,7 +2715,7 @@ export function AuthProvider({ children }) {
           refundAmount: orderTotal,
           driverCompensation: 0
         };
-        
+
       case 'accepted':
       case 'inProgress':
         return {
@@ -2724,7 +2725,7 @@ export function AuthProvider({ children }) {
           refundAmount: orderTotal,
           driverCompensation: 0
         };
-        
+
       case 'arrivedAtPickup':
         return {
           canCancel: false,
@@ -2733,7 +2734,7 @@ export function AuthProvider({ children }) {
           refundAmount: 0,
           driverCompensation: 0
         };
-        
+
       case 'pickedUp':
         return {
           canCancel: false,
@@ -2742,7 +2743,7 @@ export function AuthProvider({ children }) {
           refundAmount: 0,
           driverCompensation: 0
         };
-        
+
       case 'enRouteToDropoff':
         return {
           canCancel: false,
@@ -2751,7 +2752,7 @@ export function AuthProvider({ children }) {
           refundAmount: 0,
           driverCompensation: 0
         };
-        
+
       case 'completed':
         return {
           canCancel: false,
@@ -2760,7 +2761,7 @@ export function AuthProvider({ children }) {
           refundAmount: 0,
           driverCompensation: 0
         };
-        
+
       case 'cancelled':
         return {
           canCancel: false,
@@ -2769,7 +2770,7 @@ export function AuthProvider({ children }) {
           refundAmount: 0,
           driverCompensation: 0
         };
-        
+
       default:
         return {
           canCancel: false,
@@ -2785,7 +2786,7 @@ export function AuthProvider({ children }) {
   const createVerificationSession = async (userData) => {
     // Use payment service URL - Render backend
     const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
-    
+
     try {
       const response = await fetch(`${PAYMENT_SERVICE_URL}/create-verification-session`, {
         method: 'POST',
@@ -2798,11 +2799,11 @@ export function AuthProvider({ children }) {
           ...userData
         }),
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to create verification session');
       }
-      
+
       const data = await response.json();
       return data;
     } catch (error) {
@@ -2830,7 +2831,7 @@ export function AuthProvider({ children }) {
 
       const doc = await response.json();
       const config = fromFirestoreFormat(doc);
-      
+
       // Validate required fields exist
       if (!config.tosVersion || !config.privacyVersion) {
         throw new Error('Invalid legal configuration. Please contact support.');
@@ -2856,7 +2857,7 @@ export function AuthProvider({ children }) {
     try {
       // Get current required versions
       const currentVersions = await getLegalConfig();
-      
+
       // Get user's accepted versions
       const response = await fetch(`${FIRESTORE_BASE_URL}/users/${uid}`, {
         headers: {
@@ -2865,8 +2866,8 @@ export function AuthProvider({ children }) {
       });
 
       if (!response.ok) {
-        return { 
-          needsAcceptance: true, 
+        return {
+          needsAcceptance: true,
           missingVersions: ['tosVersion', 'privacyVersion'],
           reason: 'No terms acceptance record found'
         };
@@ -2878,8 +2879,8 @@ export function AuthProvider({ children }) {
 
       // If no terms agreement at all
       if (!userTerms || !userTerms.accepted) {
-        return { 
-          needsAcceptance: true, 
+        return {
+          needsAcceptance: true,
           missingVersions: ['tosVersion', 'privacyVersion'],
           reason: 'No terms accepted'
         };
@@ -2888,8 +2889,8 @@ export function AuthProvider({ children }) {
       // Migration: Handle old format users (version field instead of tosVersion/privacyVersion)
       if (userTerms.version && !userTerms.tosVersion) {
         console.log('Migrating user from old terms format - forcing re-acceptance');
-        return { 
-          needsAcceptance: true, 
+        return {
+          needsAcceptance: true,
           missingVersions: ['tosVersion', 'privacyVersion'],
           reason: 'Migration: old format detected',
           requiresMigration: true
@@ -2898,15 +2899,15 @@ export function AuthProvider({ children }) {
 
       // Check version mismatches
       const missingVersions = [];
-      
+
       if (userTerms.tosVersion !== currentVersions.tosVersion) {
         missingVersions.push('tosVersion');
       }
-      
+
       if (userTerms.privacyVersion !== currentVersions.privacyVersion) {
         missingVersions.push('privacyVersion');
       }
-      
+
       // Check driver agreement if user is a driver
       if (userData.userType === 'driver' && currentVersions.driverAgreementVersion) {
         if (userTerms.driverAgreementVersion !== currentVersions.driverAgreementVersion) {
@@ -2940,14 +2941,14 @@ export function AuthProvider({ children }) {
     try {
       // Get current versions that need to be accepted
       const currentVersions = await getLegalConfig();
-      
+
       // Get user data to determine if they're a driver
       const userResponse = await fetch(`${FIRESTORE_BASE_URL}/users/${uid}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       let userType = 'customer';
       if (userResponse.ok) {
         const userDoc = await userResponse.json();
@@ -2969,7 +2970,7 @@ export function AuthProvider({ children }) {
 
       const fieldPaths = Object.keys(updateData);
       const updateMaskParams = fieldPaths.map(path => `updateMask.fieldPaths=${path}`).join('&');
-      
+
       const firestoreData = toFirestoreFormat(updateData);
 
       await fetch(
@@ -2999,7 +3000,7 @@ export function AuthProvider({ children }) {
 
     try {
       const termsData = await checkTermsAcceptance(uid);
-      
+
       return {
         hasAccepted: termsData.accepted || false,
         version: termsData.version || null,
@@ -3031,7 +3032,7 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Setting driver online:', driverId, 'at location:', location);
-      
+
       const response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/online`, {
         method: 'POST',
         body: JSON.stringify({
@@ -3062,7 +3063,7 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Setting driver offline:', driverId);
-      
+
       const response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/offline`, {
         method: 'POST',
         body: JSON.stringify({
@@ -3115,11 +3116,11 @@ export function AuthProvider({ children }) {
     const R = 3959; // Earth's radius in miles
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -3156,7 +3157,7 @@ export function AuthProvider({ children }) {
 
     try {
       const targetDate = date || new Date().toISOString().split('T')[0];
-      
+
       const response = await authFetch(
         `${PAYMENT_SERVICE_URL}/drivers/${driverId}/session-stats?date=${targetDate}`,
         { method: 'GET' }

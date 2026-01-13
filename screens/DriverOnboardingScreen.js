@@ -16,13 +16,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-// import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
+import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 
 const { width, height } = Dimensions.get('window');
 
 export default function DriverOnboardingScreen({ navigation }) {
   const { currentUser, createDriverConnectAccount, getDriverOnboardingLink } = useAuth();
-  
+
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [verificationSessionId, setVerificationSessionId] = useState(null);
@@ -50,7 +50,7 @@ export default function DriverOnboardingScreen({ navigation }) {
 
   const scrollViewRef = useRef();
   const progressAnim = useRef(new Animated.Value(0)).current;
-  
+
   // Define payment service URL - Render backend
   const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
 
@@ -74,7 +74,7 @@ export default function DriverOnboardingScreen({ navigation }) {
 
       const data = await response.json();
       setVerificationSessionId(data.id);
-      
+
       return {
         sessionId: data.id,
         ephemeralKeySecret: data.ephemeral_key_secret,
@@ -87,24 +87,24 @@ export default function DriverOnboardingScreen({ navigation }) {
     }
   };
 
-  // const { status, present, loading: identityLoading } = useStripeIdentity(fetchVerificationSessionParams);
+  const { status, present, loading: identityLoading } = useStripeIdentity(fetchVerificationSessionParams);
 
   // Handle verification status
-  // useEffect(() => {
-  //   if (status === 'FlowCompleted') {
-  //     setVerificationStatus('completed');
-  //     Alert.alert(
-  //       'Verification Complete!',
-  //       'Your identity has been verified successfully.',
-  //       [{ text: 'Continue', onPress: () => nextStep() }]
-  //     );
-  //   } else if (status === 'FlowCanceled') {
-  //     setVerificationStatus('canceled');
-  //   } else if (status === 'FlowFailed') {
-  //     setVerificationStatus('failed');
-  //     Alert.alert('Verification Failed', 'Please try again.');
-  //   }
-  // }, [status]);
+  useEffect(() => {
+    if (status === 'FlowCompleted') {
+      setVerificationStatus('completed');
+      Alert.alert(
+        'Verification Complete!',
+        'Your identity has been verified successfully.',
+        [{ text: 'Continue', onPress: () => nextStep() }]
+      );
+    } else if (status === 'FlowCanceled') {
+      setVerificationStatus('canceled');
+    } else if (status === 'FlowFailed') {
+      setVerificationStatus('failed');
+      Alert.alert('Verification Failed', 'Please try again.');
+    }
+  }, [status]);
 
   const steps = [
     {
@@ -176,7 +176,7 @@ export default function DriverOnboardingScreen({ navigation }) {
       const newStep = currentStep + 1;
       setCurrentStep(newStep);
       animateProgress(newStep);
-      
+
       // Scroll to top of new step
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
@@ -187,7 +187,7 @@ export default function DriverOnboardingScreen({ navigation }) {
       const newStep = currentStep - 1;
       setCurrentStep(newStep);
       animateProgress(newStep);
-      
+
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
   };
@@ -231,12 +231,36 @@ export default function DriverOnboardingScreen({ navigation }) {
         vehicleInfo: formData.vehicleInfo,
       });
 
+      // Parse dateOfBirth - handle both MM/DD/YYYY and MMDDYYYY formats
+      let dobDay, dobMonth, dobYear;
+      if (formData.dateOfBirth) {
+        const dob = formData.dateOfBirth.replace(/\D/g, ''); // Remove all non-digits
+        if (dob.length === 8) {
+          // MMDDYYYY format
+          dobMonth = parseInt(dob.substring(0, 2), 10);
+          dobDay = parseInt(dob.substring(2, 4), 10);
+          dobYear = parseInt(dob.substring(4, 8), 10);
+        } else if (formData.dateOfBirth.includes('/')) {
+          // MM/DD/YYYY format
+          const parts = formData.dateOfBirth.split('/');
+          if (parts.length === 3) {
+            dobMonth = parseInt(parts[0], 10);
+            dobDay = parseInt(parts[1], 10);
+            dobYear = parseInt(parts[2], 10);
+          }
+        }
+      }
+
       // Create Stripe Connect account
       const connectResult = await createDriverConnectAccount({
         firstName: formData.firstName,
         lastName: formData.lastName,
         phoneNumber: formData.phoneNumber,
-        dateOfBirth: formData.dateOfBirth,
+        dob: {
+          day: dobDay || 1,
+          month: dobMonth || 1,
+          year: dobYear || 1990,
+        },
         address: formData.address,
         vehicleInfo: formData.vehicleInfo,
         verificationSessionId: verificationSessionId,
@@ -253,7 +277,7 @@ export default function DriverOnboardingScreen({ navigation }) {
         if (onboardingResult.success) {
           // Open Stripe onboarding in browser
           await Linking.openURL(onboardingResult.onboardingUrl);
-          
+
           // Navigate to completion screen
           navigation.navigate('DriverOnboardingCompleteScreen', {
             connectAccountId: connectResult.connectAccountId,
@@ -331,7 +355,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.welcomeDescription}>
               Join thousands of drivers earning money on their own schedule. We'll help you get set up in just a few minutes.
             </Text>
-            
+
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
                 <Ionicons name="cash-outline" size={20} color="#00D4AA" />
@@ -355,7 +379,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.formDescription}>
               For the safety of our community, we need to verify your identity. This process takes just 2-3 minutes.
             </Text>
-            
+
             <View style={styles.verificationFeatures}>
               <View style={styles.verificationItem}>
                 <View style={styles.verificationIcon}>
@@ -403,12 +427,12 @@ export default function DriverOnboardingScreen({ navigation }) {
               </View>
             )}
 
-            {/* {identityLoading && (
+            {identityLoading && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#00D4AA" />
                 <Text style={styles.loadingText}>Preparing verification...</Text>
               </View>
-            )} */}
+            )}
 
             <TouchableOpacity
               style={[
@@ -416,8 +440,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 verificationStatus === 'completed' && styles.verifyButtonDisabled
               ]}
               onPress={() => {
-                // present() - Stripe Identity temporarily disabled
-                Alert.alert('Temporarily Unavailable', 'Will be back when server is running again!');
+                present();
               }}
               disabled={verificationStatus === 'completed'}
             >
@@ -434,7 +457,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.formDescription}>
               Let's start with some basic information about you.
             </Text>
-            
+
             <View style={styles.inputRow}>
               <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.inputLabel}>First Name *</Text>
@@ -492,7 +515,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.formDescription}>
               We need your address for payment processing and verification.
             </Text>
-            
+
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Street Address *</Text>
               <TextInput
@@ -552,7 +575,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.formDescription}>
               Tell us about the vehicle you'll be using for deliveries.
             </Text>
-            
+
             <View style={styles.inputRow}>
               <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.inputLabel}>Make *</Text>
@@ -628,7 +651,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.finalDescription}>
               We'll now set up your secure payment account with Stripe. This ensures you get paid quickly and safely for every delivery.
             </Text>
-            
+
             <View style={styles.securityFeatures}>
               <View style={styles.securityItem}>
                 <Ionicons name="shield-checkmark" size={20} color="#00D4AA" />
@@ -704,24 +727,24 @@ export default function DriverOnboardingScreen({ navigation }) {
       {renderProgressBar()}
 
       {/* Content */}
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
-        style={styles.scrollView} 
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.stepContainer}>
           <View style={[styles.stepIcon, { backgroundColor: `${steps[currentStep].color}20` }]}>
-            <Ionicons 
-              name={steps[currentStep].icon} 
-              size={32} 
-              color={steps[currentStep].color} 
+            <Ionicons
+              name={steps[currentStep].icon}
+              size={32}
+              color={steps[currentStep].color}
             />
           </View>
-          
+
           <Text style={styles.stepTitle}>{steps[currentStep].title}</Text>
           <Text style={styles.stepSubtitle}>{steps[currentStep].subtitle}</Text>
-          
+
           {renderStepContent()}
         </View>
       </ScrollView>
@@ -733,7 +756,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <Text style={styles.backActionText}>Back</Text>
           </TouchableOpacity>
         )}
-        
+
         <TouchableOpacity
           style={[
             styles.nextButton,
@@ -849,7 +872,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  
+
   // Welcome content
   welcomeContent: {
     width: '100%',
@@ -900,7 +923,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 12,
   },
-  
+
   // Form content
   formContent: {
     width: '100%',
@@ -935,7 +958,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
-  
+
   // Final content
   finalContent: {
     width: '100%',
@@ -1001,7 +1024,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  
+
   // Verification styles
   verificationFeatures: {
     marginTop: 24,
@@ -1071,7 +1094,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
   },
-  
+
   // Bottom actions
   bottomActions: {
     flexDirection: 'row',

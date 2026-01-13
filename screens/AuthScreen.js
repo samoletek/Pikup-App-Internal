@@ -24,7 +24,7 @@ export default function AuthScreen({ navigation, route }) {
   const [lastName, setLastName] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
 
-  const { signup, login, loading, currentUser, checkTermsAcceptance } = useAuth();
+  const { signup, login, loading, currentUser, checkTermsAcceptance, getDriverProfile } = useAuth();
 
   // Get the user role from navigation params
   const userRole = route?.params?.userRole || "customer";
@@ -41,11 +41,17 @@ export default function AuthScreen({ navigation, route }) {
               returnTo: userRole === "customer" ? "CustomerTabs" : "DriverTabs"
             });
           } else {
-            // Navigate directly to tabs based on user role
+            // Navigate based on user role
             if (userRole === "customer") {
               navigation.navigate("CustomerTabs");
             } else if (userRole === "driver") {
-              navigation.navigate("DriverTabs");
+              // Check if driver completed onboarding
+              const driverProfile = await getDriverProfile(currentUser.uid);
+              if (!driverProfile?.onboardingComplete) {
+                navigation.navigate("DriverOnboardingScreen");
+              } else {
+                navigation.navigate("DriverTabs");
+              }
             } else {
               navigation.navigate("RoleSelectionScreen");
             }

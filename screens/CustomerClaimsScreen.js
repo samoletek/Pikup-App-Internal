@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-// import * as DocumentPicker from 'expo-document-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 export default function CustomerClaimsScreen({ navigation }) {
   const { currentUser, getUserPickupRequests } = useAuth();
@@ -48,7 +48,7 @@ export default function CustomerClaimsScreen({ navigation }) {
   const loadClaimsData = async () => {
     try {
       setLoading(true);
-      
+
       // Get ALL claims and filter on frontend by user email
       const response = await fetch(`${PAYMENT_SERVICE_URL}/insurance/claims`, {
         headers: {
@@ -59,16 +59,16 @@ export default function CustomerClaimsScreen({ navigation }) {
 
       if (response.ok) {
         const claimsData = await response.json();
-        
+
         // Filter claims for current user by email only (safe approach)
-        const userClaims = claimsData.data?.filter(claim => 
+        const userClaims = claimsData.data?.filter(claim =>
           claim.claimantEmail === currentUser.email
         ) || [];
-        
+
         // Separate ongoing and completed claims
         const ongoing = [];
         const completed = [];
-        
+
         userClaims.forEach(claim => {
           const claimItem = {
             id: claim.id,
@@ -95,7 +95,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             ongoing.push(claimItem);
           }
         });
-        
+
         setOngoingClaims(ongoing);
         setCompletedClaims(completed);
       } else {
@@ -121,11 +121,11 @@ export default function CustomerClaimsScreen({ navigation }) {
     try {
       // Get user's completed pickup requests that had insurance
       const requests = await getUserPickupRequests();
-      
+
       const tripsWithInsurance = requests
-        .filter(request => 
-          request.status === 'completed' && 
-          request.insurance && 
+        .filter(request =>
+          request.status === 'completed' &&
+          request.insurance &&
           request.insurance.included &&
           request.insurance.bookingId // Must have actual insurance booking ID
         )
@@ -142,7 +142,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           bookingId: request.insurance.bookingId,
           quoteId: request.insurance.quoteId,
         }));
-      
+
       setPastTrips(tripsWithInsurance);
     } catch (error) {
       console.error('Error loading past trips:', error);
@@ -165,7 +165,7 @@ export default function CustomerClaimsScreen({ navigation }) {
         console.warn('Failed to load document types, using defaults');
         setDocumentTypes([
           'PHOTOS_DAMAGE',
-          'PHOTOS_SCENE', 
+          'PHOTOS_SCENE',
           'POLICE_REPORT',
           'RECEIPT',
           'INVOICE',
@@ -179,7 +179,7 @@ export default function CustomerClaimsScreen({ navigation }) {
       setDocumentTypes([
         'PHOTOS_DAMAGE',
         'PHOTOS_SCENE',
-        'POLICE_REPORT', 
+        'POLICE_REPORT',
         'RECEIPT',
         'INVOICE',
         'MEDICAL_REPORT',
@@ -191,7 +191,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 
   const getClaimStatus = (claim) => {
     if (!claim.status) return 'filed';
-    
+
     switch (claim.status.toUpperCase()) {
       case 'SUBMITTED':
       case 'PENDING':
@@ -269,7 +269,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           Alert.alert('Error', 'Claims are not enabled for this delivery');
           return;
         }
-        
+
         setSelectedTrip({
           ...trip,
           setupData
@@ -335,9 +335,6 @@ export default function CustomerClaimsScreen({ navigation }) {
   };
 
   const pickDocument = async () => {
-    // Temporarily disabled - requires expo-document-picker
-    Alert.alert('Feature Temporarily Unavailable', 'Document picker will be available in the next update');
-    /*
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'application/pdf', 'text/plain'],
@@ -359,7 +356,6 @@ export default function CustomerClaimsScreen({ navigation }) {
       console.error('Error picking document:', error);
       Alert.alert('Error', 'Failed to pick document');
     }
-    */
   };
 
   const removeDocument = (documentId) => {
@@ -378,14 +374,14 @@ export default function CustomerClaimsScreen({ navigation }) {
     }
 
     setSubmitting(true);
-    
+
     try {
       // Create FormData for file upload
       const formData = new FormData();
-      
+
       // Use the actual insurance booking ID
       const bookingId = selectedTrip.bookingId;
-      
+
       // Add claim data - only send what the insurance API expects
       formData.append('bookingId', bookingId);
       formData.append('lossType', claimType);
@@ -430,16 +426,16 @@ export default function CustomerClaimsScreen({ navigation }) {
       if (response.ok) {
         const result = await response.json();
         console.log('Claim submitted successfully:', result);
-        
+
         // Reset form
         setClaimDescription('');
         setClaimType('DAMAGED_GOODS');
         setSelectedDocuments([]);
         setModalVisible(false);
-        
+
         // Reload claims data
         await loadClaimsData();
-        
+
         Alert.alert(
           'Claim Submitted',
           'Your claim has been submitted successfully. We will review it shortly.',
@@ -453,7 +449,7 @@ export default function CustomerClaimsScreen({ navigation }) {
     } catch (error) {
       console.error('Error submitting claim:', error);
       let errorMessage = 'Failed to submit claim. Please try again.';
-      
+
       if (error.message.includes('not found')) {
         errorMessage = 'Booking not found or claims not available for this trip.';
       } else if (error.message.includes('not enabled')) {
@@ -465,7 +461,7 @@ export default function CustomerClaimsScreen({ navigation }) {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       Alert.alert('Error', errorMessage);
     } finally {
       setSubmitting(false);
@@ -475,7 +471,7 @@ export default function CustomerClaimsScreen({ navigation }) {
   const renderClaimItem = ({ item }) => {
     const statusText = getClaimStatusText(item.status);
     const statusColor = getClaimStatusColor(item.status);
-    
+
     return (
       <View style={styles.claimCard}>
         <View style={styles.claimHeader}>
@@ -485,18 +481,18 @@ export default function CustomerClaimsScreen({ navigation }) {
           </View>
           <Text style={styles.claimAmount}>{item.amount}</Text>
         </View>
-        
+
         <Text style={styles.claimDescription} numberOfLines={2}>
           {item.description}
         </Text>
-        
+
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
-            <View 
+            <View
               style={[
-                styles.progressFill, 
+                styles.progressFill,
                 { width: `${item.progress}%`, backgroundColor: statusColor }
-              ]} 
+              ]}
             />
           </View>
           <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
@@ -519,15 +515,15 @@ export default function CustomerClaimsScreen({ navigation }) {
   };
 
   const renderTripItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.tripCard} 
+    <TouchableOpacity
+      style={styles.tripCard}
       onPress={() => handleSelectTrip(item)}
     >
       <View style={styles.tripHeader}>
         <Text style={styles.tripDate}>{item.date}</Text>
         <Text style={styles.tripAmount}>{item.amount}</Text>
       </View>
-      
+
       <View style={styles.tripDetails}>
         <View style={styles.tripLocationContainer}>
           <Ionicons name="location" size={16} color="#A77BFF" />
@@ -535,12 +531,12 @@ export default function CustomerClaimsScreen({ navigation }) {
             <Text style={styles.tripLocation}>{item.pickup} → {item.dropoff}</Text>
           </View>
         </View>
-        
+
         <View style={styles.tripItemContainer}>
           <Ionicons name="cube-outline" size={16} color="#A77BFF" />
           <Text style={styles.tripItemText}>{item.item}</Text>
         </View>
-        
+
         <View style={styles.insuranceContainer}>
           <Ionicons name="shield-checkmark" size={16} color="#00D4AA" />
           <Text style={styles.insuranceText}>
@@ -554,14 +550,14 @@ export default function CustomerClaimsScreen({ navigation }) {
   const renderDocumentItem = ({ item }) => (
     <View style={styles.documentItem}>
       <View style={styles.documentInfo}>
-        <Ionicons 
-          name={item.type.startsWith('image/') ? 'image' : 'document'} 
-          size={20} 
-          color="#A77BFF" 
+        <Ionicons
+          name={item.type.startsWith('image/') ? 'image' : 'document'}
+          size={20}
+          color="#A77BFF"
         />
         <Text style={styles.documentName}>{item.name}</Text>
       </View>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.removeDocumentButton}
         onPress={() => removeDocument(item.id)}
       >
@@ -585,14 +581,14 @@ export default function CustomerClaimsScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Claims</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.refreshButton}
           onPress={loadClaimsData}
         >
@@ -615,7 +611,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 
       {/* Tab Selector */}
       <View style={styles.tabContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'ongoing' && styles.activeTab]}
           onPress={() => setActiveTab('ongoing')}
         >
@@ -623,7 +619,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             Ongoing ({ongoingClaims.length})
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
           onPress={() => setActiveTab('completed')}
         >
@@ -647,8 +643,8 @@ export default function CustomerClaimsScreen({ navigation }) {
               <View style={styles.emptyState}>
                 <Ionicons name="document-text-outline" size={48} color="#666" />
                 <Text style={styles.emptyStateText}>
-                  {activeTab === 'ongoing' 
-                    ? 'No ongoing claims' 
+                  {activeTab === 'ongoing'
+                    ? 'No ongoing claims'
                     : 'No completed claims'}
                 </Text>
                 <Text style={styles.emptyStateSubtext}>
@@ -660,7 +656,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 
           {/* Start New Claim Button */}
           {pastTrips.length > 0 && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.startClaimButton}
               onPress={handleStartClaim}
             >
@@ -673,14 +669,14 @@ export default function CustomerClaimsScreen({ navigation }) {
         <>
           <View style={styles.pastTripsHeader}>
             <Text style={styles.pastTripsTitle}>Select Insured Delivery</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.closeButton}
               onPress={() => setShowPastTrips(false)}
             >
               <Ionicons name="close" size={24} color="#fff" />
             </TouchableOpacity>
           </View>
-          
+
           <FlatList
             data={pastTrips}
             renderItem={renderTripItem}
@@ -710,7 +706,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>File Insurance Claim</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setModalVisible(false)}
               >
@@ -740,9 +736,9 @@ export default function CustomerClaimsScreen({ navigation }) {
               <View style={styles.claimTypeContainer}>
                 <Text style={styles.claimTypeLabel}>Issue Type:</Text>
                 <View style={styles.claimTypeOptions}>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
-                      styles.claimTypeOption, 
+                      styles.claimTypeOption,
                       claimType === 'DAMAGED_GOODS' && styles.claimTypeSelected
                     ]}
                     onPress={() => setClaimType('DAMAGED_GOODS')}
@@ -754,9 +750,9 @@ export default function CustomerClaimsScreen({ navigation }) {
                       Damaged
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
-                      styles.claimTypeOption, 
+                      styles.claimTypeOption,
                       claimType === 'LOST_GOODS' && styles.claimTypeSelected
                     ]}
                     onPress={() => setClaimType('LOST_GOODS')}
@@ -768,9 +764,9 @@ export default function CustomerClaimsScreen({ navigation }) {
                       Lost/Missing
                     </Text>
                   </TouchableOpacity>
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[
-                      styles.claimTypeOption, 
+                      styles.claimTypeOption,
                       claimType === 'OTHER' && styles.claimTypeSelected
                     ]}
                     onPress={() => setClaimType('OTHER')}
@@ -800,7 +796,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 
               <View style={styles.documentsContainer}>
                 <Text style={styles.documentsLabel}>Supporting Documents:</Text>
-                
+
                 {selectedDocuments.length > 0 && (
                   <FlatList
                     data={selectedDocuments}
@@ -810,7 +806,7 @@ export default function CustomerClaimsScreen({ navigation }) {
                   />
                 )}
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.addDocumentButton}
                   onPress={handleAddDocument}
                 >
@@ -820,7 +816,7 @@ export default function CustomerClaimsScreen({ navigation }) {
               </View>
             </ScrollView>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
               onPress={handleSubmitClaim}
               disabled={submitting}
