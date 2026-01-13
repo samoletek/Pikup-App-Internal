@@ -61,9 +61,5 @@ ios/build/
 # Temporary server development files
 server-updates.js
 
-# Project checklist and instructions
-CHECKLIST.md
-mapbox_critical_fix.md
-
 # MCP Configuration
 .agent/

@@ -36,7 +36,7 @@ export default function AuthScreen({ navigation, route }) {
         try {
           const res = await checkTermsAcceptance(currentUser.uid);
           if (res.needsAcceptance) {
-            navigation.navigate('ConsentGateScreen', { 
+            navigation.navigate('ConsentGateScreen', {
               missingVersions: res.missingVersions,
               returnTo: userRole === "customer" ? "CustomerTabs" : "DriverTabs"
             });
@@ -53,7 +53,7 @@ export default function AuthScreen({ navigation, route }) {
         } catch (error) {
           console.error('Error checking terms acceptance:', error);
           // If consent check fails, navigate to consent screen as fallback
-          navigation.navigate('ConsentGateScreen', { 
+          navigation.navigate('ConsentGateScreen', {
             missingVersions: ['tosVersion', 'privacyVersion'],
             returnTo: userRole === "customer" ? "CustomerTabs" : "DriverTabs"
           });
@@ -84,7 +84,7 @@ export default function AuthScreen({ navigation, route }) {
       }
     }
 
-    if (!isLogin && pass-word !== confirmPassword) {
+    if (!isLogin && password !== confirmPassword) {
       Alert.alert("Error", "Passwords don't match");
       return;
     }
@@ -173,7 +173,7 @@ export default function AuthScreen({ navigation, route }) {
                   accessibilityLabel="PikUp"
                 />
               </View>
-              
+
               <Text style={styles.title}>Welcome</Text>
               <Text style={styles.subtitle}>
                 {isLogin ? `Sign in as ${userRole}` : `Create ${userRole} account`}
@@ -237,7 +237,7 @@ export default function AuthScreen({ navigation, route }) {
 
                 {!isLogin && (
                   <View style={styles.termsContainer}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.checkboxContainer}
                       onPress={() => setTermsAccepted(!termsAccepted)}
                     >
@@ -246,7 +246,7 @@ export default function AuthScreen({ navigation, route }) {
                       </View>
                       <View style={styles.termsTextContainer}>
                         <Text style={styles.termsText}>I agree to the </Text>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
                         >
                           <Text style={styles.termsLink}>Terms of Service & Privacy Policy</Text>
