@@ -12,9 +12,9 @@ const fs = require('fs');
 const path = require('path');
 
 const TOKEN_ENV_NAME = 'MAPBOX_DOWNLOAD_TOKEN'; // downloads token (private)
-const MBX_MAPS_VERSION = '10.19.0';
-const ANDROID_NAV_VERSION = '2.20.2';
-const ANDROID_MAPS_VERSION = '10.19.0';
+const MBX_MAPS_VERSION = '11.12.0';
+const ANDROID_NAV_VERSION = '3.5.1';
+const ANDROID_MAPS_VERSION = '11.12.0';
 
 const iosPin = (v) => (v.startsWith('=') ? v : `= ${v}`);
 
@@ -156,7 +156,7 @@ end
         if (!podfile.includes("pod 'MapboxNavigation'")) {
           podfile = podfile.replace(
             /target\s+'([^']+)'\s+do/m,
-            (m) => `${m}\n  pod 'MapboxNavigation', '~> 2.20'\n`
+            (m) => `${m}\n  pod 'MapboxNavigation', '~> 3.5'\n`
           );
         }
 

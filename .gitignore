@@ -63,5 +63,7 @@ server-updates.js
 
 # Project checklist and instructions
 CHECKLIST.md
-claude.md
 mapbox_critical_fix.md
+
+# MCP Configuration
+.agent/

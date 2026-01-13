@@ -7,7 +7,7 @@ const isDev = profile === "development";
 module.exports = {
   expo: {
     name: "pikup",
-    slug: "pikup-app", 
+    slug: "pikup-app",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -23,6 +23,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.pikup.main",
+      googleServicesFile: "./GoogleService-Info.plist",
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
         mapboxPublicToken: process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
@@ -74,13 +75,13 @@ module.exports = {
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
       ],
+      googleServicesFile: "./google-services.json",
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
         },
         mapboxPublicToken: process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
-      },
-      googleServicesFile:  process.env.GOOGLE_SERVICES_FILE
+      }
     },
     "extra": {
       "eas": {
@@ -92,14 +93,13 @@ module.exports = {
 
     // Include dev client only for development builds
     plugins: [
-      ...(profile === "development" ? ["expo-dev-client"] : []),
       [
         "@rnmapbox/maps",
-        { RNMapboxMapsImpl: "mapbox", RNMapboxMapsVersion: "11.12.0" },
+        { RNMapboxMapsVersion: "11.12.0" },
       ],
       [
         "./plugins/withMapboxNavigation",
-        { ios: true, android: false},
+        { ios: false, android: false },
       ],
       ["expo-build-properties", { ios: { useFrameworks: "static" } }],
       [
