@@ -61,5 +61,7 @@ ios/build/
 # Temporary server development files
 server-updates.js
 
-# Project checklist
+# Project checklist and instructions
 CHECKLIST.md
+claude.md
+mapbox_critical_fix.md

@@ -95,7 +95,7 @@ module.exports = {
       ...(profile === "development" ? ["expo-dev-client"] : []),
       [
         "@rnmapbox/maps",
-        { RNMapboxMapsImpl: "mapbox", RNMapboxMapsVersion: "10.19.0" },
+        { RNMapboxMapsImpl: "mapbox", RNMapboxMapsVersion: "11.12.0" },
       ],
       [
         "./plugins/withMapboxNavigation",

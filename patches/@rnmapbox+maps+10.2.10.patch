@@ -1,0 +1,176 @@
+diff --git a/node_modules/@rnmapbox/maps/android/src/main/java/com/rnmapbox/rnmbx/components/styles/RNMBXStyleFactory.kt b/node_modules/@rnmapbox/maps/android/src/main/java/com/rnmapbox/rnmbx/components/styles/RNMBXStyleFactory.kt
+index a8456b6..708dd56 100644
+--- a/node_modules/@rnmapbox/maps/android/src/main/java/com/rnmapbox/rnmbx/components/styles/RNMBXStyleFactory.kt
++++ b/node_modules/@rnmapbox/maps/android/src/main/java/com/rnmapbox/rnmbx/components/styles/RNMBXStyleFactory.kt
+@@ -1221,21 +1221,7 @@ object RNMBXStyleFactory {
+     }
+ 
+     fun setFillPatternCrossFade(layer: FillLayer, styleValue: RNMBXStyleValue ) {
+-      if (styleValue.isExpression()) {
+-        val expression = styleValue.getExpression()
+-        if (expression != null) {
+-          layer.fillPatternCrossFade(expression)
+-        } else {
+-          Logger.e("RNMBXFill", "Expression for fillPatternCrossFade is null")
+-        }
+-      } else {
+-          val value = styleValue.getDouble(VALUE_KEY)
+-          if (value != null) {
+-            layer.fillPatternCrossFade(value)
+-          } else {
+-            Logger.e("RNMBXFill", "value for fillPatternCrossFade is null")
+-          }
+-      }
++      // patched: property not available in Mapbox SDK 11.12.0
+     }
+ 
+     fun setFillEmissiveStrength(layer: FillLayer, styleValue: RNMBXStyleValue ) {
+@@ -1669,21 +1655,7 @@ object RNMBXStyleFactory {
+     }
+ 
+     fun setLinePatternCrossFade(layer: LineLayer, styleValue: RNMBXStyleValue ) {
+-      if (styleValue.isExpression()) {
+-        val expression = styleValue.getExpression()
+-        if (expression != null) {
+-          layer.linePatternCrossFade(expression)
+-        } else {
+-          Logger.e("RNMBXLine", "Expression for linePatternCrossFade is null")
+-        }
+-      } else {
+-          val value = styleValue.getDouble(VALUE_KEY)
+-          if (value != null) {
+-            layer.linePatternCrossFade(value)
+-          } else {
+-            Logger.e("RNMBXLine", "value for linePatternCrossFade is null")
+-          }
+-      }
++      // patched: property not available in Mapbox SDK 11.12.0
+     }
+ 
+     fun setLineTrimFadeRange(layer: LineLayer, styleValue: RNMBXStyleValue ) {
+@@ -3283,16 +3255,7 @@ object RNMBXStyleFactory {
+     }
+ 
+     fun setCircleElevationReference(layer: CircleLayer, styleValue: RNMBXStyleValue ) {
+-      if (styleValue.isExpression()) {
+-        val expression = styleValue.getExpression()
+-        if (expression != null) {
+-          layer.circleElevationReference(expression)
+-        } else {
+-          Logger.e("RNMBXCircle", "Expression for circleElevationReference is null")
+-        }
+-      } else {
+-          layer.circleElevationReference(CircleElevationReference.valueOf(styleValue.getEnumName()))
+-      }
++      // patched: property not available in Mapbox SDK 11.12.0
+     }
+ 
+     fun setCircleEmissiveStrength(layer: CircleLayer, styleValue: RNMBXStyleValue ) {
+@@ -3715,21 +3678,7 @@ object RNMBXStyleFactory {
+     }
+ 
+     fun setFillExtrusionPatternCrossFade(layer: FillExtrusionLayer, styleValue: RNMBXStyleValue ) {
+-      if (styleValue.isExpression()) {
+-        val expression = styleValue.getExpression()
+-        if (expression != null) {
+-          layer.fillExtrusionPatternCrossFade(expression)
+-        } else {
+-          Logger.e("RNMBXFillExtrusion", "Expression for fillExtrusionPatternCrossFade is null")
+-        }
+-      } else {
+-          val value = styleValue.getDouble(VALUE_KEY)
+-          if (value != null) {
+-            layer.fillExtrusionPatternCrossFade(value)
+-          } else {
+-            Logger.e("RNMBXFillExtrusion", "value for fillExtrusionPatternCrossFade is null")
+-          }
+-      }
++      // patched: property not available in Mapbox SDK 11.12.0
+     }
+ 
+     fun setFillExtrusionHeightAlignment(layer: FillExtrusionLayer, styleValue: RNMBXStyleValue ) {
+diff --git a/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXStyle.swift b/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXStyle.swift
+index be9eadd..98702bf 100644
+--- a/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXStyle.swift
++++ b/node_modules/@rnmapbox/maps/ios/RNMBX/RNMBXStyle.swift
+@@ -1160,7 +1160,7 @@ func setFillPatternCrossFade(_ layer: inout FillLayer, styleValue: RNMBXStyleVal
+       #if RNMBX_11
+       
+         
+-          layer.fillPatternCrossFade = styleValue.mglStyleValueNumber();
++          // layer.fillPatternCrossFade = styleValue.mglStyleValueNumber();
+         
+       
+       #endif
+@@ -1395,7 +1395,7 @@ func setLineElevationReference(_ layer: inout LineLayer, styleValue: RNMBXStyleV
+       #if RNMBX_11
+       
+         
+-          layer.lineElevationReference = styleValue.mglStyleValueEnum(); 
++          // layer.lineElevationReference = styleValue.mglStyleValueEnum();
+         
+       
+       #endif
+@@ -1406,7 +1406,7 @@ func setLineCrossSlope(_ layer: inout LineLayer, styleValue: RNMBXStyleValue)
+       #if RNMBX_11
+       
+         
+-          layer.lineCrossSlope = styleValue.mglStyleValueNumber();
++          // layer.lineCrossSlope = styleValue.mglStyleValueNumber();
+         
+       
+       #endif
+@@ -1417,7 +1417,7 @@ func setLinePatternCrossFade(_ layer: inout LineLayer, styleValue: RNMBXStyleVal
+       #if RNMBX_11
+       
+         
+-          layer.linePatternCrossFade = styleValue.mglStyleValueNumber();
++          // layer.linePatternCrossFade = styleValue.mglStyleValueNumber();
+         
+       
+       #endif
+@@ -2344,7 +2344,7 @@ func setCircleElevationReference(_ layer: inout CircleLayer, styleValue: RNMBXSt
+       #if RNMBX_11
+       
+         
+-          layer.circleElevationReference = styleValue.mglStyleValueEnum(); 
++          // layer.circleElevationReference = styleValue.mglStyleValueEnum();
+         
+       
+       #endif
+@@ -2594,7 +2594,7 @@ func setFillExtrusionPatternCrossFade(_ layer: inout FillExtrusionLayer, styleVa
+       #if RNMBX_11
+       
+         
+-          layer.fillExtrusionPatternCrossFade = styleValue.mglStyleValueNumber();
++          // layer.fillExtrusionPatternCrossFade = styleValue.mglStyleValueNumber();
+         
+       
+       #endif
+@@ -2605,7 +2605,7 @@ func setFillExtrusionHeightAlignment(_ layer: inout FillExtrusionLayer, styleVal
+       #if RNMBX_11
+       
+         
+-          layer.fillExtrusionHeightAlignment = styleValue.mglStyleValueEnum(); 
++          // layer.fillExtrusionHeightAlignment = styleValue.mglStyleValueEnum();
+         
+       
+       #endif
+@@ -2616,7 +2616,7 @@ func setFillExtrusionBaseAlignment(_ layer: inout FillExtrusionLayer, styleValue
+       #if RNMBX_11
+       
+         
+-          layer.fillExtrusionBaseAlignment = styleValue.mglStyleValueEnum(); 
++          // layer.fillExtrusionBaseAlignment = styleValue.mglStyleValueEnum();
+         
+       
+       #endif
+@@ -3480,7 +3480,7 @@ func setBackgroundPitchAlignment(_ layer: inout BackgroundLayer, styleValue: RNM
+       #if RNMBX_11
+       
+         
+-          layer.backgroundPitchAlignment = styleValue.mglStyleValueEnum(); 
++          // layer.backgroundPitchAlignment = styleValue.mglStyleValueEnum();
+         
+       
+       #endif
