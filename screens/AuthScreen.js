@@ -11,8 +11,10 @@ import {
   ScrollView,
   Alert,
   Image,
+  Dimensions
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function AuthScreen({ navigation, route }) {
@@ -28,6 +30,11 @@ export default function AuthScreen({ navigation, route }) {
 
   // Get the user role from navigation params
   const userRole = route?.params?.userRole || "customer";
+
+  const screenHeight = Dimensions.get("window").height;
+
+  // Calculate dynamic extraScrollHeight (e.g., 10% of screen height)
+  const extraScrollHeight = screenHeight * 0.1;
 
   // Check terms acceptance after user is set in AuthContext
   useEffect(() => {
@@ -169,7 +176,12 @@ export default function AuthScreen({ navigation, route }) {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.container}
         >
-          <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <KeyboardAwareScrollView
+            contentContainerStyle={styles.scrollContainer}
+            extraScrollHeight={extraScrollHeight} // Adds extra space above the keyboard
+            enableOnAndroid={true} // Enables functionality on Android
+            keyboardShouldPersistTaps="handled"
+          >
             <View style={styles.formSection}>
               <View style={styles.logoContainer}>
                 <Image
@@ -286,7 +298,7 @@ export default function AuthScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
             </View>
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>

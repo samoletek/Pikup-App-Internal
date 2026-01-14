@@ -76,6 +76,7 @@ module.exports = {
         "VIBRATE",
       ],
       googleServicesFile: "./google-services.json",
+      newArchEnabled: true,
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
