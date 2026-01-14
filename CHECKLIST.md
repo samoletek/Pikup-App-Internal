@@ -98,6 +98,14 @@
 - **NO `RNMapboxMapsImpl: "mapbox"`** in app.config.js - use default MapLibre
 - Mapbox patch applied: `patches/@rnmapbox+maps+10.2.10.patch`
 
+> [!CAUTION]
+> **DO NOT UPDATE these packages** — will break iOS build:
+> - `react-native-reanimated` — keep at `~3.17.4` (v4+ requires New Architecture)
+> - `react-native-gesture-handler` — keep at `~2.24.0`
+> - `expo-dev-client` — **DO NOT ADD** (causes Xcode 17 compile errors)
+> 
+> If you need to update dependencies, run `npm install` only. Never run `npm update`.
+
 ### New Developer Setup
 ```bash
 
