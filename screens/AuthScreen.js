@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Ionicons } from '@expo/vector-icons'; 
 import {
   View,
   Text,
@@ -26,6 +27,18 @@ export default function AuthScreen({ navigation, route }) {
   const [lastName, setLastName] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
 
+  // Error states
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
+  const [firstNameError, setFirstNameError] = useState("");
+  const [lastNameError, setLastNameError] = useState("");
+  const [termsAcceptedError, setTermsAcceptedError] = useState("");
+
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const { signup, login, loading, currentUser, checkTermsAcceptance, getDriverProfile } = useAuth();
 
   // Get the user role from navigation params
@@ -38,6 +51,20 @@ export default function AuthScreen({ navigation, route }) {
 
   // Check terms acceptance after user is set in AuthContext
   useEffect(() => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setFirstName("");
+    setLastName("");
+    setTermsAccepted(false);
+
+    setEmailError("");
+    setPasswordError("");
+    setConfirmPasswordError("");
+    setFirstNameError("");
+    setLastNameError("");
+    setTermsAcceptedError("");
+
     if (currentUser) {
       (async () => {
         try {
@@ -73,43 +100,81 @@ export default function AuthScreen({ navigation, route }) {
         }
       })();
     }
-  }, [currentUser, userRole, navigation, checkTermsAcceptance]);
+  }, [currentUser, userRole, navigation, checkTermsAcceptance, isLogin]);
 
+ 
   const handleAuth = async () => {
+    // Reset all error states before validation
+    setEmailError("");
+    setPasswordError("");
+    setConfirmPasswordError("");
+    setFirstNameError("");
+    setLastNameError("");
+    setTermsAcceptedError("");
+
+    let hasError = false;
+
     // Validation
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
+    if (!email) {
+      setEmailError("Email is required.");
+      hasError = true;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Please enter a valid email address.");
+      hasError = true;
+    }
+
+    if (!password) {
+      setPasswordError("Password is required.");
+      hasError = true;
+    } else if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      hasError = true;
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      setPasswordError("Password must contain at least one uppercase letter.");
+      hasError = true;
+    } else if (!/(?=.*\d)/.test(password)) {
+      setPasswordError("Password must contain at least one number.");
+      hasError = true;
+    } else if (!/(?=.*[@$!%*?&])/.test(password)) {
+      setPasswordError("Password must contain at least one special character (e.g., @, $, !, %, *, ?, &).");
+      hasError = true;
     }
 
     if (!isLogin) {
-      if (!firstName.trim() || !lastName.trim()) {
-        Alert.alert("Error", "Please enter your first and last name.");
-        return;
+      if (!firstName.trim()) {
+        setFirstNameError("First name is required.");
+        hasError = true;
+      } else if (firstName.trim().length < 2) {
+        setFirstNameError("First name must be at least 2 characters.");
+        hasError = true;
+      } else if (!/^[A-Za-z]+$/.test(firstName.trim())) {
+        setFirstNameError("First name must only contain letters.");
+        hasError = true;
       }
-      if (firstName.trim().length < 2) {
-        Alert.alert("Error", "First name must be at least 2 characters.");
-        return;
+      
+      if (!lastName.trim()) {
+        setLastNameError("Last name is required.");
+        hasError = true;
+      } else if (lastName.trim().length < 2) {
+        setLastNameError("Last name must be at least 2 characters.");
+        hasError = true;
+      } else if (!/^[A-Za-z]+$/.test(lastName.trim())) {
+        setLastNameError("Last name must only contain letters.");
+        hasError = true;
       }
-      if (lastName.trim().length < 2) {
-        Alert.alert("Error", "Last name must be at least 2 characters.");
-        return;
+
+      if (password !== confirmPassword) {
+        setConfirmPasswordError("Passwords do not match.");
+        hasError = true;
+      }
+
+      if (!termsAccepted) {
+        setTermsAcceptedError("Please accept the Terms of Service and Privacy Policy");
+        hasError = true;
       }
     }
 
-    if (!isLogin && password !== confirmPassword) {
-      Alert.alert("Error", "Passwords don't match");
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
-      return;
-    }
-
-    // Terms validation for signup only
-    if (!isLogin && !termsAccepted) {
-      Alert.alert("Error", "Please accept the Terms of Service and Privacy Policy");
+    if (hasError) {
       return;
     }
 
@@ -148,21 +213,19 @@ export default function AuthScreen({ navigation, route }) {
       // Handle Firebase REST API errors
       if (error.message) {
         if (error.message.includes("EMAIL_NOT_FOUND")) {
-          errorMessage = "No account found with this email";
+          setEmailError("No account found with this email.");
         } else if (error.message.includes("INVALID_PASSWORD")) {
-          errorMessage = "Incorrect password";
+          setPasswordError("Incorrect password.");
         } else if (error.message.includes("EMAIL_EXISTS")) {
-          errorMessage = "Email already in use";
+          setEmailError("Email already in use.");
         } else if (error.message.includes("INVALID_EMAIL")) {
-          errorMessage = "Invalid email address";
+          setEmailError("Invalid email address.");
         } else if (error.message.includes("WEAK_PASSWORD")) {
-          errorMessage = "Password should be at least 6 characters";
+          setPasswordError("Password should be at least 6 characters.");
         } else {
           errorMessage = error.message;
         }
       }
-
-      Alert.alert("Error", errorMessage);
     }
   };
 
@@ -201,63 +264,110 @@ export default function AuthScreen({ navigation, route }) {
                 {!isLogin && (
                   <>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, firstNameError ? styles.inputError : null]}
                       placeholder="First name"
                       placeholderTextColor="#888"
                       value={firstName}
-                      onChangeText={setFirstName}
+                      onChangeText={(value) => {
+                        setFirstName(value);
+                        setFirstNameError("");
+                      }}
                       autoCapitalize="words"
                     />
-
+                    {firstNameError ? <Text style={styles.errorText}>{firstNameError}</Text> : null}
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, lastNameError ? styles.inputError : null]}
                       placeholder="Last name"
                       placeholderTextColor="#888"
                       value={lastName}
-                      onChangeText={setLastName}
+                      onChangeText={(value) => {
+                        setLastName(value);
+                        setLastNameError(""); // Reset last name error
+                      }}
                       autoCapitalize="words"
                     />
+                    {lastNameError ? <Text style={styles.errorText}>{lastNameError}</Text> : null}
                   </>
                 )}
 
                 <TextInput
-                  style={styles.input}
+                 style={[styles.input, emailError ? styles.inputError : null]}
                   placeholder="Email address"
                   placeholderTextColor="#888"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setEmailError(""); 
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
-
+                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
+                <View style={{ position: 'relative' }}>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, passwordError ? styles.inputError : null]}
                   placeholder="Password"
                   placeholderTextColor="#888"
                   value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setPasswordError("");
+                  }}
+                  secureTextEntry={!showPassword}
                   autoCapitalize="none"
                 />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPassword(!showPassword)} // Toggle state
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off" : "eye"} // Change icon based on state
+                    size={24}
+                    color="#888"
+                  />
+                </TouchableOpacity>
+                </View>
+                {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
                 {!isLogin && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Confirm password"
-                    placeholderTextColor="#888"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                  />
+                  <>
+                  <View style={{ position: 'relative' }}>
+                    <TextInput
+                      style={[styles.input, confirmPasswordError ? styles.inputError : null]}
+                      placeholder="Confirm password"
+                      placeholderTextColor="#888"
+                      value={confirmPassword}
+                      onChangeText={(value) => {
+                        setConfirmPassword(value);
+                        setConfirmPasswordError(""); // Reset confirm password error
+                      }}
+                      secureTextEntry={!showConfirmPassword}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowConfirmPassword(!showConfirmPassword)} // Toggle state
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? "eye-off" : "eye"} // Change icon based on state
+                        size={24}
+                        color="#888"
+                      />
+                    </TouchableOpacity>
+                    </View>
+                    {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
+                  </>
                 )}
 
                 {!isLogin && (
                   <View style={styles.termsContainer}>
                     <TouchableOpacity
                       style={styles.checkboxContainer}
-                      onPress={() => setTermsAccepted(!termsAccepted)}
+                      onPress={() => { 
+                        setTermsAccepted(!termsAccepted);
+                        setTermsAcceptedError(""); 
+                      }}
                     >
                       <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
                         {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
@@ -271,6 +381,9 @@ export default function AuthScreen({ navigation, route }) {
                         </TouchableOpacity>
                       </View>
                     </TouchableOpacity>
+                    {termsAcceptedError ? (
+                      <Text style={styles.termsAcceptedErrorText}>{termsAcceptedError}</Text>
+                    ) : null}
                   </View>
                 )}
 
@@ -308,6 +421,27 @@ export default function AuthScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  errorText: {
+    color: "red",
+    fontSize: 12,
+    marginBottom: 10,
+    marginLeft: 20,
+  },
+  eyeIcon: {
+    position: "absolute",
+    right: 30, 
+    borderRadius: 30,
+    paddingVertical: 16,
+  },
+  termsAcceptedErrorText: {
+    color: "red",
+    fontSize: 12,
+    marginBottom: 30, 
+    marginLeft: 20,
+  },
+  inputError: {
+    borderColor: "red",
   },
   scrollContainer: {
     flexGrow: 1,

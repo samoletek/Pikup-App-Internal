@@ -144,9 +144,9 @@ These fixes were required to unblock progress
 ## Out of Scope (Probably for Phase 2)
 
 - Fix layout (top/bottom blocks that content scrolls behind - content should go behind device edges like in popular apps)
-- Scroll on auth screen - unclear why it's needed
+- Scroll on auth screen - unclear why it's needed - (Replace with KeyboardAvoidingView. Please review)
 - Logo positioning above search field
-- Auth field validation (password can be 6 identical digits)
+- Auth field validation (password can be 6 identical digits) - (done)
 - Full onboarding redesign:
   - Add dropdown/autocomplete for address (with validation)
   - Add dynamic pickers for vehicle make, model, year, and color
