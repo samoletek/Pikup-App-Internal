@@ -46,16 +46,16 @@ const PriceSummaryModal = ({
   const [addPaymentModalVisible, setAddPaymentModalVisible] = useState(false);
   const [slideAnim] = useState(new Animated.Value(height));
   const [processing, setProcessing] = useState(false);
-  
+
   // NEW: Insurance state - always included by default
   const [includeCoverage, setIncludeCoverage] = useState(true);
   const [insuranceQuote, setInsuranceQuote] = useState(null);
   const [loadingInsurance, setLoadingInsurance] = useState(false);
-  
+
   // Error handling for insurance failures
   const [insuranceError, setInsuranceError] = useState(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
-  
+
   // UX Improvements: Expandable sections
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [showTripDetails, setShowTripDetails] = useState(true);
@@ -87,10 +87,10 @@ const PriceSummaryModal = ({
         tension: 100,
         friction: 8,
       }).start();
-      
+
       // Initialize toggle animation based on current state
       toggleAnim.setValue(includeCoverage ? 1 : 0);
-      
+
       // Use pricing from VehicleSelectionModal - no additional API calls needed
     } else {
       Animated.spring(slideAnim, {
@@ -131,12 +131,12 @@ const PriceSummaryModal = ({
     // Use pricing from vehicle selection (existing working logic)
     if (selectedVehicle?.pricing?.total) {
       const baseTotal = selectedVehicle.pricing.total;
-      
+
       // Clean insurance logic: $0 if no coverage, real quote if coverage
-      const coverageFee = includeCoverage && insuranceQuote?.premium 
-        ? insuranceQuote.premium 
+      const coverageFee = includeCoverage && insuranceQuote?.premium
+        ? insuranceQuote.premium
         : 0;
-      
+
       const coverageTax = coverageFee * 0.08; // Tax only on actual coverage fee
       return (baseTotal + coverageFee + coverageTax).toFixed(2);
     }
@@ -145,17 +145,17 @@ const PriceSummaryModal = ({
     if (providedTotal) {
       return providedTotal;
     }
-    
+
     const basePrice = parseFloat(
       selectedVehicle?.price?.replace("$", "") || "40.00"
     );
     const serviceFee = 2.99;
-    
+
     // Clean: only add insurance if we have a real quote
-    const coverageFee = includeCoverage && insuranceQuote?.premium 
-      ? insuranceQuote.premium 
+    const coverageFee = includeCoverage && insuranceQuote?.premium
+      ? insuranceQuote.premium
       : 0;
-    
+
     const tax = (basePrice + serviceFee + coverageFee) * 0.08;
     return (basePrice + serviceFee + coverageFee + tax).toFixed(2);
   };
@@ -214,7 +214,7 @@ const PriceSummaryModal = ({
       }, 400);
       return;
     }
-    
+
     // Regular flow for non-demo mode
     // Check if user has a payment method
     if (!defaultPaymentMethod && paymentMethods.length === 0) {
@@ -247,7 +247,7 @@ const PriceSummaryModal = ({
         includeCoverage,
         rideId,
         timestamp: new Date().toISOString(),
-        
+
         // Insurance always included - require quote data
         insurance: {
           included: true,
@@ -271,7 +271,7 @@ const PriceSummaryModal = ({
         // Handle specific insurance error codes
         const error = paymentIntentResult.error;
         const errorCode = paymentIntentResult.errorCode;
-        
+
         switch (errorCode) {
           case 'INSURANCE_UNAVAILABLE':
             Alert.alert(
@@ -336,12 +336,12 @@ const PriceSummaryModal = ({
         }, 400);
       } catch (paymentError) {
         console.error("Payment failed:", paymentError);
-        
+
         // Enhanced payment error handling with recovery options
         Alert.alert(
           "Payment Issue",
           paymentError.message ||
-            "We couldn't process your payment. Please try again.",
+          "We couldn't process your payment. Please try again.",
           [
             { text: "Cancel", style: "cancel" },
             {
@@ -367,7 +367,7 @@ const PriceSummaryModal = ({
       Alert.alert(
         "Booking Error",
         error.message ||
-          "There was an issue scheduling your pickup. Please try again.",
+        "There was an issue scheduling your pickup. Please try again.",
         [{ text: "OK" }]
       );
     } finally {
@@ -425,9 +425,8 @@ const PriceSummaryModal = ({
 
     return {
       icon: "card",
-      text: `${defaultPaymentMethod.brand?.toUpperCase()} •••• ${
-        defaultPaymentMethod.last4
-      }`,
+      text: `${defaultPaymentMethod.brand?.toUpperCase()} •••• ${defaultPaymentMethod.last4
+        }`,
       subtext: `Expires ${defaultPaymentMethod.expMonth}/${defaultPaymentMethod.expYear}`,
     };
   };
@@ -435,7 +434,7 @@ const PriceSummaryModal = ({
   // Handle coverage toggle - clean logic with animations
   const handleCoverageToggle = () => {
     const newValue = !includeCoverage;
-    
+
     // Scale animation for feedback
     Animated.sequence([
       Animated.timing(scaleAnim, {
@@ -449,7 +448,7 @@ const PriceSummaryModal = ({
         useNativeDriver: true,
       }),
     ]).start();
-    
+
     // Toggle switch animation
     Animated.spring(toggleAnim, {
       toValue: newValue ? 1 : 0,
@@ -457,9 +456,9 @@ const PriceSummaryModal = ({
       friction: 8,
       useNativeDriver: true,
     }).start();
-    
+
     setIncludeCoverage(newValue);
-    
+
     if (newValue) {
       // User wants coverage - fetch quote if we don't have one
       if (!insuranceQuote) {
@@ -475,16 +474,16 @@ const PriceSummaryModal = ({
   const getPricingData = () => {
     if (selectedVehicle?.pricing) {
       const vehiclePricing = selectedVehicle.pricing;
-      
+
       // Clean: only use insurance premium if coverage is enabled AND we have a quote
-      const coverageFee = includeCoverage && insuranceQuote?.premium 
-        ? insuranceQuote.premium 
+      const coverageFee = includeCoverage && insuranceQuote?.premium
+        ? insuranceQuote.premium
         : 0;
-      
+
       const subtotalWithCoverage = vehiclePricing.subtotal + coverageFee;
       const totalTax = (subtotalWithCoverage + vehiclePricing.serviceFee) * 0.08;
       const total = subtotalWithCoverage + vehiclePricing.serviceFee + totalTax;
-      
+
       return {
         basePrice: vehiclePricing.baseFare + vehiclePricing.mileageCharge,
         serviceFee: vehiclePricing.serviceFee,
@@ -502,12 +501,12 @@ const PriceSummaryModal = ({
       selectedVehicle?.price?.replace("$", "") || "40.00"
     );
     const serviceFee = 2.99;
-    
+
     // Clean: only add insurance if we have a real quote
-    const coverageFee = includeCoverage && insuranceQuote?.premium 
-      ? insuranceQuote.premium 
+    const coverageFee = includeCoverage && insuranceQuote?.premium
+      ? insuranceQuote.premium
       : 0;
-    
+
     const subtotal = basePrice + serviceFee + coverageFee;
     const tax = subtotal * 0.08;
 
@@ -563,7 +562,7 @@ const PriceSummaryModal = ({
           <View style={{ width: 24 }} />
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.content}
           showsVerticalScrollIndicator={false}
           bounces={true}
@@ -571,7 +570,7 @@ const PriceSummaryModal = ({
         >
           {/* Trip Details */}
           <View style={styles.tripSection}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.sectionHeader}
               onPress={() => {
                 const newValue = !showTripDetails;
@@ -584,13 +583,13 @@ const PriceSummaryModal = ({
               }}
             >
               <Text style={styles.sectionTitle}>Trip Details</Text>
-              <Ionicons 
-                name={showTripDetails ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color="#A77BFF" 
+              <Ionicons
+                name={showTripDetails ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#A77BFF"
               />
             </TouchableOpacity>
-            <Animated.View 
+            <Animated.View
               style={[{
                 opacity: tripDetailsAnim,
                 maxHeight: tripDetailsAnim.interpolate({
@@ -600,37 +599,37 @@ const PriceSummaryModal = ({
               }]}
             >
               <View style={styles.locationRow}>
-              <Ionicons name="radio-button-on" size={12} color="#00D4AA" />
-              <Text style={styles.locationText}>
-                {selectedLocations?.pickup?.address || "Pickup Location"}
-              </Text>
-            </View>
-            <View style={styles.dotLine}>
-              {[...Array(3)].map((_, i) => (
-                <View key={i} style={styles.dot} />
-              ))}
-            </View>
-            <View style={styles.locationRow}>
-              <Ionicons name="location" size={12} color="#A77BFF" />
-              <Text style={styles.locationText}>
-                {selectedLocations?.dropoff?.address || "Drop-off Location"}
-              </Text>
-            </View>
-            {/* Show distance and duration if available */}
-            {(distance || duration) && (
-              <View style={styles.tripDetails}>
-                {distance && (
-                  <Text style={styles.tripDetailText}>
-                    Distance: {distance} miles
-                  </Text>
-                )}
-                {duration && (
-                  <Text style={styles.tripDetailText}>
-                    Duration: {duration} mins
-                  </Text>
-                )}
+                <Ionicons name="radio-button-on" size={12} color="#00D4AA" />
+                <Text style={styles.locationText}>
+                  {selectedLocations?.pickup?.address || "Pickup Location"}
+                </Text>
               </View>
-            )}
+              <View style={styles.dotLine}>
+                {[...Array(3)].map((_, i) => (
+                  <View key={i} style={styles.dot} />
+                ))}
+              </View>
+              <View style={styles.locationRow}>
+                <Ionicons name="location" size={12} color="#A77BFF" />
+                <Text style={styles.locationText}>
+                  {selectedLocations?.dropoff?.address || "Drop-off Location"}
+                </Text>
+              </View>
+              {/* Show distance and duration if available */}
+              {(distance || duration) && (
+                <View style={styles.tripDetails}>
+                  {distance && (
+                    <Text style={styles.tripDetailText}>
+                      Distance: {distance} miles
+                    </Text>
+                  )}
+                  {duration && (
+                    <Text style={styles.tripDetailText}>
+                      Duration: {duration} mins
+                    </Text>
+                  )}
+                </View>
+              )}
             </Animated.View>
           </View>
 
@@ -682,14 +681,14 @@ const PriceSummaryModal = ({
                 <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
               </View>
             </View>
-            
+
             {loadingInsurance && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#A77BFF" />
                 <Text style={styles.loadingText}>Getting insurance quote...</Text>
               </View>
             )}
-            
+
             {/* Show error state if quote unavailable */}
             {!loadingInsurance && !insuranceQuote && (
               <View style={styles.errorContainer}>
@@ -716,7 +715,7 @@ const PriceSummaryModal = ({
 
           {/* Price Breakdown */}
           <View style={styles.summaryBox}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.summaryHeader}
               onPress={() => {
                 const newValue = !showPriceBreakdown;
@@ -731,15 +730,15 @@ const PriceSummaryModal = ({
               <Text style={styles.sectionTitle}>Price Breakdown</Text>
               <View style={styles.summaryHeaderRight}>
                 <Text style={styles.totalPrice}>${pricing.total}</Text>
-                <Ionicons 
-                  name={showPriceBreakdown ? "chevron-up" : "chevron-down"} 
-                  size={20} 
-                  color="#A77BFF" 
+                <Ionicons
+                  name={showPriceBreakdown ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#A77BFF"
                 />
               </View>
             </TouchableOpacity>
 
-            <Animated.View 
+            <Animated.View
               style={[{
                 opacity: priceBreakdownAnim,
                 maxHeight: priceBreakdownAnim.interpolate({
@@ -757,61 +756,61 @@ const PriceSummaryModal = ({
                 </View>
               )}
 
-            <View style={styles.priceRow}>
-              <Text style={styles.label}>Base Price</Text>
-              <Text style={styles.price}>${pricing.basePrice.toFixed(2)}</Text>
-            </View>
-
-            <View style={styles.priceRow}>
-              <Text style={styles.label}>Service Fee</Text>
-              <Text style={styles.price}>${pricing.serviceFee.toFixed(2)}</Text>
-            </View>
-
-            {/* Only show insurance line if coverage is enabled AND we have a quote */}
-            {includeCoverage && insuranceQuote?.premium > 0 && (
               <View style={styles.priceRow}>
-                <Text style={styles.label}>Insurance</Text>
-                <Text style={styles.price}>${insuranceQuote.premium.toFixed(2)}</Text>
+                <Text style={styles.label}>Base Price</Text>
+                <Text style={styles.price}>${pricing.basePrice.toFixed(2)}</Text>
               </View>
-            )}
 
-            <View style={styles.priceRow}>
-              <Text style={styles.label}>Tax</Text>
-              <Text style={styles.price}>${pricing.tax.toFixed(2)}</Text>
-            </View>
+              <View style={styles.priceRow}>
+                <Text style={styles.label}>Service Fee</Text>
+                <Text style={styles.price}>${pricing.serviceFee.toFixed(2)}</Text>
+              </View>
 
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalPrice}>${pricing.total}</Text>
-            </View>
-
-            {/* Payment Method */}
-            <TouchableOpacity
-              style={styles.paymentRow}
-              onPress={handlePaymentMethodPress}
-            >
-              <View style={styles.paymentLeft}>
-                <Ionicons
-                  name={paymentDisplay.icon}
-                  size={20}
-                  color={defaultPaymentMethod ? "#00D4AA" : "#A77BFF"}
-                />
-                <View style={styles.paymentInfo}>
-                  <Text
-                    style={[
-                      styles.paymentText,
-                      !defaultPaymentMethod && styles.addPaymentText,
-                    ]}
-                  >
-                    {paymentDisplay.text}
-                  </Text>
-                  <Text style={styles.paymentSubtext}>
-                    {paymentDisplay.subtext}
-                  </Text>
+              {/* Only show insurance line if coverage is enabled AND we have a quote */}
+              {includeCoverage && insuranceQuote?.premium > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.label}>Insurance</Text>
+                  <Text style={styles.price}>${insuranceQuote.premium.toFixed(2)}</Text>
                 </View>
+              )}
+
+              <View style={styles.priceRow}>
+                <Text style={styles.label}>Tax</Text>
+                <Text style={styles.price}>${pricing.tax.toFixed(2)}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#ccc" />
-            </TouchableOpacity>
+
+              <View style={[styles.priceRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalPrice}>${pricing.total}</Text>
+              </View>
+
+              {/* Payment Method */}
+              <TouchableOpacity
+                style={styles.paymentRow}
+                onPress={handlePaymentMethodPress}
+              >
+                <View style={styles.paymentLeft}>
+                  <Ionicons
+                    name={paymentDisplay.icon}
+                    size={20}
+                    color={defaultPaymentMethod ? "#00D4AA" : "#A77BFF"}
+                  />
+                  <View style={styles.paymentInfo}>
+                    <Text
+                      style={[
+                        styles.paymentText,
+                        !defaultPaymentMethod && styles.addPaymentText,
+                      ]}
+                    >
+                      {paymentDisplay.text}
+                    </Text>
+                    <Text style={styles.paymentSubtext}>
+                      {paymentDisplay.subtext}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+              </TouchableOpacity>
             </Animated.View>
           </View>
         </ScrollView>

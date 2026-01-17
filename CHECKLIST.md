@@ -151,3 +151,4 @@ These fixes were required to unblock progress
   - Add dropdown/autocomplete for address (with validation)
   - Add dynamic pickers for vehicle make, model, year, and color
   - Add input masks for phone number and date of birth
+- Existing email still allows onboarding (signup with already registered email should show error, not proceed)

@@ -75,7 +75,7 @@ export default function CustomerHomeScreen({ navigation }) {
       const unsubscribe = navigation.addListener('focus', () => {
         // Get the route params
         const params = navigation.getState()?.routes?.find(route => route.name === 'CustomerHomeScreen')?.params;
-        
+
         if (params?.returnFromPayment && params?.bookingContext) {
           // Restore the booking context
           const { bookingContext } = params;
@@ -85,10 +85,10 @@ export default function CustomerHomeScreen({ navigation }) {
           setCalculatedDistance(bookingContext.calculatedDistance);
           setEstimatedDuration(bookingContext.estimatedDuration);
           setRideId(bookingContext.rideId);
-          
+
           // Re-open the price modal
           setPriceModalVisible(true);
-          
+
           // Clear the return params
           navigation.setParams({ returnFromPayment: false, bookingContext: null });
         }
@@ -107,7 +107,7 @@ export default function CustomerHomeScreen({ navigation }) {
       // Get coordinates - they should already be available from the search modal
       let pickupCoords = selectedLocations.pickup.coordinates;
       let dropoffCoords = selectedLocations.dropoff.coordinates;
-      
+
       // Only geocode if we don't have coordinates
       if (!pickupCoords && selectedLocations.pickup.address) {
         try {
@@ -116,7 +116,7 @@ export default function CustomerHomeScreen({ navigation }) {
           console.log('Could not geocode pickup address:', error.message);
         }
       }
-      
+
       if (!dropoffCoords && selectedLocations.dropoff.address) {
         try {
           dropoffCoords = await MapboxLocationService.geocodeAddress(selectedLocations.dropoff.address);
@@ -130,7 +130,7 @@ export default function CustomerHomeScreen({ navigation }) {
         console.log('Missing coordinates, using fallback estimates');
         const estimatedDistance = Math.random() * 5 + 10; // 10-15 miles
         const estimatedTime = Math.random() * 10 + 20; // 20-30 minutes
-        
+
         setCalculatedDistance(parseFloat(estimatedDistance.toFixed(1)));
         setEstimatedDuration(Math.round(estimatedTime));
         return;
@@ -151,9 +151,9 @@ export default function CustomerHomeScreen({ navigation }) {
       // Convert distance from meters to miles and duration from seconds to minutes
       const distanceInMiles = (routeData.distance.value * 0.000621371).toFixed(1);
       const durationInMinutes = Math.round(
-        routeData.duration_in_traffic ? 
-        routeData.duration_in_traffic.value / 60 : 
-        routeData.duration.value / 60
+        routeData.duration_in_traffic ?
+          routeData.duration_in_traffic.value / 60 :
+          routeData.duration.value / 60
       );
 
       setCalculatedDistance(parseFloat(distanceInMiles));
@@ -162,14 +162,14 @@ export default function CustomerHomeScreen({ navigation }) {
       console.log(`Real route calculated: ${distanceInMiles} miles, ${durationInMinutes} minutes (with traffic)`);
     } catch (error) {
       console.error('Error calculating real route details:', error);
-      
+
       // Fallback to estimated values based on typical city distances
       const estimatedDistance = Math.random() * 5 + 10; // 10-15 miles
       const estimatedTime = Math.random() * 10 + 20; // 20-30 minutes
-      
+
       setCalculatedDistance(parseFloat(estimatedDistance.toFixed(1)));
       setEstimatedDuration(Math.round(estimatedTime));
-      
+
       console.log(`Using fallback estimates: ${estimatedDistance.toFixed(1)} miles, ${Math.round(estimatedTime)} minutes`);
     }
   };
@@ -190,15 +190,15 @@ export default function CustomerHomeScreen({ navigation }) {
 
   useEffect(() => {
     getCurrentLocation();
-    
+
     // Check for active deliveries
     const checkActiveDeliveries = async () => {
       try {
         const requests = await getUserPickupRequests();
-        const activeRequest = requests.find(req => 
+        const activeRequest = requests.find(req =>
           ['accepted', 'inProgress', 'arrivedAtPickup', 'pickedUp', 'enRouteToDropoff', 'arrivedAtDropoff'].includes(req.status)
         );
-        
+
         if (activeRequest) {
           setActiveDelivery(activeRequest);
         } else {
@@ -208,12 +208,12 @@ export default function CustomerHomeScreen({ navigation }) {
         console.error('Error checking for active deliveries:', error);
       }
     };
-    
+
     checkActiveDeliveries();
-    
+
     // Set up a timer to check periodically
     const intervalCheck = setInterval(checkActiveDeliveries, 30000);
-    
+
     return () => {
       clearInterval(intervalCheck);
     };
@@ -222,7 +222,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const getCurrentLocation = async () => {
     try {
       setLocationStatus("Requesting permissions...");
-      
+
       setLocationStatus("Getting location...");
       const location = await MapboxLocationService.getCurrentLocation();
 
@@ -300,32 +300,32 @@ export default function CustomerHomeScreen({ navigation }) {
   const handleSummaryNext = async (summaryInfo) => {
     console.log("Summary next with data:", summaryInfo);
     console.log("🔍 selectedLocations at handleSummaryNext start:", selectedLocations);
-    
+
     try {
       // If there are photos, upload them to Firebase Storage first
       if (summaryInfo.photos && summaryInfo.photos.length > 0) {
         setIsUploadingPhotos(true);
         console.log(`Uploading ${summaryInfo.photos.length} customer photos...`);
-        
+
         // Create a temporary request ID for photo storage
         const tempRequestId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Upload photos to Firebase Storage using new path structure
         const uploadedPhotos = await uploadMultiplePhotos(
-          summaryInfo.photos, 
+          summaryInfo.photos,
           `photos/${tempRequestId}/pickup`
         );
-        
+
         console.log('Customer photos uploaded successfully:', uploadedPhotos);
-        
+
         // Add uploaded photo URLs to summary data
         summaryInfo.uploadedPhotos = uploadedPhotos;
         summaryInfo.tempRequestId = tempRequestId; // Store temp ID for later cleanup if needed
       }
-      
+
       setSummaryData(summaryInfo);
       setIsUploadingPhotos(false);
-      
+
       // In demo mode, update the demo data
       if (isDemoMode && currentStage === 'SUMMARY_DETAILS') {
         updateDemoData({
@@ -339,7 +339,7 @@ export default function CustomerHomeScreen({ navigation }) {
       console.log("🔍 selectedLocations before opening vehicle modal:", selectedLocations);
       setSummaryModalVisible(false);
       setVehicleModalVisible(true);
-      
+
     } catch (error) {
       setIsUploadingPhotos(false);
       console.error('Error uploading customer photos:', error);
@@ -363,14 +363,14 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const handleVehicleSelection = (vehicle) => {
     setSelectedVehicle(vehicle);
-    
+
     // In demo mode, update the demo data
     if (isDemoMode && currentStage === 'VEHICLE_SELECTION') {
       updateDemoData({
         vehicle: vehicle
       }, 'PRICE_SUMMARY');
     }
-    
+
     setVehicleModalVisible(false);
     setPriceModalVisible(true);
   };
@@ -389,7 +389,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const handleNavigateToPaymentMethods = () => {
     // Close the price modal first
     setPriceModalVisible(false);
-    
+
     // Navigate to payment methods screen
     navigation.navigate("PaymentMethodsScreen", {
       // Pass return path so PaymentMethodsScreen knows where to return
@@ -562,16 +562,16 @@ export default function CustomerHomeScreen({ navigation }) {
             thumbColor={isDemoMode ? "#2196F3" : "#f4f3f4"}
           />
         </View>
-        
+
         {!isDemoMode && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.demoButton}
             onPress={handleStartDemoFlow}
           >
             <Text style={styles.demoButtonText}>Start Demo Flow</Text>
           </TouchableOpacity>
         )}
-        
+
         {isDemoMode && (
           <View style={styles.demoStageContainer}>
             <Text style={styles.demoStageText}>Current Stage: {currentStage}</Text>
@@ -616,7 +616,7 @@ export default function CustomerHomeScreen({ navigation }) {
       {/* Delivery Status Tracker - Only show when there's an active delivery */}
       {activeDelivery && (
         <View style={styles.trackerContainer}>
-          <DeliveryStatusTracker 
+          <DeliveryStatusTracker
             requestId={activeDelivery.id}
             onDeliveryComplete={isDemoMode ? null : handleDeliveryComplete}
             onViewFullTracker={() => handleViewFullTracker(activeDelivery.id)}

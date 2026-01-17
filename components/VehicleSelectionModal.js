@@ -48,24 +48,24 @@ const vehicles = [
   },
 ];
 
-const VehicleSelectionModal = ({ 
-  visible, 
-  onClose, 
-  onNext, 
-  description = '', 
+const VehicleSelectionModal = ({
+  visible,
+  onClose,
+  onNext,
+  description = '',
   selectedLocations = null,
-  summaryData = null 
+  summaryData = null
 }) => {
   const [index, setIndex] = useState(0);
   const [recommended, setRecommended] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   // Pricing states
   const [vehiclePricing, setVehiclePricing] = useState({});
   const [loadingPrices, setLoadingPrices] = useState(false);
   const [distance, setDistance] = useState(0);
   const [estimatedTime, setEstimatedTime] = useState(0);
-  
+
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
   console.log('VehicleSelectionModal render - visible:', visible);
@@ -76,7 +76,7 @@ const VehicleSelectionModal = ({
     console.log('🔄 selectedLocations:', selectedLocations);
     console.log('🔄 Pickup exists:', !!selectedLocations?.pickup);
     console.log('🔄 Dropoff exists:', !!selectedLocations?.dropoff);
-    
+
     if (visible && selectedLocations?.pickup && selectedLocations?.dropoff) {
       console.log('✅ Conditions met, fetching vehicle pricing...');
       fetchVehiclePricing();
@@ -119,20 +119,20 @@ const VehicleSelectionModal = ({
     setLoadingPrices(true);
     try {
       console.log('🚗 Fetching pricing for locations:', selectedLocations);
-      
+
       // Convert pickup and dropoff addresses to coordinates if needed
       const pickupCoords = selectedLocations.pickup?.coordinates || {
         latitude: 33.749, // Default Atlanta coords - should be replaced with actual geocoding
         longitude: -84.388
       };
-      
+
       const dropoffCoords = selectedLocations.dropoff?.coordinates || {
         latitude: 33.749, // Default Atlanta coords - should be replaced with actual geocoding  
         longitude: -84.388
       };
 
       const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
-      
+
       const requestBody = {
         pickupLocation: pickupCoords,
         destinationLocation: dropoffCoords,
@@ -142,9 +142,9 @@ const VehicleSelectionModal = ({
         timeOfDay: new Date().getHours(),
         dayOfWeek: new Date().getDay()
       };
-      
+
       console.log('🚀 Making pricing API request:', requestBody);
-      
+
       const response = await fetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
         method: 'POST',
         headers: {
@@ -154,7 +154,7 @@ const VehicleSelectionModal = ({
       });
 
       console.log('📡 API Response status:', response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ API Error response:', errorText);
@@ -163,7 +163,7 @@ const VehicleSelectionModal = ({
 
       const result = await response.json();
       console.log('✅ Full API response:', result);
-      
+
       if (result.success && result.prices) {
         console.log('💰 Pricing API success:', result);
         console.log('💰 Setting vehicle pricing:', result.prices);
@@ -175,10 +175,10 @@ const VehicleSelectionModal = ({
         console.error('❌ Full result object:', result);
         throw new Error(result.error || 'Failed to get pricing');
       }
-      
+
     } catch (error) {
       console.error('Error fetching vehicle pricing:', error);
-      
+
       // Fallback to estimated pricing based on new algorithm
       const fallbackPricing = {
         'Cargo Van': {
@@ -194,7 +194,7 @@ const VehicleSelectionModal = ({
           surgeMultiplier: 1.0
         }
       };
-      
+
       setVehiclePricing(fallbackPricing);
       setDistance(10.0);
       setEstimatedTime(25);
@@ -234,7 +234,7 @@ const VehicleSelectionModal = ({
 
         const currentY = translateY._value;
         const velocity = gestureState.vy;
-        
+
         let finalY;
         let shouldExpand;
         let shouldClose = false;
@@ -253,7 +253,7 @@ const VehicleSelectionModal = ({
         } else {
           const expandedThreshold = (100 + SCREEN_HEIGHT - COLLAPSED_HEIGHT) / 2;
           const closeThreshold = SCREEN_HEIGHT - COLLAPSED_HEIGHT + 50;
-          
+
           if (currentY < expandedThreshold) {
             finalY = 100;
             shouldExpand = true;
@@ -320,14 +320,14 @@ const VehicleSelectionModal = ({
   const handleNext = () => {
     const selectedVehicle = vehicles[index];
     const selectedPricing = vehiclePricing[selectedVehicle.type];
-    
+
     if (!selectedPricing) {
       console.error('No pricing available for', selectedVehicle.type);
       // Don't proceed without pricing
       Alert.alert('Error', 'Pricing information is not available. Please try again.');
       return;
     }
-    
+
     const vehicleWithPricing = {
       ...selectedVehicle,
       pricing: selectedPricing, // Pass the full pricing object from server
@@ -336,7 +336,7 @@ const VehicleSelectionModal = ({
       price: `${selectedPricing.total.toFixed(2)}`, // For backward compatibility
       priceDisplay: `${selectedPricing.total.toFixed(2)}`
     };
-    
+
     console.log('Selected vehicle with server pricing:', vehicleWithPricing);
     onNext(vehicleWithPricing);
     closeModal();
@@ -359,7 +359,7 @@ const VehicleSelectionModal = ({
   return (
     <>
       <TouchableWithoutFeedback onPress={closeModal}>
-        <Animated.View 
+        <Animated.View
           style={[
             styles.backdrop,
             {
@@ -369,7 +369,7 @@ const VehicleSelectionModal = ({
                 extrapolate: 'clamp',
               }),
             }
-          ]} 
+          ]}
         />
       </TouchableWithoutFeedback>
 
@@ -389,7 +389,7 @@ const VehicleSelectionModal = ({
         {!isExpanded && (
           <View style={styles.collapsedContainer}>
             {/* Vehicle Preview */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.collapsedHeader}
               onPress={expandModal}
               activeOpacity={0.8}
@@ -405,7 +405,7 @@ const VehicleSelectionModal = ({
                     </View>
                   ) : (
                     <Text style={styles.collapsedPrice}>
-                      {vehiclePricing[current.type] 
+                      {vehiclePricing[current.type]
                         ? `$${vehiclePricing[current.type].total.toFixed(2)}`
                         : (visible ? 'Loading...' : 'Calculating...')
                       }
@@ -431,7 +431,7 @@ const VehicleSelectionModal = ({
                   Cargo Van
                 </Text>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.vehicleOption, index === 1 && styles.vehicleOptionSelected]}
                 onPress={() => setIndex(1)}
@@ -458,8 +458,8 @@ const VehicleSelectionModal = ({
         )}
 
         {isExpanded && (
-          <ScrollView 
-            style={styles.expandedContent} 
+          <ScrollView
+            style={styles.expandedContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -478,17 +478,17 @@ const VehicleSelectionModal = ({
                   disabled={index === 0}
                   onPress={() => setIndex(index - 1)}
                 >
-                  <Ionicons 
-                    name="chevron-back" 
-                    size={24} 
-                    color={index === 0 ? "#666" : "#fff"} 
+                  <Ionicons
+                    name="chevron-back"
+                    size={24}
+                    color={index === 0 ? "#666" : "#fff"}
                   />
                 </TouchableOpacity>
 
                 <View style={styles.vehicleContainer}>
                   <Image source={current.image} style={styles.vehicleImg} />
                   <Text style={styles.vehicleType}>{current.type}</Text>
-                  
+
                   {recommended === current.type && (
                     <View style={styles.recommendedTag}>
                       <Ionicons name="sparkles" size={12} color="#fff" />
@@ -502,10 +502,10 @@ const VehicleSelectionModal = ({
                   disabled={index === vehicles.length - 1}
                   onPress={() => setIndex(index + 1)}
                 >
-                  <Ionicons 
-                    name="chevron-forward" 
-                    size={24} 
-                    color={index === vehicles.length - 1 ? "#666" : "#fff"} 
+                  <Ionicons
+                    name="chevron-forward"
+                    size={24}
+                    color={index === vehicles.length - 1 ? "#666" : "#fff"}
                   />
                 </TouchableOpacity>
               </View>
@@ -523,7 +523,7 @@ const VehicleSelectionModal = ({
                     ) : (
                       <View>
                         <Text style={styles.priceValue}>
-                          {vehiclePricing[current.type] 
+                          {vehiclePricing[current.type]
                             ? `$${vehiclePricing[current.type].total.toFixed(2)}`
                             : (visible ? 'Loading...' : 'Calculating...')
                           }
@@ -531,7 +531,7 @@ const VehicleSelectionModal = ({
                         {vehiclePricing[current.type] && distance > 0 && (
                           <Text style={styles.priceDetails}>
                             {distance} miles • {estimatedTime} min
-                            {vehiclePricing[current.type].surgeMultiplier > 1 && 
+                            {vehiclePricing[current.type].surgeMultiplier > 1 &&
                               ` • ${vehiclePricing[current.type].surgeMultiplier}x surge`
                             }
                           </Text>

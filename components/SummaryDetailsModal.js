@@ -135,7 +135,7 @@ const SummaryDetailsModal = ({
     setIsAnalyzing(true);
     try {
       console.log("🖼️ Starting AI analysis for image...");
-      
+
       // Use the AI service to analyze the image
       const analysis = await AIImageService.analyzeImage(imageData, "gemini");
 
@@ -164,11 +164,11 @@ const SummaryDetailsModal = ({
       return insights;
     } catch (error) {
       console.error("❌ AI analysis failed:", error.message);
-      
+
       // Show more specific error messages based on error type
       let errorTitle = "Analysis Failed";
       let errorMessage = "Could not analyze the image. You can still add it manually.";
-      
+
       if (error.message.includes("API key")) {
         errorTitle = "API Configuration Error";
         errorMessage = "Gemini API key is not configured. Please contact support or add items manually.";
@@ -182,7 +182,7 @@ const SummaryDetailsModal = ({
         errorTitle = "Network Error";
         errorMessage = "Please check your internet connection and try again.";
       }
-      
+
       Alert.alert(errorTitle, errorMessage, [{ text: "OK" }]);
       return null;
     } finally {
@@ -291,9 +291,8 @@ const SummaryDetailsModal = ({
 
         // Format: "item1, item2, item3 - X people needed"
         const itemsList = allItemDescriptions.join(", ");
-        const fullDescription = `${itemsList} - ${maxPeopleNeeded} person${
-          maxPeopleNeeded > 1 ? "s" : ""
-        } needed`;
+        const fullDescription = `${itemsList} - ${maxPeopleNeeded} person${maxPeopleNeeded > 1 ? "s" : ""
+          } needed`;
 
         setItemDescription(fullDescription);
 
@@ -338,9 +337,8 @@ const SummaryDetailsModal = ({
 
     // Format: "item1, item2, item3 - X people needed"
     const itemsList = allItemDescriptions.join(", ");
-    const fullDescription = `${itemsList} - ${maxPeopleNeeded} person${
-      maxPeopleNeeded > 1 ? "s" : ""
-    } needed`;
+    const fullDescription = `${itemsList} - ${maxPeopleNeeded} person${maxPeopleNeeded > 1 ? "s" : ""
+      } needed`;
 
     const suggestions = {
       description: fullDescription,
@@ -414,9 +412,8 @@ const SummaryDetailsModal = ({
 
               // Format: "item1, item2 - X people needed"
               const itemsList = remainingItemDescriptions.join(", ");
-              return `${itemsList} - ${maxPeopleNeeded} person${
-                maxPeopleNeeded > 1 ? "s" : ""
-              } needed`;
+              return `${itemsList} - ${maxPeopleNeeded} person${maxPeopleNeeded > 1 ? "s" : ""
+                } needed`;
             });
 
             // Update help requirement - keep true if any remaining analysis needs help
@@ -548,11 +545,11 @@ const SummaryDetailsModal = ({
               <View style={styles.routeInfo}>
                 <Ionicons name="location" size={16} color="#A77BFF" />
                 <Text style={styles.routeText} numberOfLines={1}>
-                  {typeof selectedLocations.pickup === 'string' 
-                    ? selectedLocations.pickup 
-                    : selectedLocations.pickup?.address || 'Pickup Location'} → {typeof selectedLocations.dropoff === 'string' 
-                    ? selectedLocations.dropoff 
-                    : selectedLocations.dropoff?.address || 'Dropoff Location'}
+                  {typeof selectedLocations.pickup === 'string'
+                    ? selectedLocations.pickup
+                    : selectedLocations.pickup?.address || 'Pickup Location'} → {typeof selectedLocations.dropoff === 'string'
+                      ? selectedLocations.dropoff
+                      : selectedLocations.dropoff?.address || 'Dropoff Location'}
                 </Text>
               </View>
               {selectedLocations.isScheduled &&
@@ -578,7 +575,7 @@ const SummaryDetailsModal = ({
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Photos</Text>
                 <Text style={[
-                  styles.photoCount, 
+                  styles.photoCount,
                   photos.length < 2 && styles.photoCountRequired
                 ]}>{photos.length}/10 (min 2)</Text>
               </View>
