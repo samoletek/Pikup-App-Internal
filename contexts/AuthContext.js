@@ -2129,6 +2129,113 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Save customer feedback to Firebase
+  const saveFeedback = async (feedbackData) => {
+    if (!currentUser?.accessToken) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const feedbackId = `feedback_${feedbackData.requestId}_${Date.now()}`;
+
+      const firestoreData = toFirestoreFormat({
+        ...feedbackData,
+        createdAt: new Date().toISOString(),
+      });
+
+      const response = await fetch(
+        `${FIRESTORE_BASE_URL}/feedback/${feedbackId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUser.accessToken}`
+          },
+          body: JSON.stringify(firestoreData)
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to save feedback:', errorText);
+        throw new Error('Failed to save feedback');
+      }
+
+      console.log('Feedback saved successfully:', feedbackId);
+
+      // Also update driver's rating if this is customer->driver feedback
+      if (feedbackData.type === 'customer_to_driver' && feedbackData.driverId && feedbackData.rating) {
+        await updateUserRating(feedbackData.driverId, feedbackData.rating, 'driverProfile');
+      }
+
+      return feedbackId;
+    } catch (error) {
+      console.error('Error saving feedback:', error);
+      // Non-blocking - don't throw, just return null
+      return null;
+    }
+  };
+
+  // Get driver feedback from Firebase
+  const getDriverFeedback = async (driverId, limit = 5) => {
+    if (!currentUser?.accessToken) {
+      return [];
+    }
+
+    try {
+      // Query feedback collection where driverId matches
+      const queryParams = new URLSearchParams({
+        'orderBy': 'timestamp desc',
+        'pageSize': limit.toString(),
+      });
+
+      // Firestore REST API query with filter
+      const response = await fetch(
+        `${FIRESTORE_BASE_URL}:runQuery`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUser.accessToken}`
+          },
+          body: JSON.stringify({
+            structuredQuery: {
+              from: [{ collectionId: 'feedback' }],
+              where: {
+                fieldFilter: {
+                  field: { fieldPath: 'driverId' },
+                  op: 'EQUAL',
+                  value: { stringValue: driverId }
+                }
+              },
+              orderBy: [
+                { field: { fieldPath: 'timestamp' }, direction: 'DESCENDING' }
+              ],
+              limit: limit
+            }
+          })
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Failed to fetch driver feedback');
+        return [];
+      }
+
+      const results = await response.json();
+
+      // Parse Firestore format
+      const feedback = results
+        .filter(result => result.document)
+        .map(result => fromFirestoreFormat(result.document));
+
+      return feedback;
+    } catch (error) {
+      console.error('Error fetching driver feedback:', error);
+      return [];
+    }
+  };
+
   // Messaging functions
   const createConversation = async (requestId, customerId, driverId, customerName, driverName) => {
     try {
@@ -3225,6 +3332,9 @@ export function AuthProvider({ children }) {
     getUserProfile,
     // Rating functions
     updateUserRating,
+    // Feedback functions
+    saveFeedback,
+    getDriverFeedback,
     // Firebase Storage functions
     uploadPhotoToStorage,
     uploadMultiplePhotos,

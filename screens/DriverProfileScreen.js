@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function DriverProfileScreen({ navigation }) {
-  const { currentUser, logout, getDriverProfile, getUserProfile, profileImage, getProfileImage } = useAuth();
+  const { currentUser, logout, getDriverProfile, getUserProfile, profileImage, getProfileImage, getDriverFeedback } = useAuth();
   const [driverProfile, setDriverProfile] = useState(null);
   const [displayName, setDisplayName] = useState("Driver");
   const [onboardingStatus, setOnboardingStatus] = useState({
@@ -22,6 +22,8 @@ export default function DriverProfileScreen({ navigation }) {
     documentsVerified: false,
     canReceivePayments: false
   });
+  const [recentFeedback, setRecentFeedback] = useState([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
 
   useEffect(() => {
     loadDriverProfile();
@@ -31,7 +33,7 @@ export default function DriverProfileScreen({ navigation }) {
     try {
       const profile = await getDriverProfile?.(currentUser?.uid);
       setDriverProfile(profile);
-      
+
       // Fetch canonical identity from /users/{uid}
       const user = await getUserProfile(); // uses currentUser.uid internally
       const name =
@@ -40,10 +42,10 @@ export default function DriverProfileScreen({ navigation }) {
           ? `${user.firstName} ${user.lastName}`
           : currentUser?.email?.split("@")[0] || "Driver");
       setDisplayName(name);
-      
+
       // Load profile image
       await getProfileImage?.();
-      
+
       if (profile) {
         setOnboardingStatus({
           connectAccountCreated: !!profile.connectAccountId,
@@ -51,9 +53,28 @@ export default function DriverProfileScreen({ navigation }) {
           documentsVerified: profile.documentsVerified || false,
           canReceivePayments: profile.canReceivePayments || false
         });
+
+        // Load feedback if driver is verified
+        if (profile.canReceivePayments || profile.onboardingComplete) {
+          loadDriverFeedback();
+        }
       }
     } catch (error) {
       console.error('Error loading driver profile:', error);
+    }
+  };
+
+  const loadDriverFeedback = async () => {
+    if (!currentUser?.uid) return;
+
+    setLoadingFeedback(true);
+    try {
+      const feedback = await getDriverFeedback(currentUser.uid, 5);
+      setRecentFeedback(feedback);
+    } catch (error) {
+      console.error('Error loading feedback:', error);
+    } finally {
+      setLoadingFeedback(false);
     }
   };
 
@@ -151,7 +172,7 @@ export default function DriverProfileScreen({ navigation }) {
               <View style={styles.statusText}>
                 <Text style={styles.statusTitle}>Complete Your Setup</Text>
                 <Text style={styles.statusSubtitle}>
-                  {!onboardingStatus.onboardingComplete 
+                  {!onboardingStatus.onboardingComplete
                     ? 'Finish verification to start earning'
                     : 'Documents pending review'
                   }
@@ -204,7 +225,7 @@ export default function DriverProfileScreen({ navigation }) {
         <View style={styles.profileSection}>
           <View style={styles.nameSection}>
             <Text style={styles.userName}>{displayName}</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.profileButton}
               onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
             >
@@ -219,7 +240,7 @@ export default function DriverProfileScreen({ navigation }) {
               )}
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.ratingSection}>
             <View style={styles.ratingItem}>
               <Ionicons name="star" size={16} color="#00D4AA" />
@@ -234,7 +255,7 @@ export default function DriverProfileScreen({ navigation }) {
             </View>
             <View style={styles.divider} />
             <View style={[
-              styles.verifiedBadge, 
+              styles.verifiedBadge,
               !onboardingStatus.canReceivePayments && styles.verifiedBadgePending
             ]}>
               <Text style={[
@@ -255,21 +276,21 @@ export default function DriverProfileScreen({ navigation }) {
 
         {/* Quick Actions - Driver Specific */}
         <View style={styles.quickActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate('CustomerHelpScreen')}
           >
             <Ionicons name="help-circle-outline" size={24} color="#00D4AA" />
             <Text style={styles.actionText}>Help</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.actionButton, !onboardingStatus.canReceivePayments && styles.actionButtonDisabled]}
             onPress={handleEarnings}
           >
-            <Ionicons 
-              name="wallet-outline" 
-              size={24} 
-              color={onboardingStatus.canReceivePayments ? "#00D4AA" : "#666"} 
+            <Ionicons
+              name="wallet-outline"
+              size={24}
+              color={onboardingStatus.canReceivePayments ? "#00D4AA" : "#666"}
             />
             <Text style={[
               styles.actionText,
@@ -371,6 +392,60 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         </View>
 
+        {/* RECENT FEEDBACK */}
+        {onboardingStatus.canReceivePayments && (
+          <View style={styles.feedbackSection}>
+            <View style={styles.feedbackHeader}>
+              <Text style={styles.feedbackTitle}>Recent Feedback</Text>
+              {recentFeedback.length > 0 && (
+                <Text style={styles.feedbackCount}>{recentFeedback.length} reviews</Text>
+              )}
+            </View>
+
+            {loadingFeedback ? (
+              <View style={styles.feedbackLoading}>
+                <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
+              </View>
+            ) : recentFeedback.length > 0 ? (
+              recentFeedback.slice(0, 3).map((feedback, index) => (
+                <View key={index} style={styles.feedbackItem}>
+                  <View style={styles.feedbackStars}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Ionicons
+                        key={star}
+                        name={star <= (feedback.rating || 5) ? 'star' : 'star-outline'}
+                        size={14}
+                        color={star <= (feedback.rating || 5) ? '#FFD700' : '#444'}
+                      />
+                    ))}
+                    <Text style={styles.feedbackDate}>
+                      {feedback.timestamp
+                        ? new Date(feedback.timestamp).toLocaleDateString()
+                        : ''}
+                    </Text>
+                  </View>
+                  {feedback.comment && (
+                    <Text style={styles.feedbackComment} numberOfLines={2}>
+                      "{feedback.comment}"
+                    </Text>
+                  )}
+                  {!feedback.comment && (
+                    <Text style={styles.feedbackNoComment}>No comment provided</Text>
+                  )}
+                </View>
+              ))
+            ) : (
+              <View style={styles.feedbackEmpty}>
+                <Ionicons name="chatbubble-outline" size={32} color="#444" />
+                <Text style={styles.feedbackEmptyText}>No feedback yet</Text>
+                <Text style={styles.feedbackEmptySubtext}>
+                  Complete deliveries to receive customer reviews
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* PIKUP PREFERENCES */}
         <TouchableOpacity style={styles.preferencesSection} onPress={handlePikUpPreferences}>
           <View style={styles.preferencesContent}>
@@ -386,10 +461,10 @@ export default function DriverProfileScreen({ navigation }) {
         <View style={styles.menuSections}>
           <TouchableOpacity style={styles.menuItem} onPress={handlePaymentSettings}>
             <View style={styles.menuItemLeft}>
-              <Ionicons 
-                name="card-outline" 
-                size={20} 
-                color={onboardingStatus.connectAccountCreated ? "#00D4AA" : "#666"} 
+              <Ionicons
+                name="card-outline"
+                size={20}
+                color={onboardingStatus.connectAccountCreated ? "#00D4AA" : "#666"}
               />
               <Text style={[
                 styles.menuItemTitle,
@@ -401,8 +476,8 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.menuItem} 
+          <TouchableOpacity
+            style={styles.menuItem}
             onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
           >
             <View style={styles.menuItemLeft}>
@@ -412,7 +487,7 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
           >
@@ -431,7 +506,7 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('CustomerSettingsScreen')}
           >
@@ -442,7 +517,7 @@ export default function DriverProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('CustomerHelpScreen')}
           >
@@ -493,7 +568,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 10,
   },
-  
+
   // Onboarding Status Styles
   statusSection: {
     paddingHorizontal: 20,
@@ -681,7 +756,7 @@ const styles = StyleSheet.create({
   actionTextDisabled: {
     color: '#666',
   },
-  
+
   // Earnings section - enabled state
   earningsSection: {
     backgroundColor: '#141426',
@@ -734,7 +809,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // Balance section styles
   balanceSection: {
     backgroundColor: '#141426',
@@ -785,7 +860,7 @@ const styles = StyleSheet.create({
     color: '#666',
     marginRight: 8,
   },
-  
+
   // Progress section styles
   progressSection: {
     backgroundColor: '#141426',
@@ -862,7 +937,7 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#666',
   },
-  
+
   statsSection: {
     flexDirection: 'row',
     backgroundColor: '#141426',
@@ -965,5 +1040,80 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+
+  // Feedback Section Styles
+  feedbackSection: {
+    backgroundColor: '#141426',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#2A2A3B',
+  },
+  feedbackHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  feedbackTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  feedbackCount: {
+    fontSize: 14,
+    color: '#A77BFF',
+  },
+  feedbackLoading: {
+    paddingVertical: 20,
+    alignItems: 'center',
+  },
+  feedbackLoadingText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  feedbackItem: {
+    backgroundColor: '#1A1A3A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  feedbackStars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  feedbackDate: {
+    color: '#666',
+    fontSize: 12,
+    marginLeft: 8,
+  },
+  feedbackComment: {
+    color: '#ccc',
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
+  feedbackNoComment: {
+    color: '#666',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  feedbackEmpty: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  feedbackEmptyText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  feedbackEmptySubtext: {
+    color: '#444',
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'center',
   },
 });

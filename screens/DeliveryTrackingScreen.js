@@ -23,6 +23,7 @@ import MapboxMap from '../components/mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import CancelOrderModal from '../components/CancelOrderModal';
+import FeedbackModal from '../components/FeedbackModal';
 
 const { width, height } = Dimensions.get('window');
 const MAP_HEIGHT = height * 0.55;
@@ -46,7 +47,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     notifyPhotosUploaded,
     showToast
   } = useNotifications();
-  
+
   // State management
   const [requestData, setRequestData] = useState(initialRequestData);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -60,23 +61,27 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
   const [remainingDistance, setRemainingDistance] = useState('Calculating...');
   const [previousStatus, setPreviousStatus] = useState(initialRequestData?.status);
   const [previousEta, setPreviousEta] = useState('--');
-  
+
   // Image modal state
   const [selectedImages, setSelectedImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageModalVisible, setImageModalVisible] = useState(false);
-  
+
   // Cancel order modal state
   const [cancelModalVisible, setCancelModalVisible] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
-  
+
+  // Feedback modal state
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [hasShownFeedback, setHasShownFeedback] = useState(false);
+
   // Handle successful order cancellation
   const handleCancelSuccess = () => {
     setCancelModalVisible(false);
     // Navigate back to home screen
     navigation.navigate('CustomerHome');
   };
-  
+
   // Animation references
   const mapRef = useRef(null);
   const scrollViewRef = useRef(null);
@@ -89,11 +94,11 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     const R = 3959; // Earth's radius in miles
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -103,14 +108,14 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
   useEffect(() => {
     if (requestId) {
       fetchRequestData();
-      
+
       // Set up real-time updates every 5 seconds for more responsive tracking
       const interval = setInterval(() => {
         fetchRequestData();
       }, 5000);
-      
+
       setRefreshInterval(interval);
-      
+
       return () => {
         if (interval) clearInterval(interval);
       };
@@ -144,62 +149,69 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
             showToast('Order confirmed! Finding your driver...');
           }
           break;
-          
+
         case 'pickupInProgress':
         case 'accepted':
           if (['confirmed', 'pending'].includes(previousStatus)) {
             notifyDriverAccepted(driverName);
           }
           break;
-          
+
         case 'arrivedAtPickup':
           if (['pickupInProgress', 'accepted', 'inProgress'].includes(previousStatus)) {
             notifyDriverArrived('pickup');
           }
           break;
-          
+
         case 'pickedUp':
           if (previousStatus === 'arrivedAtPickup') {
             notifyItemsPickedUp();
           }
           break;
-          
+
         case 'deliveryInProgress':
         case 'enRouteToDropoff':
           if (previousStatus === 'pickedUp') {
             showToast('Items secured! Heading to delivery location...');
           }
           break;
-          
+
         case 'arrivedAtDropoff':
           if (['deliveryInProgress', 'pickedUp', 'enRouteToDropoff'].includes(previousStatus)) {
             notifyDriverArrived('delivery');
           }
           break;
-          
+
         case 'completed':
           if (previousStatus === 'arrivedAtDropoff') {
             notifyDeliveryCompleted();
+            // Show feedback modal after delivery completion
+            if (!hasShownFeedback) {
+              setTimeout(() => {
+                setFeedbackModalVisible(true);
+                setHasShownFeedback(true);
+              }, 1500); // Small delay for better UX
+            }
           }
           break;
       }
-      
+
       setPreviousStatus(currentStatus);
     }
 
     // Check for new photos
-    const hasNewPickupPhotos = requestData.pickupPhotos && 
-      requestData.pickupPhotos.length > 0 && 
+    const hasNewPickupPhotos = requestData.pickupPhotos &&
+      requestData.pickupPhotos.length > 0 &&
       ['pickedUp', 'enRouteToDropoff', 'arrivedAtDropoff', 'completed'].includes(currentStatus);
-    
-    const hasNewDeliveryPhotos = requestData.dropoffPhotos && 
-      requestData.dropoffPhotos.length > 0 && 
+
+    const hasNewDeliveryPhotos = requestData.dropoffPhotos &&
+      requestData.dropoffPhotos.length > 0 &&
       currentStatus === 'completed';
 
     if (hasNewPickupPhotos && previousStatus === 'arrivedAtPickup') {
       notifyPhotosUploaded('pickup');
     }
-    
+
     if (hasNewDeliveryPhotos && previousStatus === 'arrivedAtDropoff') {
       notifyPhotosUploaded('delivery');
     }
@@ -212,7 +224,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
       // Only notify if ETA changed significantly (more than 2 minutes difference)
       const currentMinutes = parseInt(estimatedTime);
       const previousMinutes = parseInt(previousEta);
-      
+
       if (!isNaN(currentMinutes) && !isNaN(previousMinutes)) {
         const timeDiff = Math.abs(currentMinutes - previousMinutes);
         if (timeDiff >= 2) {
@@ -226,19 +238,19 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
   const fetchRequestData = async () => {
     try {
       if (!requestId) return;
-      
+
       const latestData = await getRequestById(requestId);
-      
+
       // Temporary logging to debug photo data
       console.log('=== PHOTO DEBUG INFO ===');
       console.log('pickupPhotos:', latestData?.pickupPhotos);
       console.log('dropoffPhotos:', latestData?.dropoffPhotos);
       console.log('status:', latestData?.status);
       console.log('========================');
-      
+
       setRequestData(latestData);
       setLoading(false);
-      
+
       // Load driver profile if we have a driver assigned
       if (latestData.assignedDriverId && !driverProfile) {
         try {
@@ -248,15 +260,15 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           console.error('Error loading driver profile:', error);
         }
       }
-      
+
       // Update driver location and route
       if (latestData.driverLocation) {
         // Check if driver location has changed significantly (more than 50 meters)
-        const hasLocationChanged = !previousDriverLocation || 
+        const hasLocationChanged = !previousDriverLocation ||
           calculateDistance(
-            previousDriverLocation.latitude, 
+            previousDriverLocation.latitude,
             previousDriverLocation.longitude,
-            latestData.driverLocation.latitude, 
+            latestData.driverLocation.latitude,
             latestData.driverLocation.longitude
           ) > 0.03; // Approximately 50 meters
 
@@ -264,12 +276,12 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           console.log('Driver location updated:', latestData.driverLocation);
           setPreviousDriverLocation(driverLocation);
           setDriverLocation(latestData.driverLocation);
-          
+
           // Get destination based on current status
           const destination = getDestinationForStatus(latestData);
           if (destination) {
             generateRoute(latestData.driverLocation, destination);
-            
+
             // Center map to show both points
             centerMapToShowRoute(latestData.driverLocation, destination);
           }
@@ -286,7 +298,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           if (latestData.estimatedTime) {
             setEstimatedTime(latestData.estimatedTime.replace(' mins', '').replace(' min', ''));
           }
-          
+
           // Center map on destination
           if (mapRef.current) {
             mapRef.current.animateToRegion({
@@ -306,15 +318,15 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const getDestinationForStatus = (data) => {
     if (!data) return null;
-    
+
     let destination;
-    
+
     // Before pickup: show pickup location
     if (['confirmed', 'pickupInProgress', 'accepted', 'inProgress', 'arrivedAtPickup'].includes(data.status)) {
-      destination = data.pickupCoordinates || 
-                   data.pickup?.coordinates || 
-                   data.selectedLocations?.pickup?.coordinates;
-      
+      destination = data.pickupCoordinates ||
+        data.pickup?.coordinates ||
+        data.selectedLocations?.pickup?.coordinates;
+
       // Parse coordinates if they're JSON strings
       if (typeof destination === 'string') {
         try {
@@ -324,7 +336,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           destination = null;
         }
       }
-      
+
       // Fallback to individual lat/lng or default
       if (!destination && data.pickupLat && data.pickupLng) {
         destination = {
@@ -332,7 +344,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           longitude: data.pickupLng
         };
       }
-      
+
       if (!destination) {
         destination = {
           latitude: 33.7490,
@@ -341,10 +353,10 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
       }
     } else {
       // After pickup: show delivery location
-      destination = data.dropoffCoordinates || 
-                   data.dropoff?.coordinates || 
-                   data.selectedLocations?.dropoff?.coordinates;
-      
+      destination = data.dropoffCoordinates ||
+        data.dropoff?.coordinates ||
+        data.selectedLocations?.dropoff?.coordinates;
+
       // Parse coordinates if they're JSON strings
       if (typeof destination === 'string') {
         try {
@@ -354,7 +366,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           destination = null;
         }
       }
-      
+
       // Fallback to individual lat/lng or default
       if (!destination && data.dropoffLat && data.dropoffLng) {
         destination = {
@@ -362,7 +374,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           longitude: data.dropoffLng
         };
       }
-      
+
       if (!destination) {
         destination = {
           latitude: 33.7540,
@@ -370,7 +382,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
         };
       }
     }
-    
+
     return destination;
   };
 
@@ -378,12 +390,12 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     try {
       const routeData = await MapboxLocationService.getRoute(start, end);
       setRouteCoordinates(routeData.coordinates);
-      
+
       const distanceText = routeData.distance.text;
-      const durationText = routeData.duration_in_traffic ? 
-        routeData.duration_in_traffic.text : 
+      const durationText = routeData.duration_in_traffic ?
+        routeData.duration_in_traffic.text :
         routeData.duration.text;
-      
+
       setRemainingDistance(distanceText);
       setEstimatedTime(durationText.replace(' mins', ' min').replace(' min', ''));
     } catch (error) {
@@ -425,10 +437,10 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
         req.customer?.name ||
         req.customer?.displayName ||
         (customerEmail ? customerEmail.split('@')[0] : 'Customer');
-      
+
       const assignedDriverId = req.assignedDriverId || req.assignedDriver || req.driverId;
       const driverName = req.assignedDriverName || req.driverName || 'Driver';
-      
+
       if (!requestIdLocal || !customerId || !assignedDriverId || !currentUser?.uid) {
         console.error('Missing required data for chat:', { requestIdLocal, customerId, assignedDriverId, currentUserUid: currentUser?.uid });
         return;
@@ -452,14 +464,14 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const toggleOrderDetails = () => {
     const toValue = orderDetailsExpanded ? 0 : 200;
-    
+
     Animated.spring(orderDetailsHeight, {
       toValue,
       useNativeDriver: false,
       tension: 100,
       friction: 8,
     }).start();
-    
+
     setOrderDetailsExpanded(!orderDetailsExpanded);
   };
 
@@ -467,7 +479,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     setSelectedImages(images);
     setCurrentImageIndex(startIndex);
     setImageModalVisible(true);
-    
+
     // Scroll to the selected image after modal opens
     setTimeout(() => {
       if (imageScrollRef.current) {
@@ -493,12 +505,12 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const getDriverInfo = () => {
     if (!requestData) return { name: 'Driver', email: '', rating: 5.0, vehicleType: 'Vehicle' };
-    
+
     const driverEmail = requestData.assignedDriverEmail || requestData.driverEmail;
     const driverName =
       requestData.assignedDriverName ||
       (driverEmail ? driverEmail.split('@')[0] : 'Driver');
-    
+
     return {
       name: driverName,
       email: driverEmail,
@@ -509,34 +521,34 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const getDeliveryStage = () => {
     if (!requestData) return 0;
-    
+
     const status = requestData.status;
     switch (status) {
       case 'confirmed': return 1;
-      
+
       // All pickup-related statuses map to stage 2
       case 'pickupInProgress':
       case 'accepted':
       case 'inProgress':
       case 'arrivedAtPickup':
       case 'pickedUp': return 2;
-      
+
       // All delivery-related statuses map to stage 3
       case 'deliveryInProgress':
       case 'enRouteToDropoff':
       case 'arrivedAtDropoff': return 3;
-      
+
       case 'completed': return 4;
-      
+
       default: return 1;
     }
   };
 
   const getStatusMessage = () => {
     if (!requestData) return { title: 'Loading...', subtitle: 'Please wait' };
-    
+
     const driverName = getDriverInfo().name;
-    
+
     switch (requestData.status) {
       case 'confirmed':
         return {
@@ -604,36 +616,36 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     return (
       <View style={styles.progressBarContainer}>
         <View style={styles.progressLine}>
-          <View 
+          <View
             style={[
-              styles.progressFill, 
+              styles.progressFill,
               { width: `${((currentStage - 1) / (stages.length - 1)) * 100}%` }
-            ]} 
+            ]}
           />
         </View>
-        
+
         <View style={styles.stagesContainer}>
           {stages.map((stage, index) => {
             const stageNumber = index + 1;
             const isCompleted = stageNumber <= currentStage;
             const isCurrent = stageNumber === currentStage;
-            
+
             return (
               <View key={index} style={styles.stageItem}>
-                <View 
+                <View
                   style={[
                     styles.stageCircle,
                     isCompleted && styles.stageCompleted,
                     isCurrent && styles.stageCurrent
                   ]}
                 >
-                  <Ionicons 
-                    name={stage.icon} 
-                    size={12} 
-                    color={isCompleted ? '#fff' : '#666'} 
+                  <Ionicons
+                    name={stage.icon}
+                    size={12}
+                    color={isCompleted ? '#fff' : '#666'}
                   />
                 </View>
-                <Text 
+                <Text
                   style={[
                     styles.stageLabel,
                     isCompleted && styles.stageLabelCompleted
@@ -651,7 +663,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const renderStatusCard = () => {
     const statusInfo = getStatusMessage();
-    
+
     return (
       <View style={styles.statusCard}>
         <View style={styles.statusHeader}>
@@ -667,18 +679,18 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const renderDriverCard = () => {
     const driverInfo = getDriverInfo();
-    
+
     return (
       <View style={styles.driverCard}>
         <View style={styles.driverHeader}>
           <Text style={styles.cardTitle}>Your Driver</Text>
         </View>
-        
+
         <View style={styles.driverInfoRow}>
           <View style={styles.driverAvatarContainer}>
             <Ionicons name="person" size={24} color="#fff" />
           </View>
-          
+
           <View style={styles.driverDetails}>
             <Text style={styles.driverName}>{driverInfo.name}</Text>
             <Text style={styles.vehicleText}>{driverInfo.vehicleType}</Text>
@@ -687,13 +699,13 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
               <Text style={styles.ratingText}>{driverInfo.rating}</Text>
             </View>
           </View>
-          
+
           <View style={styles.contactButtons}>
             <TouchableOpacity style={styles.contactButton} onPress={handleCall}>
               <Ionicons name="call" size={20} color="#A77BFF" />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.contactButton} 
+            <TouchableOpacity
+              style={styles.contactButton}
               onPress={handleChat}
               disabled={isCreatingChat}
             >
@@ -709,7 +721,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     return (
       <View style={styles.locationCard}>
         <Text style={styles.cardTitle}>Route Information</Text>
-        
+
         <View style={styles.routeContainer}>
           <View style={styles.routePoint}>
             <View style={styles.pickupDot} />
@@ -720,9 +732,9 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.routeLine} />
-          
+
           <View style={styles.routePoint}>
             <View style={styles.dropoffDot} />
             <View style={styles.addressContainer}>
@@ -733,7 +745,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
             </View>
           </View>
         </View>
-        
+
         <View style={styles.routeStats}>
           <View style={styles.statItem}>
             <Ionicons name="navigate" size={16} color="#A77BFF" />
@@ -753,9 +765,9 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
     const hasDeliveryPhotos = requestData?.dropoffPhotos && requestData.dropoffPhotos.length > 0;
     const showPickupPhotos = hasPickupPhotos && ['pickedUp', 'enRouteToDropoff', 'arrivedAtDropoff', 'completed'].includes(requestData?.status);
     const showDeliveryPhotos = hasDeliveryPhotos && requestData?.status === 'completed';
-    
+
     if (!showPickupPhotos && !showDeliveryPhotos) return null;
-    
+
     return (
       <View style={styles.photosCard}>
         {showPickupPhotos && (
@@ -763,11 +775,11 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
             <Text style={styles.photosTitle}>Pickup Photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {requestData.pickupPhotos.map((photo, index) => (
-                <TouchableOpacity 
-                  key={index} 
+                <TouchableOpacity
+                  key={index}
                   style={styles.photoItem}
                   onPress={() => openImageModal(
-                    requestData.pickupPhotos?.map(photo => photo.url || photo.uri || photo) || [], 
+                    requestData.pickupPhotos?.map(photo => photo.url || photo.uri || photo) || [],
                     index
                   )}
                 >
@@ -777,17 +789,17 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
             </ScrollView>
           </View>
         )}
-        
+
         {showDeliveryPhotos && (
           <View style={styles.photosSection}>
             <Text style={styles.photosTitle}>Delivery Photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
               {requestData.dropoffPhotos.map((photo, index) => (
-                <TouchableOpacity 
-                  key={index} 
+                <TouchableOpacity
+                  key={index}
                   style={styles.photoItem}
                   onPress={() => openImageModal(
-                    requestData.dropoffPhotos?.map(photo => photo.url || photo.uri || photo) || [], 
+                    requestData.dropoffPhotos?.map(photo => photo.url || photo.uri || photo) || [],
                     index
                   )}
                 >
@@ -804,45 +816,45 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
   const renderOrderDetailsCard = () => {
     return (
       <View style={styles.orderDetailsCard}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.orderDetailsToggle}
           onPress={toggleOrderDetails}
         >
           <Text style={styles.orderDetailsToggleText}>
             {orderDetailsExpanded ? 'Hide Order Details' : 'Show Order Details'}
           </Text>
-          <Ionicons 
-            name={orderDetailsExpanded ? 'chevron-down' : 'chevron-up'} 
-            size={20} 
-            color="#A77BFF" 
+          <Ionicons
+            name={orderDetailsExpanded ? 'chevron-down' : 'chevron-up'}
+            size={20}
+            color="#A77BFF"
           />
         </TouchableOpacity>
-        
+
         <Animated.View style={[styles.orderDetailsContent, { height: orderDetailsHeight }]}>
           <View style={styles.orderDetailsRow}>
             <Text style={styles.orderDetailLabel}>Order ID</Text>
             <Text style={styles.orderDetailValue}>#{requestId?.slice(-8) || 'N/A'}</Text>
           </View>
-          
+
           <View style={styles.orderDetailsRow}>
             <Text style={styles.orderDetailLabel}>Total Amount</Text>
             <Text style={styles.orderDetailValue}>
               ${requestData?.pricing?.total?.toFixed(2) || '0.00'}
             </Text>
           </View>
-          
+
           <View style={styles.orderDetailsRow}>
             <Text style={styles.orderDetailLabel}>Service Type</Text>
             <Text style={styles.orderDetailValue}>
               {requestData?.vehicleType || 'Standard Delivery'}
             </Text>
           </View>
-          
+
           <View style={styles.orderDetailsRow}>
             <Text style={styles.orderDetailLabel}>Booked Time</Text>
             <Text style={styles.orderDetailValue}>
-              {requestData?.createdAt ? 
-                new Date(requestData.createdAt).toLocaleString() : 
+              {requestData?.createdAt ?
+                new Date(requestData.createdAt).toLocaleString() :
                 'N/A'
               }
             </Text>
@@ -854,24 +866,24 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
   const renderCancelSection = () => {
     if (!requestData) return null;
-    
+
     const cancellationInfo = getCancellationInfo(requestData);
-    
+
     // Only show cancel button if cancellation is allowed
     if (!cancellationInfo.canCancel) {
       return null;
     }
-    
+
     return (
       <View style={styles.cancelSection}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.cancelButton}
           onPress={() => setCancelModalVisible(true)}
         >
           <Ionicons name="close-circle-outline" size={20} color="#FF6B6B" />
           <Text style={styles.cancelButtonText}>Cancel Order</Text>
         </TouchableOpacity>
-        
+
         {cancellationInfo.fee > 0 && (
           <Text style={styles.cancelFeeText}>
             Cancellation fee: ${cancellationInfo.fee.toFixed(2)}
@@ -888,7 +900,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           <Ionicons name="help-circle-outline" size={20} color="#A77BFF" />
           <Text style={styles.helpButtonText}>Help & Support</Text>
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={[styles.helpButton, styles.reportButton]}>
           <Ionicons name="warning-outline" size={20} color="#ff4444" />
           <Text style={[styles.helpButtonText, { color: '#ff4444' }]}>Report Issue</Text>
@@ -908,7 +920,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Map Section - Top 55% */}
       <View style={styles.mapContainer}>
         <MapboxMap
@@ -928,12 +940,12 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
               </View>
             </Mapbox.PointAnnotation>
           )}
-          
+
           {requestData && getDestinationForStatus(requestData) && (
             <Mapbox.PointAnnotation
               id="destination"
               coordinate={[
-                getDestinationForStatus(requestData).longitude, 
+                getDestinationForStatus(requestData).longitude,
                 getDestinationForStatus(requestData).latitude
               ]}
               title={getDeliveryStage() <= 2 ? "Pickup Location" : "Delivery Location"}
@@ -943,7 +955,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
               </View>
             </Mapbox.PointAnnotation>
           )}
-          
+
           {routeCoordinates.length > 0 && (
             <Mapbox.ShapeSource id="routeSource" shape={{
               type: 'Feature',
@@ -964,21 +976,21 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
             </Mapbox.ShapeSource>
           )}
         </MapboxMap>
-        
+
         {/* Back Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      
+
       {/* Bottom Section - 45% with scrollable content */}
       <Animated.View style={[styles.bottomSection, { transform: [{ translateY: bottomSectionY }] }]}>
         <View style={styles.scrollHandle} />
-        
-        <ScrollView 
+
+        <ScrollView
           ref={scrollViewRef}
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
@@ -992,7 +1004,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
           {renderOrderDetailsCard()}
           {renderCancelSection()}
           {renderHelpSection()}
-          
+
           <View style={styles.bottomSpacing} />
         </ScrollView>
       </Animated.View>
@@ -1005,14 +1017,14 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
         onRequestClose={closeImageModal}
       >
         <View style={styles.modalContainer}>
-          <TouchableOpacity 
-            style={styles.modalOverlay} 
+          <TouchableOpacity
+            style={styles.modalOverlay}
             activeOpacity={1}
             onPress={closeImageModal}
           >
             <View style={styles.modalContent}>
               {/* Close Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.closeButton}
                 onPress={closeImageModal}
               >
@@ -1041,8 +1053,8 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
                 {selectedImages.map((image, index) => (
                   <View key={index} style={styles.imageContainer}>
                     <TouchableOpacity activeOpacity={1}>
-                      <Image 
-                        source={{ uri: image }} 
+                      <Image
+                        source={{ uri: image }}
                         style={styles.fullScreenImage}
                         resizeMode="contain"
                       />
@@ -1062,6 +1074,19 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
         onCancelSuccess={handleCancelSuccess}
         orderData={requestData}
         orderId={requestId}
+      />
+
+      {/* Feedback Modal - shown after delivery completion */}
+      <FeedbackModal
+        visible={feedbackModalVisible}
+        onClose={() => setFeedbackModalVisible(false)}
+        onSubmit={(feedback) => {
+          console.log('Feedback submitted:', feedback);
+          setFeedbackModalVisible(false);
+        }}
+        requestId={requestId}
+        driverName={requestData?.assignedDriverName || requestData?.driverName || 'Driver'}
+        driverId={requestData?.assignedDriverId || requestData?.driverId}
       />
     </View>
   );
@@ -1165,7 +1190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  
+
   // Progress Bar Styles
   progressBarContainer: {
     backgroundColor: '#141426',
@@ -1220,7 +1245,7 @@ const styles = StyleSheet.create({
     color: '#A77BFF',
     fontWeight: '600',
   },
-  
+
   // Status Card Styles
   statusCard: {
     backgroundColor: '#141426',
@@ -1248,7 +1273,7 @@ const styles = StyleSheet.create({
     color: '#aaa',
     fontSize: 14,
   },
-  
+
   // Driver Card Styles
   driverCard: {
     backgroundColor: '#141426',
@@ -1314,7 +1339,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   // Location Card Styles
   locationCard: {
     backgroundColor: '#141426',
@@ -1383,7 +1408,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 8,
   },
-  
+
   // Photos Section Styles
   photosCard: {
     backgroundColor: '#141426',
@@ -1417,7 +1442,7 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  
+
   // Order Details Styles
   orderDetailsCard: {
     backgroundColor: '#141426',
@@ -1459,7 +1484,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  
+
   // Cancel Section Styles
   cancelSection: {
     backgroundColor: '#141426',
@@ -1493,7 +1518,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  
+
   // Help Section Styles
   helpSection: {
     flexDirection: 'row',
@@ -1521,11 +1546,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
   },
-  
+
   bottomSpacing: {
     height: 40,
   },
-  
+
   // Image Modal Styles
   modalContainer: {
     flex: 1,

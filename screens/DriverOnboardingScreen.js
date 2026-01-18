@@ -13,6 +13,7 @@ import {
   Dimensions,
   Image,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -109,37 +110,37 @@ export default function DriverOnboardingScreen({ navigation }) {
   const steps = [
     {
       title: 'Welcome to PikUp',
-      subtitle: 'Let\'s get you set up to start earning',
+      subtitle: 'Join thousands of drivers earning money on their own schedule. We\'ll help you get set up in just a few minutes.',
       icon: 'car-outline',
       color: '#A77BFF'
     },
     {
       title: 'Identity Verification',
-      subtitle: 'Quick verification for your safety',
+      subtitle: 'For the safety of our community, we need to verify your identity. This process takes just 2-3 minutes.',
       icon: 'shield-checkmark-outline',
       color: '#00D4AA'
     },
     {
       title: 'Personal Information',
-      subtitle: 'We need some basic info about you',
+      subtitle: 'Let\'s start with some basic information about you.',
       icon: 'person-outline',
       color: '#A77BFF'
     },
     {
       title: 'Address Details',
-      subtitle: 'Where should we send your payments?',
+      subtitle: 'We need your address for payment processing and verification.',
       icon: 'location-outline',
       color: '#00D4AA'
     },
     {
       title: 'Vehicle Information',
-      subtitle: 'Tell us about your vehicle',
+      subtitle: 'Tell us about the vehicle you\'ll be using for deliveries.',
       icon: 'car-sport-outline',
       color: '#A77BFF'
     },
     {
       title: 'Payment Setup',
-      subtitle: 'Secure payment processing setup',
+      subtitle: 'We\'ll now set up your secure payment account with Stripe. This ensures you get paid quickly and safely.',
       icon: 'card-outline',
       color: '#00D4AA'
     },
@@ -162,6 +163,149 @@ export default function DriverOnboardingScreen({ navigation }) {
       }));
     }
   };
+
+  // Input formatting/masking helpers
+  const formatPhoneNumber = (text) => {
+    // Remove all non-digits
+    const cleaned = text.replace(/\D/g, '');
+    // Format as (XXX) XXX-XXXX
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    if (match) {
+      let formatted = '';
+      if (match[1]) formatted = `(${match[1]}`;
+      if (match[2]) formatted += `) ${match[2]}`;
+      if (match[3]) formatted += `-${match[3]}`;
+      return formatted;
+    }
+    return text;
+  };
+
+  const formatDateOfBirth = (text) => {
+    // Remove all non-digits
+    const cleaned = text.replace(/\D/g, '');
+    // Format as MM/DD/YYYY
+    const match = cleaned.match(/^(\d{0,2})(\d{0,2})(\d{0,4})$/);
+    if (match) {
+      let formatted = '';
+      let month = match[1];
+      let day = match[2];
+      let year = match[3];
+
+      // Validate month (01-12)
+      if (month && month.length === 2) {
+        const monthNum = parseInt(month);
+        if (monthNum > 12) month = '12';
+        if (monthNum < 1 && month.length === 2) month = '01';
+      }
+
+      // Validate day (01-31)
+      if (day && day.length === 2) {
+        const dayNum = parseInt(day);
+        if (dayNum > 31) day = '31';
+        if (dayNum < 1 && day.length === 2) day = '01';
+      }
+
+      // Validate year (1900 - current year minus 18)
+      if (year && year.length === 4) {
+        const yearNum = parseInt(year);
+        const currentYear = new Date().getFullYear();
+        const maxYear = currentYear - 18; // Must be at least 18
+        const minYear = 1900;
+
+        if (yearNum > maxYear) year = maxYear.toString();
+        if (yearNum < minYear) year = minYear.toString();
+      }
+
+      if (month) formatted = month;
+      if (day) formatted += `/${day}`;
+      if (year) formatted += `/${year}`;
+      return formatted;
+    }
+    return text;
+  };
+
+  const formatName = (text) => {
+    // Remove digits and limit to letters, spaces, hyphens, apostrophes
+    return text.replace(/[0-9]/g, '').replace(/[^a-zA-Z\s\-']/g, '');
+  };
+
+  const validateName = (name) => {
+    // Must be at least 2 characters and only letters
+    return name.length >= 2 && /^[a-zA-Z\s\-']+$/.test(name);
+  };
+
+  const formatZipCode = (text) => {
+    // Only digits, max 5
+    return text.replace(/\D/g, '').slice(0, 5);
+  };
+
+  const formatYear = (text) => {
+    // Only digits, max 4
+    return text.replace(/\D/g, '').slice(0, 4);
+  };
+
+  const formatLicensePlate = (text) => {
+    // Uppercase, alphanumeric only, 2-8 characters
+    return text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  };
+
+  // US States for picker
+  const US_STATES = [
+    { label: 'Select State', value: '' },
+    { label: 'Alabama', value: 'AL' },
+    { label: 'Alaska', value: 'AK' },
+    { label: 'Arizona', value: 'AZ' },
+    { label: 'Arkansas', value: 'AR' },
+    { label: 'California', value: 'CA' },
+    { label: 'Colorado', value: 'CO' },
+    { label: 'Connecticut', value: 'CT' },
+    { label: 'Delaware', value: 'DE' },
+    { label: 'Florida', value: 'FL' },
+    { label: 'Georgia', value: 'GA' },
+    { label: 'Hawaii', value: 'HI' },
+    { label: 'Idaho', value: 'ID' },
+    { label: 'Illinois', value: 'IL' },
+    { label: 'Indiana', value: 'IN' },
+    { label: 'Iowa', value: 'IA' },
+    { label: 'Kansas', value: 'KS' },
+    { label: 'Kentucky', value: 'KY' },
+    { label: 'Louisiana', value: 'LA' },
+    { label: 'Maine', value: 'ME' },
+    { label: 'Maryland', value: 'MD' },
+    { label: 'Massachusetts', value: 'MA' },
+    { label: 'Michigan', value: 'MI' },
+    { label: 'Minnesota', value: 'MN' },
+    { label: 'Mississippi', value: 'MS' },
+    { label: 'Missouri', value: 'MO' },
+    { label: 'Montana', value: 'MT' },
+    { label: 'Nebraska', value: 'NE' },
+    { label: 'Nevada', value: 'NV' },
+    { label: 'New Hampshire', value: 'NH' },
+    { label: 'New Jersey', value: 'NJ' },
+    { label: 'New Mexico', value: 'NM' },
+    { label: 'New York', value: 'NY' },
+    { label: 'North Carolina', value: 'NC' },
+    { label: 'North Dakota', value: 'ND' },
+    { label: 'Ohio', value: 'OH' },
+    { label: 'Oklahoma', value: 'OK' },
+    { label: 'Oregon', value: 'OR' },
+    { label: 'Pennsylvania', value: 'PA' },
+    { label: 'Rhode Island', value: 'RI' },
+    { label: 'South Carolina', value: 'SC' },
+    { label: 'South Dakota', value: 'SD' },
+    { label: 'Tennessee', value: 'TN' },
+    { label: 'Texas', value: 'TX' },
+    { label: 'Utah', value: 'UT' },
+    { label: 'Vermont', value: 'VT' },
+    { label: 'Virginia', value: 'VA' },
+    { label: 'Washington', value: 'WA' },
+    { label: 'West Virginia', value: 'WV' },
+    { label: 'Wisconsin', value: 'WI' },
+    { label: 'Wyoming', value: 'WY' },
+    { label: 'Washington DC', value: 'DC' },
+  ];
+
+  const [showStatePicker, setShowStatePicker] = useState(false);
 
   const animateProgress = (step) => {
     Animated.timing(progressAnim, {
@@ -348,14 +492,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 0:
         return (
           <View style={styles.welcomeContent}>
-            <View style={styles.welcomeIconContainer}>
-              <Ionicons name="car-outline" size={64} color="#A77BFF" />
-            </View>
-            <Text style={styles.welcomeTitle}>Ready to Start Earning?</Text>
-            <Text style={styles.welcomeDescription}>
-              Join thousands of drivers earning money on their own schedule. We'll help you get set up in just a few minutes.
-            </Text>
-
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
                 <Ionicons name="cash-outline" size={20} color="#00D4AA" />
@@ -376,10 +512,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 1: // Identity Verification
         return (
           <View style={styles.formContent}>
-            <Text style={styles.formDescription}>
-              For the safety of our community, we need to verify your identity. This process takes just 2-3 minutes.
-            </Text>
-
             <View style={styles.verificationFeatures}>
               <View style={styles.verificationItem}>
                 <View style={styles.verificationIcon}>
@@ -418,35 +550,30 @@ export default function DriverOnboardingScreen({ navigation }) {
               </View>
             </View>
 
-            {verificationStatus === 'completed' && (
-              <View style={styles.verificationSuccess}>
-                <Ionicons name="checkmark-circle" size={32} color="#00D4AA" />
-                <Text style={styles.verificationSuccessText}>
-                  Identity verified successfully!
-                </Text>
-              </View>
-            )}
-
-            {identityLoading && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#00D4AA" />
-                <Text style={styles.loadingText}>Preparing verification...</Text>
-              </View>
-            )}
-
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                verificationStatus === 'completed' && styles.verifyButtonDisabled
+                identityLoading && styles.verifyButtonDisabled,
+                verificationStatus === 'completed' && styles.verifyButtonSuccess
               ]}
               onPress={() => {
                 present();
               }}
-              disabled={verificationStatus === 'completed'}
+              disabled={verificationStatus === 'completed' || identityLoading}
             >
-              <Text style={styles.verifyButtonText}>
-                {verificationStatus === 'completed' ? 'Verified \u2713' : 'Start Verification'}
-              </Text>
+              {identityLoading ? (
+                <View style={styles.buttonLoadingContainer}>
+                  <ActivityIndicator size="small" color="#fff" />
+                  <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Preparing verification...</Text>
+                </View>
+              ) : verificationStatus === 'completed' ? (
+                <View style={styles.buttonLoadingContainer}>
+                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Identity verified successfully!</Text>
+                </View>
+              ) : (
+                <Text style={styles.verifyButtonText}>Start Verification</Text>
+              )}
             </TouchableOpacity>
           </View>
         );
@@ -454,32 +581,42 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 2: // Personal Info
         return (
           <View style={styles.formContent}>
-            <Text style={styles.formDescription}>
-              Let's start with some basic information about you.
-            </Text>
-
             <View style={styles.inputRow}>
               <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.inputLabel}>First Name *</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[
+                    styles.textInput,
+                    formData.firstName.length > 0 && formData.firstName.length < 2 && styles.textInputError
+                  ]}
                   value={formData.firstName}
-                  onChangeText={(value) => updateFormData('firstName', value)}
+                  onChangeText={(value) => updateFormData('firstName', formatName(value))}
                   placeholder="John"
                   placeholderTextColor="#666"
                   autoCapitalize="words"
+                  maxLength={30}
                 />
+                {formData.firstName.length > 0 && formData.firstName.length < 2 && (
+                  <Text style={styles.inputHint}>Min 2 characters</Text>
+                )}
               </View>
               <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
                 <Text style={styles.inputLabel}>Last Name *</Text>
                 <TextInput
-                  style={styles.textInput}
+                  style={[
+                    styles.textInput,
+                    formData.lastName.length > 0 && formData.lastName.length < 2 && styles.textInputError
+                  ]}
                   value={formData.lastName}
-                  onChangeText={(value) => updateFormData('lastName', value)}
+                  onChangeText={(value) => updateFormData('lastName', formatName(value))}
                   placeholder="Doe"
                   placeholderTextColor="#666"
                   autoCapitalize="words"
+                  maxLength={30}
                 />
+                {formData.lastName.length > 0 && formData.lastName.length < 2 && (
+                  <Text style={styles.inputHint}>Min 2 characters</Text>
+                )}
               </View>
             </View>
 
@@ -488,10 +625,11 @@ export default function DriverOnboardingScreen({ navigation }) {
               <TextInput
                 style={styles.textInput}
                 value={formData.phoneNumber}
-                onChangeText={(value) => updateFormData('phoneNumber', value)}
+                onChangeText={(value) => updateFormData('phoneNumber', formatPhoneNumber(value))}
                 placeholder="(555) 123-4567"
                 placeholderTextColor="#666"
                 keyboardType="phone-pad"
+                maxLength={14}
               />
             </View>
 
@@ -500,10 +638,11 @@ export default function DriverOnboardingScreen({ navigation }) {
               <TextInput
                 style={styles.textInput}
                 value={formData.dateOfBirth}
-                onChangeText={(value) => updateFormData('dateOfBirth', value)}
+                onChangeText={(value) => updateFormData('dateOfBirth', formatDateOfBirth(value))}
                 placeholder="MM/DD/YYYY"
                 placeholderTextColor="#666"
                 keyboardType="numeric"
+                maxLength={10}
               />
             </View>
           </View>
@@ -512,10 +651,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 3: // Address
         return (
           <View style={styles.formContent}>
-            <Text style={styles.formDescription}>
-              We need your address for payment processing and verification.
-            </Text>
-
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Street Address *</Text>
               <TextInput
@@ -542,40 +677,83 @@ export default function DriverOnboardingScreen({ navigation }) {
               </View>
               <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
                 <Text style={styles.inputLabel}>State *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.address.state}
-                  onChangeText={(value) => updateFormData('address.state', value)}
-                  placeholder="GA"
-                  placeholderTextColor="#666"
-                  autoCapitalize="characters"
-                  maxLength={2}
-                />
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setShowStatePicker(true)}
+                >
+                  <Text style={formData.address.state ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
+                    {formData.address.state || 'Select'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>ZIP Code *</Text>
               <TextInput
-                style={[styles.textInput, { width: '50%' }]}
+                style={styles.textInput}
                 value={formData.address.postalCode}
-                onChangeText={(value) => updateFormData('address.postalCode', value)}
+                onChangeText={(value) => updateFormData('address.postalCode', formatZipCode(value))}
                 placeholder="30309"
                 placeholderTextColor="#666"
                 keyboardType="numeric"
                 maxLength={5}
               />
+              {formData.address.postalCode.length > 0 && formData.address.postalCode.length < 5 && (
+                <Text style={styles.inputHint}>ZIP must be 5 digits</Text>
+              )}
             </View>
+
+            {/* State Picker Modal */}
+            <Modal
+              visible={showStatePicker}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowStatePicker(false)}
+            >
+              <View style={styles.pickerModalOverlay}>
+                <View style={styles.pickerModal}>
+                  <View style={styles.pickerHeader}>
+                    <Text style={styles.pickerTitle}>Select State</Text>
+                    <TouchableOpacity onPress={() => setShowStatePicker(false)}>
+                      <Ionicons name="close" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView style={styles.pickerList}>
+                    {US_STATES.map((state) => (
+                      <TouchableOpacity
+                        key={state.value}
+                        style={[
+                          styles.pickerItem,
+                          formData.address.state === state.value && styles.pickerItemSelected
+                        ]}
+                        onPress={() => {
+                          updateFormData('address.state', state.value);
+                          setShowStatePicker(false);
+                        }}
+                      >
+                        <Text style={[
+                          styles.pickerItemText,
+                          formData.address.state === state.value && styles.pickerItemTextSelected
+                        ]}>
+                          {state.label}
+                        </Text>
+                        {formData.address.state === state.value && (
+                          <Ionicons name="checkmark" size={20} color="#00D4AA" />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+            </Modal>
           </View>
         );
 
       case 4: // Vehicle Info
         return (
           <View style={styles.formContent}>
-            <Text style={styles.formDescription}>
-              Tell us about the vehicle you'll be using for deliveries.
-            </Text>
-
             <View style={styles.inputRow}>
               <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.inputLabel}>Make *</Text>
@@ -607,7 +785,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 <TextInput
                   style={styles.textInput}
                   value={formData.vehicleInfo.year}
-                  onChangeText={(value) => updateFormData('vehicleInfo.year', value)}
+                  onChangeText={(value) => updateFormData('vehicleInfo.year', formatYear(value))}
                   placeholder="2020"
                   placeholderTextColor="#666"
                   keyboardType="numeric"
@@ -630,13 +808,17 @@ export default function DriverOnboardingScreen({ navigation }) {
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>License Plate *</Text>
               <TextInput
-                style={[styles.textInput, { width: '60%' }]}
+                style={styles.textInput}
                 value={formData.vehicleInfo.licensePlate}
-                onChangeText={(value) => updateFormData('vehicleInfo.licensePlate', value)}
+                onChangeText={(value) => updateFormData('vehicleInfo.licensePlate', formatLicensePlate(value))}
                 placeholder="ABC123"
                 placeholderTextColor="#666"
                 autoCapitalize="characters"
+                maxLength={8}
               />
+              {formData.vehicleInfo.licensePlate.length > 0 && formData.vehicleInfo.licensePlate.length < 2 && (
+                <Text style={styles.inputHint}>Min 2 characters</Text>
+              )}
             </View>
           </View>
         );
@@ -644,14 +826,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 5: // Payment Setup
         return (
           <View style={styles.finalContent}>
-            <View style={styles.finalIconContainer}>
-              <Ionicons name="card-outline" size={48} color="#A77BFF" />
-            </View>
-            <Text style={styles.finalTitle}>Secure Payment Setup</Text>
-            <Text style={styles.finalDescription}>
-              We'll now set up your secure payment account with Stripe. This ensures you get paid quickly and safely for every delivery.
-            </Text>
-
             <View style={styles.securityFeatures}>
               <View style={styles.securityItem}>
                 <Ionicons name="shield-checkmark" size={20} color="#00D4AA" />
@@ -905,6 +1079,7 @@ const styles = StyleSheet.create({
   benefitsList: {
     width: '100%',
     paddingHorizontal: 20,
+    marginTop: 20,
   },
   benefitItem: {
     flexDirection: 'row',
@@ -927,6 +1102,7 @@ const styles = StyleSheet.create({
   // Form content
   formContent: {
     width: '100%',
+    paddingTop: 20,
   },
   formDescription: {
     fontSize: 16,
@@ -963,6 +1139,7 @@ const styles = StyleSheet.create({
   finalContent: {
     width: '100%',
     alignItems: 'center',
+    paddingTop: 20,
   },
   finalIconContainer: {
     width: 100,
@@ -1069,6 +1246,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#666',
     opacity: 0.7,
   },
+  verifyButtonSuccess: {
+    backgroundColor: '#00D4AA',
+    opacity: 1,
+  },
   verifyButtonText: {
     color: '#fff',
     fontSize: 16,
@@ -1145,5 +1326,92 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+
+  // Button loading container
+  buttonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Input validation styles
+  textInputError: {
+    borderColor: '#FF6B6B',
+    borderWidth: 1,
+  },
+  inputHint: {
+    color: '#FF6B6B',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  // State Picker styles
+  pickerButton: {
+    backgroundColor: '#141426',
+    borderWidth: 1,
+    borderColor: '#2A2A3B',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pickerButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  pickerButtonPlaceholder: {
+    color: '#666',
+    fontSize: 16,
+  },
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  pickerModal: {
+    backgroundColor: '#1E1E2E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '60%',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A3B',
+  },
+  pickerTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  pickerList: {
+    paddingHorizontal: 16,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A3B',
+  },
+  pickerItemSelected: {
+    backgroundColor: 'rgba(167, 123, 255, 0.1)',
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  pickerItemText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  pickerItemTextSelected: {
+    color: '#A77BFF',
+    fontWeight: '600',
   },
 });

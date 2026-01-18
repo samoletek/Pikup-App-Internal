@@ -140,7 +140,10 @@ const VehicleSelectionModal = ({
         helpNeeded: summaryData?.needsHelp || false,
         itemWeight: 'medium',
         timeOfDay: new Date().getHours(),
-        dayOfWeek: new Date().getDay()
+        dayOfWeek: new Date().getDay(),
+        // Add insurance parameters
+        itemValue: summaryData?.itemValue,
+        includeCoverage: true // Always request insurance if itemValue is present
       };
 
       console.log('🚀 Making pricing API request:', requestBody);

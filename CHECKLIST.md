@@ -41,11 +41,11 @@
 ## New Features
 
 ### Feedback After Delivery
-- [ ] Create feedback UI component (star rating + comments)
-- [ ] Trigger feedback modal after `status === 'completed'`
-- [ ] Create `feedback` collection in Firebase
-- [ ] Store: `requestId`, `rating`, `comment`, `timestamp`
-- [ ] Show feedback in driver profile/stats
+- [x] Create feedback UI component (star rating + comments)
+- [x] Trigger feedback modal after `status === 'completed'`
+- [x] Create `feedback` collection in Firebase
+- [x] Store: `requestId`, `rating`, `comment`, `timestamp`
+- [x] Show feedback in driver profile/stats
 
 ## Testing
 
@@ -138,11 +138,26 @@ These fixes were required to unblock progress
 - [x] Fix `pass-word` typo in AuthScreen.js that broke registration
 - [x] Fix dateOfBirth parsing (NaN error) - handle both MMDDYYYY and MM/DD/YYYY formats
 - [x] Fix terms acceptance screen skipping - reordered race condition in signup
+- [x] Fix Driver Onboarding UX (6 items)
+  - [x] Remove top car icon on welcome screen
+  - [x] Fix verification button loading state (show in button, not above)
+  - [x] Add input masks: phone `(XXX) XXX-XXXX`, DOB `MM/DD/YYYY`, name (no digits, min 2 chars)
+  - [x] Add state picker dropdown with all US states
+  - [x] Add masks: ZIP (5 digits), Year (4 digits), License Plate (uppercase, 2-8 chars)
+  - [x] Remove top card icon on payment setup screen
+  - [x] Consolidate verification button (3 states: default, loading inside button, success green checkmark)
+  - [x] Add DOB validation (month 01-12, day 01-31, year 1900-2008)
+  - [x] Clean up texts: move descriptions to headers, remove redundant titles (Welcome, Payment Setup)
+  - [x] Fix consistent spacing: add top padding/margin (20px) to content in all steps
+  - [x] Fix input sizing: remove width constraints from License Plate and ZIP (now 100% width)
+  - [x] Match State Picker style exactly to text inputs (height, border, colors)
+  - [x] Remove "(2-8 characters)" hint from License Plate label
 
 ---
 
 ## Out of Scope (Probably for Phase 2)
 
+### UI/UX Improvements
 - Fix layout (top/bottom blocks that content scrolls behind - content should go behind device edges like in popular apps)
 - Scroll on auth screen - unclear why it's needed - (Replace with KeyboardAvoidingView. Please review)
 - Logo positioning above search field
@@ -152,3 +167,19 @@ These fixes were required to unblock progress
   - Add dynamic pickers for vehicle make, model, year, and color
   - Add input masks for phone number and date of birth
 - Existing email still allows onboarding (signup with already registered email should show error, not proceed)
+
+### Design System (Code Consistency)
+> Currently all colors/fonts/spacing are hardcoded across 370+ files.
+
+- Refactor components to use design tokens (remove hardcoded values)
+
+### Reusable Components
+- Create shared `Button` component with variants (primary, secondary, outlined)
+- Create shared `Card` component with consistent styling
+- Create shared `ModalBase` component with unified animations
+- Create shared `Input` component with validation states
+
+### Responsive Design
+- Add `utils/responsive.js` with `scale()` / `fontScale()` utilities
+- Apply responsive scaling to key UI elements for tablet support and different screen sizes
+

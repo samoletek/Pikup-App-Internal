@@ -77,7 +77,7 @@ const PriceSummaryModal = ({
   const itemValue = summaryData?.itemValue || 500;
 
   // Payment service URL - configured for your backend
-  const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
+  const PAYMENT_SERVICE_URL = 'https://pikup-app-server.onrender.com';
 
   useEffect(() => {
     if (visible) {
@@ -167,8 +167,11 @@ const PriceSummaryModal = ({
     setLoadingInsurance(true);
 
     try {
-      const response = await authFetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
+      const response = await fetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           vehicleType: selectedVehicle?.type,
           distance: selectedVehicle?.distance || distance,
