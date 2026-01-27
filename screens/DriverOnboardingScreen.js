@@ -22,7 +22,7 @@ import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 const { width, height } = Dimensions.get('window');
 
 export default function DriverOnboardingScreen({ navigation }) {
-  const { currentUser, createDriverConnectAccount, getDriverOnboardingLink } = useAuth();
+  const { currentUser, createDriverConnectAccount, getDriverOnboardingLink, updateDriverPaymentProfile } = useAuth();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -846,6 +846,45 @@ export default function DriverOnboardingScreen({ navigation }) {
                 You'll be redirected to complete a quick verification process. This usually takes 2-3 minutes.
               </Text>
             </View>
+
+            {/* TODO: Remove before production */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[styles.verifyButton, { backgroundColor: '#FF6B6B', marginTop: 16 }]}
+                onPress={() => {
+                  Alert.alert(
+                    'DEV: Skip Payment Setup',
+                    'This will mark onboarding as complete without Stripe setup. Driver will NOT be able to receive payments.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Skip Anyway',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await updateDriverPaymentProfile(currentUser.uid, {
+                              onboardingComplete: true,
+                              documentsVerified: true,
+                              canReceivePayments: false, // Important: cannot receive payments
+                              devSkippedPaymentSetup: true,
+                            });
+                            // Navigate directly to DriverTabs, bypassing CompleteScreen
+                            navigation.reset({
+                              index: 0,
+                              routes: [{ name: 'DriverTabs' }],
+                            });
+                          } catch (error) {
+                            Alert.alert('Error', error.message);
+                          }
+                        }
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.verifyButtonText}>⚠️ DEV: Skip Payment Setup</Text>
+              </TouchableOpacity>
+            )}
           </View>
         );
 

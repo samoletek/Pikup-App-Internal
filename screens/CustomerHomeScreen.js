@@ -14,7 +14,7 @@ import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
-import { useDemo } from "../contexts/DemoContext";
+
 import CustomerSearchModal from "../components/CustomerSearchModal";
 import SummaryDetailsModal from "../components/SummaryDetailsModal";
 import VehicleSelectionModal from "../components/VehicleSelectionModal";
@@ -27,7 +27,7 @@ import Mapbox from '@rnmapbox/maps';
 export default function CustomerHomeScreen({ navigation }) {
   const { userType, createPickupRequest, getUserPickupRequests, getRequestById, uploadMultiplePhotos } = useAuth();
   const { defaultPaymentMethod, paymentMethods } = usePayment();
-  const { isDemoMode, startDemo, stopDemo, currentStage, demoData, updateDemoData, startAutoCompletion } = useDemo();
+
 
   const [region, setRegion] = useState({
     latitude: 33.749,
@@ -174,19 +174,7 @@ export default function CustomerHomeScreen({ navigation }) {
     }
   };
 
-  // Demo mode handlers
-  const toggleDemoMode = () => {
-    if (isDemoMode) {
-      stopDemo();
-    }
-  };
 
-  const handleStartDemoFlow = () => {
-    // Start the demo flow with the search modal
-    startDemo();
-    // Open the search modal
-    setSearchModalVisible(true);
-  };
 
   useEffect(() => {
     getCurrentLocation();
@@ -282,13 +270,7 @@ export default function CustomerHomeScreen({ navigation }) {
     console.log("🔍 Setting selectedLocations to:", locationData);
     setSelectedLocations(locationData);
 
-    // In demo mode, update the demo data
-    if (isDemoMode && currentStage === 'SEARCH_LOCATION') {
-      updateDemoData({
-        pickup: locationData.pickup.address,
-        dropoff: locationData.dropoff.address
-      }, 'SUMMARY_DETAILS');
-    }
+
 
     // Close current modal and open next one
     setSearchModalVisible(false);
@@ -326,14 +308,7 @@ export default function CustomerHomeScreen({ navigation }) {
       setSummaryData(summaryInfo);
       setIsUploadingPhotos(false);
 
-      // In demo mode, update the demo data
-      if (isDemoMode && currentStage === 'SUMMARY_DETAILS') {
-        updateDemoData({
-          itemDescription: summaryInfo.itemDescription,
-          needsHelp: summaryInfo.needsHelp,
-          specialInstructions: summaryInfo.specialInstructions
-        }, 'VEHICLE_SELECTION');
-      }
+
 
       // Close current modal and open next one
       console.log("🔍 selectedLocations before opening vehicle modal:", selectedLocations);
@@ -364,12 +339,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const handleVehicleSelection = (vehicle) => {
     setSelectedVehicle(vehicle);
 
-    // In demo mode, update the demo data
-    if (isDemoMode && currentStage === 'VEHICLE_SELECTION') {
-      updateDemoData({
-        vehicle: vehicle
-      }, 'PRICE_SUMMARY');
-    }
+
 
     setVehicleModalVisible(false);
     setPriceModalVisible(true);
@@ -465,12 +435,7 @@ export default function CustomerHomeScreen({ navigation }) {
         updatedAt: new Date().toISOString()
       };
 
-      // In demo mode, start auto-completion after price summary
-      if (isDemoMode && currentStage === 'PRICE_SUMMARY') {
-        setPriceModalVisible(false);
-        startAutoCompletion();
-        return;
-      }
+
 
       console.log("Creating pickup request with data:", JSON.stringify(pickupRequestData, null, 2));
 
@@ -549,43 +514,7 @@ export default function CustomerHomeScreen({ navigation }) {
     }, 100);
   };
 
-  // Render demo mode controls
-  const renderDemoControls = () => {
-    return (
-      <View style={styles.demoContainer}>
-        <View style={styles.demoHeader}>
-          <Text style={styles.demoTitle}>Demo Mode</Text>
-          <Switch
-            value={isDemoMode}
-            onValueChange={toggleDemoMode}
-            trackColor={{ false: "#767577", true: "#81b0ff" }}
-            thumbColor={isDemoMode ? "#2196F3" : "#f4f3f4"}
-          />
-        </View>
 
-        {!isDemoMode && (
-          <TouchableOpacity
-            style={styles.demoButton}
-            onPress={handleStartDemoFlow}
-          >
-            <Text style={styles.demoButtonText}>Start Demo Flow</Text>
-          </TouchableOpacity>
-        )}
-
-        {isDemoMode && (
-          <View style={styles.demoStageContainer}>
-            <Text style={styles.demoStageText}>Current Stage: {currentStage}</Text>
-            <Text style={styles.demoInstructions}>
-              {currentStage === 'SEARCH_LOCATION' && 'Enter pickup and dropoff locations'}
-              {currentStage === 'SUMMARY_DETAILS' && 'Enter item details and continue'}
-              {currentStage === 'VEHICLE_SELECTION' && 'Select a vehicle type'}
-              {currentStage === 'PRICE_SUMMARY' && 'Review and confirm price'}
-            </Text>
-          </View>
-        )}
-      </View>
-    );
-  };
 
   return (
     <View style={styles.container}>
@@ -618,7 +547,7 @@ export default function CustomerHomeScreen({ navigation }) {
         <View style={styles.trackerContainer}>
           <DeliveryStatusTracker
             requestId={activeDelivery.id}
-            onDeliveryComplete={isDemoMode ? null : handleDeliveryComplete}
+            onDeliveryComplete={handleDeliveryComplete}
             onViewFullTracker={() => handleViewFullTracker(activeDelivery.id)}
           />
         </View>
@@ -684,7 +613,7 @@ export default function CustomerHomeScreen({ navigation }) {
         selectedVehicle={selectedVehicle}
         selectedLocations={selectedLocations}
         total={null} // Let PriceSummaryModal calculate its own total using server pricing
-        isDemo={isDemoMode && currentStage === 'PRICE_SUMMARY'}
+        isDemo={false}
         // NEW PROPS FOR ENHANCED FUNCTIONALITY
         distance={calculatedDistance}
         duration={estimatedDuration}
@@ -786,47 +715,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
   },
-  demoContainer: {
-    position: 'absolute',
-    top: 50,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 10,
-    borderRadius: 10,
-    width: 200,
-    zIndex: 1000,
-  },
-  demoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  demoTitle: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  demoButton: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-  },
-  demoButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  demoStageContainer: {
-    marginTop: 10,
-  },
-  demoStageText: {
-    color: 'white',
-    fontSize: 12,
-  },
-  demoInstructions: {
-    color: 'white',
-    fontSize: 12,
-  },
+
   statusBar: {
     position: 'absolute',
     top: 0,

@@ -5,7 +5,7 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 import { LogBox, NativeModules } from 'react-native';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
-import { DemoProvider } from './contexts/DemoContext';
+
 import { NotificationProvider } from './contexts/NotificationContext';
 import Navigation from './Navigation';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -27,7 +27,7 @@ if (!STRIPE_PUBLISHABLE_KEY) {
 }
 
 // Debug: Check if MapboxNavigation native module is available
-console.log('🔍 Available Native Modules:', Object.keys(NativeModules).filter(key => 
+console.log('🔍 Available Native Modules:', Object.keys(NativeModules).filter(key =>
   key.toLowerCase().includes('mapbox') || key.toLowerCase().includes('navigation')
 ));
 if (NativeModules.MapboxNavigation) {
@@ -47,11 +47,9 @@ export default function App() {
         >
           <AuthProvider>
             <PaymentProvider>
-              <DemoProvider>
-                <NotificationProvider>
-                  <Navigation />
-                </NotificationProvider>
-              </DemoProvider>
+              <NotificationProvider>
+                <Navigation />
+              </NotificationProvider>
             </PaymentProvider>
           </AuthProvider>
         </StripeProvider>

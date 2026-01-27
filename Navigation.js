@@ -1,7 +1,5 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useNavigation } from "@react-navigation/native";
-import { useDemo } from "./contexts/DemoContext";
 
 import WelcomeScreen from "./screens/WelcomeScreen";
 import AuthScreen from "./screens/AuthScreen";
@@ -26,7 +24,6 @@ import DeliveryFeedbackScreen from "./screens/DeliveryFeedbackScreen";
 import DeliveryTrackingScreen from "./screens/DeliveryTrackingScreen";
 import EnRouteToPickupScreen from "./screens/EnRouteToPickupScreen";
 import GpsNavigationScreen from "./screens/GpsNavigationScreen";
-import TestDataScreen from "./screens/TestDataScreen";
 
 // NEW SCREENS - Add these imports
 import PickupConfirmationScreen from "./screens/PickupConfirmationScreen";
@@ -53,17 +50,6 @@ import ConsentGateScreen from "./screens/ConsentGateScreen";
 const Stack = createNativeStackNavigator();
 
 export default function Navigation() {
-  const navigation = useNavigation();
-  const { registerNavigation } = useDemo();
-
-  // Register the navigation function with the demo context
-  useEffect(() => {
-    if (registerNavigation) {
-      registerNavigation((screenName, params) => {
-        navigation.navigate(screenName, params);
-      });
-    }
-  }, [navigation, registerNavigation]);
 
   return (
     <Stack.Navigator
@@ -99,12 +85,7 @@ export default function Navigation() {
         component={DriverMessagesScreen}
       />
 
-      {/* Modal/Overlay screens - Keep these in stack navigation */}
-      <Stack.Screen
-        name="TestDataScreen"
-        component={TestDataScreen}
-        options={{ headerShown: false }}
-      />
+
       <Stack.Screen
         name="DriverPreferencesScreen"
         component={DriverPreferencesScreen}
@@ -159,7 +140,7 @@ export default function Navigation() {
         component={DeliveryConfirmationScreen}
         options={{ headerShown: false }}
       />
-      
+
       {/* CUSTOMER PROFILE SCREENS - Add these routes */}
       <Stack.Screen
         name="CustomerHelpScreen"

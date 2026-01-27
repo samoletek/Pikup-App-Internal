@@ -1,336 +1,277 @@
-# Pikup 
+# PikUp
 
-Pikup is a React Native/Expo application. The app features dual interfaces for customers and drivers, with real-time tracking, payment processing, and AI-powered item analysis.
+PikUp is a React Native/Expo application that connects users with drivers who have pickup trucks or SUVs, offering a faster, convenient, and affordable way to transport large or medium items — unlike dealing with the hassle of renting or high costs of traditional movers.
 
-# Latest Updated
-**Firebase issue** I'm currently getting the following issue "Default FirebaseApp is not initialized in this process com.pikup.main. Make sure to call FirebaseApp.initializeApp(Context) first." which probably means the native Firebase SDK  failed to initialize automatically. This issue is probably link to sign up/login feature not working
+## 🚀 Project Status
 
-**Mabpox issue** While the SDK has been successfully integrated and is able to build without errors, its functionality has not yet been fully verified. This means that while the code compiles and runs, additional testing is necessary to ensure that all features of the Mapbox SDK are working as intended within the application. This step is critical to confirm that the integration is complete and behaves as expected in real-world scenarios.
+**Current Phase:** Option C - Full Build  
+**Timeline:** 8-10 weeks
+**Developer:** Andrew S. / Architeq
 
-**Stripe Identity** Stripe Identity, which has been implemented in the project. However, testing for this feature has been blocked due to a user authentication issue. Specifically, users are currently unable to log in or sign up, which prevents the team from verifying the Stripe Identity functionality. Resolving the login/sign-up issue is a prerequisite for testing this feature and ensuring that it operates correctly within the application.
+See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 
-
+---
 
 ## 🏗️ Architecture Overview
 
-### Core Structure
-```
-├── App.js                     # Main app entry point with provider setup
-├── Navigation.js              # Stack navigation configuration
-├── contexts/                  # React context providers for state management
-├── screens/                   # All application screens
-├── components/                # Reusable UI components and modals
-├── services/                  # Business logic services
-└── navigation/                # Tab navigator configurations
-```
+### Tech Stack
+- **Frontend:** React Native + Expo
+- **Backend:** Supabase (migrating from Firebase)
+- **Payments:** Stripe (Payments + Connect + Identity)
+- **Maps:** Mapbox Navigation SDK
+- **AI:** Google Gemini Vision API
+- **Insurance:** Redkik API
 
-## Key Context Providers
+---
+
+## 📱 Features
+
+### Customer Experience
+1. **Photo Capture** → **AI Analysis** → **Address Selection** → **Vehicle Selection** → **Payment** → **Driver Matching**
+2. **Real-time Tracking** via DeliveryTrackingScreen
+3. **Multiple Items Support** with individual photos and descriptions
+4. **New/Used Classification** with receipt upload for insurance
+5. **In-app Messaging** with assigned driver
+6. **Delivery Confirmation** with photos
+7. **Rating System** and feedback
+
+### Driver Experience
+1. **Driver Onboarding** with Stripe Connect and identity verification
+2. **Preferences Setup** (item sizes, equipment, availability)
+3. **Order Notifications** with timer for accept/decline
+4. **Smart Matching** based on distance and preferences
+5. **GPS Navigation** to pickup/dropoff locations
+6. **Earnings Dashboard** with realtime sync
+7. **Gamification** - weekly milestones and bonuses
+
+### Key Algorithms
+- **Order Matching:** Find drivers within 5-10 miles, prioritize by preferences and experience
+- **Dynamic Pricing:** Based on distance, item type, time, and demand
+- **Insurance Logic:** Auto-apply to new items only, require receipt verification
+
+---
+
+## 🔑 Key Context Providers
 
 ### AuthContext (`contexts/AuthContext.js`)
-**The heart of the application** - Manages all core functionality including:
-
-- **Authentication**: User registration, login, logout using Firebase REST API
-- **User Management**: Profile creation, updates, driver/customer role handling
-- **Firebase Operations**: All Firestore data operations (users, pickupRequests, drivers)
-- **Driver Earnings**: Calculation (80% of trip cost, $5 minimum), tracking, payout management
-- **Request Management**: Creating, updating, and tracking pickup requests
-- **Location Services**: Integration with location tracking and geocoding
-- **Data Transformation**: `toFirestoreFormat()` and `fromFirestoreFormat()` helpers
+**The heart of the application** - Manages:
+- User authentication (registration, login, logout)
+- Profile management (customer/driver roles)
+- Pickup request lifecycle
+- Driver earnings (70% of trip cost)
+- All Supabase data operations
 
 **Key Functions:**
 - `registerUser()`, `loginUser()`, `logoutUser()`
 - `createPickupRequest()`, `updateRequestStatus()`
 - `setupStripeConnect()`, `processDriverPayout()`
-- `uploadUserData()`, `fetchUserProfile()`
 
 ### PaymentContext (`contexts/PaymentContext.js`)
-Handles all customer payment processing:
+Handles all Stripe operations:
+- Payment intents and checkout
+- Payment method management
+- Error handling
 
-- **Stripe Integration**: Payment methods, payment intents, checkout flow
-- **Payment Processing**: Secure payment handling for pickup requests
-- **Payment Methods**: Adding, removing, and managing customer payment methods
-- **Error Handling**: Payment failures, network issues, validation
-
-**Key Functions:**
-- `createPaymentIntent()`, `confirmPayment()`
-- `addPaymentMethod()`, `removePaymentMethod()`
-- `processPayment()`, `handlePaymentError()`
-
-### DemoContext (`contexts/DemoContext.js`)
-Provides demo data and navigation utilities:
-
-- **Mock Data**: Demo users, requests, and navigation helpers
-- **Development Support**: Fallback data when services are unavailable
-- **Navigation Utilities**: Helper functions for demo flows
-
-**Note**: For new features, always modify **AuthContext**, not DemoContext, unless explicitly stated otherwise.
+---
 
 ## 📱 Screen Structure
 
-### Customer Screens (`screens/Customer*`)
+### Customer Screens
+| Screen | Purpose |
+|--------|---------|
+| CustomerHomeScreen | Create pickup requests |
+| CustomerActivityScreen | View current/past requests |
+| CustomerMessagesScreen | Chat with drivers |
+| CustomerProfileScreen | Profile & settings |
+| PhotoCaptureScreen | AI-powered item analysis |
+| PickupDropoffScreen | Address selection |
+| VehicleSelectionScreen | Choose vehicle type |
+| PaymentScreen | Payment processing |
+| DeliveryTrackingScreen | **Main tracking interface** |
 
-#### CustomerTabNavigator
-- **CustomerHomeScreen**: Main interface for creating pickup requests
-- **CustomerActivityScreen**: View current and past pickup requests
-- **CustomerMessagesScreen**: Chat interface with drivers
-- **CustomerProfileScreen**: Profile management and settings
+### Driver Screens
+| Screen | Purpose |
+|--------|---------|
+| DriverHomeScreen | Accept/decline requests |
+| DriverEarningsScreen | Earnings & payouts |
+| DriverMessagesScreen | Chat with customers |
+| DriverProfileScreen | Profile & vehicle info |
+| DriverOnboardingScreen | Stripe Connect setup |
+| DriverNavigationScreen | GPS navigation |
 
-#### Key Customer Screens
-- **PhotoCaptureScreen**: AI-powered item analysis using camera
-- **PickupDropoffScreen**: Address selection and confirmation
-- **VehicleSelectionScreen**: Choose appropriate vehicle type
-- **PaymentScreen**: Payment method selection and processing
-- **DeliveryTrackingScreen**: **THE MAIN TRACKING INTERFACE**
+---
 
-### Driver Screens (`screens/Driver*`)
+## 🛠️ Development Setup
 
-#### DriverTabNavigator
-- **DriverHomeScreen**: Accept/decline requests, navigation
-- **DriverEarningsScreen**: Earnings tracking and payout management
-- **DriverMessagesScreen**: Chat interface with customers
-- **DriverProfileScreen**: Profile and vehicle information
-
-#### Key Driver Screens
-- **DriverOnboardingScreen**: Stripe Connect setup and vehicle registration
-- **DriverRequestScreen**: View and accept available requests
-- **DriverNavigationScreen**: GPS navigation to pickup/dropoff locations
-
-### Shared Screens
-- **MessagingScreen**: Real-time chat between customers and drivers
-- **PaymentMethodsScreen**: Manage payment methods
-
-### Unused/Deprecated Screens
-The following screens exist but are not actively used:
-- **TestDataScreen**: Development testing interface (deprecated)
-- **RouteConfirmationScreen**: Route planning (functionality moved to other screens)
-- **firebasefirestore file**: Deprecated Firebase operations (all moved to AuthContext)
-
-## DeliveryTrackingScreen - The Customer Tracking Hub
-
-**File**: `screens/DeliveryTrackingScreen.js`
-
-This is the **primary tracking interface** for customers and handles all real-time tracking functionality:
-
-### Core Functionality
-- **Real-time Driver Tracking**: Updates driver location every 5 seconds
-- **Order Status Management**: Displays current status (accepted, inProgress, arrivedAtPickup, etc.)
-- **Interactive Map**: Shows customer location, driver location, and route
-- **Status Updates**: Real-time notifications as order progresses
-- **Communication**: Direct messaging with assigned driver
-- **Delivery Confirmation**: Photo verification and completion handling
-
-### Status Flow Tracking
-```
-pending → accepted → inProgress → arrivedAtPickup → pickedUp → enRouteToDropoff → completed
-```
-
-### Key Features
-- **Live Location Updates**: Customer can see exactly where their driver is
-- **ETA Calculations**: Real-time estimated arrival times
-- **Photo Confirmations**: Displays pickup and delivery confirmation photos
-- **Status Notifications**: Clear visual indicators of order progress
-- **Driver Contact**: Call or message driver directly from the screen
-- **Order Details**: Shows item information, addresses, and pricing
-
-### Integration Points
-- **AuthContext**: Fetches request data and driver information
-- **LocationService**: Real-time location tracking
-- **MessagingScreen**: Direct chat with driver
-- **PaymentContext**: Final payment processing
-
-## Services
-
-### LocationService (`services/LocationService.js`)
-- **Position Tracking**: Current location, background tracking
-- **Geocoding**: Address to coordinates conversion
-- **Route Calculation**: Google Maps integration
-- **Permission Handling**: Location access permissions
-
-### AIImageService (`services/AIImageService.js`)
-- **Google Gemini Vision API**: Analyzes photos of items to be picked up
-- **Weight Estimation**: Automatic weight calculation
-- **Help Requirements**: Determines if additional help is needed
-- **Item Categorization**: For pricing and vehicle selection
-
-## Navigation Structure
-
-### Navigation.js
-- **Stack Navigator**: Main app navigation structure
-- **Route Definitions**: All screen imports and routing
-- **Navigation Types**: TypeScript navigation types (if applicable)
-
-### Tab Navigators
-- **CustomerTabNavigator** (`navigation/CustomerTabNavigator.js`): Customer interface tabs
-- **DriverTabNavigator** (`navigation/DriverTabNavigator.js`): Driver interface tabs
-
-## Firebase Integration
-
-### Collections
-- **users**: Customer and driver profiles
-- **pickupRequests**: All pickup/delivery requests
-- **drivers**: Driver-specific information and earnings
-
-### Data Flow
-- All Firebase operations go through **AuthContext**
-- Data transformation via `toFirestoreFormat()` and `fromFirestoreFormat()`
-- Authentication state handled in all operations
-- Real-time listeners for live updates
-
-## Payment System
-
-### Customer Payments
-- **Stripe Integration**: Secure payment processing
-- **Payment Methods**: Credit/debit card management
-- **Payment Intents**: Secure payment confirmation
-
-### Driver Payouts
-- **Stripe Connect**: Direct payouts to driver accounts
-- **Earnings Calculation**: 80% of trip cost with $5 minimum
-- **Payout Management**: Real-time earnings tracking
-
-### Payment Flow
-1. Customer selects payment method
-2. Payment intent created via PaymentContext
-3. Payment processed securely through Stripe
-4. Driver earnings calculated and tracked
-5. Automatic payout processing
-
-## AI Integration
-
-### Google Gemini Vision API
-- **Item Analysis**: Analyzes photos to determine item details
-- **Weight Estimation**: Automatic weight calculation for pricing
-- **Help Requirements**: Determines if lifting assistance is needed
-- **Pricing Support**: Helps determine appropriate vehicle and pricing
-
-## 📱 Platform Configuration
+### Prerequisites
+- Node.js 18+
+- Expo CLI
+- Xcode 17+ (for iOS)
+- Android Studio (for Android)
 
 ### Environment Variables
-```
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+Create `.env.local`:
+```env
+EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
 EXPO_PUBLIC_STRIPE_MERCHANT_ID=merchant.com.pikup
 EXPO_PUBLIC_URL_SCHEME=pikup
 EXPO_PUBLIC_GEMINI_API_KEY=your-gemini-api-key
+EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+REDKIK_CLIENT_ID=your-redkik-client-id
+REDKIK_CLIENT_SECRET=your-redkik-client-secret
 ```
 
-### Platform-Specific Handling
-- **Android**: Uses `10.0.2.2` for localhost connections from emulator
-- **iOS**: Uses `localhost` for simulator connections
-- **Payment Service**: Platform-specific URLs in AuthContext
-
-## 🚀 Development Commands
-
-### Start Development
+### Installation
 ```bash
-npm start              # Start Expo development server
-npm run android        # Run on Android emulator/device
-npm run ios            # Run on iOS simulator/device
-npm run web            # Run in web browser
+git pull origin Release_1_1_0
+npm install
+npx expo prebuild --clean --platform ios
+npx expo run:ios
 ```
+
+> **Important:** Use `npx expo run:ios` NOT `npx expo start --ios` (Mapbox needs native build)
 
 ### Build Commands
 ```bash
-# Development build
-npx eas build --platform android --profile development
+# Development
 npx eas build --platform ios --profile development
+npx eas build --platform android --profile development
 
-# Production build
-npx eas build --platform android --profile production
+# Production
 npx eas build --platform ios --profile production
+npx eas build --platform android --profile production
 ```
 
-## 🧪 Testing
+---
 
-- **No test framework currently configured**
-- **Mock Data**: Uses demo data when services unavailable
-- **Payment Testing**: Stripe test environment for development
-- **Platform Testing**: Android emulator and iOS simulator support
+## ⚠️ Critical Configuration
 
-##  Key Files Reference
+### Package Versions (DO NOT UPDATE)
+```json
+{
+  "react": "19.1.0",
+  "react-native": "^0.81.5",
+  "react-native-screens": "^4.19.0",
+  "@rnmapbox/maps": "10.2.10",
+  "react-native-reanimated": "~3.17.4",
+  "react-native-gesture-handler": "~2.24.0"
+}
+```
 
-### Essential Files
-- **App.js**: Main entry point with all providers
-- **Navigation.js**: Complete navigation structure
-- **contexts/AuthContext.js**: Core business logic and Firebase operations
-- **contexts/PaymentContext.js**: Payment processing
-- **screens/DeliveryTrackingScreen.js**: Main customer tracking interface
+### Build Requirements
+- **NO `expo-dev-client`** — causes Xcode 17 compile errors
+- **NO `RNMapboxMapsImpl: "mapbox"`** — use default MapLibre
+- Mapbox patch: `patches/@rnmapbox+maps+10.2.10.patch`
 
-### Component Structure
-- **components/**: Reusable UI components and modals
-- **screens/Customer***: Customer-facing screens
-- **screens/Driver***: Driver-facing screens
-- **services/**: Business logic services
+---
 
-### Configuration
-- **app.json**: Expo configuration
-- **eas.json**: Build configuration
-- **.env**: Environment variables (contains API keys)
+## 🔗 External Services
 
-##  Security Notes
+| Service | Purpose | Status |
+|---------|---------|--------|
+| Supabase | Auth + Database + Realtime | Migrating |
+| Stripe | Payments + Connect + Identity | Live keys |
+| Mapbox | Navigation SDK | Configured |
+| Google Gemini | AI item analysis | Working |
+| Redkik | Insurance API | Blocked (wrong URL) |
 
-- **API Keys**: Stored in .env file (needs security review for production)
-- **Payment Security**: Stripe handles all sensitive payment data
-- **Firebase Security**: Uses Firebase security rules
-- **Authentication**: Secure token-based authentication
+### Backend
+- **URL:** `https://pikup-server.onrender.com`
+- **Known Issue:** Driver payout returns 500 error
 
+---
 
-## Issues and also Next Steps
-- Mapbox sdk needs to be properly configured, currently has issues with the cloud building and the sourcing in the soruce files at build time
-- Insurance needs to be tested along with driver side once insurance is in and mapbox
-- Stripe identity needs to be reimplemented since its commented out while server isnt running
-- Put back in the document picker module for the claims screen since it was giving a error si i cmmented out for now
+## 📋 Milestones
 
-## Services / API's Needed
-- Firebase database
-- Render server with env variables needed
-- Stripe Keys
-- Google Map Key
-- Google Gemini Key
-- Mapbox Download and Public Key
+### Milestone 1: Foundation & Backend
+- Social login (Apple + Google)
+- Account deletion
+- Supabase migration
+- Modal fixes
+- Address autocomplete
 
+### Milestone 2: Customer Flow Polish
+- Apple HIG compliance
+- Request flow navigation
+- New/Used item selection
+- Error handling
+- Forgot password
 
-## 📱 Screen Photos
+### Milestone 3: Features & Driver Onboarding
+- Messaging system
+- Account screens rebuild
+- Multiple items support
+- Driver preferences UI
+- Gamification
+- Dynamic pricing
 
-### Customer Screens
-<div align="center">
-  <img src="assets/homescreen.png" alt="Home Screen" width="200"/>
-  <img src="assets/details.png" alt="Order Details" width="200"/>
-  <img src="assets/location.png" alt="Location Tracking" width="200"/>
-</div>
+### Milestone 4: Driver Experience & Deployment
+- Order matching algorithm
+- Driver notifications with timer
+- Earnings dashboard
+- Stripe payments testing
+- Cross-platform testing
+- App Store submission
 
-<div align="center">
-  <img src="assets/price.png" alt="Pricing" width="200"/>
-  <img src="assets/vehicle.png" alt="Vehicle Selection" width="200"/>
-</div>
+---
 
-### Driver Screens
-<div align="center">
-  <img src="assets/driverhome.png" alt="Driver Home" width="200"/>
-  <img src="assets/driverprofile.png" alt="Driver Profile" width="200"/>
-  <img src="assets/earnings.png" alt="Driver Earnings" width="200"/>
-</div>
+## 🔐 Security Notes
 
-### Authentication & Setup
-<div align="center">
-  <img src="assets/login.png" alt="Login Screen" width="200"/>
-  <img src="assets/login2.png" alt="Login Screen 2" width="200"/>
-  <img src="assets/roleselect.png" alt="Role Selection" width="200"/>
-</div>
+- **API Keys:** Stored in `.env.local` (not committed)
+- **Payments:** Stripe handles all sensitive data
+- **Auth:** Supabase with RLS
+- **⚠️ Stripe keys are LIVE** — be careful with payments
 
-<div align="center">
-  <img src="assets/offline.png" alt="Offline Mode" width="200"/>
-</div>
+---
 
-##  Key Features
+## 📞 Resources
 
-### Customer Experience
-1. **Photo Capture** → **AI Analysis** → **Address Selection** → **Vehicle Selection** → **Payment** → **Driver Matching**
-2. **Real-time Tracking** via DeliveryTrackingScreen
-3. **Delivery Confirmation** with photos
-4. **Rating System** and feedback
+- **Landing Page:** https://pikup-app.com/
 
-### Driver Experience
-1. **Driver Onboarding** with Stripe Connect setup
-2. **Request Acceptance** and navigation
-3. **Pickup/Delivery Confirmation** with photos
-4. **Earnings Tracking** and payout management
+---
+
+## Future Considerations (v2)
+
+Features discussed but intentionally deferred to keep MVP lean:
+
+### Phone Calls
+- [ ] In-app calling between customer and driver (like Uber/Lyft)
+- Complex feature, requires VoIP integration
+- Current approach: messaging + push notifications
+
+### Map Animations
+- [ ] Show other drivers on map while customer is requesting
+- Animated car icons in customer's area
+- May be UI-only (not real-time sync) like Uber/Lyft
+
+### Loading/Unloading Timer
+- [ ] Timer for loading/unloading at pickup/dropoff
+- Charge extra if exceeds time limit
+- Need to define pricing model
+
+### Plaid Integration
+- [ ] Consider Plaid instead of Stripe for unified service
+- Identity verification + payments + background check in one
+- Potentially cheaper than separate services
+
+### Enhanced Rating System
+- [ ] Low-rated drivers get fewer job matches
+- [ ] Auto-suspend/terminate for complaints or criminal behavior
+- [ ] Trust score algorithm similar to Uber/Lyft
+
+### Help Page Cleanup
+- [ ] Review and remove unused features from old app
+- [ ] Keep only essential features for cleaner UX
+
+### Car Animations on Map
+- [ ] Customer sees nearby drivers while requesting
+- [ ] Animated icons showing driver movement
+- Could be real-time or decorative (TBD)
+
+---
+
+**Note:** These features were discussed during planning calls but excluded from current scope to focus on core MVP functionality. Will revisit after successful App Store launch.
+
+**Last Updated:** January 25, 2026  
+**Developer:** Andrew S. / Architeq
