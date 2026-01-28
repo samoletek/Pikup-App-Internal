@@ -29,12 +29,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const { defaultPaymentMethod, paymentMethods } = usePayment();
 
 
-  const [region, setRegion] = useState({
-    latitude: 33.749,
-    longitude: -84.388,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  });
+  const [region, setRegion] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("Loading...");
   const [activeDelivery, setActiveDelivery] = useState(null);
@@ -209,8 +204,23 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const getCurrentLocation = async () => {
     try {
+      // 1. Try to load saved location first for immediate display
+      const savedLocation = await MapboxLocationService.getLastKnownLocation();
+      if (savedLocation) {
+        console.log('Using saved location for immediate display');
+        const savedRegion = {
+          latitude: savedLocation.latitude,
+          longitude: savedLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setRegion(savedRegion);
+        setUserLocation(savedLocation);
+      }
+
       setLocationStatus("Requesting permissions...");
 
+      // 2. Get fresh location
       setLocationStatus("Getting location...");
       const location = await MapboxLocationService.getCurrentLocation();
 
@@ -501,13 +511,10 @@ export default function CustomerHomeScreen({ navigation }) {
   };
 
   const handleSearchBarPress = () => {
-    console.log("Search bar pressed - checking payment method");
-
     if (!checkPaymentMethodBeforeBooking()) {
       return;
     }
 
-    console.log("Payment method available - opening modal");
     setSearchModalVisible(true);
     setTimeout(() => {
       searchModalRef.current?.openExpanded();
@@ -515,6 +522,17 @@ export default function CustomerHomeScreen({ navigation }) {
   };
 
 
+
+  if (!region) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A1F', justifyContent: 'center', alignItems: 'center' }}>
+        <Image
+          source={require('../assets/pikup-logo.png')}
+          style={{ width: '80%', height: 250, resizeMode: 'contain' }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -554,21 +572,27 @@ export default function CustomerHomeScreen({ navigation }) {
       )}
 
       {/* Search Bar */}
-      <TouchableOpacity
-        style={[styles.searchBar, activeDelivery && styles.searchBarWithTracker]}
-        activeOpacity={0.8}
-        onPress={handleSearchBarPress}
+      <View
+        style={[styles.searchBarContainer, activeDelivery && styles.searchBarWithTracker]}
+        pointerEvents="box-none"
       >
-        <Ionicons
-          name="search"
-          size={20}
-          color="#999"
-          style={styles.searchIcon}
-        />
-        <Text style={styles.searchPlaceholder}>
-          Search for pickup locations
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.searchButton}
+          activeOpacity={0.8}
+          onPress={handleSearchBarPress}
+          testID="search-bar-button"
+        >
+          <Ionicons
+            name="search"
+            size={20}
+            color="#999"
+            style={styles.searchIcon}
+          />
+          <Text style={styles.searchPlaceholder}>
+            Search for pickup locations
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Bottom Section */}
       <View style={styles.bottomSection}>
@@ -661,18 +685,21 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  searchBar: {
+  searchBarContainer: {
     position: "absolute",
     top: 100,
     left: 20,
     right: 20,
+    zIndex: 100,
+    elevation: 100,
+  },
+  searchButton: {
     height: 50,
     backgroundColor: "rgba(30, 30, 50, 0.95)",
     borderRadius: 25,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    zIndex: 5,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,

@@ -33,28 +33,28 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   const [selectedTime, setSelectedTime] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  
+
   // Places API states
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   const [activeField, setActiveField] = useState(null); // 'pickup' or 'dropoff'
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  
+
   // Store coordinates from selected places
   const [pickupCoordinates, setPickupCoordinates] = useState(null);
   const [dropoffCoordinates, setDropoffCoordinates] = useState(null);
-  
+
   // Loading state for current location
   const [isLoadingCurrentLocation, setIsLoadingCurrentLocation] = useState(false);
-  
+
   // Animation states for enhanced UX
   const [rotationAnim] = useState(new Animated.Value(0));
   const [pulseAnim] = useState(new Animated.Value(1));
   const [showLocationSuccess, setShowLocationSuccess] = useState(false);
-  
+
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
-  // Google Places API functions
+  // Mapbox Geocoding API for autocomplete
   const searchPlaces = async (query, fieldType) => {
     if (!query || query.length < 2) {
       if (fieldType === 'pickup') setPickupSuggestions([]);
@@ -64,45 +64,59 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
     try {
       setIsLoadingSuggestions(true);
-      
-      // Get user location for better results (optional, will work without)
-      let locationBias = '';
+
+      // Get user location for proximity bias (optional)
+      let proximityParam = '';
       try {
         const userLocation = await MapboxLocationService.getCurrentLocation();
         if (userLocation) {
-          locationBias = `&location=${userLocation.latitude},${userLocation.longitude}&radius=50000`;
+          // Mapbox uses proximity parameter: longitude,latitude (note the order!)
+          proximityParam = `&proximity=${userLocation.longitude},${userLocation.latitude}`;
         }
       } catch (locationError) {
-        console.log('Could not get user location for places search bias');
+        console.log('Could not get user location for proximity bias');
       }
 
+      const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+
+      // Mapbox Geocoding API endpoint
+      // Limit to US addresses, autocomplete mode, limit 5 results
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}${locationBias}&components=country:us`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+        `access_token=${accessToken}` +
+        `&country=us` + // Limit to US
+        `&types=address,poi` + // Address and points of interest
+        `&limit=5` + // Max 5 results
+        `&autocomplete=true` + // Enable autocomplete
+        proximityParam
       );
-      
+
       const data = await response.json();
-      
-      if (data.status === 'OK' && data.predictions) {
-        const formattedSuggestions = data.predictions.slice(0, 5).map(prediction => ({
-          id: prediction.place_id,
-          name: prediction.structured_formatting?.main_text || prediction.description,
-          address: prediction.structured_formatting?.secondary_text || prediction.description,
-          full_description: prediction.description,
-          place_id: prediction.place_id
+
+      if (data.features && data.features.length > 0) {
+        const formattedSuggestions = data.features.map(feature => ({
+          id: feature.id,
+          name: feature.text, // Main text (e.g., "Main Street")
+          address: feature.place_name.replace(feature.text + ', ', ''), // Secondary text
+          full_description: feature.place_name, // Full formatted address
+          coordinates: {
+            latitude: feature.center[1], // Mapbox returns [lng, lat]
+            longitude: feature.center[0]
+          }
         }));
-        
+
         if (fieldType === 'pickup') {
           setPickupSuggestions(formattedSuggestions);
         } else if (fieldType === 'dropoff') {
           setDropoffSuggestions(formattedSuggestions);
         }
       } else {
-        console.log('Places API error:', data.status);
+        console.log('Mapbox Geocoding: No results found');
         if (fieldType === 'pickup') setPickupSuggestions([]);
         if (fieldType === 'dropoff') setDropoffSuggestions([]);
       }
     } catch (error) {
-      console.error('Places search error:', error);
+      console.error('Mapbox geocoding error:', error);
       if (fieldType === 'pickup') setPickupSuggestions([]);
       if (fieldType === 'dropoff') setDropoffSuggestions([]);
     } finally {
@@ -110,32 +124,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     }
   };
 
-  const getPlaceDetails = async (placeId) => {
-    try {
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address&key=${process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      );
-      
-      const data = await response.json();
-      
-      if (data.status === 'OK' && data.result?.geometry?.location) {
-        return {
-          latitude: data.result.geometry.location.lat,
-          longitude: data.result.geometry.location.lng,
-          formatted_address: data.result.formatted_address
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('Place details error:', error);
-      return null;
-    }
-  };
-
   // Animation helper functions
   const startLocationLoading = () => {
     setIsLoadingCurrentLocation(true);
-    
+
     // Reset and start continuous rotation
     rotationAnim.setValue(0);
     Animated.loop(
@@ -162,24 +154,24 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   const setPickupFromCurrentLocation = async () => {
     try {
       startLocationLoading();
-      
+
       // Get user's current location
       const location = await MapboxLocationService.getCurrentLocation();
-      
+
       if (location) {
         // Store coordinates immediately
         setPickupCoordinates({
           latitude: location.latitude,
           longitude: location.longitude
         });
-        
+
         // Reverse geocode to get address
         try {
           const addressData = await MapboxLocationService.reverseGeocode(
-            location.latitude, 
+            location.latitude,
             location.longitude
           );
-          
+
           if (addressData && addressData.address) {
             setPickup(addressData.address);
             showSuccessAnimation();
@@ -207,21 +199,21 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   const handleUseCurrentLocation = async () => {
     try {
       startLocationLoading();
-      
+
       const location = await MapboxLocationService.getCurrentLocation();
-      
+
       if (location) {
         setPickupCoordinates({
           latitude: location.latitude,
           longitude: location.longitude
         });
-        
+
         try {
           const addressData = await MapboxLocationService.reverseGeocode(
-            location.latitude, 
+            location.latitude,
             location.longitude
           );
-          
+
           if (addressData && addressData.address) {
             setPickup(addressData.address);
             showSuccessAnimation();
@@ -234,7 +226,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
           setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
           showSuccessAnimation();
         }
-        
+
         // Clear any existing suggestions when using current location
         setPickupSuggestions([]);
         setActiveField(null);
@@ -255,7 +247,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   const getNextWeekDates = () => {
     const dates = [];
     const today = new Date();
-    
+
     for (let i = 0; i < 7; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
@@ -276,25 +268,25 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     const currentTime = new Date();
     const selectedDateObj = selectedDate?.date || new Date();
     const isToday = selectedDateObj.toDateString() === currentTime.toDateString();
-    
+
     // Start from current time + 1 hour if today, otherwise from 8 AM
     let startHour = isToday ? Math.max(currentTime.getHours() + 1, 8) : 8;
     const endHour = 22; // 10 PM
-    
+
     for (let hour = startHour; hour <= endHour; hour++) {
       // Add :00 and :30 slots
       for (let minute of [0, 30]) {
         if (hour === endHour && minute === 30) break; // Don't add 10:30 PM
-        
+
         const time = new Date();
         time.setHours(hour, minute, 0, 0);
-        
+
         slots.push({
           time: time,
-          display: time.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit', 
-            hour12: true 
+          display: time.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
           }),
           value: `${hour}:${minute.toString().padStart(2, '0')}`
         });
@@ -309,7 +301,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       console.log('CustomerSearchModal is now visible');
       translateY.setValue(SCREEN_HEIGHT - COLLAPSED_HEIGHT);
       setIsExpanded(false);
-      
+
       // Auto-fill pickup location only if field is empty
       if (!pickup?.trim()) {
         setPickupFromCurrentLocation();
@@ -354,7 +346,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
         const currentY = translateY._value;
         const velocity = gestureState.vy;
-        
+
         let finalY;
         let shouldExpand;
         let shouldClose = false;
@@ -373,7 +365,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
         } else {
           const expandedThreshold = (100 + SCREEN_HEIGHT - COLLAPSED_HEIGHT) / 2;
           const closeThreshold = SCREEN_HEIGHT - COLLAPSED_HEIGHT + 50;
-          
+
           if (currentY < expandedThreshold) {
             finalY = 100;
             shouldExpand = true;
@@ -475,9 +467,9 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     try {
       // Use stored coordinates if available from Places API, otherwise geocode
       console.log('Validating addresses...');
-      
+
       let pickupValidation, dropoffValidation;
-      
+
       // Check if we have coordinates from Places API selection
       if (pickupCoordinates) {
         pickupValidation = {
@@ -489,7 +481,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
         pickupValidation = await MapboxLocationService.geocodeAddress(pickup.trim()).catch(err => ({ error: err.message }));
         console.log('Geocoding pickup address with Mapbox');
       }
-      
+
       if (dropoffCoordinates) {
         dropoffValidation = {
           latitude: dropoffCoordinates.latitude,
@@ -504,7 +496,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       // Check for validation errors
       if (pickupValidation.error) {
         Alert.alert(
-          'Invalid Pickup Address', 
+          'Invalid Pickup Address',
           'Please enter a valid pickup address. We couldn\'t find the location you specified.',
           [{ text: 'OK' }]
         );
@@ -513,7 +505,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
       if (dropoffValidation.error) {
         Alert.alert(
-          'Invalid Dropoff Address', 
+          'Invalid Dropoff Address',
           'Please enter a valid dropoff address. We couldn\'t find the location you specified.',
           [{ text: 'OK' }]
         );
@@ -528,7 +520,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
       if (distance < 0.5) {
         Alert.alert(
-          'Locations Too Close', 
+          'Locations Too Close',
           'Pickup and dropoff locations must be at least 0.5 miles apart for delivery service.',
           [{ text: 'OK' }]
         );
@@ -555,28 +547,28 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
           date: selectedDate.fullDate,
           time: selectedTime.display,
           dateTime: new Date(
-            selectedDate.date.getFullYear(), 
-            selectedDate.date.getMonth(), 
-            selectedDate.date.getDate(), 
-            parseInt(selectedTime.value.split(':')[0]), 
+            selectedDate.date.getFullYear(),
+            selectedDate.date.getMonth(),
+            selectedDate.date.getDate(),
+            parseInt(selectedTime.value.split(':')[0]),
             parseInt(selectedTime.value.split(':')[1])
           )
         } : null
       };
-      
+
       console.log('Confirming with validated location data:', JSON.stringify(locationData, null, 2));
       onConfirm(locationData);
       closeModal();
-      
+
     } catch (error) {
       console.error('Error validating addresses:', error);
       Alert.alert(
-        'Validation Error', 
+        'Validation Error',
         'Unable to validate addresses. Please check your internet connection and try again.',
         [
           { text: 'Cancel' },
-          { 
-            text: 'Continue Anyway', 
+          {
+            text: 'Continue Anyway',
             style: 'destructive',
             onPress: () => {
               // Fallback to original behavior without validation
@@ -594,10 +586,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                   date: selectedDate.fullDate,
                   time: selectedTime.display,
                   dateTime: new Date(
-                    selectedDate.date.getFullYear(), 
-                    selectedDate.date.getMonth(), 
-                    selectedDate.date.getDate(), 
-                    parseInt(selectedTime.value.split(':')[0]), 
+                    selectedDate.date.getFullYear(),
+                    selectedDate.date.getMonth(),
+                    selectedDate.date.getDate(),
+                    parseInt(selectedTime.value.split(':')[0]),
                     parseInt(selectedTime.value.split(':')[1])
                   )
                 } : null
@@ -611,49 +603,36 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     }
   };
 
-  // Handle Places API suggestion selection
+  // Handle Mapbox suggestion selection
   const handlePlaceSelection = async (place, fieldType) => {
     try {
-      // Get coordinates for the selected place
-      const placeDetails = await getPlaceDetails(place.place_id);
-      
-      if (placeDetails) {
-        if (fieldType === 'pickup') {
-          setPickup(place.full_description);
-          setPickupSuggestions([]);
-          setActiveField(null);
-          // Store coordinates for use in handleConfirm
-          setPickupCoordinates({
-            latitude: placeDetails.latitude,
-            longitude: placeDetails.longitude
-          });
-        } else if (fieldType === 'dropoff') {
-          setDropoff(place.full_description);
-          setDropoffSuggestions([]);
-          setActiveField(null);
-          // Store coordinates for use in handleConfirm
-          setDropoffCoordinates({
-            latitude: placeDetails.latitude,
-            longitude: placeDetails.longitude
-          });
-        }
-      } else {
-        // Fallback to just setting the text
-        if (fieldType === 'pickup') {
-          setPickup(place.full_description);
-          setPickupSuggestions([]);
-          setActiveField(null);
-          setPickupCoordinates(null); // Clear stored coordinates on fallback
-        } else if (fieldType === 'dropoff') {
-          setDropoff(place.full_description);
-          setDropoffSuggestions([]);
-          setActiveField(null);
-          setDropoffCoordinates(null); // Clear stored coordinates on fallback
-        }
+      // Mapbox autocomplete already includes coordinates, no need for second API call
+      if (fieldType === 'pickup') {
+        setPickup(place.full_description);
+        setPickupSuggestions([]);
+        setActiveField(null);
+        // Store coordinates directly from the suggestion
+        setPickupCoordinates({
+          latitude: place.coordinates.latitude,
+          longitude: place.coordinates.longitude
+        });
+        console.log('Pickup selected:', place.full_description);
+        console.log('Pickup coordinates:', place.coordinates);
+      } else if (fieldType === 'dropoff') {
+        setDropoff(place.full_description);
+        setDropoffSuggestions([]);
+        setActiveField(null);
+        // Store coordinates directly from the suggestion
+        setDropoffCoordinates({
+          latitude: place.coordinates.latitude,
+          longitude: place.coordinates.longitude
+        });
+        console.log('Dropoff selected:', place.full_description);
+        console.log('Dropoff coordinates:', place.coordinates);
       }
     } catch (error) {
       console.error('Error selecting place:', error);
-      // Fallback to just setting the text
+      // Fallback: just set the text without coordinates
       if (fieldType === 'pickup') {
         setPickup(place.full_description);
         setPickupSuggestions([]);
@@ -780,7 +759,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     <>
       {/* Backdrop */}
       <TouchableWithoutFeedback onPress={closeModal}>
-        <Animated.View 
+        <Animated.View
           style={[
             styles.backdrop,
             {
@@ -790,7 +769,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                 extrapolate: 'clamp',
               }),
             }
-          ]} 
+          ]}
         />
       </TouchableWithoutFeedback>
 
@@ -811,7 +790,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
         {/* Collapsed Header */}
         {!isExpanded && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.collapsedHeader}
             onPress={expandModal}
             activeOpacity={0.8}
@@ -823,13 +802,13 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
         {/* Expanded Content */}
         {isExpanded && (
-          <KeyboardAvoidingView 
-            style={styles.expandedContent} 
+          <KeyboardAvoidingView
+            style={styles.expandedContent}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <ScrollView 
-                style={styles.scrollContent} 
+              <ScrollView
+                style={styles.scrollContent}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContentContainer}
@@ -845,10 +824,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
                 {/* Pickup Time Button */}
                 <TouchableOpacity style={styles.pickupNowButton} onPress={toggleScheduling}>
-                  <Ionicons 
-                    name={isScheduled ? "calendar-outline" : "time-outline"} 
-                    size={16} 
-                    color="#fff" 
+                  <Ionicons
+                    name={isScheduled ? "calendar-outline" : "time-outline"}
+                    size={16}
+                    color="#fff"
                   />
                   <Text style={styles.pickupNowText}>{getScheduleButtonText()}</Text>
                   <Ionicons name="chevron-down" size={16} color="#fff" />
@@ -857,7 +836,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                 {/* Scheduling Options */}
                 {isScheduled && (
                   <View style={styles.schedulingContainer}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.dateTimeButton}
                       onPress={() => setShowDatePicker(true)}
                     >
@@ -869,7 +848,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                     </TouchableOpacity>
 
                     {selectedDate && (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.dateTimeButton}
                         onPress={() => setShowTimePicker(true)}
                       >
@@ -898,7 +877,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                     />
                     {!pickup.trim() && !isLoadingCurrentLocation && (
                       <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           onPress={handleUseCurrentLocation}
                           style={styles.currentLocationButton}
                         >
@@ -907,7 +886,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       </Animated.View>
                     )}
                     {isLoadingCurrentLocation && (
-                      <Animated.View 
+                      <Animated.View
                         style={[
                           styles.loadingContainer,
                           {
@@ -939,13 +918,13 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       </TouchableOpacity>
                     )}
                   </View>
-                  
+
                   <View style={styles.dotLine}>
                     {[...Array(8)].map((_, i) => (
                       <View key={i} style={styles.dot} />
                     ))}
                   </View>
-                  
+
                   <View style={styles.inputRowStyled}>
                     <MaterialCommunityIcons name="map-marker" size={18} color="#A77BFF" />
                     <TextInput
@@ -976,8 +955,8 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       {isLoadingSuggestions ? 'Searching...' : 'Pickup Suggestions'}
                     </Text>
                     {pickupSuggestions.map((place) => (
-                      <TouchableOpacity 
-                        key={place.id} 
+                      <TouchableOpacity
+                        key={place.id}
                         style={styles.suggestionRow}
                         onPress={() => handlePlaceSelection(place, 'pickup')}
                         activeOpacity={0.7}
@@ -998,8 +977,8 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       {isLoadingSuggestions ? 'Searching...' : 'Destination Suggestions'}
                     </Text>
                     {dropoffSuggestions.map((place) => (
-                      <TouchableOpacity 
-                        key={place.id} 
+                      <TouchableOpacity
+                        key={place.id}
                         style={styles.suggestionRow}
                         onPress={() => handlePlaceSelection(place, 'dropoff')}
                         activeOpacity={0.7}
@@ -1041,7 +1020,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
         >
           <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
             <View style={styles.pickerOverlay}>
-              <TouchableWithoutFeedback onPress={() => {}}>
+              <TouchableWithoutFeedback onPress={() => { }}>
                 <View style={styles.pickerContainer}>
                   <View style={styles.pickerHeader}>
                     <TouchableOpacity onPress={() => setShowDatePicker(false)}>
@@ -1050,8 +1029,8 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                     <Text style={styles.pickerTitle}>Select Date</Text>
                     <View style={{ width: 60 }} />
                   </View>
-                  
-                  <ScrollView 
+
+                  <ScrollView
                     style={styles.pickerScroll}
                     showsVerticalScrollIndicator={false}
                   >
@@ -1089,7 +1068,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
         >
           <TouchableWithoutFeedback onPress={() => setShowTimePicker(false)}>
             <View style={styles.pickerOverlay}>
-              <TouchableWithoutFeedback onPress={() => {}}>
+              <TouchableWithoutFeedback onPress={() => { }}>
                 <View style={styles.pickerContainer}>
                   <View style={styles.pickerHeader}>
                     <TouchableOpacity onPress={() => setShowTimePicker(false)}>
@@ -1098,8 +1077,8 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                     <Text style={styles.pickerTitle}>Select Time</Text>
                     <View style={{ width: 60 }} />
                   </View>
-                  
-                  <ScrollView 
+
+                  <ScrollView
                     style={styles.pickerScroll}
                     showsVerticalScrollIndicator={false}
                   >

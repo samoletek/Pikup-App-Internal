@@ -1,5 +1,7 @@
 import React from "react";
+import { View, ActivityIndicator, Image } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useAuth } from "./contexts/AuthContext";
 
 import WelcomeScreen from "./screens/WelcomeScreen";
 import AuthScreen from "./screens/AuthScreen";
@@ -50,11 +52,30 @@ import ConsentGateScreen from "./screens/ConsentGateScreen";
 const Stack = createNativeStackNavigator();
 
 export default function Navigation() {
+  const { isInitializing, currentUser, userType } = useAuth();
+
+  if (isInitializing) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A1F' }}>
+        <Image
+          source={require('./assets/pikup-logo.png')}
+          style={{ width: '80%', height: 250, resizeMode: 'contain' }}
+        />
+      </View>
+    );
+  }
+
+  const getInitialRoute = () => {
+    if (currentUser) {
+      return userType === 'driver' ? 'DriverTabs' : 'CustomerTabs';
+    }
+    return 'WelcomeScreen';
+  };
 
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false }}
-      initialRouteName="WelcomeScreen"
+      initialRouteName={getInitialRoute()}
     >
       <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
       <Stack.Screen name="AuthScreen" component={AuthScreen} />

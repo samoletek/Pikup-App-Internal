@@ -13,13 +13,13 @@
 
 ### Global / Critical
 - [ ] #1 Safe Area - extend content to screen edges like modern apps - Erema
-- [ ] #2 Sign in with Apple (App Store requirement) - Andrei
-- [ ] #3 Sign in with Google (Play Store requirement) - Andrei
-- [ ] #4 Account deletion feature (required by both stores) - Andrei
+- [x] #2 Sign in with Apple (App Store requirement) - Andrei
+- [x] #3 Sign in with Google (Play Store requirement) - Andrei
+- [x] #4 Account deletion feature (required by both stores) - Andrei
 - [ ] #5 Terms/Privacy - links to pikup-app.com - Drew
 
 ### Customer Flow - Step 1: Pickup & Dropoff
-- [ ] #21 Address autocomplete (Google Places) - Andrei
+- [x] #21 Address autocomplete (Mapbox API) - Andrei
 - [ ] #22 Remove "Popular Places" section - not relevant for moving - Erema
 - [ ] #23 Add "Use current location" option - Erema
 
