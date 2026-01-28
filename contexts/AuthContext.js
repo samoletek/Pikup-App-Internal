@@ -1,5 +1,5 @@
 // contexts/AuthContext.js - Updated with Driver Earnings and Payment Integration
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { storage, getStoragePath } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -9,6 +9,7 @@ import * as Crypto from 'expo-crypto';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,6 +23,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userType, setUserType] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [profileImage, setProfileImage] = useState(null);
 
   const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
@@ -31,6 +33,61 @@ export function AuthProvider({ children }) {
   // Payment service configuration - Updated for Android emulator
   // Always use Render server for all environments
   const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
+
+  // AsyncStorage keys for auth persistence
+  const STORAGE_KEYS = {
+    USER_TOKEN: '@pikup_user_token',
+    USER_DATA: '@pikup_user_data',
+    USER_TYPE: '@pikup_user_type',
+  };
+
+  // Save auth data to AsyncStorage
+  const saveAuthData = async (user, type) => {
+    try {
+      await AsyncStorage.multiSet([
+        [STORAGE_KEYS.USER_TOKEN, user.accessToken],
+        [STORAGE_KEYS.USER_DATA, JSON.stringify(user)],
+        [STORAGE_KEYS.USER_TYPE, type],
+      ]);
+      console.log('✅ Auth data saved to storage');
+    } catch (error) {
+      console.error('❌ Failed to save auth data:', error);
+    }
+  };
+
+  // Load auth data from AsyncStorage
+  const loadAuthData = async () => {
+    try {
+      const [[, token], [, userData], [, userType]] = await AsyncStorage.multiGet([
+        STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.USER_TYPE,
+      ]);
+
+      if (token && userData && userType) {
+        const user = JSON.parse(userData);
+        return { user, userType };
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to load auth data:', error);
+      return null;
+    }
+  };
+
+  // Clear all auth data from AsyncStorage
+  const clearAuthData = async () => {
+    try {
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.USER_TYPE,
+      ]);
+      console.log('✅ Auth data cleared from storage');
+    } catch (error) {
+      console.error('❌ Failed to clear auth data:', error);
+    }
+  };
 
   // Authenticated fetch helper
   const authFetch = async (url, opts = {}) => {
@@ -906,6 +963,37 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Initialize auth from storage on app start
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 Initializing auth from storage...');
+
+        // Enforce minimum splash screen time (2500ms)
+        const minDelay = new Promise(resolve => setTimeout(resolve, 2500));
+
+        const [authData] = await Promise.all([
+          loadAuthData(),
+          minDelay
+        ]);
+
+        if (authData) {
+          setCurrentUser(authData.user);
+          setUserType(authData.userType);
+          console.log('✅ Auth restored:', authData.userType, authData.user.email);
+        } else {
+          console.log('ℹ️ No saved auth data found');
+        }
+      } catch (e) {
+        console.error('Auth initialization error:', e);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
   async function signup(email, password, type, additionalData = {}) {
     setLoading(true);
 
@@ -1004,6 +1092,9 @@ export function AuthProvider({ children }) {
       setCurrentUser(mockUser);
       setUserType(type);
 
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, type);
+
       return { user: mockUser };
 
     } catch (error) {
@@ -1066,6 +1157,9 @@ export function AuthProvider({ children }) {
 
       setCurrentUser(mockUser);
       setUserType(fetchedUserType);
+
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, fetchedUserType);
 
       // Check if user needs to accept terms after login
       try {
@@ -1232,6 +1326,9 @@ export function AuthProvider({ children }) {
       setCurrentUser(mockUser);
       setUserType(finalUserRole);
 
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, finalUserRole);
+
       // Check terms status
       try {
         const consentStatus = await checkTermsAcceptance(mockUser.uid);
@@ -1385,6 +1482,9 @@ export function AuthProvider({ children }) {
       setCurrentUser(mockUser);
       setUserType(finalUserRole);
 
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, finalUserRole);
+
       // Check terms status
       try {
         const consentStatus = await checkTermsAcceptance(mockUser.uid);
@@ -1410,6 +1510,7 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    await clearAuthData();
     setCurrentUser(null);
     setUserType(null);
     console.log('Logged out');
@@ -3705,6 +3806,7 @@ export function AuthProvider({ children }) {
     logout,
     deleteAccount,
     loading,
+    isInitializing,
     createPickupRequest,
     getUserPickupRequests,
     getAvailableRequests,

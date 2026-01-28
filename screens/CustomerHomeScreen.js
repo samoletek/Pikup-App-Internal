@@ -29,12 +29,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const { defaultPaymentMethod, paymentMethods } = usePayment();
 
 
-  const [region, setRegion] = useState({
-    latitude: 33.749,
-    longitude: -84.388,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  });
+  const [region, setRegion] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState("Loading...");
   const [activeDelivery, setActiveDelivery] = useState(null);
@@ -209,8 +204,23 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const getCurrentLocation = async () => {
     try {
+      // 1. Try to load saved location first for immediate display
+      const savedLocation = await MapboxLocationService.getLastKnownLocation();
+      if (savedLocation) {
+        console.log('Using saved location for immediate display');
+        const savedRegion = {
+          latitude: savedLocation.latitude,
+          longitude: savedLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setRegion(savedRegion);
+        setUserLocation(savedLocation);
+      }
+
       setLocationStatus("Requesting permissions...");
 
+      // 2. Get fresh location
       setLocationStatus("Getting location...");
       const location = await MapboxLocationService.getCurrentLocation();
 
@@ -512,6 +522,17 @@ export default function CustomerHomeScreen({ navigation }) {
   };
 
 
+
+  if (!region) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A1F', justifyContent: 'center', alignItems: 'center' }}>
+        <Image
+          source={require('../assets/pikup-logo.png')}
+          style={{ width: '80%', height: 250, resizeMode: 'contain' }}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

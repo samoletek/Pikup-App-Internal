@@ -1,6 +1,8 @@
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+const LAST_LOCATION_KEY = '@pikup_last_location';
 
 class MapboxLocationService {
   constructor() {
@@ -9,8 +11,29 @@ class MapboxLocationService {
     this.watchId = null;
   }
 
+  // Save location to storage
+  async saveLastKnownLocation(location) {
+    try {
+      await AsyncStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(location));
+    } catch (error) {
+      console.warn('Failed to save last location:', error);
+    }
+  }
+
+  // Get location from storage
+  async getLastKnownLocation() {
+    try {
+      const jsonValue = await AsyncStorage.getItem(LAST_LOCATION_KEY);
+      return jsonValue != null ? JSON.parse(jsonValue) : null;
+    } catch (error) {
+      console.warn('Failed to load last location:', error);
+      return null;
+    }
+  }
+
   // CRITICAL: Replace Google Directions API (TOS violation)
   async getRoute(origin, destination, waypoints = []) {
+    // ... existing implementation ...
     try {
       const originStr = `${origin.longitude},${origin.latitude}`;
       const destinationStr = `${destination.longitude},${destination.latitude}`;
@@ -129,6 +152,9 @@ class MapboxLocationService {
         timestamp: location.timestamp,
       };
 
+      // Save to storage
+      this.saveLastKnownLocation(this.currentLocation);
+
       return this.currentLocation;
     } catch (error) {
       console.error('Error getting current location:', error);
@@ -156,7 +182,10 @@ class MapboxLocationService {
             accuracy: location.coords.accuracy,
             timestamp: location.timestamp,
           };
-          
+
+          // Save to storage
+          this.saveLastKnownLocation(this.currentLocation);
+
           this.locationCallbacks.forEach(cb => cb(this.currentLocation));
           if (callback) callback(this.currentLocation);
         }
@@ -183,11 +212,11 @@ class MapboxLocationService {
     const R = 6371; // Radius of the Earth in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const d = R * c; // Distance in km
     return d;
   }
