@@ -14,8 +14,8 @@ import { useAuth } from "../contexts/AuthContext";
 
 export default function CustomerSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser } = useAuth();
-  
+  const { currentUser, deleteAccount } = useAuth();
+
   const [settings, setSettings] = useState({
     notifications: {
       pushNotifications: true,
@@ -57,6 +57,28 @@ export default function CustomerSettingsScreen({ navigation }) {
     );
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAccount();
+              Alert.alert("Account Deleted", "Your account has been permanently deleted.");
+            } catch (error) {
+              Alert.alert("Error", error.message || "Failed to delete account. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -77,8 +99,8 @@ export default function CustomerSettingsScreen({ navigation }) {
         {/* Account Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
           >
@@ -88,8 +110,8 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-          
-          
+
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Ionicons name="globe-outline" size={20} color="#A77BFF" />
@@ -100,7 +122,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               <Ionicons name="chevron-forward" size={20} color="#666" />
             </View>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Ionicons name="cash-outline" size={20} color="#A77BFF" />
@@ -116,7 +138,7 @@ export default function CustomerSettingsScreen({ navigation }) {
         {/* Notifications Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notifications</Text>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Push Notifications</Text>
@@ -132,7 +154,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               value={settings.notifications.pushNotifications}
             />
           </View>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Email Notifications</Text>
@@ -148,7 +170,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               value={settings.notifications.emailNotifications}
             />
           </View>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>SMS Notifications</Text>
@@ -164,7 +186,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               value={settings.notifications.smsNotifications}
             />
           </View>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Promotions and Offers</Text>
@@ -180,7 +202,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               value={settings.notifications.promotions}
             />
           </View>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Trip Updates</Text>
@@ -196,7 +218,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               value={settings.notifications.tripUpdates}
             />
           </View>
-          
+
           <View style={styles.settingItem}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Account Activity</Text>
@@ -218,7 +240,7 @@ export default function CustomerSettingsScreen({ navigation }) {
         {/* About and Legal */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About & Legal</Text>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Ionicons name="information-circle-outline" size={20} color="#A77BFF" />
@@ -226,8 +248,8 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
           >
@@ -237,8 +259,8 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
           >
@@ -253,7 +275,7 @@ export default function CustomerSettingsScreen({ navigation }) {
         {/* Data & Storage */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data & Storage</Text>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Ionicons name="analytics-outline" size={20} color="#A77BFF" />
@@ -261,7 +283,7 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
               <Ionicons name="download-outline" size={20} color="#A77BFF" />
@@ -269,12 +291,19 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.clearDataButton}
             onPress={handleClearData}
           >
             <Text style={styles.clearDataText}>Clear App Data</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.clearDataButton, { borderTopWidth: 1, borderTopColor: '#2A2A3B' }]}
+            onPress={handleDeleteAccount}
+          >
+            <Text style={styles.clearDataText}>Delete Account</Text>
           </TouchableOpacity>
         </View>
 

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,22 +8,79 @@ import {
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AuthModal from '../components/AuthModal';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function WelcomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("customer");
+  const { currentUser, userType, checkTermsAcceptance, getDriverProfile } = useAuth();
 
   const handleRoleSelection = (role) => {
-    // Navigate to auth screen and pass the selected role
-    navigation.navigate("AuthScreen", { userRole: role });
+    setSelectedRole(role);
+    setModalVisible(true);
   };
+
+  const closeModal = () => {
+    setModalVisible(false);
+  };
+
+  // Navigate after successful login
+  useEffect(() => {
+    console.log('WelcomeScreen - currentUser:', !!currentUser, 'userType:', userType);
+
+    if (currentUser && userType) {
+      console.log('User logged in, navigating...');
+
+      const navigateAfterLogin = async () => {
+        try {
+          // Check for terms acceptance first
+          const termsStatus = await checkTermsAcceptance(currentUser.uid);
+          console.log('Terms status:', termsStatus);
+
+          if (termsStatus.needsAcceptance) {
+            console.log('Navigating to ConsentGate');
+            navigation.replace('ConsentGate', {
+              missingVersions: termsStatus.missingVersions,
+              role: userType
+            });
+            return;
+          }
+
+          if (userType === "driver") {
+            console.log('User is driver, checking profile...');
+            const driverProfile = await getDriverProfile(currentUser.uid);
+            if (driverProfile?.onboardingComplete) {
+              console.log('Navigating to DriverTabs');
+              navigation.replace("DriverTabs");
+            } else {
+              console.log('Navigating to DriverOnboarding');
+              navigation.replace("DriverOnboarding");
+            }
+          } else {
+            console.log('Navigating to CustomerTabs');
+            navigation.replace("CustomerTabs");
+          }
+        } catch (error) {
+          console.error("Navigation error:", error);
+          // Fallback
+          if (userType === "driver") navigation.replace("DriverTabs");
+          else navigation.replace("CustomerTabs");
+        }
+      };
+
+      navigateAfterLogin();
+    }
+  }, [currentUser, userType, navigation]);
 
   return (
     <LinearGradient
       colors={['#0A0A1F', '#141426']}
       style={styles.container}
     >
-      <View style={[styles.safeArea, { paddingTop: insets.top }]}>
-        <View style={styles.content}>
+      <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <View style={styles.logoWrapper}>
           <View style={styles.logoContainer}>
             <Image
               source={require("../assets/pikup-logo.png")}
@@ -32,26 +89,31 @@ export default function WelcomeScreen({ navigation }) {
               accessibilityLabel="PikUp"
             />
           </View>
-          
-          <Text style={styles.title}>Welcome</Text>
-          <Text style={styles.subtitle}>Please select your role to continue</Text>
-
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={() => handleRoleSelection("customer")}
-            >
-              <Text style={styles.buttonText}>Customer</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.driverButton]}
-              onPress={() => handleRoleSelection("driver")}
-            >
-              <Text style={styles.buttonText}>Driver</Text>
-            </TouchableOpacity>
-          </View>
         </View>
+
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => handleRoleSelection("customer")}
+          >
+            <Text style={styles.buttonText}>Customer</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.driverButton]}
+            onPress={() => handleRoleSelection("driver")}
+          >
+            <Text style={styles.buttonText}>Driver</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Auth Modal */}
+        <AuthModal
+          visible={modalVisible}
+          onClose={closeModal}
+          selectedRole={selectedRole}
+        />
+
       </View>
     </LinearGradient>
   );
@@ -63,18 +125,19 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    justifyContent: "center",
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    justifyContent: 'flex-end',
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
+  logoWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: -1,
   },
   logoContainer: {
+    width: "100%",
     alignItems: "center",
-    marginBottom: 20,
     shadowColor: "rgba(167,123,255,0.6)",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
@@ -82,35 +145,22 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   logo: {
-    width: 800,
-    aspectRatio: 5.08,
-    height: undefined,
+    width: '80%',
+    height: 250,
     resizeMode: "contain",
-    alignSelf: "center",
-  },
-  title: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 6,
-  },
-  subtitle: {
-    color: "#ccc",
-    fontSize: 14,
-    marginBottom: 40,
-    textAlign: "center",
   },
   buttonContainer: {
     width: "100%",
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
     alignItems: "center",
+    marginBottom: 50,
   },
   button: {
     backgroundColor: "#A77BFF",
     paddingVertical: 16,
-    paddingHorizontal: 40,
     borderRadius: 30,
-    marginBottom: 20,
-    width: "80%",
+    width: "40%",
     alignItems: "center",
     shadowColor: "#A77BFF",
     shadowOffset: { width: 0, height: 4 },

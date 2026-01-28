@@ -1,9 +1,17 @@
 // contexts/AuthContext.js - Updated with Driver Earnings and Payment Integration
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { storage, getStoragePath } from '../config/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import * as ImageManipulator from 'expo-image-manipulator';
+
+import * as Crypto from 'expo-crypto';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext();
 
@@ -15,6 +23,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userType, setUserType] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [profileImage, setProfileImage] = useState(null);
 
   const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
@@ -24,6 +33,61 @@ export function AuthProvider({ children }) {
   // Payment service configuration - Updated for Android emulator
   // Always use Render server for all environments
   const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
+
+  // AsyncStorage keys for auth persistence
+  const STORAGE_KEYS = {
+    USER_TOKEN: '@pikup_user_token',
+    USER_DATA: '@pikup_user_data',
+    USER_TYPE: '@pikup_user_type',
+  };
+
+  // Save auth data to AsyncStorage
+  const saveAuthData = async (user, type) => {
+    try {
+      await AsyncStorage.multiSet([
+        [STORAGE_KEYS.USER_TOKEN, user.accessToken],
+        [STORAGE_KEYS.USER_DATA, JSON.stringify(user)],
+        [STORAGE_KEYS.USER_TYPE, type],
+      ]);
+      console.log('✅ Auth data saved to storage');
+    } catch (error) {
+      console.error('❌ Failed to save auth data:', error);
+    }
+  };
+
+  // Load auth data from AsyncStorage
+  const loadAuthData = async () => {
+    try {
+      const [[, token], [, userData], [, userType]] = await AsyncStorage.multiGet([
+        STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.USER_TYPE,
+      ]);
+
+      if (token && userData && userType) {
+        const user = JSON.parse(userData);
+        return { user, userType };
+      }
+      return null;
+    } catch (error) {
+      console.error('❌ Failed to load auth data:', error);
+      return null;
+    }
+  };
+
+  // Clear all auth data from AsyncStorage
+  const clearAuthData = async () => {
+    try {
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.USER_TOKEN,
+        STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.USER_TYPE,
+      ]);
+      console.log('✅ Auth data cleared from storage');
+    } catch (error) {
+      console.error('❌ Failed to clear auth data:', error);
+    }
+  };
 
   // Authenticated fetch helper
   const authFetch = async (url, opts = {}) => {
@@ -899,6 +963,37 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Initialize auth from storage on app start
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        console.log('🔄 Initializing auth from storage...');
+
+        // Enforce minimum splash screen time (2500ms)
+        const minDelay = new Promise(resolve => setTimeout(resolve, 2500));
+
+        const [authData] = await Promise.all([
+          loadAuthData(),
+          minDelay
+        ]);
+
+        if (authData) {
+          setCurrentUser(authData.user);
+          setUserType(authData.userType);
+          console.log('✅ Auth restored:', authData.userType, authData.user.email);
+        } else {
+          console.log('ℹ️ No saved auth data found');
+        }
+      } catch (e) {
+        console.error('Auth initialization error:', e);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
   async function signup(email, password, type, additionalData = {}) {
     setLoading(true);
 
@@ -997,6 +1092,9 @@ export function AuthProvider({ children }) {
       setCurrentUser(mockUser);
       setUserType(type);
 
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, type);
+
       return { user: mockUser };
 
     } catch (error) {
@@ -1038,8 +1136,30 @@ export function AuthProvider({ children }) {
         accessToken: loginData.idToken
       };
 
+      // Fetch userType from Firestore
+      let fetchedUserType = 'customer'; // default
+      try {
+        const userDocResponse = await fetch(`${FIRESTORE_BASE_URL}/users/${mockUser.uid}`, {
+          headers: {
+            'Authorization': `Bearer ${mockUser.accessToken}`
+          }
+        });
+
+        if (userDocResponse.ok) {
+          const userDoc = await userDocResponse.json();
+          const userData = fromFirestoreFormat(userDoc);
+          fetchedUserType = userData.userType || 'customer';
+          console.log('User type fetched:', fetchedUserType);
+        }
+      } catch (e) {
+        console.warn('Could not fetch user type, defaulting to customer:', e);
+      }
+
       setCurrentUser(mockUser);
-      setUserType('customer'); // You can fetch this from Firestore if needed
+      setUserType(fetchedUserType);
+
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, fetchedUserType);
 
       // Check if user needs to accept terms after login
       try {
@@ -1067,10 +1187,400 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function signInWithApple(userRole = 'customer') {
+    setLoading(true);
+    try {
+      const csrf = Math.random().toString(36).substring(2, 15);
+      const nonce = Math.random().toString(36).substring(2, 10);
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        nonce
+      );
+
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce: hashedNonce,
+      });
+
+      const { identityToken, email, fullName } = appleCredential;
+
+      // Exchange with Firebase REST API
+      const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postBody: `id_token=${identityToken}&providerId=apple.com&nonce=${nonce}`,
+          requestUri: "http://localhost",
+          returnIdpCredential: true,
+          returnSecureToken: true,
+        }),
+      }
+      );
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      console.log('Firebase Apple Sign In successful');
+
+      // Check if user exists in Firestore
+      const userRef = await fetch(`${FIRESTORE_BASE_URL}/users/${data.localId}`, {
+        headers: { 'Authorization': `Bearer ${data.idToken}` }
+      });
+
+      let finalUserRole = userRole;
+
+      if (!userRef.ok) {
+        // User doesn't exist, create new user
+        console.log('Creating new user from Apple Sign In');
+
+        // Extract name
+        let displayName = 'Apple User';
+        let firstName = '';
+        let lastName = '';
+        if (fullName) {
+          if (fullName.givenName) {
+            firstName = fullName.givenName;
+            displayName = firstName;
+            if (fullName.familyName) {
+              lastName = fullName.familyName;
+              displayName += ` ${lastName}`;
+            }
+          }
+        }
+
+        const userData = {
+          email: data.email,
+          userType: userRole,
+          createdAt: new Date().toISOString(),
+          name: displayName,
+          firstName,
+          lastName,
+          authProvider: 'apple'
+        };
+
+        // Initialize profile based on role (copied from signup)
+        if (userRole === 'driver') {
+          userData.driverProfile = {
+            onboardingStarted: false,
+            onboardingComplete: false,
+            connectAccountId: null,
+            documentsVerified: false,
+            canReceivePayments: false,
+            vehicleVerified: false,
+            backgroundCheckComplete: false,
+            totalEarnings: 0,
+            availableBalance: 0,
+            completedTrips: 0,
+            rating: 5.0,
+            ratingCount: 0,
+            status: 'pending_onboarding',
+            payoutSchedule: 'weekly',
+            lastPayoutDate: null,
+            bankAccountVerified: false,
+          };
+        } else if (userRole === 'customer') {
+          userData.customerProfile = {
+            rating: 5.0,
+            ratingCount: 0,
+            completedOrders: 0,
+          };
+        }
+
+        const firestoreData = toFirestoreFormat(userData);
+
+        // Save user data
+        await fetch(`${FIRESTORE_BASE_URL}/users/${data.localId}?currentDocument.exists=false`, {
+          method: 'PATCH', // Use PATCH to create/update
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.idToken}`
+          },
+          body: JSON.stringify(firestoreData)
+        });
+
+        // Accept terms implicitly for Apple Sign In
+        try {
+          await acceptTerms(data.localId, true, data.idToken);
+        } catch (e) {
+          console.warn('Failed to accept terms during Apple Sign In', e);
+        }
+
+      } else {
+        // User exists, get their role
+        const userDoc = await userRef.json();
+        const existingData = fromFirestoreFormat(userDoc);
+        finalUserRole = existingData.userType;
+      }
+
+      const mockUser = {
+        uid: data.localId,
+        email: data.email,
+        accessToken: data.idToken
+      };
+
+      setCurrentUser(mockUser);
+      setUserType(finalUserRole);
+
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, finalUserRole);
+
+      // Check terms status
+      try {
+        const consentStatus = await checkTermsAcceptance(mockUser.uid);
+        return {
+          user: mockUser,
+          needsConsent: consentStatus.needsAcceptance,
+          missingVersions: consentStatus.missingVersions
+        };
+      } catch (consentError) {
+        return {
+          user: mockUser,
+          needsConsent: true,
+          missingVersions: ['tosVersion', 'privacyVersion']
+        };
+      }
+
+    } catch (error) {
+      if (error.code === 'ERR_CANCELED') {
+        console.log('Apple Sign In canceled');
+        return { canceled: true };
+      }
+      console.error('Apple Sign In Error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Google Sign In Hook
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    iosClientId: Constants.expoConfig?.extra?.google?.iosClientId || 'placeholder_ios_client_id',
+    androidClientId: Constants.expoConfig?.extra?.google?.androidClientId || 'placeholder_android_client_id',
+    webClientId: Constants.expoConfig?.extra?.google?.webClientId || 'placeholder_web_client_id',
+  });
+
+  async function signInWithGoogle(userRole = 'customer') {
+    setLoading(true);
+    try {
+      const result = await promptAsync();
+
+      if (result?.type !== 'success') {
+        if (result?.type === 'cancel') return { canceled: true };
+        throw new Error('Google Sign In failed or cancelled');
+      }
+
+      const { id_token } = result.params;
+
+      // Exchange with Firebase REST API
+      const firebaseResponse = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postBody: `id_token=${id_token}&providerId=google.com`,
+          requestUri: "http://localhost",
+          returnIdpCredential: true,
+          returnSecureToken: true,
+        }),
+      }
+      );
+
+      const data = await firebaseResponse.json();
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      console.log('Firebase Google Sign In successful');
+
+      // Check if user exists in Firestore (Reuse logic from Apple Sign In / Signup)
+      const userRef = await fetch(`${FIRESTORE_BASE_URL}/users/${data.localId}`, {
+        headers: { 'Authorization': `Bearer ${data.idToken}` }
+      });
+
+      let finalUserRole = userRole;
+
+      if (!userRef.ok) {
+        // User doesn't exist, create new user
+        console.log('Creating new user from Google Sign In');
+
+        const userData = {
+          email: data.email,
+          userType: userRole,
+          createdAt: new Date().toISOString(),
+          name: data.displayName || data.email.split('@')[0],
+          // Attempt to split name if available
+          firstName: data.displayName ? data.displayName.split(' ')[0] : '',
+          lastName: data.displayName && data.displayName.split(' ').length > 1 ? data.displayName.substring(data.displayName.indexOf(' ') + 1) : '',
+          authProvider: 'google',
+          photoURL: data.photoUrl
+        };
+
+        // Initialize profile based on role (copied from signup)
+        if (userRole === 'driver') {
+          userData.driverProfile = {
+            onboardingStarted: false,
+            onboardingComplete: false,
+            connectAccountId: null,
+            documentsVerified: false,
+            canReceivePayments: false,
+            vehicleVerified: false,
+            backgroundCheckComplete: false,
+            totalEarnings: 0,
+            availableBalance: 0,
+            completedTrips: 0,
+            rating: 5.0,
+            ratingCount: 0,
+            status: 'pending_onboarding',
+            payoutSchedule: 'weekly',
+            lastPayoutDate: null,
+            bankAccountVerified: false,
+          };
+        } else if (userRole === 'customer') {
+          userData.customerProfile = {
+            rating: 5.0,
+            ratingCount: 0,
+            completedOrders: 0,
+          };
+        }
+
+        const firestoreData = toFirestoreFormat(userData);
+        // Add photoURL mapping if needed for toFirestoreFormat if it handles simple fields fine
+
+        // Save user data
+        await fetch(`${FIRESTORE_BASE_URL}/users/${data.localId}?currentDocument.exists=false`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.idToken}`
+          },
+          body: JSON.stringify(firestoreData)
+        });
+
+        // Accept terms implicitly (as with Apple)
+        try {
+          await acceptTerms(data.localId, true, data.idToken);
+        } catch (e) {
+          console.warn('Failed to accept terms during Google Sign In', e);
+        }
+
+      } else {
+        const userDoc = await userRef.json();
+        const existingData = fromFirestoreFormat(userDoc);
+        finalUserRole = existingData.userType;
+      }
+
+      const mockUser = {
+        uid: data.localId,
+        email: data.email,
+        accessToken: data.idToken
+      };
+
+      setCurrentUser(mockUser);
+      setUserType(finalUserRole);
+
+      // Save to AsyncStorage for persistence
+      await saveAuthData(mockUser, finalUserRole);
+
+      // Check terms status
+      try {
+        const consentStatus = await checkTermsAcceptance(mockUser.uid);
+        return {
+          user: mockUser,
+          needsConsent: consentStatus.needsAcceptance,
+          missingVersions: consentStatus.missingVersions
+        };
+      } catch (consentError) {
+        return {
+          user: mockUser,
+          needsConsent: true,
+          missingVersions: ['tosVersion', 'privacyVersion']
+        };
+      }
+
+    } catch (error) {
+      console.error('Google Sign In Error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function logout() {
+    await clearAuthData();
     setCurrentUser(null);
     setUserType(null);
     console.log('Logged out');
+  }
+
+  async function deleteAccount() {
+    if (!currentUser?.accessToken || !currentUser?.uid) {
+      throw new Error('User not authenticated');
+    }
+
+    setLoading(true);
+    try {
+      console.log('Starting account deletion process...');
+
+      // 1. Delete Firestore User Data
+      // Note: This only deletes the user document. Complex apps might use Cloud Functions 
+      // to recursively delete subcollections or related data to ensure true cleanup.
+      // For this implementation effectively removing the user reference is the primary goal.
+      try {
+        await fetch(`${FIRESTORE_BASE_URL}/users/${currentUser.uid}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${currentUser.accessToken}`
+          }
+        });
+        console.log('Firestore user document deleted');
+      } catch (e) {
+        console.error('Error deleting Firestore data:', e);
+        // Continue even if Firestore deletion fails (e.g. permission issues), 
+        // ensuring account is still deleted from Auth
+      }
+
+      // 2. Delete Profile Image from Storage
+      try {
+        const storagePath = getStoragePath.userProfile(currentUser.uid);
+        await deletePhotoFromStorage(storagePath);
+        console.log('Profile image deleted');
+      } catch (e) {
+        console.log('No profile image to delete or error:', e);
+      }
+
+      // 3. Delete from Firebase Auth
+      const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          idToken: currentUser.accessToken
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      console.log('Account deleted from Firebase Auth');
+
+      // 4. Local Logout
+      await logout();
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Create pickup request function
@@ -3291,8 +3801,12 @@ export function AuthProvider({ children }) {
     userType,
     signup,
     login,
+    signInWithApple,
+    signInWithGoogle,
     logout,
+    deleteAccount,
     loading,
+    isInitializing,
     createPickupRequest,
     getUserPickupRequests,
     getAvailableRequests,

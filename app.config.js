@@ -9,6 +9,7 @@ module.exports = {
     name: "pikup",
     slug: "pikup-app",
     version: "1.0.0",
+    scheme: "pikup",
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
@@ -87,6 +88,11 @@ module.exports = {
     "extra": {
       "eas": {
         "projectId": "b8028c4b-62e3-4bfd-a81a-526bf93b3190"
+      },
+      "google": {
+        "iosClientId": process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+        "androidClientId": process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+        "webClientId": process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
       }
     },
     owner: "pikup-app",
