@@ -243,6 +243,12 @@
 - [x] Fix terms acceptance screen skipping - reordered race condition in signup
 - [x] Fix Driver Onboarding UX (14 items total)
 
+### Startup & Auth Optimizations (Completed)
+- [x] **Auth Persistence**: Fix logout on restart (AsyncStorage implementation)
+- [x] **Startup Speed**: Optimize map loading (immediate rendering from cache)
+- [x] **Splash Screen**: Custom dark purple splash + smooth transition
+- [x] **Login Flicker**: Fix login screen flashing on startup
+
 ---
 
 ## Technical Notes
