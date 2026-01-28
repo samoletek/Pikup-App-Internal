@@ -54,12 +54,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
-  const suggestions = [
-    { id: '1', name: 'Hartsfield-Jackson Airport', address: '6000 N Terminal Pkwy, Atlanta, GA' },
-    { id: '2', name: 'Lenox Square Mall', address: '3393 Peachtree Rd NE, Atlanta, GA' },
-   
-  ];
-
   // Google Places API functions
   const searchPlaces = async (query, fieldType) => {
     if (!query || query.length < 2) {
@@ -617,14 +611,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     }
   };
 
-  const handleSuggestionPress = (suggestion) => {
-    if (!pickup.trim()) {
-      setPickup(suggestion.name + ' - ' + suggestion.address);
-    } else if (!dropoff.trim()) {
-      setDropoff(suggestion.name + ' - ' + suggestion.address);
-    }
-  };
-
   // Handle Places API suggestion selection
   const handlePlaceSelection = async (place, fieldType) => {
     try {
@@ -1028,27 +1014,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       </TouchableOpacity>
                     ))}
                   </>
-                ) : (
-                  <>
-                    <Text style={styles.suggestionsTitle}>Popular Places</Text>
-                    {suggestions.slice(0, isScheduled ? 2 : 4).map((item) => (
-                      <TouchableOpacity 
-                        key={item.id} 
-                        style={styles.suggestionRow}
-                        onPress={() => handleSuggestionPress(item)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.suggestionIcon}>
-                          <Ionicons name="location-outline" size={20} color="#fff" />
-                        </View>
-                        <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionName}>{item.name}</Text>
-                          <Text style={styles.suggestionAddress}>{item.address}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </>
-                )}
+                ) : null}
 
                 {/* Confirm Button - Always show when locations are filled */}
                 {pickup.trim() && dropoff.trim() && (
