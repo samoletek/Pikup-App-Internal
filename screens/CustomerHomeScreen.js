@@ -501,13 +501,10 @@ export default function CustomerHomeScreen({ navigation }) {
   };
 
   const handleSearchBarPress = () => {
-    console.log("Search bar pressed - checking payment method");
-
     if (!checkPaymentMethodBeforeBooking()) {
       return;
     }
 
-    console.log("Payment method available - opening modal");
     setSearchModalVisible(true);
     setTimeout(() => {
       searchModalRef.current?.openExpanded();
@@ -554,21 +551,27 @@ export default function CustomerHomeScreen({ navigation }) {
       )}
 
       {/* Search Bar */}
-      <TouchableOpacity
-        style={[styles.searchBar, activeDelivery && styles.searchBarWithTracker]}
-        activeOpacity={0.8}
-        onPress={handleSearchBarPress}
+      <View
+        style={[styles.searchBarContainer, activeDelivery && styles.searchBarWithTracker]}
+        pointerEvents="box-none"
       >
-        <Ionicons
-          name="search"
-          size={20}
-          color="#999"
-          style={styles.searchIcon}
-        />
-        <Text style={styles.searchPlaceholder}>
-          Search for pickup locations
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.searchButton}
+          activeOpacity={0.8}
+          onPress={handleSearchBarPress}
+          testID="search-bar-button"
+        >
+          <Ionicons
+            name="search"
+            size={20}
+            color="#999"
+            style={styles.searchIcon}
+          />
+          <Text style={styles.searchPlaceholder}>
+            Search for pickup locations
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Bottom Section */}
       <View style={styles.bottomSection}>
@@ -661,18 +664,21 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  searchBar: {
+  searchBarContainer: {
     position: "absolute",
     top: 100,
     left: 20,
     right: 20,
+    zIndex: 100,
+    elevation: 100,
+  },
+  searchButton: {
     height: 50,
     backgroundColor: "rgba(30, 30, 50, 0.95)",
     borderRadius: 25,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    zIndex: 5,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
