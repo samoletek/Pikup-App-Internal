@@ -33,7 +33,6 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const [region, setRegion] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
-  const [locationStatus, setLocationStatus] = useState("Loading...");
   const [activeDelivery, setActiveDelivery] = useState(null);
 
   // Modal states
@@ -220,10 +219,7 @@ export default function CustomerHomeScreen({ navigation }) {
         setUserLocation(savedLocation);
       }
 
-      setLocationStatus("Requesting permissions...");
-
-      // 2. Get fresh location
-      setLocationStatus("Getting location...");
+      // Get fresh location
       const location = await MapboxLocationService.getCurrentLocation();
 
       const newRegion = {
@@ -238,10 +234,8 @@ export default function CustomerHomeScreen({ navigation }) {
         latitude: location.latitude,
         longitude: location.longitude,
       });
-      setLocationStatus(`Location found`);
     } catch (error) {
       console.error("Location error:", error);
-      setLocationStatus(`Using default location`);
     }
   };
 
@@ -547,11 +541,6 @@ export default function CustomerHomeScreen({ navigation }) {
       </MapboxMap>
 
 
-      {/* Status Bar */}
-      <View style={[styles.statusBar, { paddingTop: insets.top }]}>
-        <Text style={styles.statusText}>{locationStatus}</Text>
-      </View>
-
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Image
@@ -742,19 +731,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  statusBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-    zIndex: 1000,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-  },
   markerContainer: {
     alignItems: 'center',
     justifyContent: 'center',

@@ -157,7 +157,7 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
+      {/* Search Bar - Top */}
       <View style={[styles.searchContainer, { paddingTop: insets.top + 10 }]}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#999" />
@@ -171,65 +171,68 @@ export default function CustomerMessagesScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'all' && styles.activeFilter]}
-          onPress={() => setSelectedFilter('all')}
+      {/* Messages List - Main content area */}
+      {loading ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>Loading conversations...</Text>
+        </View>
+      ) : filteredConversations.length > 0 ? (
+        <ScrollView
+          style={styles.messagesList}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={[styles.filterText, selectedFilter === 'all' && styles.activeFilterText]}>
-            All
+          {filteredConversations.map(renderConversationItem)}
+          <View style={styles.bottomSpacing} />
+        </ScrollView>
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="chatbubbles-outline" size={64} color="#2A2A3B" />
+          <Text style={styles.emptyStateTitle}>No messages yet</Text>
+          <Text style={styles.emptyStateSubtitle}>
+            Messages with your drivers will appear here
           </Text>
-          <View style={styles.filterBadge}>
-            <Text style={styles.filterBadgeText}>{conversations.length}</Text>
-          </View>
-        </TouchableOpacity>
+        </View>
+      )}
 
-        <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'active' && styles.activeFilter]}
-          onPress={() => setSelectedFilter('active')}
-        >
-          <Text style={[styles.filterText, selectedFilter === 'active' && styles.activeFilterText]}>
-            Active
-          </Text>
-          <View style={[styles.filterBadge, { backgroundColor: '#00D4AA' }]}>
-            <Text style={styles.filterBadgeText}>
-              {conversations.filter(c => c.requestId && c.lastMessageAt).length}
+      {/* Bottom Controls - Filter Tabs */}
+      <View style={styles.bottomControlsContainer}>
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterTab, selectedFilter === 'all' && styles.activeFilter]}
+            onPress={() => setSelectedFilter('all')}
+          >
+            <Text style={[styles.filterText, selectedFilter === 'all' && styles.activeFilterText]}>
+              All
             </Text>
-          </View>
-        </TouchableOpacity>
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{conversations.length}</Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={[styles.filterTab, selectedFilter === 'support' && styles.activeFilter]}
-          onPress={() => setSelectedFilter('support')}
-        >
-          <Text style={[styles.filterText, selectedFilter === 'support' && styles.activeFilterText]}>
-            Support
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterTab, selectedFilter === 'active' && styles.activeFilter]}
+            onPress={() => setSelectedFilter('active')}
+          >
+            <Text style={[styles.filterText, selectedFilter === 'active' && styles.activeFilterText]}>
+              Active
+            </Text>
+            <View style={[styles.filterBadge, { backgroundColor: '#00D4AA' }]}>
+              <Text style={styles.filterBadgeText}>
+                {conversations.filter(c => c.requestId && c.lastMessageAt).length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterTab, selectedFilter === 'support' && styles.activeFilter]}
+            onPress={() => setSelectedFilter('support')}
+          >
+            <Text style={[styles.filterText, selectedFilter === 'support' && styles.activeFilterText]}>
+              Support
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-
-      {/* Messages List */}
-      <ScrollView style={styles.messagesList} showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>Loading conversations...</Text>
-          </View>
-        ) : filteredConversations.length > 0 ? (
-          filteredConversations.map(renderConversationItem)
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={64} color="#2A2A3B" />
-            <Text style={styles.emptyStateTitle}>No messages yet</Text>
-            <Text style={styles.emptyStateSubtitle}>
-              Messages with your drivers will appear here
-            </Text>
-          </View>
-        )}
-        
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
     </View>
   );
 }
@@ -241,7 +244,12 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingBottom: 15,
+  },
+  bottomControlsContainer: {
+    backgroundColor: '#0A0A1F',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   searchBar: {
     flexDirection: 'row',
@@ -261,9 +269,9 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 15,
+    paddingTop: 12,
     gap: 8,
+    justifyContent: 'center',
   },
   filterTab: {
     flexDirection: 'row',
@@ -420,9 +428,9 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
   },
   emptyStateTitle: {
     color: '#fff',
@@ -437,6 +445,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   bottomSpacing: {
-    height: 100,
+    height: 20,
   },
 });

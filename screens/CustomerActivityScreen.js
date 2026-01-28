@@ -447,59 +447,29 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      {/* Summary Stats */}
+      {/* Summary Stats - Top */}
       {!isActiveTrip && (
         <View style={[styles.summaryContainer, { paddingTop: insets.top + 10 }]}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.totalTrips}</Text>
-            <Text style={styles.statLabel}>Total Trips</Text>
             <Ionicons name="trending-up" size={16} color="#00D4AA" />
+            <Text style={styles.statNumber}>{stats.totalTrips}</Text>
+            <Text style={styles.statLabel}>Trips</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>${stats.totalSpent.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Total Spent</Text>
             <Ionicons name="wallet" size={16} color="#A77BFF" />
+            <Text style={styles.statNumber}>${stats.totalSpent.toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Spent</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.avgRating.toFixed(1)}</Text>
-            <Text style={styles.statLabel}>Avg Rating</Text>
             <Ionicons name="star" size={16} color="#FFD700" />
+            <Text style={styles.statNumber}>{stats.avgRating.toFixed(1)}</Text>
+            <Text style={styles.statLabel}>Rating</Text>
           </View>
         </View>
       )}
 
-      {/* Tab Selector */}
-      <View style={[styles.tabContainer, isActiveTrip && { marginTop: insets.top + 10 }]}>
-        {isActiveTrip && (
-          <TouchableOpacity 
-            style={[styles.tab, selectedTab === 'active' && styles.activeTab]}
-            onPress={() => animateTransition('active')}
-          >
-            <Text style={[styles.tabText, selectedTab === 'active' && styles.activeTabText]}>
-              Active
-            </Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity 
-          style={[styles.tab, selectedTab === 'recent' && styles.activeTab]}
-          onPress={() => animateTransition('recent')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'recent' && styles.activeTabText]}>
-            Recent
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, selectedTab === 'all' && styles.activeTab]}
-          onPress={() => animateTransition('all')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'all' && styles.activeTabText]}>
-            All Trips
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Trip List */}
-      <Animated.View style={[styles.listContainer, { opacity: fadeAnim }]}>
+      {/* Trip List - Main content area */}
+      <Animated.View style={[styles.listContainer, { opacity: fadeAnim }, isActiveTrip && { paddingTop: insets.top + 10 }]}>
         {selectedTab === 'active' && isActiveTrip ? (
           renderActiveTrip()
         ) : loading ? (
@@ -507,32 +477,62 @@ export default function CustomerActivityScreen({ navigation, route }) {
             <ActivityIndicator size="large" color="#A77BFF" />
             <Text style={styles.loadingText}>Loading your trips...</Text>
           </View>
-        ) : (
+        ) : getFilteredTrips().length > 0 ? (
           <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            {getFilteredTrips().length > 0 ? (
-              getFilteredTrips().map(renderTripCard)
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="cube-outline" size={60} color="#666" />
-                <Text style={styles.emptyTitle}>No trips found</Text>
-                <Text style={styles.emptyText}>
-                  {selectedTab === 'recent' ? 'No recent trips to show' : 
-                   'You haven\'t made any trips yet'}
-                </Text>
-                {selectedTab === 'all' && (
-                  <TouchableOpacity 
-                    style={styles.emptyButton}
-                    onPress={() => navigation.navigate('CustomerHomeScreen')}
-                  >
-                    <Text style={styles.emptyButtonText}>Book Your First Trip</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
+            {getFilteredTrips().map(renderTripCard)}
             <View style={styles.bottomSpacing} />
           </ScrollView>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="cube-outline" size={60} color="#666" />
+            <Text style={styles.emptyTitle}>No trips found</Text>
+            <Text style={styles.emptyText}>
+              {selectedTab === 'recent' ? 'No recent trips to show' :
+               'You haven\'t made any trips yet'}
+            </Text>
+            {selectedTab === 'all' && (
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => navigation.navigate('CustomerHomeScreen')}
+              >
+                <Text style={styles.emptyButtonText}>Book Your First Trip</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </Animated.View>
+
+      {/* Bottom Controls - Tab Selector */}
+      <View style={styles.bottomControlsContainer}>
+        <View style={styles.tabContainer}>
+          {isActiveTrip && (
+            <TouchableOpacity
+              style={[styles.tab, selectedTab === 'active' && styles.activeTab]}
+              onPress={() => animateTransition('active')}
+            >
+              <Text style={[styles.tabText, selectedTab === 'active' && styles.activeTabText]}>
+                Active
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'recent' && styles.activeTab]}
+            onPress={() => animateTransition('recent')}
+          >
+            <Text style={[styles.tabText, selectedTab === 'recent' && styles.activeTabText]}>
+              Recent
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, selectedTab === 'all' && styles.activeTab]}
+            onPress={() => animateTransition('all')}
+          >
+            <Text style={[styles.tabText, selectedTab === 'all' && styles.activeTabText]}>
+              All Trips
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }
@@ -545,34 +545,39 @@ const styles = StyleSheet.create({
   summaryContainer: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingBottom: 15,
     gap: 12,
   },
   statCard: {
     flex: 1,
     backgroundColor: '#141426',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    padding: 12,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
     borderWidth: 1,
     borderColor: '#2A2A3B',
   },
   statNumber: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 4,
   },
   statLabel: {
     color: '#999',
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 11,
+  },
+  bottomControlsContainer: {
+    backgroundColor: '#0A0A1F',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#141426',
-    marginHorizontal: 20,
-    marginBottom: 15,
+    marginTop: 12,
     borderRadius: 12,
     padding: 4,
     borderWidth: 1,
@@ -763,7 +768,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   bottomSpacing: {
-    height: 40,
+    height: 20,
   },
   
   // Active trip styles
@@ -903,7 +908,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
     paddingHorizontal: 40,
   },
   emptyTitle: {
