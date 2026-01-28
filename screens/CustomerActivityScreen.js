@@ -503,7 +503,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
       </Animated.View>
 
       {/* Bottom Controls - Tab Selector */}
-      <View style={styles.bottomControlsContainer}>
+      <View style={[styles.bottomControlsContainer, { paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.tabContainer}>
           {isActiveTrip && (
             <TouchableOpacity

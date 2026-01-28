@@ -195,7 +195,7 @@ export default function CustomerMessagesScreen({ navigation }) {
       )}
 
       {/* Bottom Controls - Filter Tabs */}
-      <View style={styles.bottomControlsContainer}>
+      <View style={[styles.bottomControlsContainer, { paddingBottom: insets.bottom + 12 }]}>
         <View style={styles.filterContainer}>
           <TouchableOpacity
             style={[styles.filterTab, selectedFilter === 'all' && styles.activeFilter]}
