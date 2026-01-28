@@ -57,7 +57,6 @@ const VehicleSelectionModal = ({
   summaryData = null
 }) => {
   const [index, setIndex] = useState(0);
-  const [recommended, setRecommended] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Pricing states
@@ -89,23 +88,6 @@ const VehicleSelectionModal = ({
       }
     }
   }, [visible, selectedLocations]);
-
-  // Set AI recommendation based on description
-  useEffect(() => {
-    const desc = description.toLowerCase();
-    if (
-      desc.includes('sofa') ||
-      desc.includes('dresser') ||
-      desc.includes('bed') ||
-      desc.includes('tv')
-    ) {
-      setRecommended('Pickup Truck');
-    } else if (desc.includes('boxes') || desc.includes('bags')) {
-      setRecommended('Cargo Van');
-    } else {
-      setRecommended('Cargo Van');
-    }
-  }, [description]);
 
   const fetchVehiclePricing = async () => {
     if (!visible || !selectedLocations?.pickup || !selectedLocations?.dropoff) {
@@ -414,9 +396,6 @@ const VehicleSelectionModal = ({
                       }
                     </Text>
                   )}
-                  {recommended === current.type && (
-                    <Text style={styles.collapsedRecommended}>✨ AI Recommended</Text>
-                  )}
                 </View>
                 <View style={styles.collapsedArrow}>
                   <Ionicons name="chevron-up" size={20} color="#aaa" />
@@ -491,13 +470,6 @@ const VehicleSelectionModal = ({
                 <View style={styles.vehicleContainer}>
                   <Image source={current.image} style={styles.vehicleImg} />
                   <Text style={styles.vehicleType}>{current.type}</Text>
-
-                  {recommended === current.type && (
-                    <View style={styles.recommendedTag}>
-                      <Ionicons name="sparkles" size={12} color="#fff" />
-                      <Text style={styles.recommendedText}>AI Recommended</Text>
-                    </View>
-                  )}
                 </View>
 
                 <TouchableOpacity
@@ -638,12 +610,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  collapsedRecommended: {
-    color: '#00D4AA',
-    fontSize: 11,
-    marginTop: 2,
-    fontWeight: '500',
-  },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -781,20 +747,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
-  },
-  recommendedTag: {
-    backgroundColor: '#A77BFF',
-    flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignItems: 'center',
-    gap: 4,
-  },
-  recommendedText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: '500',
   },
   detailsContainer: {
     marginBottom: 20,
