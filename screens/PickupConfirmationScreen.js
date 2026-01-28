@@ -14,10 +14,12 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import useOrderStatusMonitor from '../hooks/useOrderStatusMonitor';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 export default function PickupConfirmationScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { request, driverLocation } = route.params;
   const { confirmPickup, startDelivery } = useAuth();
   
@@ -212,8 +214,8 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
@@ -350,7 +352,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Bottom Action Button */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity 
           style={[
             styles.confirmButton, 
@@ -387,7 +389,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 16,
     backgroundColor: '#1a1a2e',
@@ -619,7 +620,6 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     padding: 20,
-    paddingBottom: 40,
     backgroundColor: '#1a1a2e',
     borderTopWidth: 1,
     borderTopColor: '#2A2A3B',

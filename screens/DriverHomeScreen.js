@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, ScrollView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
@@ -17,11 +18,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../hooks/useOrderStatusMonitor';
 
 export default function DriverHomeScreen({ navigation, route }) {
-  const { 
-    userType, 
+  const insets = useSafeAreaInsets();
+  const {
+    userType,
     currentUser,
-    getAvailableRequests, 
-    acceptRequest, 
+    getAvailableRequests,
+    acceptRequest,
     checkExpiredRequests,
     updateDriverLocation,
     setDriverOnline,
@@ -659,7 +661,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       )}
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View style={styles.leftSection}>
           <Image 
             source={require('../assets/pikup-logo.png')}
@@ -678,7 +680,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       </View>
 
       {/* Bottom Panel */}
-      <View style={styles.bottomPanel}>
+      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 20 }]}>
         {isOnline ? (
           <>
             <View style={styles.waitTimeContainer}>
@@ -823,7 +825,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
     zIndex: 10,
   },
@@ -905,7 +906,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
   },

@@ -10,6 +10,7 @@ import {
   Switch,
   Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
@@ -25,6 +26,7 @@ import MapboxMap from "../components/mapbox/MapboxMap";
 import Mapbox from '@rnmapbox/maps';
 
 export default function CustomerHomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { userType, createPickupRequest, getUserPickupRequests, getRequestById, uploadMultiplePhotos } = useAuth();
   const { defaultPaymentMethod, paymentMethods } = usePayment();
 
@@ -528,12 +530,12 @@ export default function CustomerHomeScreen({ navigation }) {
 
 
       {/* Status Bar */}
-      <View style={styles.statusBar}>
+      <View style={[styles.statusBar, { paddingTop: insets.top }]}>
         <Text style={styles.statusText}>{locationStatus}</Text>
       </View>
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Image
           source={require("../assets/pikup-logo.png")}
           style={styles.headerLogo}
@@ -544,7 +546,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
       {/* Delivery Status Tracker - Only show when there's an active delivery */}
       {activeDelivery && (
-        <View style={styles.trackerContainer}>
+        <View style={[styles.trackerContainer, { top: insets.top + 60 }]}>
           <DeliveryStatusTracker
             requestId={activeDelivery.id}
             onDeliveryComplete={handleDeliveryComplete}
@@ -555,7 +557,11 @@ export default function CustomerHomeScreen({ navigation }) {
 
       {/* Search Bar */}
       <TouchableOpacity
-        style={[styles.searchBar, activeDelivery && styles.searchBarWithTracker]}
+        style={[
+          styles.searchBar,
+          { top: insets.top + 60 },
+          activeDelivery && { top: insets.top + 120 }
+        ]}
         activeOpacity={0.8}
         onPress={handleSearchBarPress}
       >
@@ -571,7 +577,7 @@ export default function CustomerHomeScreen({ navigation }) {
       </TouchableOpacity>
 
       {/* Bottom Section */}
-      <View style={styles.bottomSection}>
+      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity
           style={styles.requestButton}
           onPress={handleRequestPickup}
@@ -638,7 +644,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 15,
     flexDirection: "row",
@@ -648,7 +653,6 @@ const styles = StyleSheet.create({
   },
   trackerContainer: {
     position: "absolute",
-    top: 100,
     left: 0,
     right: 0,
     zIndex: 15,
@@ -663,7 +667,6 @@ const styles = StyleSheet.create({
 
   searchBar: {
     position: "absolute",
-    top: 100,
     left: 20,
     right: 20,
     height: 50,
@@ -679,9 +682,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  searchBarWithTracker: {
-    top: 160, // Move search bar down when tracker is visible
-  },
   searchIcon: {
     marginRight: 12,
   },
@@ -696,7 +696,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    paddingBottom: 40,
     paddingTop: 20,
   },
   requestButton: {
@@ -721,7 +720,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
     zIndex: 1000,
   },
   statusText: {

@@ -4,12 +4,14 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Image,
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function WelcomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+
   const handleRoleSelection = (role) => {
     // Navigate to auth screen and pass the selected role
     navigation.navigate("AuthScreen", { userRole: role });
@@ -20,7 +22,7 @@ export default function WelcomeScreen({ navigation }) {
       colors={['#0A0A1F', '#141426']}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={styles.content}>
           <View style={styles.logoContainer}>
             <Image
@@ -50,7 +52,7 @@ export default function WelcomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }

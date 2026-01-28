@@ -15,8 +15,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HelpOptionsModal from './HelpOptionsModal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RouteConfirmationScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { pickup, dropoff } = route.params || {};
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Furniture');
@@ -26,9 +28,9 @@ export default function RouteConfirmationScreen({ route, navigation }) {
   const categories = ['Furniture', 'Appliance', 'Electronic', 'Fragile'];
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: '#0A0A1F' }}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]} keyboardShouldPersistTaps="handled">
           <Image
             source={{ uri: 'https://via.placeholder.com/400x140.png?text=Route+Map' }}
             style={styles.mapImage}

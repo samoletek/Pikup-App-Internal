@@ -4,18 +4,19 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Animated,
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapboxMap from '../components/mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function CustomerActivityScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('recent');
   const [fadeAnim] = useState(new Animated.Value(1));
   const [trips, setTrips] = useState([]);
@@ -445,18 +446,10 @@ export default function CustomerActivityScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Activity</Text>
-        <TouchableOpacity style={styles.filterButton}>
-          <Ionicons name="filter" size={20} color="#A77BFF" />
-        </TouchableOpacity>
-      </View>
-
+    <View style={styles.container}>
       {/* Summary Stats */}
       {!isActiveTrip && (
-        <View style={styles.summaryContainer}>
+        <View style={[styles.summaryContainer, { paddingTop: insets.top + 10 }]}>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>{stats.totalTrips}</Text>
             <Text style={styles.statLabel}>Total Trips</Text>
@@ -476,7 +469,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
       )}
 
       {/* Tab Selector */}
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, isActiveTrip && { marginTop: insets.top + 10 }]}>
         {isActiveTrip && (
           <TouchableOpacity 
             style={[styles.tab, selectedTab === 'active' && styles.activeTab]}
@@ -540,7 +533,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
           </ScrollView>
         )}
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -548,28 +541,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A1F',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 15,
-    backgroundColor: '#141426',
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  filterButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1A1A3A',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   summaryContainer: {
     flexDirection: 'row',

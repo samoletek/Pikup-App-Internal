@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  ActivityIndicator, 
-  Alert, 
-  Platform, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Platform,
   Linking,
   Animated,
   Dimensions,
@@ -24,10 +24,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import useOrderStatusMonitor from '../hooks/useOrderStatusMonitor';
 import useMapboxNavigation from '../components/mapbox/useMapboxNavigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
 export default function GpsNavigationScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { 
     startDriving, 
@@ -798,7 +800,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     return (
       <View style={styles.navigationContainer}>
         {/* Purple header section with instruction */}
-        <View style={styles.navigationHeader}>
+        <View style={[styles.navigationHeader, { paddingTop: insets.top + 20 }]}>
           <View style={styles.navigationHeaderContent}>
             <Text style={styles.distanceText}>
               {distanceToTurn || 'Calculating...'}
@@ -953,8 +955,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
         </MapboxMap>
         
         {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.backButton}
+        <TouchableOpacity
+          style={[styles.backButton, { top: insets.top + 10 }]}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -1039,8 +1041,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
           {/* Mapbox Navigation SDK runs full-screen here automatically */}
           
           {/* Close Navigation Button */}
-          <TouchableOpacity 
-            style={styles.closeNavButton}
+          <TouchableOpacity
+            style={[styles.closeNavButton, { top: insets.top + 10 }]}
             onPress={() => stopNavigation()}
           >
             <Ionicons name="close" size={24} color="#fff" />
@@ -1173,8 +1175,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
         </MapboxMap>
         
         {/* Back Button */}
-        <TouchableOpacity 
-          style={styles.backButton}
+        <TouchableOpacity
+          style={[styles.backButton, { top: insets.top + 10 }]}
           onPress={() => {
             if (isNavigating) {
               stopNavigation();
@@ -1187,8 +1189,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
 
         {/* Start Navigation Button (only show if navigation is supported) */}
         {isSupported && !isNavigating && driverLocation && customerLocation && (
-          <TouchableOpacity 
-            style={styles.startNavButton}
+          <TouchableOpacity
+            style={[styles.startNavButton, { top: insets.top + 10 }]}
             onPress={startNavigation}
           >
             <Ionicons name="navigate" size={20} color="#fff" />
@@ -1526,7 +1528,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 50,
     left: 20,
     backgroundColor: 'rgba(10, 10, 31, 0.8)',
     width: 40,
@@ -1744,7 +1745,6 @@ const styles = StyleSheet.create({
   
   navigationHeader: {
     backgroundColor: '#8B5FBF',
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -1864,7 +1864,6 @@ const styles = StyleSheet.create({
   
   closeNavButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     width: 44,
@@ -1879,7 +1878,6 @@ const styles = StyleSheet.create({
   
   startNavButton: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
     right: 20,
     backgroundColor: '#A77BFF',
     flexDirection: 'row',

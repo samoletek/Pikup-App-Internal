@@ -4,15 +4,16 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Image,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function CustomerProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, logout, getUserProfile, profileImage, getProfileImage } = useAuth();
   const [customerProfile, setCustomerProfile] = useState(null);
   const [displayName, setDisplayName] = useState("User");
@@ -62,23 +63,13 @@ export default function CustomerProfileScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
         {/* Profile Info */}
-        <View style={styles.profileSection}>
+        <View style={[styles.profileSection, { paddingTop: insets.top + 20 }]}>
           <View style={styles.nameSection}>
             <Text style={styles.userName}>{displayName}</Text>
             <TouchableOpacity 
@@ -264,9 +255,9 @@ export default function CustomerProfileScreen({ navigation }) {
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -277,20 +268,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: "#141426",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
   },
   profileSection: {
     backgroundColor: "#141426",

@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   FlatList,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 
 const helpCategories = [
@@ -62,11 +62,12 @@ const FAQItems = [
 ];
 
 export default function CustomerHelpScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [expandedFAQ, setExpandedFAQ] = useState(null);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -155,9 +156,9 @@ export default function CustomerHelpScreen({ navigation }) {
           <Text style={styles.emergencyText}>Emergency Help</Text>
         </TouchableOpacity>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -171,7 +172,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 10,
     backgroundColor: "#141426",
     borderBottomWidth: 1,

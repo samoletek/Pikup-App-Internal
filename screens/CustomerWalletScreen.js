@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   RefreshControl,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { usePayment } from "../contexts/PaymentContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -56,6 +56,7 @@ const transactionHistory = [
 ];
 
 export default function CustomerWalletScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { paymentMethods, defaultPaymentMethod } = usePayment();
   const { currentUser, getUserPickupRequests } = useAuth();
   const [transactions, setTransactions] = useState([]);
@@ -107,8 +108,8 @@ export default function CustomerWalletScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -219,9 +220,9 @@ export default function CustomerWalletScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -235,7 +236,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 10,
     backgroundColor: "#141426",
     borderBottomWidth: 1,

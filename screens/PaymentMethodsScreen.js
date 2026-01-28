@@ -4,15 +4,16 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { usePayment } from '../contexts/PaymentContext';
 import AddPaymentMethodModal from '../components/AddPaymentMethodModal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PaymentMethodsScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { paymentMethods, defaultPaymentMethod, removePaymentMethod, setDefault } = usePayment();
   const [addModalVisible, setAddModalVisible] = useState(false);
   
@@ -103,10 +104,10 @@ export default function PaymentMethodsScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={handleBack}
@@ -221,7 +222,7 @@ export default function PaymentMethodsScreen({ navigation, route }) {
         onClose={() => setAddModalVisible(false)}
         onSuccess={handlePaymentMethodAdded}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -238,7 +239,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 15,
     backgroundColor: '#141426',
   },

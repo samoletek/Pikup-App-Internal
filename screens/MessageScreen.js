@@ -6,12 +6,13 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function MessageScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, userType, getMessages, sendMessage, subscribeToMessages, markMessageAsRead } = useAuth();
   const { conversationId, driverName, requestId, driverInfo } = route.params || {};
   const title = driverName || driverInfo?.name || 'Chat';
@@ -106,8 +107,8 @@ export default function MessageScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
@@ -129,7 +130,7 @@ export default function MessageScreen({ navigation, route }) {
         />
       )}
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { marginBottom: insets.bottom + 16 }]}>
         <TextInput
           style={styles.input}
           placeholder="Send message..."
@@ -137,19 +138,19 @@ export default function MessageScreen({ navigation, route }) {
           value={messageText}
           onChangeText={setMessageText}
         />
-        <TouchableOpacity 
-          onPress={handleSend} 
+        <TouchableOpacity
+          onPress={handleSend}
           style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
           disabled={sending}
         >
-          <Ionicons 
-            name={sending ? "hourglass-outline" : "send"} 
-            size={20} 
-            color="#fff" 
+          <Ionicons
+            name={sending ? "hourglass-outline" : "send"}
+            size={20}
+            color="#fff"
           />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -20,13 +20,13 @@
 
 ### Customer Flow - Step 1: Pickup & Dropoff
 - [ ] #21 Address autocomplete (Google Places) - Andrei
-- [ ] #22 Remove "Popular Places" section - not relevant for moving - Erema
+- [x] #22 Remove "Popular Places" section - not relevant for moving - Erema
 - [ ] #23 Add "Use current location" option - Erema
 
 ### Customer Flow - Step 3: Vehicle Selection
 - [ ] #31 Fix Modal maxHeight - content gets cut off - Drew
 - [ ] #32 Add back/collapse navigation to modals - Drew
-- [ ] #33 Remove hardcoded "AI Recommended" badge - Erema
+- [x] #33 Remove hardcoded "AI Recommended" badge - Erema
 - [ ] #34 Audit and fix price calculations - Drew
 - [ ] #35 Show vehicles as scrollable list, not buttons - Drew
 
