@@ -11,6 +11,8 @@ import {
     Dimensions,
     ActivityIndicator,
     TextInput as RNTextInput,
+    Linking,
+    Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -46,7 +48,7 @@ const Button = ({ title, onPress, variant = 'primary', disabled, loading, style 
     );
 };
 
-const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, rightIcon, onRightIconPress, keyboardType, autoCapitalize }) => (
+const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, rightIcon, onRightIconPress, keyboardType, autoCapitalize, editable }) => (
     <View style={styles.inputContainer}>
         <View style={[styles.inputWrapper, error && styles.inputError]}>
             <RNTextInput
@@ -58,6 +60,7 @@ const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, right
                 secureTextEntry={secureTextEntry}
                 keyboardType={keyboardType}
                 autoCapitalize={autoCapitalize}
+                editable={editable !== false}
             />
             {rightIcon && (
                 <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
@@ -71,7 +74,7 @@ const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, right
 
 // --- Auth Modal Component ---
 
-export default function AuthModal({ visible, onClose, selectedRole }) {
+export default function AuthModal({ visible, onClose, selectedRole, navigation }) {
     const modalRef = useRef(null);
 
     // Auth Context
@@ -83,10 +86,18 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [name, setName] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    // Fade animation for step transitions
+    const fadeAnim = useRef(new Animated.Value(1)).current;
 
     // Errors
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [nameError, setNameError] = useState('');
+    const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
     // Reset form on open
     useEffect(() => {
@@ -100,9 +111,14 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         setAuthMode('login');
         setEmail('');
         setPassword('');
+        setName('');
+        setConfirmPassword('');
         setShowPassword(false);
+        setShowConfirmPassword(false);
         setEmailError('');
         setPasswordError('');
+        setNameError('');
+        setConfirmPasswordError('');
     };
 
     const handleClose = () => {
@@ -125,6 +141,15 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         return true;
     };
 
+    const validateName = (val) => {
+        if (!val.trim()) {
+            setNameError('Name is required');
+            return false;
+        }
+        setNameError('');
+        return true;
+    };
+
     const validatePassword = (val) => {
         if (!val) {
             setPasswordError('Password is required');
@@ -135,6 +160,19 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
             return false;
         }
         setPasswordError('');
+        return true;
+    };
+
+    const validateConfirmPassword = (val) => {
+        if (!val) {
+            setConfirmPasswordError('Please confirm your password');
+            return false;
+        }
+        if (val !== password) {
+            setConfirmPasswordError('Passwords do not match');
+            return false;
+        }
+        setConfirmPasswordError('');
         return true;
     };
 
@@ -161,15 +199,33 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
 
     const handleContinueWithEmail = () => {
         if (!validateEmail(email)) return;
-        setStep(authMode === 'login' ? 'login' : 'register');
+        animateStepChange(authMode === 'login' ? 'login' : 'register');
     };
 
     const handleBack = () => {
         if (step === 'login' || step === 'register') {
-            setStep('email');
+            animateStepChange('email');
         } else {
-            setStep('initial');
+            animateStepChange('initial');
         }
+    };
+
+    const animateStepChange = (newStep) => {
+        // Fade out
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+        }).start(() => {
+            // Change step
+            setStep(newStep);
+            // Fade in
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 150,
+                useNativeDriver: true,
+            }).start();
+        });
     };
 
     const handleLogin = async () => {
@@ -185,11 +241,31 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
     };
 
     const handleRegister = async () => {
-        if (validateEmail(email) && validatePassword(password)) {
+        const isNameValid = validateName(name);
+        const isEmailValid = validateEmail(email);
+        const isPasswordValid = validatePassword(password);
+        const isConfirmValid = validateConfirmPassword(confirmPassword);
+
+        if (isNameValid && isEmailValid && isPasswordValid && isConfirmValid) {
             try {
                 // signup(email, password, role, additionalData)
-                await signup(email, password, selectedRole, {});
-                Alert.alert('Account Created', 'Your account has been created successfully.', [{ text: 'OK', onPress: handleClose }]);
+                // Split name for consistency if needed, but Context usually handles raw data
+                const nameParts = name.trim().split(' ');
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ') || '';
+
+                await signup(email, password, selectedRole, {
+                    name: name.trim(),
+                    firstName,
+                    lastName
+                });
+
+                // Navigate directly to CustomerTabs/DriverTabs to avoid WelcomeScreen flash
+                handleClose();
+                if (navigation) {
+                    const targetScreen = selectedRole === 'driver' ? 'DriverTabs' : 'CustomerTabs';
+                    navigation.replace(targetScreen);
+                }
             } catch (e) {
                 Alert.alert('Registration Failed', e.message);
             }
@@ -261,7 +337,22 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
 
     const renderPasswordStep = (isRegister) => (
         <>
-            <Text style={styles.emailDisplay}>{email}</Text>
+            <Input
+                value={email}
+                editable={false}
+                placeholder="Email"
+            />
+
+            {isRegister && (
+                <Input
+                    placeholder="Full Name"
+                    value={name}
+                    onChangeText={(t) => { setName(t); setNameError(''); }}
+                    autoCapitalize="words"
+                    error={nameError}
+                    editable={!loading}
+                />
+            )}
 
             <Input
                 placeholder="Password"
@@ -272,7 +363,22 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
                 error={passwordError}
                 rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#888" />}
                 onRightIconPress={() => setShowPassword(!showPassword)}
+                editable={!loading}
             />
+
+            {isRegister && (
+                <Input
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChangeText={(t) => { setConfirmPassword(t); setConfirmPasswordError(''); }}
+                    secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
+                    error={confirmPasswordError}
+                    rightIcon={<Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                    onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    editable={!loading}
+                />
+            )}
 
             <Button
                 title={isRegister ? "Create Account" : "Sign In"}
@@ -288,7 +394,10 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
 
             {isRegister && (
                 <Text style={styles.termsText}>
-                    By creating an account, you agree to our Terms and Privacy Policy.
+                    By creating an account, you agree to our{'\n'}
+                    <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Terms</Text>
+                    {' '}and{' '}
+                    <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Privacy Policy</Text>.
                 </Text>
             )}
         </>
@@ -305,7 +414,13 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
     };
 
     const getModalHeight = () => {
-        // Uniform compact height for all steps
+        if (step === 'register') {
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.54 : SCREEN_HEIGHT * 0.62;
+        }
+        if (step === 'login') {
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.37 : SCREEN_HEIGHT * 0.43;
+        }
+        // Compact height for other steps (initial, email)
         return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.35 : SCREEN_HEIGHT * 0.40;
     };
 
@@ -340,12 +455,12 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
                 enabled={false} // Disabled because BaseModal handles it via avoidKeyboard
                 style={{ flex: 1 }}
             >
-                <View style={styles.content}>
+                <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
                     {step === 'initial' && renderInitialStep()}
                     {step === 'email' && renderEmailStep()}
                     {step === 'login' && renderPasswordStep(false)}
                     {step === 'register' && renderPasswordStep(true)}
-                </View>
+                </Animated.View>
             </KeyboardAvoidingView>
         </BaseModal>
     );
@@ -372,7 +487,7 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 24,
-        paddingBottom: 40,
+        paddingBottom: 20,
     },
 
     // Buttons
@@ -482,7 +597,7 @@ const styles = StyleSheet.create({
     },
     forgotBtn: {
         alignSelf: 'center',
-        marginTop: 24,
+        marginTop: 20,
     },
     forgotText: {
         color: '#A77BFF',
@@ -495,4 +610,8 @@ const styles = StyleSheet.create({
         marginTop: 20,
         lineHeight: 18,
     },
+    linkText: {
+        color: '#A77BFF',
+        fontWeight: '600'
+    }
 });

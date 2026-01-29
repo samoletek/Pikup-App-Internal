@@ -54,7 +54,10 @@ const Stack = createNativeStackNavigator();
 export default function Navigation() {
   const { isInitializing, currentUser, userType } = useAuth();
 
+  console.log('🎯 Navigation render - isInitializing:', isInitializing, 'currentUser:', !!currentUser, 'userType:', userType);
+
   if (isInitializing) {
+    console.log('⏳ Showing splash screen - isInitializing is TRUE');
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A1F' }}>
         <Image
@@ -65,17 +68,11 @@ export default function Navigation() {
     );
   }
 
-  const getInitialRoute = () => {
-    if (currentUser) {
-      return userType === 'driver' ? 'DriverTabs' : 'CustomerTabs';
-    }
-    return 'WelcomeScreen';
-  };
+  console.log('✅ Navigation ready - proceeding to navigator');
 
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false }}
-      initialRouteName={getInitialRoute()}
     >
       <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
       <Stack.Screen name="AuthScreen" component={AuthScreen} />

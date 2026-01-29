@@ -64,8 +64,8 @@ export default function AuthScreen({ navigation, route }) {
                     console.log('Terms status:', termsStatus);
 
                     if (termsStatus.needsAcceptance) {
-                        console.log('Navigating to ConsentGate');
-                        navigation.navigate('ConsentGate', {
+                        console.log('Navigating to ConsentGateScreen');
+                        navigation.navigate('ConsentGateScreen', {
                             missingVersions: termsStatus.missingVersions,
                             role: userType
                         });
