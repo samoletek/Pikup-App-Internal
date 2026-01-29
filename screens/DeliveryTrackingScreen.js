@@ -7,7 +7,6 @@ import {
   ScrollView,
   Animated,
   Dimensions,
-  SafeAreaView,
   Image,
   Alert,
   StatusBar,
@@ -15,6 +14,7 @@ import {
   Linking,
   Modal,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -30,6 +30,7 @@ const MAP_HEIGHT = height * 0.55;
 const BOTTOM_SECTION_HEIGHT = height * 0.45;
 
 export default function DeliveryTrackingScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { requestId, requestData: initialRequestData } = route.params || {};
   const {
     getRequestById,
@@ -979,7 +980,7 @@ export default function DeliveryTrackingScreen({ route, navigation }) {
 
         {/* Back Button */}
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { top: insets.top + 10 }]}
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -1143,7 +1144,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 50,
     left: 20,
     backgroundColor: 'rgba(10, 10, 31, 0.8)',
     width: 40,
@@ -1573,7 +1573,6 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     position: 'absolute',
-    top: 50,
     right: 20,
     zIndex: 10,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',

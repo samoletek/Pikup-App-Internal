@@ -11,6 +11,7 @@ import {
   Dimensions,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 const { width } = Dimensions.get('window');
 
 export default function DeliveryConfirmationScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { request, pickupPhotos, driverLocation } = route.params;
   const { finishDelivery } = useAuth();
   
@@ -241,7 +243,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -392,7 +394,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Bottom Action Button */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
         <TouchableOpacity 
           style={[
             styles.completeButton, 
@@ -429,7 +431,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 50,
     paddingHorizontal: 20,
     paddingBottom: 16,
     backgroundColor: '#1a1a2e',
@@ -678,7 +679,6 @@ const styles = StyleSheet.create({
   },
   bottomContainer: {
     padding: 20,
-    paddingBottom: 40,
     backgroundColor: '#1a1a2e',
     borderTopWidth: 1,
     borderTopColor: '#2A2A3B',

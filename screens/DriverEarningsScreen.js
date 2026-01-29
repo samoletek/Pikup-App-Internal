@@ -4,17 +4,18 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Dimensions,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function DriverEarningsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, getDriverTrips, getDriverStats, processInstantPayout, getDriverProfile } = useAuth();
   
   const [selectedPeriod, setSelectedPeriod] = useState('week');
@@ -270,10 +271,10 @@ export default function DriverEarningsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -443,9 +444,9 @@ export default function DriverEarningsScreen({ navigation }) {
           ))}
         </View>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -462,7 +463,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 15,
     backgroundColor: '#141426',
   },

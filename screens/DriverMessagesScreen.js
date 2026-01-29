@@ -4,16 +4,17 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   TextInput,
   Image,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function DriverMessagesScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, getConversations } = useAuth();
   const [searchText, setSearchText] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
@@ -166,9 +167,9 @@ export default function DriverMessagesScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -271,9 +272,9 @@ export default function DriverMessagesScreen({ navigation }) {
           </View>
         )}
         
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -287,7 +288,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 12,
     backgroundColor: '#141426',
   },

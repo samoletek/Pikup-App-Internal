@@ -5,13 +5,15 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TermsAndPrivacyScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+
   return (
     <LinearGradient
       colors={["#0A0A1F", "#141426"]}
@@ -19,9 +21,9 @@ export default function TermsAndPrivacyScreen({ navigation }) {
       end={{ x: 1, y: 1 }}
       style={styles.gradient}
     >
-      <SafeAreaView style={styles.safe}>
+      <View style={styles.safe}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
             accessibilityRole="button"
             onPress={() => navigation.goBack()}
@@ -161,7 +163,7 @@ export default function TermsAndPrivacyScreen({ navigation }) {
             </TouchableOpacity> */}
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }

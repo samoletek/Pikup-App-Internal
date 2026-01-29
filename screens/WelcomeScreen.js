@@ -4,14 +4,15 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Image,
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AuthModal from '../components/AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function WelcomeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRole, setSelectedRole] = useState("customer");
   const { currentUser, userType, checkTermsAcceptance, getDriverProfile } = useAuth();
@@ -27,7 +28,7 @@ export default function WelcomeScreen({ navigation }) {
 
   // Navigate after successful login
   useEffect(() => {
-    console.log('🔍 WelcomeScreen - currentUser:', !!currentUser, 'userType:', userType);
+    console.log('WelcomeScreen - currentUser:', !!currentUser, 'userType:', userType);
 
     if (currentUser && userType) {
       console.log('User logged in, navigating...');
@@ -78,7 +79,7 @@ export default function WelcomeScreen({ navigation }) {
       colors={['#0A0A1F', '#141426']}
       style={styles.container}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.logoWrapper}>
           <View style={styles.logoContainer}>
             <Image
@@ -106,14 +107,14 @@ export default function WelcomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* New Linkble-style Auth Modal */}
+        {/* Auth Modal */}
         <AuthModal
           visible={modalVisible}
           onClose={closeModal}
           selectedRole={selectedRole}
         />
 
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: "#A77BFF",
     paddingVertical: 16,
-    borderRadius: 30, // Restored pill shape matching Linkble
+    borderRadius: 30,
     width: "40%",
     alignItems: "center",
     shadowColor: "#A77BFF",

@@ -6,16 +6,17 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
-  SafeAreaView,
   ScrollView,
   Alert
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { usePayment } from '../contexts/PaymentContext';
 import DeliveryPhotosModal from '../components/DeliveryPhotosModal';
 
 export default function DeliveryFeedbackScreen({ route, navigation }) {
+  const insets = useSafeAreaInsets();
   const { requestId, requestData: initialRequestData, returnToHome } = route.params || {};
   const { getRequestById, updateRequestStatus, getUserProfile, currentUser } = useAuth();
   const { confirmPayment, defaultPaymentMethod } = usePayment();
@@ -183,8 +184,8 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 10 }]}>
         <Text style={styles.title}>Was Your Item Delivered Safely?</Text>
 
         <View style={styles.toggleRow}>
@@ -294,7 +295,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         )}
       </ScrollView>
 
-      <View style={styles.buttonContainer}>
+      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity 
           style={[styles.submitBtn, submitting && styles.disabledBtn]} 
           onPress={handleSubmit}
@@ -324,7 +325,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
           requestDetails={requestData}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -451,7 +452,7 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 0,
     left: 16,
     right: 16,
     gap: 10,

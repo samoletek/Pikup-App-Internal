@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   TextInput,
   Alert,
@@ -18,10 +17,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
 export default function DriverOnboardingScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, createDriverConnectAccount, getDriverOnboardingLink, updateDriverPaymentProfile } = useAuth();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -912,9 +913,9 @@ export default function DriverOnboardingScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
@@ -990,7 +991,7 @@ export default function DriverOnboardingScreen({ navigation }) {
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1004,7 +1005,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 15,
     backgroundColor: '#141426',
     borderBottomWidth: 1,

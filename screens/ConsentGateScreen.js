@@ -4,16 +4,17 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from "../contexts/AuthContext";
 
 export default function ConsentGateScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [missingVersions, setMissingVersions] = useState([]);
@@ -108,7 +109,7 @@ export default function ConsentGateScreen({ navigation, route }) {
       colors={['#0A0A1F', '#141426']}
       style={styles.container}
     >
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.content}>
             <View style={styles.iconContainer}>
@@ -167,7 +168,7 @@ export default function ConsentGateScreen({ navigation, route }) {
             </Text>
           </View>
         </ScrollView>
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }

@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
 // import { StripeIdentityProvider } from '@stripe/stripe-identity-react-native';
 import { LogBox, NativeModules } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
 
@@ -38,22 +39,24 @@ if (NativeModules.MapboxNavigation) {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <NavigationContainer>
-        <StripeProvider
-          publishableKey={STRIPE_PUBLISHABLE_KEY}
-          merchantId={MERCHANT_ID}
-          urlScheme={URL_SCHEME}
-        >
-          <AuthProvider>
-            <PaymentProvider>
-              <NotificationProvider>
-                <Navigation />
-              </NotificationProvider>
-            </PaymentProvider>
-          </AuthProvider>
-        </StripeProvider>
-      </NavigationContainer>
-    </ErrorBoundary>
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <NavigationContainer>
+          <StripeProvider
+            publishableKey={STRIPE_PUBLISHABLE_KEY}
+            merchantId={MERCHANT_ID}
+            urlScheme={URL_SCHEME}
+          >
+            <AuthProvider>
+              <PaymentProvider>
+                <NotificationProvider>
+                  <Navigation />
+                </NotificationProvider>
+              </PaymentProvider>
+            </AuthProvider>
+          </StripeProvider>
+        </NavigationContainer>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }

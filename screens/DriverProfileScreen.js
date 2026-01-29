@@ -4,15 +4,16 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Alert,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DriverProfileScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser, logout, getDriverProfile, getUserProfile, profileImage, getProfileImage, getDriverFeedback } = useAuth();
   const [driverProfile, setDriverProfile] = useState(null);
   const [displayName, setDisplayName] = useState("Driver");
@@ -205,16 +206,10 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <Text style={styles.headerTitle}>Driver Profile</Text>
         </View>
 
@@ -534,9 +529,9 @@ export default function DriverProfileScreen({ navigation }) {
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -549,24 +544,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
     paddingBottom: 15,
     backgroundColor: '#141426',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   headerTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    marginLeft: 10,
   },
 
   // Onboarding Status Styles

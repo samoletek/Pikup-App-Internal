@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Image, 
-  SafeAreaView,
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
   Dimensions,
   Animated
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 const CARD_HEIGHT = 200;
@@ -198,6 +198,7 @@ const darkMapStyle = [
 ];
 
 export default function EnRouteToPickupScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
   const { request, isCustomerView = false, isDelivery = false, title } = route.params || {};
   const { user } = useAuth();
   const [driverLocation, setDriverLocation] = useState(null);
@@ -352,20 +353,20 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
       </MapView>
       
       {/* Back button */}
-      <SafeAreaView style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={[styles.backButton, { top: insets.top + 10 }]}
           onPress={handleBackPress}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
       
       {/* Bottom Card */}
-      <Animated.View 
+      <Animated.View
         style={[
           styles.bottomCard,
-          { transform: [{ translateY: slideAnim }] }
+          { transform: [{ translateY: slideAnim }], paddingBottom: insets.bottom + 20 }
         ]}
       >
         <View style={styles.handle} />
@@ -510,12 +511,15 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   backButton: {
+    position: 'absolute',
+    left: 16,
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: 'rgba(20, 20, 38, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1,
   },
   bottomCard: {
     position: 'absolute',
@@ -526,7 +530,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
-    paddingBottom: 36,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,

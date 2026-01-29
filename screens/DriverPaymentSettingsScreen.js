@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   Alert,
   Switch,
@@ -12,8 +11,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DriverPaymentSettingsScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
   const [paymentData, setPaymentData] = useState({
     instantPay: false,
@@ -299,10 +300,10 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -327,9 +328,9 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         {/* Settings */}
         {renderSettings()}
 
-        <View style={styles.bottomSpacing} />
+        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -346,7 +347,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
     paddingBottom: 16,
   },
   backButton: {
