@@ -2,7 +2,7 @@
 
 PikUp is a React Native/Expo application that connects users with drivers who have pickup trucks or SUVs, offering a faster, convenient, and affordable way to transport large or medium items — unlike dealing with the hassle of renting or high costs of traditional movers.
 
-## 🚀 Project Status
+## Project Status
 
 **Current Phase:** Option C - Full Build  
 **Timeline:** 8-10 weeks
@@ -12,7 +12,7 @@ See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 
 ---
 
-## 🏗️ Architecture Overview
+## Architecture Overview
 
 ### Tech Stack
 - **Frontend:** React Native + Expo
@@ -24,7 +24,7 @@ See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 
 ---
 
-## 📱 Features
+## Features
 
 ### Customer Experience
 1. **Photo Capture** → **AI Analysis** → **Address Selection** → **Vehicle Selection** → **Payment** → **Driver Matching**
@@ -51,7 +51,7 @@ See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 
 ---
 
-## 🔑 Key Context Providers
+## Key Context Providers
 
 ### AuthContext (`contexts/AuthContext.js`)
 **The heart of the application** - Manages:
@@ -74,7 +74,7 @@ Handles all Stripe operations:
 
 ---
 
-## 📱 Screen Structure
+## Screen Structure
 
 ### Customer Screens
 | Screen | Purpose |
@@ -101,7 +101,7 @@ Handles all Stripe operations:
 
 ---
 
-## 🛠️ Development Setup
+## Development Setup
 
 ### Prerequisites
 - Node.js 18+
@@ -145,7 +145,7 @@ npx eas build --platform android --profile production
 
 ---
 
-## ⚠️ Critical Configuration
+## Critical Configuration
 
 ### Package Versions (DO NOT UPDATE)
 ```json
@@ -166,7 +166,7 @@ npx eas build --platform android --profile production
 
 ---
 
-## 🔗 External Services
+## External Services
 
 | Service | Purpose | Status |
 |---------|---------|--------|
@@ -182,7 +182,7 @@ npx eas build --platform android --profile production
 
 ---
 
-## 📋 Milestones
+## Milestones
 
 ### Milestone 1: Foundation & Backend
 - Social login (Apple + Google)
@@ -216,12 +216,12 @@ npx eas build --platform android --profile production
 
 ---
 
-## 🔐 Security Notes
+## Security Notes
 
 - **API Keys:** Stored in `.env.local` (not committed)
 - **Payments:** Stripe handles all sensitive data
 - **Auth:** Supabase with RLS
-- **⚠️ Stripe keys are LIVE** — be careful with payments
+- **Stripe keys are LIVE** — careful with payments
 
 ---
 

@@ -12,11 +12,11 @@
 **Focus:** Backend migration, authentication, core fixes
 
 ### Global / Critical
-- [ ] #1 Safe Area - extend content to screen edges like modern apps - Erema
-- [x] #2 Sign in with Apple (App Store requirement) - Andrei
-- [x] #3 Sign in with Google (Play Store requirement) - Andrei
-- [x] #4 Account deletion feature (required by both stores) - Andrei
-- [ ] #5 Terms/Privacy - links to pikup-app.com - Drew
+- [x] #1 Safe Area - extend content to screen edges like modern apps - Erema
+- [-] #2 Sign in with Apple (App Store requirement) - Andrei
+- [-] #3 Sign in with Google (Play Store requirement) - Andrei
+- [-] #4 Account deletion feature (required by both stores) - Andrei
+- [-] #5 Terms/Privacy - links to pikup-app.com - Drew
 
 ### Customer Flow - Step 1: Pickup & Dropoff
 - [x] #21 Address autocomplete (Mapbox API) - Andrei
@@ -31,7 +31,7 @@
 - [ ] #35 Show vehicles as scrollable list, not buttons - Drew
 
 ### Backend / Infrastructure
-- [ ] #71 Supabase migration (auth + DB + realtime) - Andrei: очистить приложение от связи со старым бэком. Разметить полностью бэк под супабейс, все эндпойнты, таблицы новые. Какие именно таблицы должны быть и какие в них должны быть поля - это все должен подсказать файл readme.
+- [-] #71 Supabase migration (auth + DB + realtime) - Andrei: очистить приложение от связи со старым бэком. Разметить полностью бэк под супабейс, все эндпойнты, таблицы новые. Какие именно таблицы должны быть и какие в них должны быть поля - это все должен подсказать файл readme.
 
 ### Insurance API
 - [ ] #80 Redkik API authentication - **BLOCKED: waiting for correct base URL**
