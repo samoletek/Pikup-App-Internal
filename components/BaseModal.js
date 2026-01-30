@@ -115,7 +115,7 @@ const BaseModal = forwardRef(({
             // We set it to height just to be safe for next mounting.
             translateY.setValue(height);
         }
-    }, [visible, height]);
+    }, [visible]); // Removed 'height' to prevent slide animation on height changes
 
     // Keyboard listeners
     useEffect(() => {

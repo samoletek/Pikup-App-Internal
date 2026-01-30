@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useStripe } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
+import { supabase } from '../config/supabase';
 
 const PaymentContext = createContext();
 
@@ -24,7 +25,7 @@ export const PaymentProvider = ({ children }) => {
   // For Android emulator: use 10.0.2.2 if backend is on same machine
   // For Android device: use your machine's IP address (e.g., 192.168.1.100)
   // TODO: Replace with your actual backend URL
-  const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com'; // Always use Render server
+  // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com'; // REMOVED
 
   // Load saved payment methods on app start
   useEffect(() => {
@@ -42,7 +43,7 @@ export const PaymentProvider = ({ children }) => {
     try {
       const saved = await AsyncStorage.getItem('paymentMethods');
       const defaultMethod = await AsyncStorage.getItem('defaultPaymentMethod');
-      
+
       if (saved) {
         setPaymentMethods(JSON.parse(saved));
       }
@@ -57,23 +58,31 @@ export const PaymentProvider = ({ children }) => {
   // Fetch saved payment methods from Stripe
   const fetchStripePaymentMethods = async () => {
     if (!currentUser?.uid) return;
-    
+
     try {
       setLoading(true);
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/customer-payment-methods/${currentUser.uid}`);
-      const data = await response.json();
-      
-      if (data.success && data.paymentMethods) {
-        setPaymentMethods(data.paymentMethods);
-        await AsyncStorage.setItem('paymentMethods', JSON.stringify(data.paymentMethods));
-        
-        const defaultMethod = data.paymentMethods.find(
-          pm => pm.id === data.defaultPaymentMethodId || pm.isDefault
-        );
-        if (defaultMethod) {
-          setDefaultPaymentMethod(defaultMethod);
-          await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(defaultMethod));
-        }
+      console.log('Fetching payment methods for:', currentUser.uid);
+
+      console.log('Invoking get-payment-methods Edge Function...');
+      const { data, error } = await supabase.functions.invoke('get-payment-methods');
+
+      if (error) {
+        throw error;
+      }
+
+      console.log('Payment methods fetched:', data.paymentMethods?.length);
+
+      setPaymentMethods(data.paymentMethods || []);
+      await AsyncStorage.setItem('paymentMethods', JSON.stringify(data.paymentMethods || []));
+
+      // Set default if exists
+      const defaultMethod = data.paymentMethods?.find(pm => pm.isDefault);
+      if (defaultMethod) {
+        setDefaultPaymentMethod(defaultMethod);
+        await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(defaultMethod));
+      } else {
+        setDefaultPaymentMethod(null);
+        await AsyncStorage.removeItem('defaultPaymentMethod');
       }
     } catch (error) {
       console.error('Error fetching Stripe payment methods:', error);
@@ -87,13 +96,13 @@ export const PaymentProvider = ({ children }) => {
     try {
       const newMethods = [...paymentMethods, paymentMethod];
       setPaymentMethods(newMethods);
-      
+
       // Set as default if it's the first one
       if (newMethods.length === 1) {
         setDefaultPaymentMethod(paymentMethod);
         await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(paymentMethod));
       }
-      
+
       await AsyncStorage.setItem('paymentMethods', JSON.stringify(newMethods));
       return { success: true };
     } catch (error) {
@@ -106,14 +115,14 @@ export const PaymentProvider = ({ children }) => {
     try {
       const updatedMethods = paymentMethods.filter(method => method.id !== methodId);
       setPaymentMethods(updatedMethods);
-      
+
       // If removing default method, set new default
       if (defaultPaymentMethod?.id === methodId) {
         const newDefault = updatedMethods.length > 0 ? updatedMethods[0] : null;
         setDefaultPaymentMethod(newDefault);
         await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(newDefault));
       }
-      
+
       await AsyncStorage.setItem('paymentMethods', JSON.stringify(updatedMethods));
       return { success: true };
     } catch (error) {
@@ -137,68 +146,44 @@ export const PaymentProvider = ({ children }) => {
   const createPaymentIntent = async (amount, currency = 'usd', rideDetails = {}) => {
     try {
       setLoading(true);
-      
       console.log(`Creating payment intent for ${amount}`);
-      
-      // Call your payment service instead of creating mock payment
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/create-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add any auth headers you need
-          // 'Authorization': `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({
+
+      // Call Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('create-payment-intent', {
+        body: {
           amount,
           currency,
           userEmail: currentUser?.email,
           userId: currentUser?.uid,
           paymentMethodId: defaultPaymentMethod?.stripePaymentMethodId,
-          rideDetails, // Send the full rideDetails object with all insurance data
-        })
+          rideDetails,
+        }
       });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+      if (error) {
+        throw error;
+      }
+
+      if (data.error) {
         return {
           success: false,
-          error: body.error || 'Failed to create payment',
-          errorCode: body.code || null,
+          error: data.error || 'Failed to create payment',
+          errorCode: data.code || null,
         };
       }
 
-      const result = await response.json();
-      
-      if (!result.success) {
-        return {
-          success: false,
-          error: result.error || 'Failed to create payment intent',
-          errorCode: result.code || null,
-        };
-      }
-
-      console.log('Payment intent created successfully:', result.paymentIntent);
-      return { success: true, paymentIntent: result.paymentIntent };
+      console.log('Payment intent created successfully:', data.clientSecret);
+      // Construct paymentIntent object similar to what Stripe expects or existing app logic
+      return {
+        success: true,
+        paymentIntent: {
+          client_secret: data.clientSecret,
+          id: data.paymentIntentId // Ensure Edge Function returns this if needed by app
+        }
+      };
 
     } catch (error) {
       console.error('Error creating payment intent:', error);
-      
-      // Fallback to mock for development/testing
-      if (__DEV__ && error.message.includes('Network request failed')) {
-        console.log('Falling back to mock payment intent for development');
-        
-        const mockPaymentIntent = {
-          id: `pi_mock_${Date.now()}`,
-          amount: Math.round(amount * 100), // Stripe uses cents
-          currency,
-          status: 'requires_payment_method',
-          client_secret: `pi_mock_${Date.now()}_secret_${Math.random().toString(36).substr(2, 9)}`,
-          created: Date.now(),
-        };
-
-        return { success: true, paymentIntent: mockPaymentIntent };
-      }
-      
       return { success: false, error: error.message || 'Network error', errorCode: null };
     } finally {
       setLoading(false);
@@ -215,7 +200,7 @@ export const PaymentProvider = ({ children }) => {
       }
 
       const paymentMethodToUse = paymentMethodId || defaultPaymentMethod?.stripePaymentMethodId;
-      
+
       if (!paymentMethodToUse) {
         throw new Error('No payment method available');
       }
@@ -244,7 +229,7 @@ export const PaymentProvider = ({ children }) => {
       }
 
       const result = await response.json();
-      
+
       if (!result.success) {
         return {
           success: false,
@@ -255,17 +240,17 @@ export const PaymentProvider = ({ children }) => {
 
       console.log('Payment confirmed successfully:', result.paymentIntent);
       return { success: true, paymentIntent: result.paymentIntent };
-      
+
     } catch (error) {
       console.error('Error confirming payment:', error);
-      
+
       // Fallback to mock for development/testing
       if (__DEV__ && error.message.includes('Network request failed')) {
         console.log('Falling back to mock payment confirmation for development');
-        
+
         // Simulate payment processing delay
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Create mock successful payment result
         const mockPaymentIntent = {
           id: paymentIntentClientSecret.split('_secret_')[0],
@@ -279,7 +264,7 @@ export const PaymentProvider = ({ children }) => {
 
         return { success: true, paymentIntent: mockPaymentIntent };
       }
-      
+
       return { success: false, error: error.message || 'Network error', errorCode: null };
     } finally {
       setLoading(false);
@@ -289,23 +274,6 @@ export const PaymentProvider = ({ children }) => {
   // Optional: Get real-time price estimate from your service
   const getPriceEstimate = async (rideDetails) => {
     try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(rideDetails)
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        return {
-          success: false,
-          error: body.error || `Price calculation error: ${response.status}`,
-          errorCode: body.code || null,
-        };
-      }
-
       const result = await response.json();
       return result;
     } catch (error) {

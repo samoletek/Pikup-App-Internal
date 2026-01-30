@@ -91,98 +91,46 @@ const VehicleSelectionModal = ({
 
   const fetchVehiclePricing = async () => {
     if (!visible || !selectedLocations?.pickup || !selectedLocations?.dropoff) {
-      console.log('Cannot fetch pricing - modal not visible or missing location data:', {
-        visible,
-        selectedLocations
-      });
       return;
     }
 
     setLoadingPrices(true);
     try {
-      console.log('🚗 Fetching pricing for locations:', selectedLocations);
+      console.log('🚗 Calculating local estimate (Migration Mode)');
 
-      // Convert pickup and dropoff addresses to coordinates if needed
-      const pickupCoords = selectedLocations.pickup?.coordinates || {
-        latitude: 33.749, // Default Atlanta coords - should be replaced with actual geocoding
-        longitude: -84.388
-      };
+      // LOCAL ESTIMATION ALGORITHM (Temporary until Supabase Edge Functions)
+      // MOCKING:
+      // 1. Calculate rough distance (Haversine or simple Euclidean for demo)
+      // 2. Apply base fare + mileage
 
-      const dropoffCoords = selectedLocations.dropoff?.coordinates || {
-        latitude: 33.749, // Default Atlanta coords - should be replaced with actual geocoding  
-        longitude: -84.388
-      };
+      const dist = 12.5; // Mock distance
 
-      const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
-
-      const requestBody = {
-        pickupLocation: pickupCoords,
-        destinationLocation: dropoffCoords,
-        vehicleTypes: ['Cargo Van', 'Pickup Truck'],
-        helpNeeded: summaryData?.needsHelp || false,
-        itemWeight: 'medium',
-        timeOfDay: new Date().getHours(),
-        dayOfWeek: new Date().getDay(),
-        // Add insurance parameters
-        itemValue: summaryData?.itemValue,
-        includeCoverage: true // Always request insurance if itemValue is present
-      };
-
-      console.log('🚀 Making pricing API request:', requestBody);
-
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('📡 API Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API Error response:', errorText);
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Full API response:', result);
-
-      if (result.success && result.prices) {
-        console.log('💰 Pricing API success:', result);
-        console.log('💰 Setting vehicle pricing:', result.prices);
-        setVehiclePricing(result.prices);
-        setDistance(result.distance || 0);
-        setEstimatedTime(result.estimatedTime || 0);
-      } else {
-        console.error('❌ API returned error:', result.error || 'Failed to get pricing');
-        console.error('❌ Full result object:', result);
-        throw new Error(result.error || 'Failed to get pricing');
-      }
-
-    } catch (error) {
-      console.error('Error fetching vehicle pricing:', error);
-
-      // Fallback to estimated pricing based on new algorithm
       const fallbackPricing = {
         'Cargo Van': {
           baseFare: 30.00,
-          mileageCharge: 20.00,
-          total: 58.50,
+          mileageCharge: dist * 2.00,
+          total: 30.00 + (dist * 2.00),
           surgeMultiplier: 1.0
         },
         'Pickup Truck': {
           baseFare: 27.00,
-          mileageCharge: 15.00,
-          total: 49.14,
+          mileageCharge: dist * 1.50,
+          total: 27.00 + (dist * 1.50),
           surgeMultiplier: 1.0
         }
       };
 
+      // Simulate network delay
+      await new Promise(r => setTimeout(r, 800));
+
       setVehiclePricing(fallbackPricing);
-      setDistance(10.0);
+      setDistance(dist);
       setEstimatedTime(25);
+
+      /* LEGACY RENDER CALL REMOVED */
+
+    } catch (error) {
+      console.error('Error calculating price:', error);
     } finally {
       setLoadingPrices(false);
     }

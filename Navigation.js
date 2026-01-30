@@ -1,5 +1,5 @@
 import React from "react";
-import { View, ActivityIndicator, Image } from "react-native";
+import { View, Image } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./contexts/AuthContext";
 
@@ -45,14 +45,80 @@ import DriverOnboardingScreen from "./screens/DriverOnboardingScreen";
 import DriverOnboardingCompleteScreen from "./screens/DriverOnboardingCompleteScreen";
 import DriverPaymentSettingsScreen from "./screens/DriverPaymentSettingsScreen";
 
-// TERMS AND PRIVACY SCREEN - Add this import
+// TERMS AND PRIVACY SCREEN
 import TermsAndPrivacyScreen from "./screens/TermsAndPrivacyScreen";
-import ConsentGateScreen from "./screens/ConsentGateScreen";
 
 const Stack = createNativeStackNavigator();
 
+// 1. Auth Stack (Unauthenticated)
+const AuthStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
+    <Stack.Screen name="AuthScreen" component={AuthScreen} />
+    <Stack.Screen name="RoleSelectionScreen" component={RoleSelectionScreen} />
+    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+  </Stack.Navigator>
+);
+
+// 2. Customer Stack (Authenticated as Customer)
+const CustomerStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="CustomerTabs" component={CustomerTabNavigator} />
+
+    {/* Customer Specific Screens */}
+    <Stack.Screen name="CustomerActivityScreen" component={CustomerActivityScreen} />
+    <Stack.Screen name="CustomerMessagesScreen" component={CustomerMessagesScreen} />
+    <Stack.Screen name="CustomerClaimsScreen" component={CustomerClaimsScreen} />
+
+    {/* Customer Profile Screens */}
+    <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />
+    <Stack.Screen name="CustomerWalletScreen" component={CustomerWalletScreen} />
+    <Stack.Screen name="CustomerPersonalInfoScreen" component={CustomerPersonalInfoScreen} />
+    <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
+    <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
+
+    {/* Shared / Interaction Screens */}
+    <Stack.Screen name="MessageScreen" component={MessageScreen} />
+    <Stack.Screen name="DeliveryFeedbackScreen" component={DeliveryFeedbackScreen} />
+    <Stack.Screen name="DeliveryTrackingScreen" component={DeliveryTrackingScreen} />
+    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+  </Stack.Navigator>
+);
+
+// 3. Driver Stack (Authenticated as Driver)
+const DriverStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="DriverTabs" component={DriverTabNavigator} />
+
+    {/* Driver Specific Screens */}
+    <Stack.Screen name="DriverMessagesScreen" component={DriverMessagesScreen} />
+    <Stack.Screen name="DriverPreferencesScreen" component={DriverPreferencesScreen} />
+    <Stack.Screen name="DriverEarningsScreen" component={DriverEarningsScreen} />
+    <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
+
+    {/* Trip Execution Flow */}
+    <Stack.Screen name="RouteConfirmationScreen" component={RouteConfirmationScreen} />
+    <Stack.Screen name="EnRouteToPickupScreen" component={EnRouteToPickupScreen} />
+    <Stack.Screen name="GpsNavigationScreen" component={GpsNavigationScreen} />
+    <Stack.Screen name="PickupConfirmationScreen" component={PickupConfirmationScreen} />
+    <Stack.Screen name="DeliveryNavigationScreen" component={DeliveryNavigationScreen} />
+    <Stack.Screen name="DeliveryConfirmationScreen" component={DeliveryConfirmationScreen} />
+
+    {/* Onboarding */}
+    <Stack.Screen name="DriverOnboardingScreen" component={DriverOnboardingScreen} />
+    <Stack.Screen name="DriverOnboardingCompleteScreen" component={DriverOnboardingCompleteScreen} />
+    <Stack.Screen name="DriverPaymentSettingsScreen" component={DriverPaymentSettingsScreen} />
+
+    {/* Shared */}
+    <Stack.Screen name="MessageScreen" component={MessageScreen} />
+    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+  </Stack.Navigator>
+);
+
 export default function Navigation() {
   const { isInitializing, currentUser, userType } = useAuth();
+
+  console.log('🎯 Navigation render - isInitializing:', isInitializing, 'currentUser:', !!currentUser ? currentUser.email : 'null', 'userType:', userType);
 
   if (isInitializing) {
     return (
@@ -65,158 +131,15 @@ export default function Navigation() {
     );
   }
 
-  const getInitialRoute = () => {
-    if (currentUser) {
-      return userType === 'driver' ? 'DriverTabs' : 'CustomerTabs';
-    }
-    return 'WelcomeScreen';
-  };
+  // Strict Role Separation Logic
+  if (currentUser && userType === 'driver') {
+    return <DriverStack />;
+  }
 
-  return (
-    <Stack.Navigator
-      screenOptions={{ headerShown: false }}
-      initialRouteName={getInitialRoute()}
-    >
-      <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
-      <Stack.Screen name="AuthScreen" component={AuthScreen} />
-      <Stack.Screen
-        name="RoleSelectionScreen"
-        component={RoleSelectionScreen}
-      />
+  if (currentUser && userType === 'customer') {
+    return <CustomerStack />;
+  }
 
-      {/* Tab Navigators - Replace individual home screens */}
-      <Stack.Screen name="CustomerTabs" component={CustomerTabNavigator} />
-      <Stack.Screen name="DriverTabs" component={DriverTabNavigator} />
-
-      {/* Individual screens that can be accessed from tabs */}
-      <Stack.Screen
-        name="CustomerActivityScreen"
-        component={CustomerActivityScreen}
-      />
-      <Stack.Screen
-        name="CustomerMessagesScreen"
-        component={CustomerMessagesScreen}
-      />
-      <Stack.Screen
-        name="CustomerClaimsScreen"
-        component={CustomerClaimsScreen}
-      />
-      <Stack.Screen
-        name="DriverMessagesScreen"
-        component={DriverMessagesScreen}
-      />
-
-
-      <Stack.Screen
-        name="DriverPreferencesScreen"
-        component={DriverPreferencesScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DriverEarningsScreen"
-        component={DriverEarningsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="PaymentMethodsScreen"
-        component={PaymentMethodsScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="RouteConfirmationScreen"
-        component={RouteConfirmationScreen}
-      />
-      <Stack.Screen name="MessageScreen" component={MessageScreen} />
-      <Stack.Screen
-        name="DeliveryTrackingScreen"
-        component={DeliveryTrackingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DeliveryFeedbackScreen"
-        component={DeliveryFeedbackScreen}
-      />
-      <Stack.Screen
-        name="EnRouteToPickupScreen"
-        component={EnRouteToPickupScreen}
-      />
-      <Stack.Screen
-        name="GpsNavigationScreen"
-        component={GpsNavigationScreen}
-      />
-
-      {/* NEW SCREENS - Add these routes */}
-      <Stack.Screen
-        name="PickupConfirmationScreen"
-        component={PickupConfirmationScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DeliveryNavigationScreen"
-        component={DeliveryNavigationScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DeliveryConfirmationScreen"
-        component={DeliveryConfirmationScreen}
-        options={{ headerShown: false }}
-      />
-
-      {/* CUSTOMER PROFILE SCREENS - Add these routes */}
-      <Stack.Screen
-        name="CustomerHelpScreen"
-        component={CustomerHelpScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CustomerWalletScreen"
-        component={CustomerWalletScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CustomerPersonalInfoScreen"
-        component={CustomerPersonalInfoScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CustomerSafetyScreen"
-        component={CustomerSafetyScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="CustomerSettingsScreen"
-        component={CustomerSettingsScreen}
-        options={{ headerShown: false }}
-      />
-
-      {/* DRIVER ONBOARDING SCREENS - Add these new routes */}
-      <Stack.Screen
-        name="DriverOnboardingScreen"
-        component={DriverOnboardingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DriverOnboardingCompleteScreen"
-        component={DriverOnboardingCompleteScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DriverPaymentSettingsScreen"
-        component={DriverPaymentSettingsScreen}
-        options={{ headerShown: false }}
-      />
-
-      {/* TERMS AND PRIVACY SCREEN - Add this route */}
-      <Stack.Screen
-        name="TermsAndPrivacyScreen"
-        component={TermsAndPrivacyScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="ConsentGateScreen"
-        component={ConsentGateScreen}
-        options={{ headerShown: false }}
-      />
-    </Stack.Navigator>
-  );
+  // Default to Auth Stack if not logged in or role unknown
+  return <AuthStack />;
 }

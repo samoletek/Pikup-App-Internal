@@ -32,7 +32,7 @@ const MapboxMap = forwardRef(({
 }, ref) => {
   const cameraRef = useRef(null);
   const mapViewRef = useRef(null);
-  
+
   // Expose camera control methods to parent components
   useImperativeHandle(ref, () => ({
     // Apple Maps style camera setter
@@ -74,7 +74,6 @@ const MapboxMap = forwardRef(({
       }
     }
   }));
-  
   const handleMapError = (error) => {
     console.error('Mapbox Map Error:', error);
   };
@@ -92,6 +91,8 @@ const MapboxMap = forwardRef(({
       scaleBarEnabled={false} // Remove scale bar
       onDidFailLoadingMap={handleMapError}
       onDidFinishLoadingMap={handleDidFinishLoadingMap}
+      logoPosition={{ bottom: 10, left: 10 }} // Symmetric bottom-left
+      attributionPosition={{ bottom: 10, right: 10 }} // Symmetric bottom-right
       {...props}
     >
       <Mapbox.Camera

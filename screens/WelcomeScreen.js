@@ -28,10 +28,16 @@ export default function WelcomeScreen({ navigation }) {
 
   // Navigate after successful login
   useEffect(() => {
-    console.log('WelcomeScreen - currentUser:', !!currentUser, 'userType:', userType);
+    console.log('🔍 WelcomeScreen useEffect - currentUser:', !!currentUser, 'userType:', userType, 'currentUser.uid:', currentUser?.uid);
+
+    // Don't navigate if modal is open (AuthModal will handle navigation)
+    if (modalVisible) {
+      console.log('⏸️ Modal is open, skipping navigation');
+      return;
+    }
 
     if (currentUser && userType) {
-      console.log('User logged in, navigating...');
+      console.log('✅ WelcomeScreen - User logged in, navigating...', { userType, uid: currentUser.uid });
 
       const navigateAfterLogin = async () => {
         try {
@@ -40,8 +46,8 @@ export default function WelcomeScreen({ navigation }) {
           console.log('Terms status:', termsStatus);
 
           if (termsStatus.needsAcceptance) {
-            console.log('Navigating to ConsentGate');
-            navigation.replace('ConsentGate', {
+            console.log('Navigating to ConsentGateScreen');
+            navigation.replace('ConsentGateScreen', {
               missingVersions: termsStatus.missingVersions,
               role: userType
             });
@@ -71,8 +77,10 @@ export default function WelcomeScreen({ navigation }) {
       };
 
       navigateAfterLogin();
+    } else {
+      console.log('⏳ WelcomeScreen - Waiting for auth state...', { hasUser: !!currentUser, userType });
     }
-  }, [currentUser, userType, navigation]);
+  }, [currentUser, userType, navigation, modalVisible]);
 
   return (
     <LinearGradient
@@ -112,6 +120,7 @@ export default function WelcomeScreen({ navigation }) {
           visible={modalVisible}
           onClose={closeModal}
           selectedRole={selectedRole}
+          navigation={navigation}
         />
 
       </View>

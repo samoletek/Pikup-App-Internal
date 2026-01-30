@@ -7,6 +7,7 @@ import {
   ScrollView,
   Switch,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { useAuth } from "../contexts/AuthContext";
 export default function CustomerSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { currentUser, deleteAccount } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const [settings, setSettings] = useState({
     notifications: {
@@ -67,11 +69,14 @@ export default function CustomerSettingsScreen({ navigation }) {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            if (loading) return;
+            setLoading(true);
             try {
               await deleteAccount();
               Alert.alert("Account Deleted", "Your account has been permanently deleted.");
             } catch (error) {
               Alert.alert("Error", error.message || "Failed to delete account. Please try again.");
+              setLoading(false);
             }
           },
         },
@@ -302,8 +307,13 @@ export default function CustomerSettingsScreen({ navigation }) {
           <TouchableOpacity
             style={[styles.clearDataButton, { borderTopWidth: 1, borderTopColor: '#2A2A3B' }]}
             onPress={handleDeleteAccount}
+            disabled={loading}
           >
-            <Text style={styles.clearDataText}>Delete Account</Text>
+            {loading ? (
+              <ActivityIndicator color="#ff4444" />
+            ) : (
+              <Text style={styles.clearDataText}>Delete Account</Text>
+            )}
           </TouchableOpacity>
         </View>
 

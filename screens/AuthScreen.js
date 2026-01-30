@@ -60,46 +60,28 @@ export default function AuthScreen({ navigation, route }) {
             console.log('Attempting to navigate for userType:', userType);
             const checkAndNavigate = async () => {
                 try {
-                    // Check for terms acceptance first
-                    const termsStatus = await checkTermsAcceptance(currentUser.uid);
-                    console.log('Terms status:', termsStatus);
+                    console.log('⚡️ AuthScreen Auto-Navigate: UserType =', userType);
 
-                    if (termsStatus.needsAcceptance) {
-                        console.log('Navigating to ConsentGate');
-                        navigation.navigate('ConsentGate', {
-                            missingVersions: termsStatus.missingVersions,
-                            role: userType
-                        });
-                        return; // Stop navigation here
-                    }
+                    // We rely on Navigation.js to handle the root stack switching based on userType/currentUser.
+                    // However, if we are here, we might want to ensure we don't flash WelcomeScreen.
+                    // Actually, with strict navigation, this component (AuthScreen) will UNMOUNT as soon as currentUser/userType is set.
+                    // So we probably don't even need to manually navigate replace!
+                    // But to be safe and explicit:
 
-                    if (userType === "driver") {
-                        console.log('User is driver, checking profile...');
-                        const driverProfile = await getDriverProfile(currentUser.uid);
-                        // Check if onboarding is complete
-                        if (driverProfile?.onboardingComplete) {
-                            console.log('Navigating to DriverTabs');
-                            navigation.replace("DriverTabs");
-                        } else {
-                            console.log('Navigating to DriverOnboarding');
-                            navigation.replace("DriverOnboarding");
-                        }
-                    } else {
-                        // Customer flow
-                        console.log('Navigating to CustomerTabs');
-                        navigation.replace("CustomerTabs");
-                    }
+                    /* 
+                       Logic moved to Navigation.js
+                       If userType is set, Navigation.js will automatically swap the stack
+                       from AuthStack to CustomerStack/DriverStack.
+                    */
+
                 } catch (error) {
                     console.error("Navigation check error:", error);
-                    // Fallback if check fails
-                    if (userType === "driver") navigation.replace("DriverTabs");
-                    else navigation.replace("CustomerTabs");
                 }
             };
 
             checkAndNavigate();
         }
-    }, [currentUser, userType, navigation, checkTermsAcceptance]);
+    }, [currentUser, userType, navigation]);
 
 
     const handleAppleSignIn = async () => {

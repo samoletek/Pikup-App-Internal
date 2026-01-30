@@ -11,11 +11,15 @@ import {
     Dimensions,
     ActivityIndicator,
     TextInput as RNTextInput,
+    Linking,
+    Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import BaseModal from './BaseModal';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../config/supabase';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,8 +50,9 @@ const Button = ({ title, onPress, variant = 'primary', disabled, loading, style 
     );
 };
 
-const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, rightIcon, onRightIconPress, keyboardType, autoCapitalize }) => (
+const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, rightIcon, onRightIconPress, keyboardType, autoCapitalize, editable, label }) => (
     <View style={styles.inputContainer}>
+        {label && <Text style={styles.inputLabel}>{label}</Text>}
         <View style={[styles.inputWrapper, error && styles.inputError]}>
             <RNTextInput
                 style={styles.input}
@@ -58,11 +63,18 @@ const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, right
                 secureTextEntry={secureTextEntry}
                 keyboardType={keyboardType}
                 autoCapitalize={autoCapitalize}
+                editable={editable !== false}
             />
             {rightIcon && (
-                <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
-                    {rightIcon}
-                </TouchableOpacity>
+                onRightIconPress ? (
+                    <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
+                        {rightIcon}
+                    </TouchableOpacity>
+                ) : (
+                    <View style={styles.rightIcon}>
+                        {rightIcon}
+                    </View>
+                )
             )}
         </View>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -71,22 +83,32 @@ const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, right
 
 // --- Auth Modal Component ---
 
-export default function AuthModal({ visible, onClose, selectedRole }) {
+export default function AuthModal({ visible, onClose, selectedRole, navigation }) {
     const modalRef = useRef(null);
 
     // Auth Context
     const { login, signup, signInWithGoogle, signInWithApple, loading } = useAuth();
 
     // State
-    const [step, setStep] = useState('initial'); // 'initial' | 'email' | 'login' | 'register'
-    const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
+    const [step, setStep] = useState('initial'); // 'initial' | 'email_check' | 'password' | 'register'
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [name, setName] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    // Checking state
+    const [checkingEmail, setCheckingEmail] = useState(false);
+
+    // Fade animation for step transitions
+    const fadeAnim = useRef(new Animated.Value(1)).current;
 
     // Errors
     const [emailError, setEmailError] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [nameError, setNameError] = useState('');
+    const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
     // Reset form on open
     useEffect(() => {
@@ -97,12 +119,17 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
 
     const resetForm = () => {
         setStep('initial');
-        setAuthMode('login');
         setEmail('');
         setPassword('');
+        setName('');
+        setConfirmPassword('');
         setShowPassword(false);
+        setShowConfirmPassword(false);
         setEmailError('');
         setPasswordError('');
+        setNameError('');
+        setConfirmPasswordError('');
+        setCheckingEmail(false);
     };
 
     const handleClose = () => {
@@ -125,6 +152,15 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         return true;
     };
 
+    const validateName = (val) => {
+        if (!val.trim()) {
+            setNameError('Name is required');
+            return false;
+        }
+        setNameError('');
+        return true;
+    };
+
     const validatePassword = (val) => {
         if (!val) {
             setPasswordError('Password is required');
@@ -138,10 +174,68 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         return true;
     };
 
+    const validateConfirmPassword = (val) => {
+        if (!val) {
+            setConfirmPasswordError('Please confirm your password');
+            return false;
+        }
+        if (val !== password) {
+            setConfirmPasswordError('Passwords do not match');
+            return false;
+        }
+        setConfirmPasswordError('');
+        return true;
+    };
+
     // --- Handlers ---
+
+    const checkEmail = async () => {
+        if (!validateEmail(email)) return;
+
+        setCheckingEmail(true);
+        try {
+            console.log('Checking user existence for:', email);
+            const { data, error } = await supabase.functions.invoke('check-user-exists', {
+                body: { email }
+            });
+
+            if (error) throw error;
+
+            console.log('Check result:', data);
+
+            // Logic:
+            // 1. If exists && userType === selectedRole: Login (Password)
+            // 2. If exists && userType !== selectedRole: Error (Wrong Portal)
+            // 3. If !exists: Register
+
+            if (data.exists) {
+                if (data.userType === selectedRole) {
+                    // Correct Portal - Login
+                    animateStepChange('password');
+                } else {
+                    // Wrong Portal
+                    const correctRole = data.userType === 'driver' ? 'Driver' : 'Customer';
+                    Alert.alert(
+                        'Wrong Portal',
+                        `This email is registered as a ${correctRole}. Please go back and login as a ${correctRole}.`
+                    );
+                }
+            } else {
+                // New User - Register
+                animateStepChange('register');
+            }
+
+        } catch (err) {
+            console.error('Email check failed:', err);
+            Alert.alert('Error', 'Could not verify email. Please try again.');
+        } finally {
+            setCheckingEmail(false);
+        }
+    };
 
     const handleAppleSignIn = async () => {
         try {
+            await AsyncStorage.setItem('expected_role', selectedRole); // For Context awareness
             await signInWithApple(selectedRole);
             handleClose();
         } catch (error) {
@@ -151,31 +245,49 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
 
     const handleGoogleSignIn = async () => {
         try {
+            await AsyncStorage.setItem('expected_role', selectedRole); // For Context awareness
             await signInWithGoogle(selectedRole);
-            setModalVisible(false); // Note: Should trigger close
+            // setModalVisible(false); // AuthModal logic usually handles closing based on auth state?
+            // Actually signInWithGoogle logic might wait for redirect.
             handleClose();
         } catch (error) {
             if (!error?.canceled) Alert.alert('Error', error.message);
         }
     };
 
-    const handleContinueWithEmail = () => {
-        if (!validateEmail(email)) return;
-        setStep(authMode === 'login' ? 'login' : 'register');
-    };
-
     const handleBack = () => {
-        if (step === 'login' || step === 'register') {
-            setStep('email');
+        if (step === 'email_check') {
+            animateStepChange('initial');
+        } else if (step === 'password' || step === 'register') {
+            animateStepChange('email_check');
         } else {
-            setStep('initial');
+            animateStepChange('initial'); // fallback
         }
     };
 
+    const animateStepChange = (newStep) => {
+        // Fade out
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+        }).start(() => {
+            // Change step
+            setStep(newStep);
+            // Fade in
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 150,
+                useNativeDriver: true,
+            }).start();
+        });
+    };
+
     const handleLogin = async () => {
-        if (validateEmail(email) && validatePassword(password)) {
+        if (validatePassword(password)) {
             try {
-                await login(email, password);
+                // Now passing selectedRole to enforce portal restrictions
+                await login(email, password, selectedRole);
                 // If successful, auth state changes, app navigates. close modal.
                 handleClose();
             } catch (e) {
@@ -185,11 +297,30 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
     };
 
     const handleRegister = async () => {
-        if (validateEmail(email) && validatePassword(password)) {
+        const isNameValid = validateName(name);
+        const isPasswordValid = validatePassword(password);
+        const isConfirmValid = validateConfirmPassword(confirmPassword);
+
+        if (isNameValid && isPasswordValid && isConfirmValid) {
             try {
                 // signup(email, password, role, additionalData)
-                await signup(email, password, selectedRole, {});
-                Alert.alert('Account Created', 'Your account has been created successfully.', [{ text: 'OK', onPress: handleClose }]);
+                // Split name for consistency if needed, but Context usually handles raw data
+                const nameParts = name.trim().split(' ');
+                const firstName = nameParts[0];
+                const lastName = nameParts.slice(1).join(' ') || '';
+
+                await signup(email, password, selectedRole, {
+                    name: name.trim(),
+                    firstName,
+                    lastName
+                });
+
+                // Navigate directly to CustomerTabs/DriverTabs to avoid WelcomeScreen flash
+                handleClose();
+                if (navigation) {
+                    const targetScreen = selectedRole === 'driver' ? 'DriverTabs' : 'CustomerTabs';
+                    navigation.replace(targetScreen);
+                }
             } catch (e) {
                 Alert.alert('Registration Failed', e.message);
             }
@@ -203,7 +334,7 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         <>
             <TouchableOpacity
                 style={[styles.authButton, styles.emailAuthBtn]}
-                onPress={() => setStep('email')}
+                onPress={() => animateStepChange('email_check')}
             >
                 <Ionicons name="mail-outline" size={24} color="#FFF" style={{ marginRight: 10 }} />
                 <Text style={[styles.authButtonText, { color: '#FFF' }]}>Continue with Email</Text>
@@ -229,25 +360,10 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
         </>
     );
 
-    const renderEmailStep = () => (
+    const renderEmailCheckStep = () => (
         <>
-            <View style={styles.modeToggle}>
-                <TouchableOpacity
-                    style={[styles.modeBtn, authMode === 'login' && styles.modeBtnActive]}
-                    onPress={() => setAuthMode('login')}
-                >
-                    <Text style={[styles.modeBtnText, authMode === 'login' && styles.modeBtnTextActive]}>Sign In</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.modeBtn, authMode === 'register' && styles.modeBtnActive]}
-                    onPress={() => setAuthMode('register')}
-                >
-                    <Text style={[styles.modeBtnText, authMode === 'register' && styles.modeBtnTextActive]}>Create Account</Text>
-                </TouchableOpacity>
-            </View>
-
             <Input
-                placeholder="Email"
+                placeholder="Email Address"
                 value={email}
                 onChangeText={(t) => { setEmail(t); setEmailError(''); }}
                 keyboardType="email-address"
@@ -255,13 +371,22 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
                 error={emailError}
             />
 
-            <Button title="Continue" onPress={handleContinueWithEmail} />
+            <Button
+                title="Continue"
+                onPress={checkEmail}
+                loading={checkingEmail}
+            />
         </>
     );
 
-    const renderPasswordStep = (isRegister) => (
+    const renderPasswordStep = () => (
         <>
-            <Text style={styles.emailDisplay}>{email}</Text>
+            <Input
+                value={email}
+                editable={false}
+                placeholder="Email Address"
+                rightIcon={<Ionicons name="checkmark" size={24} color="#FFF" />}
+            />
 
             <Input
                 placeholder="Password"
@@ -272,40 +397,102 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
                 error={passwordError}
                 rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#888" />}
                 onRightIconPress={() => setShowPassword(!showPassword)}
+                editable={!loading}
             />
 
             <Button
-                title={isRegister ? "Create Account" : "Sign In"}
-                onPress={isRegister ? handleRegister : handleLogin}
+                title="Sign In"
+                onPress={handleLogin}
                 loading={loading}
             />
 
-            {!isRegister && (
-                <TouchableOpacity style={styles.forgotBtn}>
-                    <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
-            )}
-
-            {isRegister && (
-                <Text style={styles.termsText}>
-                    By creating an account, you agree to our Terms and Privacy Policy.
-                </Text>
-            )}
+            <TouchableOpacity style={styles.forgotBtn}>
+                <Text style={styles.forgotText}>Forgot password?</Text>
+            </TouchableOpacity>
         </>
     );
 
+    const renderRegisterStep = () => (
+        <>
+            <Input
+                value={email}
+                editable={false}
+                placeholder="Email Address"
+            />
+
+            <Input
+                placeholder="Full Name"
+                value={name}
+                onChangeText={(t) => { setName(t); setNameError(''); }}
+                autoCapitalize="words"
+                error={nameError}
+                editable={!loading}
+            />
+
+            <Input
+                placeholder="Password"
+                value={password}
+                onChangeText={(t) => { setPassword(t); setPasswordError(''); }}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                error={passwordError}
+                rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                onRightIconPress={() => setShowPassword(!showPassword)}
+                editable={!loading}
+            />
+
+            <Input
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChangeText={(t) => { setConfirmPassword(t); setConfirmPasswordError(''); }}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                error={confirmPasswordError}
+                rightIcon={<Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                editable={!loading}
+            />
+
+            <Text style={styles.termsText}>
+                By creating an account, you agree to our{'\n'}
+                <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Terms</Text>
+                {' '}and{' '}
+                <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Privacy Policy</Text>.
+            </Text>
+
+            <Button
+                title="Create Account"
+                onPress={handleRegister}
+                loading={loading}
+            />
+        </>
+    );
+
+
     const getTitle = () => {
         switch (step) {
-            case 'initial': return `Are you ${selectedRole === 'driver' ? 'Driver' : 'Customer'}?`;
-            case 'email': return authMode === 'login' ? 'Sign In' : 'Create Account';
-            case 'login': return 'Sign In';
+            case 'initial': return `${selectedRole === 'driver' ? 'Driver' : 'Customer'} Login`;
+            case 'email_check': return 'What\'s your email?';
+            case 'password': return 'Welcome Back';
             case 'register': return 'Create Account';
             default: return '';
         }
     };
 
     const getModalHeight = () => {
-        // Uniform compact height for all steps
+        if (step === 'register') {
+            // User requested 55% for registration fields
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.55 : SCREEN_HEIGHT * 0.60;
+        }
+        if (step === 'email_check') {
+            // User requested ~30% for just email input
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.30 : SCREEN_HEIGHT * 0.35;
+        }
+        if (step === 'password') {
+            // Updated to 40% as requested (Email field + Password field)
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.40 : SCREEN_HEIGHT * 0.45;
+        }
+        // 'initial' (3 buttons)
         return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.35 : SCREEN_HEIGHT * 0.40;
     };
 
@@ -340,12 +527,12 @@ export default function AuthModal({ visible, onClose, selectedRole }) {
                 enabled={false} // Disabled because BaseModal handles it via avoidKeyboard
                 style={{ flex: 1 }}
             >
-                <View style={styles.content}>
+                <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
                     {step === 'initial' && renderInitialStep()}
-                    {step === 'email' && renderEmailStep()}
-                    {step === 'login' && renderPasswordStep(false)}
-                    {step === 'register' && renderPasswordStep(true)}
-                </View>
+                    {step === 'email_check' && renderEmailCheckStep()}
+                    {step === 'password' && renderPasswordStep()}
+                    {step === 'register' && renderRegisterStep()}
+                </Animated.View>
             </KeyboardAvoidingView>
         </BaseModal>
     );
@@ -372,7 +559,7 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 24,
-        paddingBottom: 40,
+        paddingBottom: 20,
     },
 
     // Buttons
@@ -390,49 +577,21 @@ const styles = StyleSheet.create({
         backgroundColor: '#222233',
         borderColor: '#444',
     },
-    googleAuthBtn: {
-        backgroundColor: '#FFFFFF',
-    },
-    appleButton: {
-        width: '100%',
-        height: 50,
-        marginBottom: 15,
-    },
     authButtonText: {
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
     },
 
-    // Toggle
-    modeToggle: {
-        flexDirection: 'row',
-        backgroundColor: '#222233',
-        borderRadius: 30,
-        padding: 4,
-        marginBottom: 12,
-    },
-    modeBtn: {
-        flex: 1,
-        paddingVertical: 10,
-        alignItems: 'center',
-        borderRadius: 30,
-    },
-    modeBtnActive: {
-        backgroundColor: '#A77BFF',
-    },
-    modeBtnText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#888',
-    },
-    modeBtnTextActive: {
-        color: '#FFFFFF',
-    },
-
     // Inputs
     inputContainer: {
         marginBottom: 12,
+    },
+    inputLabel: {
+        color: '#888',
+        fontSize: 12,
+        marginBottom: 4,
+        marginLeft: 8
     },
     inputWrapper: {
         flexDirection: 'row',
@@ -469,20 +628,15 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         alignItems: 'center',
         justifyContent: 'center',
+        marginTop: 8
     },
     btnText: {
         fontSize: 16,
         fontWeight: '700',
     },
-    emailDisplay: {
-        textAlign: 'center',
-        fontSize: 16,
-        color: '#AAA',
-        marginBottom: 12,
-    },
     forgotBtn: {
         alignSelf: 'center',
-        marginTop: 24,
+        marginTop: 20,
     },
     forgotText: {
         color: '#A77BFF',
@@ -492,7 +646,12 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         fontSize: 12,
         color: '#666',
-        marginTop: 20,
+        marginTop: 0,
+        marginBottom: 20,
         lineHeight: 18,
     },
+    linkText: {
+        color: '#A77BFF',
+        fontWeight: '600'
+    }
 });

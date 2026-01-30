@@ -39,7 +39,7 @@ export default function ConsentGateScreen({ navigation, route }) {
       await acceptTerms(currentUser.uid, false); // Not during signup
 
       // Determine where to navigate based on user type
-      const userType = currentUser.userType || route?.params?.returnTo?.replace('Tabs', '').toLowerCase();
+      const userType = currentUser.userType || route?.params?.role || route?.params?.returnTo?.replace('Tabs', '').toLowerCase();
 
       if (userType === 'driver') {
         // Check if driver completed onboarding
