@@ -58,7 +58,9 @@
     "@babel/core": "^7.20.0",
     "@expo/ngrok": "^4.1.0",
     "@react-native-community/cli": "^20.0.2",
-    "patch-package": "^8.0.1"
+    "@types/react": "~19.1.10",
+    "patch-package": "^8.0.1",
+    "typescript": "~5.9.2"
   },
   "private": true
 }

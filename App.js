@@ -40,20 +40,20 @@ export default function App() {
   return (
     <ErrorBoundary>
       <NavigationContainer>
-        {/* StripeProvider temporarily disabled for Expo Go testing */}
-        {/* <StripeProvider
+        {/* StripeProvider enabled for Dev Build */}
+        <StripeProvider
           publishableKey={STRIPE_PUBLISHABLE_KEY}
           merchantId={MERCHANT_ID}
           urlScheme={URL_SCHEME}
-        > */}
-        <AuthProvider>
-          <PaymentProvider>
-            <NotificationProvider>
-              <Navigation />
-            </NotificationProvider>
-          </PaymentProvider>
-        </AuthProvider>
-        {/* </StripeProvider> */}
+        >
+          <AuthProvider>
+            <PaymentProvider>
+              <NotificationProvider>
+                <Navigation />
+              </NotificationProvider>
+            </PaymentProvider>
+          </AuthProvider>
+        </StripeProvider>
       </NavigationContainer>
     </ErrorBoundary>
   );

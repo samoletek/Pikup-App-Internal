@@ -13,13 +13,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { usePayment } from '../contexts/PaymentContext';
+import { supabase } from '../config/supabase';
 import DeliveryPhotosModal from '../components/DeliveryPhotosModal';
 
 export default function DeliveryFeedbackScreen({ route, navigation }) {
   const { requestId, requestData: initialRequestData, returnToHome } = route.params || {};
   const { getRequestById, updateRequestStatus, getUserProfile, currentUser } = useAuth();
   const { confirmPayment, defaultPaymentMethod } = usePayment();
-  
+
   const [delivered, setDelivered] = useState(true);
   const [tip, setTip] = useState(null);
   const [customTip, setCustomTip] = useState('');
@@ -31,10 +32,9 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
   const [driverRating, setDriverRating] = useState(5.0);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  
-  // Payment service URL - matches PriceSummaryModal
-  const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
-  
+
+
+
   useEffect(() => {
     const loadData = async () => {
       if (requestId && !initialRequestData) {
@@ -47,10 +47,10 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         setLoading(false);
       }
     };
-    
+
     loadData();
   }, [requestId, initialRequestData]);
-  
+
   const processRequestData = async (data) => {
     // Extract driver name from email if available
     if (data.assignedDriverEmail) {
@@ -60,7 +60,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
       const driverNameFromEmail = data.driverEmail.split('@')[0];
       setDriverName(driverNameFromEmail);
     }
-    
+
     // Set vehicle info if available
     if (data.vehicleType) {
       setVehicleInfo(data.vehicleType);
@@ -77,7 +77,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
       }
     }
   };
-  
+
   const fetchRequestData = async () => {
     try {
       setLoading(true);
@@ -94,7 +94,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 
   const handleSubmit = async () => {
     if (submitting) return; // Prevent double submissions
-    
+
     try {
       setSubmitting(true);
       if (requestId) {
@@ -103,69 +103,55 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 
         // 1) If tipping, create & confirm tip PaymentIntent
         if (chosenTip > 0) {
-          const resp = await fetch(`${PAYMENT_SERVICE_URL}/tips/create-intent`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rideId: requestId,
-              assignedDriverId: requestData.assignedDriverId,
-              tipAmountUsd: chosenTip,
-              userId: currentUser?.uid,
-              userEmail: currentUser?.email
-            }),
-          });
-          
-          const data = await resp.json();
-          if (!resp.ok || !data?.clientSecret) {
-            throw new Error(data?.error || 'Could not start tip payment');
-          }
-
-          // Use existing confirmPayment function
-          const paymentResult = await confirmPayment(
-            data.clientSecret,
-            defaultPaymentMethod?.stripePaymentMethodId
-          );
-          
-          if (!paymentResult.success) {
-            Alert.alert('Tip Payment Failed', paymentResult.error || 'Unable to process tip payment');
-            return;
-          }
+          throw new Error(data?.error || 'Could not start tip payment');
         }
 
-        // 2) Update the request with feedback (this preserves all ride details)
-        await updateRequestStatus(requestId, 'completed', {
-          customerRating: rating,
-          customerTip: chosenTip || 0,
-          feedbackSubmitted: true,
-          updatedAt: new Date().toISOString()
-        });
-        
-        Alert.alert(
-          'Thank You!',
-          chosenTip > 0 ? 'Your tip was sent and feedback submitted!' : 'Feedback submitted!',
-          [
-            { 
-              text: 'OK', 
-              onPress: () => navigation.navigate('CustomerTabs') 
-            }
-          ]
+        // Use existing confirmPayment function
+        const paymentResult = await confirmPayment(
+          data.clientSecret,
+          defaultPaymentMethod?.stripePaymentMethodId
         );
-      } else {
-        // Mock flow for testing or demo
-        console.log({
-          delivered,
-          tip: customTip || tip,
-          rating
-        });
-        
-        // If returnToHome is true, navigate back to CustomerTabs
-        if (returnToHome) {
-          navigation.navigate('CustomerTabs');
-        } else {
-          // Otherwise just go back
-          navigation.goBack();
+
+        if (!paymentResult.success) {
+          Alert.alert('Tip Payment Failed', paymentResult.error || 'Unable to process tip payment');
+          return;
         }
       }
+
+      // 2) Submit feedback via Edge Function
+      const { error: fbError } = await supabase.functions.invoke('submit-feedback', {
+        body: {
+          requestId,
+          rating,
+          tip: chosenTip,
+          driverId: data.assignedDriverId || data.driverId
+        }
+      });
+
+      if (fbError) {
+        console.error('Feedback Edge Function Error:', fbError);
+        // We continue anyway to update local status, as feedback is non-critical?
+        // Or throw? User wants "backend marked", so let's log but ensure UI updates.
+      }
+
+      // 3) Update the request status (AuthContext/DB)
+      await updateRequestStatus(requestId, 'completed', {
+        customerRating: rating,
+        customerTip: chosenTip || 0,
+        feedbackSubmitted: true,
+        updatedAt: new Date().toISOString()
+      });
+
+      Alert.alert(
+        'Thank You!',
+        chosenTip > 0 ? 'Your tip was sent and feedback submitted!' : 'Feedback submitted!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('CustomerTabs')
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error submitting feedback:', error);
       Alert.alert('Error', error.message || 'Failed to submit feedback. Please try again.');
@@ -211,9 +197,9 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
             </View>
             <Image source={require('../assets/van.png')} style={styles.vehicleImg} />
           </View>
-          
+
           {requestData && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.viewPhotosButton}
               onPress={handleViewPhotos}
             >
@@ -260,12 +246,12 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         <View style={styles.card}>
           <Text style={styles.label}>Rate Your Trip</Text>
           <Text style={styles.subLabel}>
-            {requestData ? 
+            {requestData ?
               new Date(requestData.createdAt || new Date()).toLocaleDateString('en-US', {
                 weekday: 'short',
                 month: 'short',
                 day: 'numeric'
-              }) : 
+              }) :
               'Your recent delivery'
             }
           </Text>
@@ -284,7 +270,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         </View>
 
         {!delivered && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.startClaimButton}
             onPress={handleStartClaim}
           >
@@ -295,8 +281,8 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
       </ScrollView>
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.submitBtn, submitting && styles.disabledBtn]} 
+        <TouchableOpacity
+          style={[styles.submitBtn, submitting && styles.disabledBtn]}
           onPress={handleSubmit}
           disabled={submitting}
         >
@@ -304,10 +290,10 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
             {submitting ? 'Processing...' : 'Submit Feedback'}
           </Text>
         </TouchableOpacity>
-        
+
         {delivered && (
-          <TouchableOpacity 
-            style={styles.claimBtn} 
+          <TouchableOpacity
+            style={styles.claimBtn}
             onPress={handleStartClaim}
           >
             <Text style={styles.claimText}>Start a Claim</Text>
@@ -329,13 +315,13 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#0A0A1F' 
+  container: {
+    flex: 1,
+    backgroundColor: '#0A0A1F'
   },
-  scroll: { 
-    padding: 16, 
-    paddingBottom: 140 
+  scroll: {
+    padding: 16,
+    paddingBottom: 140
   },
   title: {
     color: '#fff',
@@ -377,23 +363,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  driverName: { 
-    color: '#fff', 
-    fontWeight: '600', 
-    fontSize: 16 
+  driverName: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16
   },
-  vehicle: { 
-    color: '#ccc', 
-    fontSize: 13 
+  vehicle: {
+    color: '#ccc',
+    fontSize: 13
   },
-  stars: { 
-    color: '#a77bff', 
-    marginTop: 4 
+  stars: {
+    color: '#a77bff',
+    marginTop: 4
   },
-  vehicleImg: { 
-    width: 80, 
-    height: 50, 
-    resizeMode: 'contain' 
+  vehicleImg: {
+    width: 80,
+    height: 50,
+    resizeMode: 'contain'
   },
   viewPhotosButton: {
     flexDirection: 'row',

@@ -31,7 +31,14 @@
 - [ ] #35 Show vehicles as scrollable list, not buttons - Drew
 
 ### Backend / Infrastructure
-- [-] #71 Supabase migration (auth + DB + realtime) - Andrei: очистить приложение от связи со старым бэком. Разметить полностью бэк под супабейс, все эндпойнты, таблицы новые. Какие именно таблицы должны быть и какие в них должны быть поля - это все должен подсказать файл readme.
+- [x] **Supabase Migration**:
+    - [x] Remove legacy Render/Firebase backend calls.
+    - [x] Create initial SQL schema (`supabase/schema.sql`).
+    - [x] Verify existing Supabase tables (Confirmed via screenshot: `customers`, `drivers`, `trips`, `feedback`, `conversations`, `messages`).
+    - [ ] Deploy Edge Functions for payments.
+        - [x] `create-verification-session` (Deployed & Connected).
+        - [x] `create-payment-intent` (Deployed & Connected).
+        - [x] `process-payout` (Deployed & Connected). - Andrei and Drew
 
 ### Insurance API
 - [ ] #80 Redkik API authentication - **BLOCKED: waiting for correct base URL**

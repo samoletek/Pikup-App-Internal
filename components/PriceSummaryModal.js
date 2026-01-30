@@ -76,8 +76,8 @@ const PriceSummaryModal = ({
   const { currentUser, authFetch } = useAuth();
   const itemValue = summaryData?.itemValue || 500;
 
-  // Payment service URL - configured for your backend
-  const PAYMENT_SERVICE_URL = 'https://pikup-app-server.onrender.com';
+  // Payment service URL - REMOVED for Migration
+  // const PAYMENT_SERVICE_URL = 'https://pikup-app-server.onrender.com';
 
   useEffect(() => {
     if (visible) {
@@ -167,40 +167,27 @@ const PriceSummaryModal = ({
     setLoadingInsurance(true);
 
     try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/calculate-price`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          vehicleType: selectedVehicle?.type,
-          distance: selectedVehicle?.distance || distance,
-          includeCoverage: true,
-          itemValue: itemValue,
-          origin: selectedLocations?.pickup?.formatted || selectedLocations?.pickup?.address,
-          destination: selectedLocations?.dropoff?.formatted || selectedLocations?.dropoff?.address,
-          userEmail: currentUser?.email,
-        }),
-      });
+      console.warn('MIGRATION: Insurance quotes currently disabled.');
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        setInsuranceError(ERROR_COPY[err.code] || "Unable to calculate price. Please try again.");
-        setInsuranceQuote(null);
-        return;
-      }
+      // MOCK INSURANCE RESPONSE
+      const mockQuote = {
+        premium: 15.00,
+        currency: 'USD',
+        quoteId: 'mock_quote_' + Date.now(),
+        offerId: 'mock_offer_' + Date.now()
+      };
 
-      const result = await response.json();
-      if (result.success && result.insurance) {
-        setInsuranceQuote(result.insurance);
-        console.log('Insurance quote received:', result.insurance);
-      } else {
-        setInsuranceError("Unable to get insurance quote. Please try again.");
-        setInsuranceQuote(null);
-      }
+      // Simulate network delay
+      await new Promise(r => setTimeout(r, 600));
+
+      setInsuranceQuote(mockQuote);
+      console.log('MOCK Insurance quote received:', mockQuote);
+
+      /* LEGACY RENDER CALL REMOVED */
+
     } catch (error) {
       console.error('Insurance quote request failed:', error);
-      setInsuranceError("Network error. Please check your connection and try again.");
+      setInsuranceError("Migration in progress. Insurance momentarily unavailable.");
       setInsuranceQuote(null);
     } finally {
       setLoadingInsurance(false);

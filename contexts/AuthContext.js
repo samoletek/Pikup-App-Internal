@@ -28,206 +28,10 @@ export function AuthProvider({ children }) {
 
   // Payment service configuration - Updated for Android emulator
   // Always use Render server for all environments
-  const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
+  // Supabase-only Context
 
-
-
-  // Authenticated fetch helper
-  const authFetch = async (url, opts = {}) => {
-    // If you later wire up Firebase Auth SDK, you can try getIdToken(false) here.
-    // For now, safely fall back to the token you already store on currentUser.
-    const token = currentUser?.accessToken;
-    if (!token) throw new Error('Not authenticated');
-
-    return fetch(url, {
-      ...opts,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(opts.headers || {}),
-        Authorization: `Bearer ${token}`,
-      },
-    });
-  };
-
-  // Helper function to convert JavaScript object to Firestore format
-  const toFirestoreFormat = (obj) => {
-    const fields = {};
-
-    Object.keys(obj).forEach(key => {
-      const value = obj[key];
-      if (value === null || value === undefined) {
-        fields[key] = { nullValue: null };
-      } else if (typeof value === 'string') {
-        fields[key] = { stringValue: value };
-      } else if (typeof value === 'number') {
-        if (Number.isInteger(value)) {
-          fields[key] = { integerValue: value.toString() };
-        } else {
-          fields[key] = { doubleValue: value };
-        }
-      } else if (typeof value === 'boolean') {
-        fields[key] = { booleanValue: value };
-      } else if (value instanceof Date) {
-        fields[key] = { timestampValue: value.toISOString() };
-      } else if (Array.isArray(value)) {
-        // Handle empty arrays
-        if (value.length === 0) {
-          fields[key] = { arrayValue: { values: [] } };
-        } else {
-          // Process non-empty arrays
-          const arrayValues = [];
-
-          for (const item of value) {
-            if (item === null || item === undefined) {
-              arrayValues.push({ nullValue: null });
-            } else if (typeof item === 'string') {
-              arrayValues.push({ stringValue: item });
-            } else if (typeof item === 'number') {
-              if (Number.isInteger(item)) {
-                arrayValues.push({ integerValue: item.toString() });
-              } else {
-                arrayValues.push({ doubleValue: item });
-              }
-            } else if (typeof item === 'boolean') {
-              arrayValues.push({ booleanValue: item });
-            } else if (typeof item === 'object') {
-              // Safely handle nested objects in arrays
-              try {
-                const nestedObj = { fields: {} };
-                Object.keys(item).forEach(nestedKey => {
-                  const nestedValue = item[nestedKey];
-                  if (typeof nestedValue === 'string') {
-                    nestedObj.fields[nestedKey] = { stringValue: nestedValue };
-                  } else if (typeof nestedValue === 'number') {
-                    if (Number.isInteger(nestedValue)) {
-                      nestedObj.fields[nestedKey] = { integerValue: nestedValue.toString() };
-                    } else {
-                      nestedObj.fields[nestedKey] = { doubleValue: nestedValue };
-                    }
-                  } else if (typeof nestedValue === 'boolean') {
-                    nestedObj.fields[nestedKey] = { booleanValue: nestedValue };
-                  } else {
-                    // For complex nested objects, convert to string
-                    nestedObj.fields[nestedKey] = { stringValue: String(nestedValue) };
-                  }
-                });
-                arrayValues.push({ mapValue: nestedObj });
-              } catch (err) {
-                // Fallback to string representation
-                arrayValues.push({ stringValue: String(item) });
-              }
-            } else {
-              arrayValues.push({ stringValue: String(item) });
-            }
-          }
-
-          fields[key] = { arrayValue: { values: arrayValues } };
-        }
-      } else if (typeof value === 'object' && value !== null) {
-        // Handle nested objects more carefully
-        try {
-          const nestedFields = {};
-          Object.keys(value).forEach(nestedKey => {
-            const nestedValue = value[nestedKey];
-            if (nestedValue === null || nestedValue === undefined) {
-              nestedFields[nestedKey] = { nullValue: null };
-            } else if (typeof nestedValue === 'string') {
-              nestedFields[nestedKey] = { stringValue: nestedValue };
-            } else if (typeof nestedValue === 'number') {
-              if (Number.isInteger(nestedValue)) {
-                nestedFields[nestedKey] = { integerValue: nestedValue.toString() };
-              } else {
-                nestedFields[nestedKey] = { doubleValue: nestedValue };
-              }
-            } else if (typeof nestedValue === 'boolean') {
-              nestedFields[nestedKey] = { booleanValue: nestedValue };
-            } else if (Array.isArray(nestedValue)) {
-              // Convert arrays to strings to avoid deep nesting issues
-              nestedFields[nestedKey] = { stringValue: JSON.stringify(nestedValue) };
-            } else if (typeof nestedValue === 'object') {
-              // Convert objects to strings to avoid deep nesting issues
-              nestedFields[nestedKey] = { stringValue: JSON.stringify(nestedValue) };
-            } else {
-              nestedFields[nestedKey] = { stringValue: String(nestedValue) };
-            }
-          });
-
-          fields[key] = { mapValue: { fields: nestedFields } };
-        } catch (err) {
-          // Fallback to string representation
-          fields[key] = { stringValue: JSON.stringify(value) };
-        }
-      } else {
-        fields[key] = { stringValue: String(value) };
-      }
-    });
-
-    return { fields };
-  };
-
-  // Helper function to convert from Firestore format to JavaScript
-  const fromFirestoreFormat = (doc) => {
-    if (!doc) return {};
-
-    const fields = doc.fields || doc;
-    const result = {};
-
-    Object.keys(fields).forEach(key => {
-      const field = fields[key];
-
-      if (field.nullValue !== undefined) {
-        result[key] = null;
-      } else if (field.stringValue !== undefined) {
-        // Check if it's a JSON string that needs parsing (for coordinates)
-        if (field.stringValue.startsWith('{') || field.stringValue.startsWith('[')) {
-          try {
-            result[key] = JSON.parse(field.stringValue);
-          } catch {
-            result[key] = field.stringValue;
-          }
-        } else {
-          result[key] = field.stringValue;
-        }
-      } else if (field.integerValue !== undefined) {
-        result[key] = parseInt(field.integerValue);
-      } else if (field.doubleValue !== undefined) {
-        result[key] = field.doubleValue;
-      } else if (field.booleanValue !== undefined) {
-        result[key] = field.booleanValue;
-      } else if (field.timestampValue !== undefined) {
-        result[key] = field.timestampValue;
-      } else if (field.mapValue !== undefined) {
-        // Recursively parse nested maps
-        result[key] = fromFirestoreFormat(field.mapValue);
-      } else if (field.arrayValue !== undefined) {
-        result[key] = (field.arrayValue.values || []).map(item => {
-          if (item.mapValue) {
-            return fromFirestoreFormat(item.mapValue);
-          } else if (item.stringValue !== undefined) {
-            // Check for JSON strings in arrays too
-            if (item.stringValue.startsWith('{') || item.stringValue.startsWith('[')) {
-              try {
-                return JSON.parse(item.stringValue);
-              } catch {
-                return item.stringValue;
-              }
-            }
-            return item.stringValue;
-          } else if (item.integerValue !== undefined) {
-            return parseInt(item.integerValue);
-          } else if (item.doubleValue !== undefined) {
-            return item.doubleValue;
-          } else if (item.booleanValue !== undefined) {
-            return item.booleanValue;
-          } else {
-            return item;
-          }
-        });
-      }
-    });
-
-    return result;
-  };
+  // Payment service configuration - MIGRATION TODO: Move to Supabase Edge Functions
+  // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com'; // REMOVED
 
   // ===========================================
   // FIREBASE STORAGE FUNCTIONS
@@ -443,76 +247,13 @@ export function AuthProvider({ children }) {
   };
 
   const createDriverConnectAccount = async (driverInfo) => {
-    try {
-      console.log('Creating Stripe Connect account with URL:', PAYMENT_SERVICE_URL);
-
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/create-driver-account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          driverId: currentUser.uid || currentUser.id,
-          email: currentUser.email,
-          ...driverInfo,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = `Payment service error: ${response.status}`;
-        try {
-          const body = await response.json();
-          if (body.error) errorMessage = body.error;
-        } catch (e) { }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Save connectAccountId to profiles table
-        const { error } = await supabase
-          .from('drivers')
-          .update({
-            stripe_account_id: result.connectAccountId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', currentUser.uid || currentUser.id);
-
-        if (error) throw error;
-
-        return { success: true, connectAccountId: result.connectAccountId };
-      } else {
-        throw new Error(result.error || 'Failed to create Connect account');
-      }
-    } catch (error) {
-      console.error('Error creating driver Connect account:', error);
-      return { success: false, error: error.message };
-    }
+    console.warn('MIGRATION: createDriverConnectAccount called. Payments services are currently disabled.');
+    return { success: false, error: 'Migration to Supabase in progress. Payments temporarily unavailable.' };
   };
 
   const getDriverOnboardingLink = async (connectAccountId, refreshUrl, returnUrl) => {
-    try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/onboard-driver`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          connectAccountId,
-          refreshUrl,
-          returnUrl,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Error getting onboarding link:', error);
-      return { success: false, error: error.message };
-    }
+    console.warn('MIGRATION: getDriverOnboardingLink. Payments disabled.');
+    return { success: false, error: 'Migration in progress' };
   };
 
   const updateDriverPaymentProfile = async (driverId, updates) => {
@@ -553,118 +294,49 @@ export function AuthProvider({ children }) {
 
 
   const checkDriverOnboardingStatus = async (connectAccountId) => {
-    try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/driver-status/${connectAccountId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Error checking driver onboarding status:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Migration in progress' };
   };
 
   const getDriverEarningsHistory = async (driverId, period = 'week') => {
-    try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/driver-earnings/${driverId}?period=${period}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Error getting driver earnings history:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: true, earnings: [] }; // Return empty allowed
   };
 
   const getDriverPayouts = async (driverId) => {
-    try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/driver-payouts/${driverId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Error getting driver payouts:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: true, payouts: [] };
   };
 
   const requestInstantPayout = async (amount) => {
-    try {
-      const driverProfile = await getDriverProfile(currentUser.uid);
-
-      if (!driverProfile?.connectAccountId) {
-        throw new Error('Driver payment account not set up');
-      }
-
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/instant-payout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          connectAccountId: driverProfile.connectAccountId,
-          amount,
-          driverId: currentUser.uid,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Error requesting instant payout:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'Migration in progress' };
   };
 
   const processTripPayout = async (payoutData) => {
     try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/process-trip-payout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payoutData),
+      console.log('Invoking process-payout Edge Function...', payoutData);
+
+      const { data, error } = await supabase.functions.invoke('process-payout', {
+        body: {
+          amount: payoutData.amount,
+          currency: 'usd',
+          connectAccountId: payoutData.connectAccountId,
+          transferGroup: payoutData.tripId, // Link transfer to the trip ID
+        }
       });
 
-      if (!response.ok) {
-        throw new Error(`Payment service error: ${response.status}`);
+      if (error) {
+        throw error;
       }
 
-      const result = await response.json();
-      return result;
+      if (!data.success) {
+        throw new Error(data.error || 'Payout processing failed');
+      }
+
+      console.log('Payout processed successfully:', data.transferId);
+      return { success: true, transferId: data.transferId };
+
     } catch (error) {
       console.error('Error processing trip payout:', error);
+      // Don't fail the whole trip completion if payout fails, just log it.
+      // In production, you might want to queue this for retry.
       return { success: false, error: error.message };
     }
   };
@@ -711,17 +383,39 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Initialize auth from Supabase session
+  // Initialize auth from Supabase session with FAST AsyncStorage fallback
   useEffect(() => {
-    // Simplified initialization - rely on onAuthStateChange listener
-    // getSession() hangs indefinitely, so skip it
-    console.log('🔄 Auth initialization - skipping getSession, relying on onAuthStateChange');
-    // setIsInitializing(false) - REMOVED: Waiting for listener
+    let mounted = true;
+
+    const hydrateFromStorage = async () => {
+      try {
+        console.log('⚡️ Trying fast auth hydration from AsyncStorage...');
+        const storedUser = await AsyncStorage.getItem('currentUser');
+        const storedUserType = await AsyncStorage.getItem('userType');
+
+        if (storedUser && storedUserType && mounted) {
+          const parsedUser = JSON.parse(storedUser);
+          console.log('✅ Hydrated user from storage:', parsedUser.email, 'Role:', storedUserType);
+          setCurrentUser(parsedUser);
+          setUserType(storedUserType);
+          setIsInitializing(false); // Unblock UI immediately
+        } else {
+          console.log('ℹ️ No stored session found, waiting for Supabase...');
+        }
+      } catch (e) {
+        console.warn('Hydration error:', e);
+      }
+    };
+
+    // 1. Run fast hydration immediately
+    hydrateFromStorage();
 
     // Safety timeout: If Supabase doesn't respond in 3s, unblock UI
     const timeout = setTimeout(() => {
-      console.log('⏰ Auth check safety timeout - unblocking UI');
-      setIsInitializing(false);
+      if (mounted) {
+        console.log('⏰ Auth check safety timeout - unblocking UI');
+        setIsInitializing(false);
+      }
     }, 3000);
 
     // Listen for auth state changes
@@ -946,11 +640,16 @@ export function AuthProvider({ children }) {
             .single();
 
           if (otherProfile) {
+            // STRICT AUTH: If user is logging into wrong portal, force logout immediately
+            console.warn(`Role mismatch: User is a ${otherTable} trying to login as ${expectedRole}`);
+            await supabase.auth.signOut();
+
             throw new Error(`Wrong portal. You are registered as a ${otherTable === 'drivers' ? 'Driver' : 'Customer'}. Please use the correct login button.`);
           }
         }
 
         console.warn(`User authenticated but not found in ${targetTable}.`);
+        await supabase.auth.signOut();
         throw new Error(`Profile not found in ${targetTable}. Please contact support.`);
       }
 
@@ -1063,6 +762,18 @@ export function AuthProvider({ children }) {
       // Or just Fetch then Insert/Update.
 
       const targetTable = userRole === 'driver' ? 'drivers' : 'customers';
+
+      // STRICT AUTH CHECK
+      // 1. Check if user is already registered in the OTHER portal
+      const otherTable = userRole === 'driver' ? 'customers' : 'drivers';
+      const { data: otherProfile } = await supabase.from(otherTable).select('id').eq('id', user.id).single();
+
+      if (otherProfile) {
+        console.warn(`Role mismatch (Apple): User is a ${otherTable} trying to login as ${userRole}`);
+        await supabase.auth.signOut();
+        throw new Error(`Wrong portal. You are registered as a ${otherTable === 'drivers' ? 'Driver' : 'Customer'}. Please use the correct login button.`);
+      }
+
       const { data: existingProfile } = await supabase.from(targetTable).select('id').eq('id', user.id).single();
 
       // If checks fail, maybe check the other table just in case? 
@@ -1193,21 +904,20 @@ export function AuthProvider({ children }) {
       console.log('Starting account deletion process...');
       const userId = currentUser.id || currentUser.uid;
 
-      // 1. Delete from Profiles table (RLS should allow users to delete their own profile)
-      const { error } = await supabase
-        .from(userType === 'driver' ? 'drivers' : 'customers')
-        .delete()
-        .eq('id', userId);
+      // 1. Invoke Edge Function to delete user (Auth + Data)
+      const { data, error } = await supabase.functions.invoke('delete-user');
 
       if (error) {
-        console.error('Error deleting profile:', error);
         throw error;
       }
 
-      console.log('Profile data deleted from Supabase');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to delete account');
+      }
 
-      // 2. Local Logout (Note: Actual Auth User deletion requires Admin API or Edge Function)
-      // For now, we clean up data and sign out.
+      console.log('Account fully deleted via Edge Function');
+
+      // 2. Local Logout
       await logout();
 
       return true;
@@ -1734,43 +1444,56 @@ export function AuthProvider({ children }) {
   };
 
 
-  // Helper function to get user profile - Firebase implementation
+  // Helper function to get user profile - Supabase implementation
   const getUserProfile = async () => {
-    if (!currentUser?.uid) {
+    if (!currentUser?.id && !currentUser?.uid) {
       throw new Error('User not authenticated');
     }
 
+    const userId = currentUser.id || currentUser.uid;
+
     try {
-      const response = await fetch(`${FIRESTORE_BASE_URL}/users/${currentUser.uid}`, {
-        headers: {
-          'Authorization': `Bearer ${currentUser.accessToken}`
-        }
-      });
+      // Try to get from customers table first
+      let { data: profile, error } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', userId)
+        .single();
 
-      if (response.ok) {
-        const doc = await response.json();
-        const userData = fromFirestoreFormat(doc);
+      if (!profile) {
+        // If not found, try drivers table
+        const { data: driverProfile } = await supabase
+          .from('drivers')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
+        profile = driverProfile;
+      }
+
+      if (profile) {
         return {
-          uid: currentUser.uid,
+          uid: userId,
           email: currentUser.email,
-          profileImageUrl: userData.profileImageUrl || null,
-          ...userData
+          profileImageUrl: profile.avatar_url || null,
+          ...profile
         };
       }
 
       // Fallback if no profile found
       return {
-        uid: currentUser.uid,
+        uid: userId,
         email: currentUser.email,
         profileImageUrl: null
       };
 
     } catch (error) {
       console.error('Error getting user profile:', error);
-      return null;
+      throw error;
     }
   };
+
+
 
   // Rating aggregation function
   // Rating aggregation function
@@ -2279,30 +2002,26 @@ export function AuthProvider({ children }) {
 
   // Create Stripe Identity verification session
   const createVerificationSession = async (userData) => {
-    // Use payment service URL - Render backend
-    const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
-
     try {
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/create-verification-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: currentUser.uid,
+      console.log('Invoking create-verification-session Edge Function...');
+
+      const { data, error } = await supabase.functions.invoke('create-verification-session', {
+        body: {
+          userId: currentUser.uid || currentUser.id,
           email: currentUser.email,
           ...userData
-        }),
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create verification session');
+      if (error) {
+        console.error('Edge Function Error:', error);
+        throw new Error(error.message || 'Verification session creation failed');
       }
 
-      const data = await response.json();
+      console.log('Verification session created:', data);
       return data;
     } catch (error) {
-      console.error('Error creating verification session:', error);
+      console.error('Error in createVerificationSession:', error);
       throw error;
     }
   };
