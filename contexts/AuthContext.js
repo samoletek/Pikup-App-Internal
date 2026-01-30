@@ -747,19 +747,16 @@ export function AuthProvider({ children }) {
   async function signup(email, password, type, additionalData = {}) {
     setLoading(true);
 
-    // Declare subscription outside try block so it's accessible in catch
+    // Set up auth state listener
     let subscription;
-
-    // Declare auth state Promise and resolver outside try block for timeout recovery
     let authStateResolver;
     const authStatePromise = new Promise((resolve) => {
       authStateResolver = resolve;
     });
 
     try {
-      console.log('🔄 [SIGNUP STEP 1] Starting signup...', email, type);
+      console.log('🔄 Starting signup (Fire-and-Forget)...', email, type);
 
-      // Temporary listener for this signup attempt
       const authListener = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('🔔 Auth listener: SIGNED_IN detected, user:', session.user.id);
@@ -768,9 +765,7 @@ export function AuthProvider({ children }) {
       });
       subscription = authListener.data.subscription;
 
-      // Fire signUp without waiting for response (it hangs in simulator)
-      // We rely on onAuthStateChange to detect successful signup
-      console.log('🔄 [SIGNUP STEP 2] Firing supabase.auth.signUp() (fire-and-forget)...');
+      // Fire signUp without waiting
       supabase.auth.signUp({
         email,
         password,
@@ -780,38 +775,17 @@ export function AuthProvider({ children }) {
             ...additionalData
           }
         }
-      }).then(result => {
-        if (result.error) {
-          console.error('❌ signUp error (async):', result.error);
-        } else {
-          console.log('✅ signUp completed (async):', result.data?.user?.id);
-        }
-      }).catch(err => {
-        console.error('❌ signUp exception (async):', err);
-      });
+      }).catch(err => console.error('❌ signUp detached error:', err));
 
-      // Wait for auth state change (max 10 seconds)
-      console.log('🔄 [SIGNUP STEP 3] Waiting for SIGNED_IN event...');
+      // Wait for event or timeout
       const authTimeout = new Promise((_, reject) =>
-        setTimeout(() => {
-          console.log('⏰ Auth timeout (10s) triggered');
-          reject(new Error('Signup timeout - no SIGNED_IN event received'));
-        }, 10000)
+        setTimeout(() => reject(new Error('Signup timeout - no SIGNED_IN event')), 10000)
       );
 
-      let user;
-      try {
-        user = await Promise.race([authStatePromise, authTimeout]);
-        console.log('✅ [SIGNUP STEP 4] User confirmed via auth listener:', user.id);
-      } catch (err) {
-        console.error('❌ Signup failed:', err.message);
-        subscription?.unsubscribe();
-        throw err;
-      }
+      const user = await Promise.race([authStatePromise, authTimeout]);
+      console.log('✅ Signup confirmed via listener:', user.id);
 
-      // Create profile
-      console.log('🔄 [SIGNUP STEP 5] Creating profile for user:', user.id);
-
+      // Create profile (with timeout)
       const profileData = {
         id: user.id,
         email: user.email,
@@ -823,50 +797,42 @@ export function AuthProvider({ children }) {
         created_at: new Date().toISOString()
       };
 
-      // Add timeout to profile creation
       const profileTimeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Profile creation timeout')), 5000)
       );
 
-      let profileError;
       try {
-        const result = await Promise.race([
+        await Promise.race([
           supabase.from('profiles').upsert(profileData),
           profileTimeout
         ]);
-        profileError = result.error;
+        console.log('✅ Profile created');
       } catch (err) {
-        console.warn('⚠️ Profile upsert timed out, continuing anyway...');
-        profileError = null;
+        console.warn('⚠️ Profile upsert timed out/failed, continuing:', err);
       }
 
-      if (profileError) {
-        console.error('❌ Profile creation error:', profileError);
-        subscription?.unsubscribe();
-        throw profileError;
-      }
+      // Create full user object
+      const fullUser = {
+        ...user,
+        ...profileData,
+        uid: user.id
+      };
 
-      console.log('✅ [SIGNUP STEP 6] Profile created');
-
-      // Create fullUser (skip getSession - it hangs in simulator like signUp did)
-      // Add uid for compatibility with WelcomeScreen
-      const fullUser = { ...user, ...profileData, uid: user.id };
-
-      // Save to AsyncStorage
+      // Save to storage
       await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
       await AsyncStorage.setItem('userType', type);
-      console.log('✅ [SIGNUP STEP 7] Saved to AsyncStorage');
+      console.log('✅ Saved to AsyncStorage');
 
       // Update state
       setCurrentUser(fullUser);
       setUserType(type);
-      console.log('✅ [SIGNUP STEP 8] Signup complete!');
 
+      console.log('✅ Signup complete!');
       subscription?.unsubscribe();
       return { user: fullUser };
 
     } catch (error) {
-      console.error('❌ [SIGNUP ERROR]:', error.message);
+      console.error('Signup error:', error);
       subscription?.unsubscribe();
       throw error;
     } finally {
@@ -879,13 +845,14 @@ export function AuthProvider({ children }) {
 
     try {
       console.log('Logging in with Supabase...');
-      const { data: { user, session }, error: signInError } = await supabase.auth.signInWithPassword({
+
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
 
-      if (signInError) throw signInError;
-      if (!user) throw new Error('Login failed: No user returned');
+      if (error) throw error;
+      if (!authData.user) throw new Error('Login failed: No user returned');
 
       console.log('Supabase login successful');
 
@@ -893,14 +860,23 @@ export function AuthProvider({ children }) {
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', authData.user.id)
         .single();
 
       if (profileError) {
         console.warn('Login successful but failed to fetch profile:', profileError);
       }
 
-      const fullUser = { ...user, ...profile, accessToken: session.access_token };
+      const fullUser = {
+        ...authData.user,
+        ...profile,
+        uid: authData.user.id,
+        accessToken: authData.session?.access_token
+      };
+
+      await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
+      await AsyncStorage.setItem('userType', profile?.user_type || 'customer');
+
       setCurrentUser(fullUser);
       setUserType(profile?.user_type || 'customer');
 
@@ -916,25 +892,18 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      // Clear state and storage immediately (don't wait for signOut which hangs)
+      const { error } = await supabase.auth.signOut();
+
       setCurrentUser(null);
       setUserType(null);
       await AsyncStorage.removeItem('currentUser');
       await AsyncStorage.removeItem('userType');
-      console.log('✅ Logged out - state and storage cleared');
 
-      // Try to sign out from Supabase (with timeout, fire-and-forget)
-      const signOutTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('signOut timeout')), 2000)
-      );
+      console.log('Logged out successfully');
 
-      Promise.race([supabase.auth.signOut(), signOutTimeout])
-        .then(() => console.log('✅ Supabase signOut completed'))
-        .catch(() => console.warn('⚠️ Supabase signOut timed out (OK, already logged out locally)'));
-
+      if (error) console.warn('SignOut error:', error);
     } catch (error) {
       console.error('Logout error:', error);
-      // Even if error, try to clear state
       setCurrentUser(null);
       setUserType(null);
     }
