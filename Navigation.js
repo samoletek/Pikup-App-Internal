@@ -70,8 +70,15 @@ export default function Navigation() {
 
   console.log('✅ Navigation ready - proceeding to navigator');
 
+  const getInitialRoute = () => {
+    if (currentUser && userType === 'driver') return 'DriverTabs';
+    if (currentUser && userType === 'customer') return 'CustomerTabs';
+    return 'WelcomeScreen';
+  };
+
   return (
     <Stack.Navigator
+      initialRouteName={getInitialRoute()}
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />

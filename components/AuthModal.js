@@ -231,7 +231,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
     const handleLogin = async () => {
         if (validateEmail(email) && validatePassword(password)) {
             try {
-                await login(email, password);
+                // Now passing selectedRole to enforce portal restrictions
+                await login(email, password, selectedRole);
                 // If successful, auth state changes, app navigates. close modal.
                 handleClose();
             } catch (e) {

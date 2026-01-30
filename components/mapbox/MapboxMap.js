@@ -22,7 +22,7 @@ const MapboxMap = forwardRef(({
 }, ref) => {
   const cameraRef = useRef(null);
   const mapViewRef = useRef(null);
-  
+
   // Expose camera control methods to parent components
   useImperativeHandle(ref, () => ({
     // Apple Maps style camera setter
@@ -64,7 +64,7 @@ const MapboxMap = forwardRef(({
       }
     }
   }));
-  
+
   return (
     <Mapbox.MapView
       ref={mapViewRef}
@@ -72,6 +72,8 @@ const MapboxMap = forwardRef(({
       onPress={onPress}
       styleURL={customMapStyle || Mapbox.StyleURL.Dark} // Dark theme like current app
       scaleBarEnabled={false} // Remove scale bar
+      logoPosition={{ bottom: 10, left: 10 }} // Symmetric bottom-left
+      attributionPosition={{ bottom: 10, right: 10 }} // Symmetric bottom-right
       {...props}
     >
       <Mapbox.Camera

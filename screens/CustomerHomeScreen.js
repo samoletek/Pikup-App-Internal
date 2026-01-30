@@ -523,16 +523,8 @@ export default function CustomerHomeScreen({ navigation }) {
 
 
 
-  if (!region) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0A0A1F', justifyContent: 'center', alignItems: 'center' }}>
-        <Image
-          source={require('../assets/pikup-logo.png')}
-          style={{ width: '80%', height: 250, resizeMode: 'contain' }}
-        />
-      </View>
-    );
-  }
+  // Removed blocking splash screen to avoid overlay issues. check active active active
+  // if (!region) { ... }
 
   return (
     <View style={styles.container}>
@@ -662,32 +654,31 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 50,
+    paddingTop: 55, // Center point for Dynamic Island interactions
     paddingHorizontal: 20,
-    paddingBottom: 15,
+    paddingBottom: 10,
     flexDirection: "row",
-    justifyContent: "flex-start",
+    justifyContent: "center", // Horizontal center
     alignItems: "center",
     zIndex: 10,
   },
   trackerContainer: {
     position: "absolute",
-    top: 100,
+    top: 110, // Restored close to 100 but avoiding overlap
     left: 0,
     right: 0,
     zIndex: 15,
   },
   headerLogo: {
-    width: 350,
+    width: 300, // Restored large size (was 350, 300 allows safer fit)
     aspectRatio: 5.08,
     height: undefined,
     resizeMode: "contain",
-    alignSelf: "center",
   },
 
   searchBarContainer: {
     position: "absolute",
-    top: 100,
+    top: 110, // Restored close to 100 (was 120, original 100)
     left: 20,
     right: 20,
     zIndex: 100,
@@ -707,7 +698,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   searchBarWithTracker: {
-    top: 160, // Move search bar down when tracker is visible
+    top: 180, // Move search bar down when tracker is visible
   },
   searchIcon: {
     marginRight: 12,

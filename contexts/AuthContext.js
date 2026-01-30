@@ -329,7 +329,7 @@ export function AuthProvider({ children }) {
       // Get driver profile data for additional stats
       let driverProfile = {};
       try {
-        const { data } = await supabase.from('profiles').select('*').eq('id', driverId).single();
+        const { data } = await supabase.from('drivers').select('*').eq('id', driverId).single();
         if (data) {
           driverProfile = { ...data, ...data.metadata };
         }
@@ -377,7 +377,7 @@ export function AuthProvider({ children }) {
 
       // Fetch current profile metadata
       const { data: profile } = await supabase
-        .from('profiles')
+        .from('drivers')
         .select('*')
         .eq('id', driverId)
         .single();
@@ -396,7 +396,7 @@ export function AuthProvider({ children }) {
 
       // Update profile
       const { data, error } = await supabase
-        .from('profiles')
+        .from('drivers')
         .update({
           metadata: newMeta,
           completed_orders: (profile?.completed_orders || 0) + 1
@@ -420,7 +420,7 @@ export function AuthProvider({ children }) {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from('drivers')
         .select('*')
         .eq('id', driverId)
         .single();
@@ -470,7 +470,7 @@ export function AuthProvider({ children }) {
       if (result.success) {
         // Save connectAccountId to profiles table
         const { error } = await supabase
-          .from('profiles')
+          .from('drivers')
           .update({
             stripe_account_id: result.connectAccountId,
             updated_at: new Date().toISOString()
@@ -521,7 +521,7 @@ export function AuthProvider({ children }) {
     try {
       // Fetch current profile metadata
       const { data: profile } = await supabase
-        .from('profiles')
+        .from('drivers')
         .select('metadata')
         .eq('id', driverId)
         .single();
@@ -534,7 +534,7 @@ export function AuthProvider({ children }) {
       const newMeta = { ...currentMeta, ...updates, updatedAt: new Date().toISOString() };
 
       const { data, error } = await supabase
-        .from('profiles')
+        .from('drivers')
         .update({
           metadata: newMeta
         })
@@ -716,57 +716,118 @@ export function AuthProvider({ children }) {
     // Simplified initialization - rely on onAuthStateChange listener
     // getSession() hangs indefinitely, so skip it
     console.log('🔄 Auth initialization - skipping getSession, relying on onAuthStateChange');
-    setIsInitializing(false);
-    console.log('✅ isInitializing = false, UI ready');
+    // setIsInitializing(false) - REMOVED: Waiting for listener
+
+    // Safety timeout: If Supabase doesn't respond in 3s, unblock UI
+    const timeout = setTimeout(() => {
+      console.log('⏰ Auth check safety timeout - unblocking UI');
+      setIsInitializing(false);
+    }, 3000);
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      if (event === 'SIGNED_IN' && session?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      console.log('🔐 Auth state changed:', event);
+      if (session?.user) {
+        console.log('👤 Session user found:', session.user.id, 'Metadata:', session.user.user_metadata);
+      } else {
+        console.log('👤 No session user in event');
+      }
 
-        if (profile) {
-          setCurrentUser({ ...session.user, ...profile, accessToken: session.access_token });
-          setUserType(profile.user_type);
+      try {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+
+          const md = session.user.user_metadata || {};
+          const userType = md.user_type;
+
+          if (userType) {
+            // OPTIMISTIC RESTORE
+            const optimisticProfile = {
+              id: session.user.id,
+              email: session.user.email,
+              first_name: md.firstName || md.first_name || '',
+              last_name: md.lastName || md.last_name || '',
+              phone_number: md.phoneNumber || md.phone_number || '',
+              user_type: userType
+            };
+
+            const fullUser = {
+              ...session.user,
+              ...optimisticProfile,
+              accessToken: session.access_token,
+              user_type: userType
+            };
+
+            console.log('⚡️ Optimistic session restore - Unblocking UI');
+            setCurrentUser(fullUser);
+            setUserType(userType);
+            setIsInitializing(false);
+
+            // Background Refresh
+            const table = userType === 'driver' ? 'drivers' : 'customers';
+            console.log(`🔄 Starting background profile fetch from ${table}...`);
+
+            supabase.from(table).select('*').eq('id', session.user.id).single()
+              .then(({ data, error }) => {
+                if (data) {
+                  console.log('✅ Background profile updated');
+                  setCurrentUser(prev => (prev ? { ...prev, ...data } : data));
+                } else if (error) {
+                  console.warn('⚠️ Background profile fetch failed:', error.message);
+                }
+              });
+            return;
+          }
+
+          // Fallback legacy logic
+          console.warn('⚠️ No metadata user_type. Fallback to blocking fetch.');
+          let profile = null;
+
+          const { data: cust, error: custErr } = await supabase.from('customers').select('*').eq('id', session.user.id).single();
+          if (cust) {
+            profile = cust;
+            userType = 'customer';
+          } else {
+            const { data: driv } = await supabase.from('drivers').select('*').eq('id', session.user.id).single();
+            if (driv) {
+              profile = driv;
+              userType = 'driver';
+            }
+          }
+
+          if (profile) {
+            console.log('✅ Session restored (fallback) for:', userType, profile.id);
+            setCurrentUser({ ...session.user, ...profile, accessToken: session.access_token });
+            setUserType(userType);
+          } else {
+            console.warn('⚠️ User authenticated but NO profile found in DB');
+          }
+        } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+          console.log('ℹ️ User signed out or no initial session found');
+          setCurrentUser(null);
+          setUserType(null);
+          setIsInitializing(false);
         }
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setUserType(null);
+      } catch (e) {
+        console.error('Error restoring session:', e);
+        setIsInitializing(false);
       }
     });
 
     return () => {
       subscription?.unsubscribe();
+      clearTimeout(timeout);
     };
   }, []);
 
   async function signup(email, password, type, additionalData = {}) {
     setLoading(true);
 
-    // Set up auth state listener
-    let subscription;
-    let authStateResolver;
-    const authStatePromise = new Promise((resolve) => {
-      authStateResolver = resolve;
-    });
-
     try {
-      console.log('🔄 Starting signup (Fire-and-Forget)...', email, type);
+      console.log('🔄 Starting signup (Table-Separated)...', email, type);
+      const tableName = type === 'driver' ? 'drivers' : 'customers';
 
-      const authListener = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          console.log('🔔 Auth listener: SIGNED_IN detected, user:', session.user.id);
-          authStateResolver(session.user);
-        }
-      });
-      subscription = authListener.data.subscription;
-
-      // Fire signUp without waiting
-      supabase.auth.signUp({
+      // Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -775,21 +836,20 @@ export function AuthProvider({ children }) {
             ...additionalData
           }
         }
-      }).catch(err => console.error('❌ signUp detached error:', err));
+      });
 
-      // Wait for event or timeout
-      const authTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Signup timeout - no SIGNED_IN event')), 10000)
-      );
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('Signup failed: No user returned');
 
-      const user = await Promise.race([authStatePromise, authTimeout]);
-      console.log('✅ Signup confirmed via listener:', user.id);
+      console.log(`✅ Supabase signup successful. Creating profile in "${tableName}"...`);
 
-      // Create profile (with timeout)
+      // Wait briefly
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create profile in SPECIFIC TABLE
       const profileData = {
-        id: user.id,
-        email: user.email,
-        user_type: type,
+        id: authData.user.id,
+        email: authData.user.email,
         first_name: additionalData.firstName || '',
         last_name: additionalData.lastName || '',
         phone_number: additionalData.phoneNumber || '',
@@ -797,55 +857,52 @@ export function AuthProvider({ children }) {
         created_at: new Date().toISOString()
       };
 
-      const profileTimeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile creation timeout')), 5000)
-      );
+      const { error: profileError } = await supabase
+        .from(tableName)
+        .insert(profileData);
 
-      try {
-        await Promise.race([
-          supabase.from('profiles').upsert(profileData),
-          profileTimeout
-        ]);
-        console.log('✅ Profile created');
-      } catch (err) {
-        console.warn('⚠️ Profile upsert timed out/failed, continuing:', err);
+      if (profileError) {
+        console.warn(`⚠️ Error creating profile in ${tableName}:`, profileError);
+      } else {
+        console.log(`✅ Profile created in "${tableName}"`);
       }
 
-      // Create full user object
       const fullUser = {
-        ...user,
+        ...authData.user,
         ...profileData,
-        uid: user.id
+        uid: authData.user.id,
+        user_type: type
       };
 
-      // Save to storage
       await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
       await AsyncStorage.setItem('userType', type);
-      console.log('✅ Saved to AsyncStorage');
-
-      // Update state
       setCurrentUser(fullUser);
       setUserType(type);
 
       console.log('✅ Signup complete!');
-      subscription?.unsubscribe();
       return { user: fullUser };
-
     } catch (error) {
       console.error('Signup error:', error);
-      subscription?.unsubscribe();
       throw error;
     } finally {
       setLoading(false);
     }
   }
 
-  async function login(email, password) {
+  // NOTE: login now requires 'expectedRole' to enforce button restrictions
+  async function login(email, password, expectedRole) {
     setLoading(true);
 
     try {
-      console.log('Logging in with Supabase...');
+      // Default fallback if not provided (though AuthModal should always provide it)
+      if (!expectedRole) {
+        console.warn('Login called without expectedRole, defaulting to loose check');
+      }
 
+      console.log(`Logging in as ${expectedRole || 'unknown'}...`);
+      const targetTable = expectedRole === 'driver' ? 'drivers' : 'customers';
+
+      // 1. Authenticate with Supabase Auth
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -854,31 +911,64 @@ export function AuthProvider({ children }) {
       if (error) throw error;
       if (!authData.user) throw new Error('Login failed: No user returned');
 
-      console.log('Supabase login successful');
+      console.log(`✅ Auth successful. Verifying profile in "${targetTable}"...`);
 
-      // Fetch profile details
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
+      // 2. Check if user exists in the EXPECTED table
+      let profile = null;
+      let profileError = null;
 
-      if (profileError) {
-        console.warn('Login successful but failed to fetch profile:', profileError);
+      if (expectedRole) {
+        const { data, error } = await supabase
+          .from(targetTable)
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        profile = data;
+        profileError = error;
+      } else {
+        // Fallback mechanism if no role provided (e.g. legacy calls) - Try CUSTOMERS first
+        const { data: cust, error: custErr } = await supabase.from('customers').select('*').eq('id', authData.user.id).single();
+        if (cust) { profile = cust; expectedRole = 'customer'; }
+        else {
+          const { data: driv, error: drivErr } = await supabase.from('drivers').select('*').eq('id', authData.user.id).single();
+          if (driv) { profile = driv; expectedRole = 'driver'; }
+        }
       }
+
+      if (!profile) {
+        // Double check: Does this user exist in the OTHER table?
+        if (expectedRole) {
+          const otherTable = expectedRole === 'driver' ? 'customers' : 'drivers';
+          const { data: otherProfile } = await supabase
+            .from(otherTable)
+            .select('id')
+            .eq('id', authData.user.id)
+            .single();
+
+          if (otherProfile) {
+            throw new Error(`Wrong portal. You are registered as a ${otherTable === 'drivers' ? 'Driver' : 'Customer'}. Please use the correct login button.`);
+          }
+        }
+
+        console.warn(`User authenticated but not found in ${targetTable}.`);
+        throw new Error(`Profile not found in ${targetTable}. Please contact support.`);
+      }
+
+      console.log(`✅ Verified user in ${targetTable}:`, profile.id);
 
       const fullUser = {
         ...authData.user,
         ...profile,
         uid: authData.user.id,
-        accessToken: authData.session?.access_token
+        accessToken: authData.session?.access_token,
+        user_type: expectedRole // Explicitly set based on verified table
       };
 
       await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
-      await AsyncStorage.setItem('userType', profile?.user_type || 'customer');
+      await AsyncStorage.setItem('userType', expectedRole);
 
       setCurrentUser(fullUser);
-      setUserType(profile?.user_type || 'customer');
+      setUserType(expectedRole);
 
       return { user: fullUser };
 
@@ -972,16 +1062,19 @@ export function AuthProvider({ children }) {
       // We can Try to Insert with user_type, on conflict do nothing?
       // Or just Fetch then Insert/Update.
 
-      const { data: existingProfile } = await supabase.from('profiles').select('id, user_type').eq('id', user.id).single();
+      const targetTable = userRole === 'driver' ? 'drivers' : 'customers';
+      const { data: existingProfile } = await supabase.from(targetTable).select('id').eq('id', user.id).single();
+
+      // If checks fail, maybe check the other table just in case? 
+      // For now assume strictly adhering to role.
 
       if (!existingProfile) {
-        profileUpdates.user_type = userRole;
         profileUpdates.created_at = new Date().toISOString();
         profileUpdates.rating = 5.0; // Default
       }
 
       const { error: profileError } = await supabase
-        .from('profiles')
+        .from(targetTable)
         .upsert(profileUpdates);
 
       if (profileError) {
@@ -1102,7 +1195,7 @@ export function AuthProvider({ children }) {
 
       // 1. Delete from Profiles table (RLS should allow users to delete their own profile)
       const { error } = await supabase
-        .from('profiles')
+        .from(userType === 'driver' ? 'drivers' : 'customers')
         .delete()
         .eq('id', userId);
 
@@ -1286,12 +1379,12 @@ export function AuthProvider({ children }) {
           let customerName = 'Customer';
           let driverName = 'Driver';
 
-          const { data: customerProfile } = await supabase.from('profiles').select('first_name, last_name, email').eq('id', customerId).single();
+          const { data: customerProfile } = await supabase.from('customers').select('first_name, last_name, email').eq('id', customerId).single();
           if (customerProfile) {
             customerName = customerProfile.first_name || customerProfile.email?.split('@')[0] || 'Customer';
           }
 
-          const { data: driverProfile } = await supabase.from('profiles').select('first_name, last_name, email').eq('id', currentUser.uid || currentUser.id).single();
+          const { data: driverProfile } = await supabase.from('drivers').select('first_name, last_name, email').eq('id', currentUser.uid || currentUser.id).single();
           if (driverProfile) {
             driverName = driverProfile.first_name || driverProfile.email?.split('@')[0] || 'Driver';
           }
@@ -1347,16 +1440,11 @@ export function AuthProvider({ children }) {
       // This allows any active trip to fetch the driver's current location via Profile
 
       const { error } = await supabase
-        .from('profiles')
+        .from('drivers')
         .update({
-          metadata: {
-            // We can't deep merge easily without dragging down current metadata, 
-            // but for now let's assume metadata is small or we handle it.
-            // Ideally we'd use a specific column or a stored proc.
-            // For V1, we'll try to just patch what we can.
-            // Or better: Just do nothing if we don't have a location column, 
-            // relying on Realtime broadcast (if implemented).
-            // BUT, the app expects this function to exist.
+          metadata: { // Assuming 'drivers' table has metadata column or we add it. 
+            // If not, we should rely on specific columns.
+            // For now, keeping legacy behavior but targeting drivers table.
             lastLocation: location,
             updatedAt: new Date().toISOString()
           }
@@ -1404,7 +1492,7 @@ export function AuthProvider({ children }) {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from(userType === 'driver' ? 'drivers' : 'customers')
         .update({
           ...updates,
           // Map standard fields if mismatch exists (e.g. firstName -> first_name if passed)
@@ -1463,7 +1551,7 @@ export function AuthProvider({ children }) {
 
     try {
       const { data, error } = await supabase
-        .from('profiles')
+        .from(userType === 'driver' ? 'drivers' : 'customers')
         .select('profile_image_url')
         .eq('id', currentUser.id)
         .single();
