@@ -195,18 +195,20 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     }
   };
 
-  // Manual current location button press
-  const handleUseCurrentLocation = async () => {
+  // Manual current location button press - now supports both fields
+  const handleUseCurrentLocation = async (fieldType = 'pickup') => {
     try {
       startLocationLoading();
 
       const location = await MapboxLocationService.getCurrentLocation();
 
       if (location) {
-        setPickupCoordinates({
+        const coordinates = {
           latitude: location.latitude,
           longitude: location.longitude
-        });
+        };
+
+        let addressText = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
 
         try {
           const addressData = await MapboxLocationService.reverseGeocode(
@@ -215,20 +217,24 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
           );
 
           if (addressData && addressData.address) {
-            setPickup(addressData.address);
-            showSuccessAnimation();
-          } else {
-            setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-            showSuccessAnimation();
+            addressText = addressData.address;
           }
         } catch (geocodeError) {
           console.log('Reverse geocoding failed, using coordinates:', geocodeError);
-          setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-          showSuccessAnimation();
         }
 
-        // Clear any existing suggestions when using current location
-        setPickupSuggestions([]);
+        // Set the appropriate field based on fieldType
+        if (fieldType === 'pickup') {
+          setPickup(addressText);
+          setPickupCoordinates(coordinates);
+          setPickupSuggestions([]);
+        } else {
+          setDropoff(addressText);
+          setDropoffCoordinates(coordinates);
+          setDropoffSuggestions([]);
+        }
+
+        showSuccessAnimation();
         setActiveField(null);
       }
     } catch (error) {
@@ -949,49 +955,121 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                 </View>
 
                 {/* Live Places API suggestions when typing, otherwise show static suggestions */}
-                {activeField === 'pickup' && pickupSuggestions.length > 0 ? (
+                {activeField === 'pickup' ? (
                   <>
-                    <Text style={styles.suggestionsTitle}>
-                      {isLoadingSuggestions ? 'Searching...' : 'Pickup Suggestions'}
-                    </Text>
-                    {pickupSuggestions.map((place) => (
-                      <TouchableOpacity
-                        key={place.id}
-                        style={styles.suggestionRow}
-                        onPress={() => handlePlaceSelection(place, 'pickup')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.suggestionIcon}>
-                          <Ionicons name="location-outline" size={20} color="#00D4AA" />
-                        </View>
-                        <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionName}>{place.name}</Text>
-                          <Text style={styles.suggestionAddress}>{place.address}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                    {/* Use Current Location Option - always visible for pickup */}
+                    <TouchableOpacity
+                      style={styles.currentLocationRow}
+                      onPress={() => handleUseCurrentLocation('pickup')}
+                      activeOpacity={0.7}
+                      disabled={isLoadingCurrentLocation}
+                    >
+                      <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00D4AA" />
+                      </View>
+                      <View style={styles.suggestionContent}>
+                        <Text style={styles.suggestionName}>Use current location</Text>
+                        <Text style={styles.suggestionAddress}>
+                          {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                        </Text>
+                      </View>
+                      {isLoadingCurrentLocation && (
+                        <Animated.View
+                          style={{
+                            transform: [{
+                              rotate: rotationAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: ['0deg', '360deg']
+                              })
+                            }]
+                          }}
+                        >
+                          <Ionicons name="refresh" size={18} color="#00D4AA" />
+                        </Animated.View>
+                      )}
+                    </TouchableOpacity>
+
+                    {pickupSuggestions.length > 0 && (
+                      <>
+                        <Text style={styles.suggestionsTitle}>
+                          {isLoadingSuggestions ? 'Searching...' : 'Pickup Suggestions'}
+                        </Text>
+                        {pickupSuggestions.map((place) => (
+                          <TouchableOpacity
+                            key={place.id}
+                            style={styles.suggestionRow}
+                            onPress={() => handlePlaceSelection(place, 'pickup')}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.suggestionIcon}>
+                              <Ionicons name="location-outline" size={20} color="#00D4AA" />
+                            </View>
+                            <View style={styles.suggestionContent}>
+                              <Text style={styles.suggestionName}>{place.name}</Text>
+                              <Text style={styles.suggestionAddress}>{place.address}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
                   </>
-                ) : activeField === 'dropoff' && dropoffSuggestions.length > 0 ? (
+                ) : activeField === 'dropoff' ? (
                   <>
-                    <Text style={styles.suggestionsTitle}>
-                      {isLoadingSuggestions ? 'Searching...' : 'Destination Suggestions'}
-                    </Text>
-                    {dropoffSuggestions.map((place) => (
-                      <TouchableOpacity
-                        key={place.id}
-                        style={styles.suggestionRow}
-                        onPress={() => handlePlaceSelection(place, 'dropoff')}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.suggestionIcon}>
-                          <Ionicons name="location-outline" size={20} color="#A77BFF" />
-                        </View>
-                        <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionName}>{place.name}</Text>
-                          <Text style={styles.suggestionAddress}>{place.address}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                    {/* Use Current Location Option - also available for dropoff */}
+                    <TouchableOpacity
+                      style={styles.currentLocationRow}
+                      onPress={() => handleUseCurrentLocation('dropoff')}
+                      activeOpacity={0.7}
+                      disabled={isLoadingCurrentLocation}
+                    >
+                      <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#A77BFF" />
+                      </View>
+                      <View style={styles.suggestionContent}>
+                        <Text style={styles.suggestionName}>Use current location</Text>
+                        <Text style={styles.suggestionAddress}>
+                          {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                        </Text>
+                      </View>
+                      {isLoadingCurrentLocation && (
+                        <Animated.View
+                          style={{
+                            transform: [{
+                              rotate: rotationAnim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: ['0deg', '360deg']
+                              })
+                            }]
+                          }}
+                        >
+                          <Ionicons name="refresh" size={18} color="#A77BFF" />
+                        </Animated.View>
+                      )}
+                    </TouchableOpacity>
+
+                    {dropoffSuggestions.length > 0 && (
+                      <>
+                        <Text style={styles.suggestionsTitle}>
+                          {isLoadingSuggestions ? 'Searching...' : 'Destination Suggestions'}
+                        </Text>
+                        {dropoffSuggestions.map((place) => (
+                          <TouchableOpacity
+                            key={place.id}
+                            style={styles.suggestionRow}
+                            onPress={() => handlePlaceSelection(place, 'dropoff')}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.suggestionIcon}>
+                              <Ionicons name="location-outline" size={20} color="#A77BFF" />
+                            </View>
+                            <View style={styles.suggestionContent}>
+                              <Text style={styles.suggestionName}>{place.name}</Text>
+                              <Text style={styles.suggestionAddress}>{place.address}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
                   </>
                 ) : null}
 
@@ -1399,6 +1477,18 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 4,
     backgroundColor: 'rgba(0, 212, 170, 0.1)',
+  },
+  currentLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: 'rgba(167, 123, 255, 0.08)',
+  },
+  currentLocationIcon: {
+    backgroundColor: 'rgba(0, 212, 170, 0.15)',
   },
 });
 
