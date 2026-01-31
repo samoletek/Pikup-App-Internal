@@ -52,7 +52,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   const [rotationAnim] = useState(new Animated.Value(0));
   const [showLocationSuccess, setShowLocationSuccess] = useState(false);
 
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  // Ref to track expanded state for PanResponder (closure issue workaround)
+  const isExpandedRef = useRef(false);
 
   // Debounce ref for search
   const searchTimeoutRef = useRef(null);
@@ -279,6 +282,11 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     }
   }, [visible]);
 
+  // Keep ref in sync with state for PanResponder
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+  }, [isExpanded]);
+
   // Improved pan responder with better gesture handling
   const panResponder = useRef(
     PanResponder.create({
@@ -301,34 +309,42 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
         const currentY = translateY._value;
         const velocity = gestureState.vy;
+        const collapsedPosition = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
 
         let finalY;
         let shouldExpand;
         let shouldClose = false;
 
-        if (velocity > 1.5) {
-          if (currentY > SCREEN_HEIGHT - COLLAPSED_HEIGHT - 100) {
-            finalY = MODAL_HEIGHT;
+        // If in collapsed state (not expanded) and swiping down, always close
+        if (!isExpandedRef.current && (velocity > 0.5 || gestureState.dy > 30)) {
+          finalY = SCREEN_HEIGHT;
+          shouldClose = true;
+        } else if (velocity > 1.5) {
+          // Fast swipe down from expanded state
+          if (currentY > collapsedPosition - 100) {
+            finalY = SCREEN_HEIGHT;
             shouldClose = true;
           } else {
-            finalY = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
+            finalY = collapsedPosition;
             shouldExpand = false;
           }
         } else if (velocity < -1.5) {
+          // Fast swipe up - expand
           finalY = 100;
           shouldExpand = true;
         } else {
-          const expandedThreshold = (100 + SCREEN_HEIGHT - COLLAPSED_HEIGHT) / 2;
-          const closeThreshold = SCREEN_HEIGHT - COLLAPSED_HEIGHT + 50;
+          // Slow gesture - use position thresholds
+          const expandedThreshold = (100 + collapsedPosition) / 2;
+          const closeThreshold = collapsedPosition + 30;
 
           if (currentY < expandedThreshold) {
             finalY = 100;
             shouldExpand = true;
           } else if (currentY > closeThreshold) {
-            finalY = MODAL_HEIGHT;
+            finalY = SCREEN_HEIGHT;
             shouldClose = true;
           } else {
-            finalY = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
+            finalY = collapsedPosition;
             shouldExpand = false;
           }
         }
@@ -340,7 +356,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
             tension: 100,
             friction: 8,
           }).start(() => {
-            translateY.setValue(MODAL_HEIGHT);
+            translateY.setValue(SCREEN_HEIGHT);
             onClose();
           });
         } else {
@@ -391,12 +407,12 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
   const closeModal = () => {
     Animated.spring(translateY, {
-      toValue: MODAL_HEIGHT,
+      toValue: SCREEN_HEIGHT,
       useNativeDriver: false,
       tension: 100,
       friction: 8,
     }).start(() => {
-      translateY.setValue(MODAL_HEIGHT);
+      translateY.setValue(SCREEN_HEIGHT);
       onClose();
     });
   };
