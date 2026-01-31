@@ -91,8 +91,8 @@ const MapboxMap = forwardRef(({
       scaleBarEnabled={false} // Remove scale bar
       onDidFailLoadingMap={handleMapError}
       onDidFinishLoadingMap={handleDidFinishLoadingMap}
-      logoPosition={{ bottom: 10, left: 10 }} // Symmetric bottom-left
-      attributionPosition={{ bottom: 10, right: 10 }} // Symmetric bottom-right
+      logoPosition={{ bottom: 8, left: 8 }} // Symmetric bottom-left
+      attributionPosition={{ bottom: 8, right: 0 }} // Closer to right edge
       {...props}
     >
       <Mapbox.Camera

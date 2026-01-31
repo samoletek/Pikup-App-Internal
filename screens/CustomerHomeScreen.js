@@ -534,7 +534,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top - 15, 20) }]}>
         <Image
           source={require("../assets/pikup-logo.png")}
           style={styles.headerLogo}
@@ -545,7 +545,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
       {/* Delivery Status Tracker - Only show when there's an active delivery */}
       {activeDelivery && (
-        <View style={[styles.trackerContainer, { top: insets.top + 60 }]}>
+        <View style={[styles.trackerContainer, { top: Math.max(insets.top + 35, 60) }]}>
           <DeliveryStatusTracker
             requestId={activeDelivery.id}
             onDeliveryComplete={handleDeliveryComplete}
@@ -558,8 +558,8 @@ export default function CustomerHomeScreen({ navigation }) {
       <View
         style={[
           styles.searchBarContainer,
-          { top: insets.top + 60 },
-          activeDelivery && { top: insets.top + 120 }
+          { top: Math.max(insets.top + 35, 60) },
+          activeDelivery && { top: Math.max(insets.top + 95, 120) }
         ]}
         pointerEvents="box-none"
       >
