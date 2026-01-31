@@ -1,3 +1,4 @@
+// CustomerSearchModal - Updated UX for current location
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import {
   View,
@@ -53,74 +54,72 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
 
-  // Mapbox Geocoding API for autocomplete
-  const searchPlaces = async (query, fieldType) => {
+  // Debounce ref for search
+  const searchTimeoutRef = useRef(null);
+
+  // Mapbox Geocoding API for autocomplete (debounced)
+  const searchPlaces = (query, fieldType) => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     if (!query || query.length < 2) {
       if (fieldType === 'pickup') setPickupSuggestions([]);
       if (fieldType === 'dropoff') setDropoffSuggestions([]);
       return;
     }
 
-    try {
-      setIsLoadingSuggestions(true);
-
-      // Get user location for proximity bias (optional)
-      let proximityParam = '';
+    // Debounce: wait 300ms before making API call
+    searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const userLocation = await MapboxLocationService.getCurrentLocation();
-        if (userLocation) {
-          // Mapbox uses proximity parameter: longitude,latitude (note the order!)
-          proximityParam = `&proximity=${userLocation.longitude},${userLocation.latitude}`;
-        }
-      } catch (locationError) {
-        console.log('Could not get user location for proximity bias');
-      }
+        setIsLoadingSuggestions(true);
 
-      const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+        const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
 
-      // Mapbox Geocoding API endpoint
-      // Limit to US addresses, autocomplete mode, limit 5 results
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
-        `access_token=${accessToken}` +
-        `&country=us` + // Limit to US
-        `&types=address,poi` + // Address and points of interest
-        `&limit=5` + // Max 5 results
-        `&autocomplete=true` + // Enable autocomplete
-        proximityParam
-      );
+        // Mapbox Geocoding API endpoint
+        // Limit to US addresses, autocomplete mode, limit 5 results
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+          `access_token=${accessToken}` +
+          `&country=us` + // Limit to US
+          `&types=address,poi` + // Address and points of interest
+          `&limit=5` + // Max 5 results
+          `&autocomplete=true` // Enable autocomplete
+        );
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (data.features && data.features.length > 0) {
-        const formattedSuggestions = data.features.map(feature => ({
-          id: feature.id,
-          name: feature.text, // Main text (e.g., "Main Street")
-          address: feature.place_name.replace(feature.text + ', ', ''), // Secondary text
-          full_description: feature.place_name, // Full formatted address
-          coordinates: {
-            latitude: feature.center[1], // Mapbox returns [lng, lat]
-            longitude: feature.center[0]
+        if (data.features && data.features.length > 0) {
+          const formattedSuggestions = data.features.map(feature => ({
+            id: feature.id,
+            name: feature.text, // Main text (e.g., "Main Street")
+            address: feature.place_name.replace(feature.text + ', ', ''), // Secondary text
+            full_description: feature.place_name, // Full formatted address
+            coordinates: {
+              latitude: feature.center[1], // Mapbox returns [lng, lat]
+              longitude: feature.center[0]
+            }
+          }));
+
+          if (fieldType === 'pickup') {
+            setPickupSuggestions(formattedSuggestions);
+          } else if (fieldType === 'dropoff') {
+            setDropoffSuggestions(formattedSuggestions);
           }
-        }));
-
-        if (fieldType === 'pickup') {
-          setPickupSuggestions(formattedSuggestions);
-        } else if (fieldType === 'dropoff') {
-          setDropoffSuggestions(formattedSuggestions);
+        } else {
+          console.log('Mapbox Geocoding: No results found');
+          if (fieldType === 'pickup') setPickupSuggestions([]);
+          if (fieldType === 'dropoff') setDropoffSuggestions([]);
         }
-      } else {
-        console.log('Mapbox Geocoding: No results found');
+      } catch (error) {
+        console.error('Mapbox geocoding error:', error);
         if (fieldType === 'pickup') setPickupSuggestions([]);
         if (fieldType === 'dropoff') setDropoffSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
       }
-    } catch (error) {
-      console.error('Mapbox geocoding error:', error);
-      if (fieldType === 'pickup') setPickupSuggestions([]);
-      if (fieldType === 'dropoff') setDropoffSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
+    }, 300);
   };
 
   // Animation helper functions
@@ -606,25 +605,27 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   // Handle text input changes with API calls
   const handlePickupChange = (text) => {
     setPickup(text);
-    setActiveField('pickup');
-    searchPlaces(text, 'pickup');
-    // Clear stored coordinates when user types manually
-    setPickupCoordinates(null);
+    // Only clear coordinates if they were set (avoid unnecessary re-renders)
+    if (pickupCoordinates !== null) {
+      setPickupCoordinates(null);
+    }
     if (text.length === 0) {
       setPickupSuggestions([]);
-      setActiveField(null);
+    } else {
+      searchPlaces(text, 'pickup');
     }
   };
 
   const handleDropoffChange = (text) => {
     setDropoff(text);
-    setActiveField('dropoff');
-    searchPlaces(text, 'dropoff');
-    // Clear stored coordinates when user types manually
-    setDropoffCoordinates(null);
+    // Only clear coordinates if they were set (avoid unnecessary re-renders)
+    if (dropoffCoordinates !== null) {
+      setDropoffCoordinates(null);
+    }
     if (text.length === 0) {
       setDropoffSuggestions([]);
-      setActiveField(null);
+    } else {
+      searchPlaces(text, 'dropoff');
     }
   };
 
@@ -681,6 +682,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       translateY.removeAllListeners();
       translateY.stopAnimation();
       rotationAnim.stopAnimation();
+      // Clear search timeout on unmount
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -810,7 +815,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       <TouchableOpacity onPress={() => {
                         setPickup('');
                         setPickupSuggestions([]);
-                        setActiveField(null);
                         setPickupCoordinates(null);
                       }}>
                         <Ionicons name="close-circle" size={18} color="#666" />
@@ -838,7 +842,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       <TouchableOpacity onPress={() => {
                         setDropoff('');
                         setDropoffSuggestions([]);
-                        setActiveField(null);
                         setDropoffCoordinates(null);
                       }}>
                         <Ionicons name="close-circle" size={18} color="#666" />
@@ -850,38 +853,39 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                 {/* Live Places API suggestions when typing, otherwise show static suggestions */}
                 {activeField === 'pickup' ? (
                   <>
-                    {/* Use Current Location Option - always visible for pickup */}
-                    <TouchableOpacity
-                      style={styles.currentLocationRow}
-                      onPress={() => handleUseCurrentLocation('pickup')}
-                      activeOpacity={0.7}
-                      disabled={isLoadingCurrentLocation}
-                    >
-                      <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
-                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00D4AA" />
-                      </View>
-                      <View style={styles.suggestionContent}>
-                        <Text style={styles.suggestionName}>Use current location</Text>
-                        <Text style={styles.suggestionAddress}>
-                          {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
-                        </Text>
-                      </View>
-                      {isLoadingCurrentLocation && (
-                        <Animated.View
-                          style={{
-                            transform: [{
-                              rotate: rotationAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: ['0deg', '360deg']
-                              })
-                            }]
-                          }}
-                        >
-                          <Ionicons name="refresh" size={18} color="#00D4AA" />
-                        </Animated.View>
-                      )}
-                    </TouchableOpacity>
-
+                    {/* Use Current Location Option - visible only when field is empty */}
+                    {!pickup.trim() && (
+                      <TouchableOpacity
+                        style={styles.currentLocationRow}
+                        onPress={() => handleUseCurrentLocation('pickup')}
+                        activeOpacity={0.7}
+                        disabled={isLoadingCurrentLocation}
+                      >
+                        <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                          <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00D4AA" />
+                        </View>
+                        <View style={styles.suggestionContent}>
+                          <Text style={styles.suggestionName}>Use current location</Text>
+                          <Text style={styles.suggestionAddress}>
+                            {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                          </Text>
+                        </View>
+                        {isLoadingCurrentLocation && (
+                          <Animated.View
+                            style={{
+                              transform: [{
+                                rotate: rotationAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg']
+                                })
+                              }]
+                            }}
+                          >
+                            <Ionicons name="refresh" size={18} color="#00D4AA" />
+                          </Animated.View>
+                        )}
+                      </TouchableOpacity>
+                    )}
                     {pickupSuggestions.length > 0 && (
                       <>
                         <Text style={styles.suggestionsTitle}>
@@ -908,38 +912,39 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                   </>
                 ) : activeField === 'dropoff' ? (
                   <>
-                    {/* Use Current Location Option - also available for dropoff */}
-                    <TouchableOpacity
-                      style={styles.currentLocationRow}
-                      onPress={() => handleUseCurrentLocation('dropoff')}
-                      activeOpacity={0.7}
-                      disabled={isLoadingCurrentLocation}
-                    >
-                      <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
-                        <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#A77BFF" />
-                      </View>
-                      <View style={styles.suggestionContent}>
-                        <Text style={styles.suggestionName}>Use current location</Text>
-                        <Text style={styles.suggestionAddress}>
-                          {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
-                        </Text>
-                      </View>
-                      {isLoadingCurrentLocation && (
-                        <Animated.View
-                          style={{
-                            transform: [{
-                              rotate: rotationAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: ['0deg', '360deg']
-                              })
-                            }]
-                          }}
-                        >
-                          <Ionicons name="refresh" size={18} color="#A77BFF" />
-                        </Animated.View>
-                      )}
-                    </TouchableOpacity>
-
+                    {/* Use Current Location Option - visible only when field is empty */}
+                    {!dropoff.trim() && (
+                      <TouchableOpacity
+                        style={styles.currentLocationRow}
+                        onPress={() => handleUseCurrentLocation('dropoff')}
+                        activeOpacity={0.7}
+                        disabled={isLoadingCurrentLocation}
+                      >
+                        <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                          <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#A77BFF" />
+                        </View>
+                        <View style={styles.suggestionContent}>
+                          <Text style={styles.suggestionName}>Use current location</Text>
+                          <Text style={styles.suggestionAddress}>
+                            {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                          </Text>
+                        </View>
+                        {isLoadingCurrentLocation && (
+                          <Animated.View
+                            style={{
+                              transform: [{
+                                rotate: rotationAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg']
+                                })
+                              }]
+                            }}
+                          >
+                            <Ionicons name="refresh" size={18} color="#A77BFF" />
+                          </Animated.View>
+                        )}
+                      </TouchableOpacity>
+                    )}
                     {dropoffSuggestions.length > 0 && (
                       <>
                         <Text style={styles.suggestionsTitle}>
