@@ -49,7 +49,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
   // Animation states for enhanced UX
   const [rotationAnim] = useState(new Animated.Value(0));
-  const [pulseAnim] = useState(new Animated.Value(1));
   const [showLocationSuccess, setShowLocationSuccess] = useState(false);
 
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
@@ -150,52 +149,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     setTimeout(() => setShowLocationSuccess(false), 1500);
   };
 
-  // Get current location and reverse geocode to address
-  const setPickupFromCurrentLocation = async () => {
-    try {
-      startLocationLoading();
-
-      // Get user's current location
-      const location = await MapboxLocationService.getCurrentLocation();
-
-      if (location) {
-        // Store coordinates immediately
-        setPickupCoordinates({
-          latitude: location.latitude,
-          longitude: location.longitude
-        });
-
-        // Reverse geocode to get address
-        try {
-          const addressData = await MapboxLocationService.reverseGeocode(
-            location.latitude,
-            location.longitude
-          );
-
-          if (addressData && addressData.address) {
-            setPickup(addressData.address);
-            showSuccessAnimation();
-          } else {
-            // Fallback to coordinates display
-            setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-            showSuccessAnimation();
-          }
-        } catch (geocodeError) {
-          console.log('Reverse geocoding failed, using coordinates:', geocodeError);
-          // Fallback to coordinates display
-          setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-          showSuccessAnimation();
-        }
-      }
-    } catch (error) {
-      console.error('Error getting current location:', error);
-      // Don't show alert - just fail silently for auto-population
-    } finally {
-      stopLocationLoading();
-    }
-  };
-
-  // Manual current location button press - now supports both fields
+  // Get current location for pickup or dropoff field
   const handleUseCurrentLocation = async (fieldType = 'pickup') => {
     try {
       startLocationLoading();
@@ -307,11 +261,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       console.log('CustomerSearchModal is now visible');
       translateY.setValue(SCREEN_HEIGHT - COLLAPSED_HEIGHT);
       setIsExpanded(false);
-
-      // Auto-fill pickup location only if field is empty
-      if (!pickup?.trim()) {
-        setPickupFromCurrentLocation();
-      }
+      // Location is now set only by user request via "Use current location" option
     } else {
       // Reset form data when modal closes
       console.log('CustomerSearchModal is now hidden, resetting form');
@@ -726,36 +676,11 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     return 'Schedule for Later';
   };
 
-  // Pulse animation for location button when field is empty
-  useEffect(() => {
-    if (!pickup.trim() && !isLoadingCurrentLocation) {
-      const pulse = () => {
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ]).start(pulse);
-      };
-      pulse();
-    } else {
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(1);
-    }
-  }, [pickup, isLoadingCurrentLocation]);
-
   useEffect(() => {
     return () => {
       translateY.removeAllListeners();
       translateY.stopAnimation();
       rotationAnim.stopAnimation();
-      pulseAnim.stopAnimation();
     };
   }, []);
 
@@ -881,38 +806,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       onFocus={() => setActiveField('pickup')}
                       autoFocus={false}
                     />
-                    {!pickup.trim() && !isLoadingCurrentLocation && (
-                      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <TouchableOpacity
-                          onPress={handleUseCurrentLocation}
-                          style={styles.currentLocationButton}
-                        >
-                          <Ionicons name="location" size={18} color="#00D4AA" />
-                        </TouchableOpacity>
-                      </Animated.View>
-                    )}
-                    {isLoadingCurrentLocation && (
-                      <Animated.View
-                        style={[
-                          styles.loadingContainer,
-                          {
-                            transform: [{
-                              rotate: rotationAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: ['0deg', '360deg']
-                              })
-                            }]
-                          }
-                        ]}
-                      >
-                        <Ionicons name="refresh" size={18} color="#00D4AA" />
-                      </Animated.View>
-                    )}
-                    {showLocationSuccess && (
-                      <Animated.View style={styles.successIndicator}>
-                        <Ionicons name="checkmark-circle" size={18} color="#00D4AA" />
-                      </Animated.View>
-                    )}
                     {pickup.trim() && (
                       <TouchableOpacity onPress={() => {
                         setPickup('');
@@ -1462,21 +1355,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 17,
     fontWeight: '500',
-  },
-  currentLocationButton: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-  },
-  loadingContainer: {
-    padding: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    borderRadius: 4,
-  },
-  successIndicator: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
   },
   currentLocationRow: {
     flexDirection: 'row',
