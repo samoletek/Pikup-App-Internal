@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { usePayment } from "../contexts/PaymentContext";
 import { useAuth } from "../contexts/AuthContext";
+import RedkikService from "../services/RedkikService";
 import AddPaymentMethodModal from "../components/AddPaymentMethodModal";
 
 const { height } = Dimensions.get("window");
@@ -160,34 +161,39 @@ const PriceSummaryModal = ({
     return (basePrice + serviceFee + coverageFee + tax).toFixed(2);
   };
 
-  // Fetch insurance quote with proper error handling
+  // Fetch insurance quote with real Redkik Service
   const fetchInsuranceQuote = async () => {
     setLoadingQuote(true);
     setInsuranceError(null);
     setLoadingInsurance(true);
 
     try {
-      console.warn('MIGRATION: Insurance quotes currently disabled.');
+      console.log('Fetching real insurance quote from Redkik...');
 
-      // MOCK INSURANCE RESPONSE
-      const mockQuote = {
-        premium: 15.00,
-        currency: 'USD',
-        quoteId: 'mock_quote_' + Date.now(),
-        offerId: 'mock_offer_' + Date.now()
+      // Construct booking details for quote
+      // TODO: Refine payload structure based on exact Redkik API docs
+      const bookingData = {
+        itemValue: itemValue,
+        description: summaryData?.itemDescription || 'Delivery Item',
+        pickup: selectedLocations?.pickup?.address,
+        dropoff: selectedLocations?.dropoff?.address,
+        distance: distance,
+        vehicleType: selectedVehicle?.type
       };
 
-      // Simulate network delay
-      await new Promise(r => setTimeout(r, 600));
+      const quote = await RedkikService.getQuote(bookingData);
 
-      setInsuranceQuote(mockQuote);
-      console.log('MOCK Insurance quote received:', mockQuote);
-
-      /* LEGACY RENDER CALL REMOVED */
+      if (quote) {
+        setInsuranceQuote(quote);
+        console.log('✅ Redkik quote received:', quote);
+      } else {
+        throw new Error('No quote received');
+      }
 
     } catch (error) {
       console.error('Insurance quote request failed:', error);
-      setInsuranceError("Migration in progress. Insurance momentarily unavailable.");
+      // Fallback to error state, but don't block the UI - just show unavailable
+      setInsuranceError("Insurance temporarily unavailable.");
       setInsuranceQuote(null);
     } finally {
       setLoadingInsurance(false);
