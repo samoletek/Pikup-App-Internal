@@ -96,9 +96,19 @@ export default function WelcomeScreen({ navigation }) {
               accessible
               accessibilityLabel="PikUp"
             />
+            <Text style={styles.tagline}>Moving made simple.</Text>
           </View>
         </View>
 
+        {/* Auth Modal */}
+        <AuthModal
+          visible={modalVisible}
+          selectedRole={selectedRole}
+          onClose={closeModal}
+          navigation={navigation}
+        />
+
+        {/* Buttons */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.button}
@@ -114,15 +124,6 @@ export default function WelcomeScreen({ navigation }) {
             <Text style={styles.buttonText}>Driver</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Auth Modal */}
-        <AuthModal
-          visible={modalVisible}
-          onClose={closeModal}
-          selectedRole={selectedRole}
-          navigation={navigation}
-        />
-
       </View>
     </LinearGradient>
   );
@@ -143,6 +144,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: -1,
+    paddingBottom: '20%',
   },
   logoContainer: {
     width: "100%",
@@ -154,9 +156,19 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   logo: {
-    width: '80%',
-    height: 250,
+    width: '90%',
+    height: 280,
     resizeMode: "contain",
+  },
+  tagline: {
+    color: '#CCC',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    marginTop: -40, // Pull it up closer to logos
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    opacity: 0.8, // Slightly more subtle
   },
   buttonContainer: {
     width: "100%",
