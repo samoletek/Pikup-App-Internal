@@ -455,9 +455,46 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
 
             <Text style={styles.termsText}>
                 By creating an account, you agree to our{'\n'}
-                <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Terms</Text>
+                <Text
+                    style={styles.linkText}
+                    onPress={async () => {
+                        console.log('Opening Terms...');
+                        try {
+                            const supported = await Linking.canOpenURL('https://pikup-app.com/');
+                            if (supported) {
+                                await Linking.openURL('https://pikup-app.com/');
+                            } else {
+                                Alert.alert('Error', 'Cannot open this link: https://pikup-app.com/');
+                            }
+                        } catch (err) {
+                            console.error('An error occurred', err);
+                            Alert.alert('Error', 'Failed to open link');
+                        }
+                    }}
+                    suppressHighlighting={false}
+                >
+                    Terms
+                </Text>
                 {' '}and{' '}
-                <Text style={styles.linkText} onPress={() => Linking.openURL('https://pikup-app.com/')}>Privacy Policy</Text>.
+                <Text
+                    style={styles.linkText}
+                    onPress={async () => {
+                        console.log('Opening Privacy...');
+                        try {
+                            const supported = await Linking.canOpenURL('https://pikup-app.com/');
+                            if (supported) {
+                                await Linking.openURL('https://pikup-app.com/');
+                            } else {
+                                Alert.alert('Error', 'Cannot open this link');
+                            }
+                        } catch (err) {
+                            console.error('An error occurred', err);
+                        }
+                    }}
+                    suppressHighlighting={false}
+                >
+                    Privacy Policy
+                </Text>.
             </Text>
 
             <Button
@@ -647,7 +684,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
         marginTop: 0,
-        marginBottom: 20,
+        marginBottom: 4,
         lineHeight: 18,
     },
     linkText: {
