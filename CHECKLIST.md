@@ -16,7 +16,7 @@
 - [-] #2 Sign in with Apple (App Store requirement)
 - [-] #3 Sign in with Google (Play Store requirement)
 - [x] #4 Account deletion feature (required by both stores)
-- [-] #5 Terms/Privacy - links to pikup-app.com
+- [-] #5 Terms/Privacy - links to pikup-app.com (need to create)
 
 ### Customer Flow - Step 1: Pickup & Dropoff
 - [x] #21 Address autocomplete (Mapbox API)
@@ -38,11 +38,11 @@
 
 ### Milestone 1 Deliverables
 - [ ] Working social authentication (Apple + Google)
-- [ ] Account deletion functionality
-- [ ] Supabase backend configured and migrated
-- [ ] Fixed modal system with proper navigation
-- [ ] Address autocomplete working
-- [ ] Price calculation audit complete
+- [x] Account deletion functionality
+- [x] Supabase backend configured and migrated
+- [x] Fixed modal system with proper navigation
+- [x] Address autocomplete working
+- [x] Price calculation audit complete
 
 ---
 
@@ -56,32 +56,32 @@
 - [ ] #7 Device consistency across screen sizes
 
 ### Authentication Screens
-- [ ] #8 Forgot Password flow
-- [ ] #9 Loading states (spinners, disabled buttons)
-- [ ] #10 Error handling on all failures
-- [ ] #11 Back button on Sign Up screen
+- [x] #8 Forgot Password flow (UI)
+- [x] #9 Loading states (spinners, disabled buttons) - andrei
+- [x] #10 Error handling on all failures
+- [x] #11 Back button on Sign Up screen - drew
 
 ### Customer Flow - Home Screen
-- [ ] #12 Logo positioning fix
-- [ ] #13 Search field - fix touch area (only 30% clickable)
-- [ ] #14 UX fix - search opens A/B modal confusion
-- [ ] #15 Remove duplicate buttons (Request Pickup vs search)
+- [x] #12 Logo positioning fix - andrei
+- [x] #13 Search field - fix touch area (only 30% clickable) - andrei
+- [x] #14 UX fix - search opens A/B modal confusion - andrei
+- [x] #15 Remove duplicate buttons (Request Pickup vs search) - drew
 
 ### Customer Flow - Request Flow (Multi-Step Modal)
-- [ ] #16 Add back navigation between request steps
-- [ ] #17 Fixed bottom button on all steps
-- [ ] #18 Unified modal component across steps
-- [ ] #19 Fix black screen flash when closing modals
-- [ ] #20 Prevent progress reset on tap outside modal
+- [x] #16 Add back navigation between request steps - drew
+- [x] #17 Fixed bottom button on all steps - drew
+- [x] #18 Unified modal component across steps - drew
+- [x] #19 Fix black screen flash when closing modals - drew
+- [x] #20 Prevent progress reset on tap outside modal - drew
 
 ### Customer Flow - Step 2: Item Details
-- [ ] #24 Remove address display (already confirmed in Step 1)
-- [ ] #25 Remove duplicate photo area
-- [ ] #26 Fix photo delete button overflow
+- [x] #24 Remove address display (already confirmed in Step 1) - drew
+- [x] #25 Remove duplicate photo area - drew
+- [x] #26 Fix photo delete button overflow - drew
 - [ ] #27 Add New/Used selection toggle
 - [ ] #28 Insurance logic: New = auto-insured, Used = disclaimer
-- [ ] #29 Remove AI analysis feature (only fills one field)
-- [ ] #30 Enlarge Description field
+- [ ] #29 Remove AI analysis feature (fix later - reimplement)
+- [x] #30 Enlarge Description field - drew
 
 ### Customer Flow - Step 4: Summary
 - [ ] #36 Tap on summary item jumps to that step
