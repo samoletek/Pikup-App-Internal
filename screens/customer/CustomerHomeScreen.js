@@ -653,10 +653,10 @@ const styles = StyleSheet.create({
     zIndex: 15,
   },
   headerLogo: {
-    width: 300, // Restored large size (was 350, 300 allows safer fit)
-    aspectRatio: 5.08,
-    height: undefined,
+    width: '22%',
+    height: 20.4,
     resizeMode: "contain",
+    marginTop: 10,
   },
 
   searchBarContainer: {

@@ -917,7 +917,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center'
     },
     pickupMarker: { backgroundColor: colors.primary },
-    dropoffMarker: { backgroundColor: colors.secondary },
+    dropoffMarker: { backgroundColor: colors.success },
     addressMarkerText: { color: colors.white, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold },
     suggestionsContainer: {
         position: 'absolute',

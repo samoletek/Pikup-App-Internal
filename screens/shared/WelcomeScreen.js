@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   logo: {
-    width: '90%',
-    height: 280,
+    width: '60%',
+    height: 170,
     resizeMode: "contain",
   },
   tagline: {
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.5,
-    marginTop: -40, // Pull it up closer to logos
+    marginTop: -10, // Pull it up closer to logos
     textTransform: 'uppercase',
     textAlign: 'center',
     opacity: 0.8, // Slightly more subtle

@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.primary
     },
     dropoffIcon: {
-        backgroundColor: colors.secondary
+        backgroundColor: colors.success
     },
     addressInfo: {
         marginLeft: spacing.md,
