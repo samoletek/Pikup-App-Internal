@@ -2,10 +2,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import DriverHomeScreen from '../screens/DriverHomeScreen';
-import DriverProfileScreen from '../screens/DriverProfileScreen';
-import DriverEarningsScreen from '../screens/DriverEarningsScreen';
-import DriverMessagesScreen from '../screens/DriverMessagesScreen';
+import DriverHomeScreen from '../screens/driver/DriverHomeScreen';
+import DriverProfileScreen from '../screens/driver/DriverProfileScreen';
+import DriverEarningsScreen from '../screens/driver/DriverEarningsScreen';
+import DriverMessagesScreen from '../screens/driver/DriverMessagesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -45,20 +45,20 @@ export default function DriverTabNavigator({ navigation }) {
         },
       })}
     >
-      <Tab.Screen 
-        name="Home" 
+      <Tab.Screen
+        name="Home"
         component={DriverHomeScreen}
       />
-      <Tab.Screen 
-        name="Earnings" 
+      <Tab.Screen
+        name="Earnings"
         component={DriverEarningsScreen}
       />
-      <Tab.Screen 
-        name="Messages" 
+      <Tab.Screen
+        name="Messages"
         component={DriverMessagesScreen}
       />
-      <Tab.Screen 
-        name="Account" 
+      <Tab.Screen
+        name="Account"
         component={DriverProfileScreen}
       />
     </Tab.Navigator>

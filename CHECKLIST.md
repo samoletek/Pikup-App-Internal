@@ -12,29 +12,29 @@
 **Focus:** Backend migration, authentication, core fixes
 
 ### Global / Critical
-- [x] #1 Safe Area - extend content to screen edges like modern apps - Erema
-- [-] #2 Sign in with Apple (App Store requirement) - Andrei
-- [-] #3 Sign in with Google (Play Store requirement) - Andrei
-- [x] #4 Account deletion feature (required by both stores) - Andrei
-- [-] #5 Terms/Privacy - links to pikup-app.com - Drew
+- [x] #1 Safe Area - extend content to screen edges like modern apps
+- [-] #2 Sign in with Apple (App Store requirement)
+- [-] #3 Sign in with Google (Play Store requirement)
+- [x] #4 Account deletion feature (required by both stores)
+- [-] #5 Terms/Privacy - links to pikup-app.com
 
 ### Customer Flow - Step 1: Pickup & Dropoff
-- [x] #21 Address autocomplete (Mapbox API) - Andrei
-- [x] #22 Remove "Popular Places" section - not relevant for moving - Erema
-- [ ] #23 Add "Use current location" option - Erema
+- [x] #21 Address autocomplete (Mapbox API)
+- [x] #22 Remove "Popular Places" section - not relevant for moving
+- [x] #23 Add "Use current location" option
 
 ### Customer Flow - Step 3: Vehicle Selection
-- [ ] #31 Fix Modal maxHeight - content gets cut off - Drew
-- [ ] #32 Add back/collapse navigation to modals - Drew
-- [x] #33 Remove hardcoded "AI Recommended" badge - Erema
-- [ ] #34 Audit and fix price calculations - Drew
-- [ ] #35 Show vehicles as scrollable list, not buttons - Drew
+- [x] #31 Fix Modal maxHeight - content gets cut off
+- [x] #32 Add back/collapse navigation to modals
+- [x] #33 Remove hardcoded "AI Recommended" badge
+- [x] #34 Audit and fix price calculations in pricesummary
+- [x] #35 Show vehicles as scrollable list, not buttons
 
 ### Backend / Infrastructure
-- [-] #71 Supabase migration (auth + DB + realtime) - Andrei: очистить приложение от связи со старым бэком. Разметить полностью бэк под супабейс, все эндпойнты, таблицы новые. Какие именно таблицы должны быть и какие в них должны быть поля - это все должен подсказать файл readme.
+- [x] #71 Supabase migration (auth + DB + realtime)
 
 ### Insurance API
-- [x] #80 Redkik API authentication - **BLOCKED: waiting for correct base URL**
+- [x] #80 Redkik API authentication 
 
 ### Milestone 1 Deliverables
 - [ ] Working social authentication (Apple + Google)

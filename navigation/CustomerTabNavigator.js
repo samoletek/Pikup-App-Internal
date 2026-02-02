@@ -2,10 +2,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import CustomerHomeScreen from '../screens/CustomerHomeScreen';
-import CustomerProfileScreen from '../screens/CustomerProfileScreen';
-import CustomerActivityScreen from '../screens/CustomerActivityScreen';
-import CustomerMessagesScreen from '../screens/CustomerMessagesScreen';
+import CustomerHomeScreen from '../screens/customer/CustomerHomeScreen';
+import CustomerProfileScreen from '../screens/customer/CustomerProfileScreen';
+import CustomerActivityScreen from '../screens/customer/CustomerActivityScreen';
+import CustomerMessagesScreen from '../screens/customer/CustomerMessagesScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -45,20 +45,20 @@ export default function CustomerTabNavigator({ navigation }) {
         },
       })}
     >
-      <Tab.Screen 
-        name="Home" 
+      <Tab.Screen
+        name="Home"
         component={CustomerHomeScreen}
       />
-      <Tab.Screen 
-        name="Activity" 
+      <Tab.Screen
+        name="Activity"
         component={CustomerActivityScreen}
       />
-      <Tab.Screen 
-        name="Messages" 
+      <Tab.Screen
+        name="Messages"
         component={CustomerMessagesScreen}
       />
-      <Tab.Screen 
-        name="Account" 
+      <Tab.Screen
+        name="Account"
         component={CustomerProfileScreen}
       />
     </Tab.Navigator>

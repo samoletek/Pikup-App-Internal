@@ -29,6 +29,7 @@ const BaseModal = forwardRef(({
     renderHeader,
     backgroundColor = '#FFFFFF', // Default to white, can be overridden
     avoidKeyboard = false,
+    onBackdropPress, // Optional: custom handler for backdrop tap (e.g., show confirmation)
 }, ref) => {
     const insets = useSafeAreaInsets();
 
@@ -53,6 +54,15 @@ const BaseModal = forwardRef(({
     useImperativeHandle(ref, () => ({
         close: animateClose
     }));
+
+    // Track if currently closing to prevent backdrop press during close
+    const isClosingRef = useRef(false);
+
+    // Store latest animateClose in ref to avoid stale closure in panResponder
+    const animateCloseRef = useRef(animateClose);
+    useEffect(() => {
+        animateCloseRef.current = animateClose;
+    }, [animateClose]);
 
     // Pan responder
     const panResponder = useRef(
@@ -84,7 +94,9 @@ const BaseModal = forwardRef(({
                 const shouldClose = velocity > 1.5 || currentY > height * 0.4;
 
                 if (shouldClose) {
-                    animateClose();
+                    // Mark as closing to prevent backdrop press from triggering
+                    isClosingRef.current = true;
+                    animateCloseRef.current();
                 } else {
                     // Snap back to open position
                     Animated.spring(translateY, {
@@ -98,9 +110,21 @@ const BaseModal = forwardRef(({
         })
     ).current;
 
+    // Handle backdrop press - check if not already closing
+    const handleBackdropPress = useCallback(() => {
+        if (isClosingRef.current) return;
+        if (onBackdropPress) {
+            onBackdropPress();
+        } else {
+            animateClose();
+        }
+    }, [onBackdropPress, animateClose]);
+
     // Handle visibility changes
     useEffect(() => {
         if (visible) {
+            // Reset closing state when modal opens
+            isClosingRef.current = false;
             // Animate in
             // Reset value first
             translateY.setValue(height);
@@ -164,7 +188,7 @@ const BaseModal = forwardRef(({
             onRequestClose={animateClose}
         >
             {/* Backdrop - opacity derived from translateY via interpolate */}
-            <TouchableWithoutFeedback onPress={animateClose}>
+            <TouchableWithoutFeedback onPress={handleBackdropPress}>
                 <Animated.View
                     style={[
                         styles.backdrop,

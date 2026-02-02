@@ -3,50 +3,43 @@ import { View, Image } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./contexts/AuthContext";
 
-import WelcomeScreen from "./screens/WelcomeScreen";
-import AuthScreen from "./screens/AuthScreen";
-import RoleSelectionScreen from "./screens/RoleSelectionScreen";
+// Shared screens
+import WelcomeScreen from "./screens/shared/WelcomeScreen";
+import AuthScreen from "./screens/shared/AuthScreen";
+import RoleSelectionScreen from "./screens/shared/RoleSelectionScreen";
+import MessageScreen from "./screens/shared/MessageScreen";
+import DeliveryFeedbackScreen from "./screens/shared/DeliveryFeedbackScreen";
+import TermsAndPrivacyScreen from "./screens/shared/TermsAndPrivacyScreen";
 
 // Import Tab Navigators
 import CustomerTabNavigator from "./navigation/CustomerTabNavigator";
 import DriverTabNavigator from "./navigation/DriverTabNavigator";
 
-// Import individual screens for the activity and messages
-import CustomerActivityScreen from "./screens/CustomerActivityScreen";
-import CustomerMessagesScreen from "./screens/CustomerMessagesScreen";
-import DriverMessagesScreen from "./screens/DriverMessagesScreen";
+// Customer screens
+import CustomerActivityScreen from "./screens/customer/CustomerActivityScreen";
+import CustomerMessagesScreen from "./screens/customer/CustomerMessagesScreen";
+import CustomerClaimsScreen from "./screens/customer/CustomerClaimsScreen";
+import CustomerHelpScreen from "./screens/customer/CustomerHelpScreen";
+import CustomerWalletScreen from "./screens/customer/CustomerWalletScreen";
+import CustomerPersonalInfoScreen from "./screens/customer/CustomerPersonalInfoScreen";
+import CustomerSafetyScreen from "./screens/customer/CustomerSafetyScreen";
+import CustomerSettingsScreen from "./screens/customer/CustomerSettingsScreen";
+import DeliveryTrackingScreen from "./screens/customer/DeliveryTrackingScreen";
+import PaymentMethodsScreen from "./screens/customer/PaymentMethodsScreen";
 
-// Import other screens
-import DriverPreferencesScreen from "./screens/DriverPreferencesScreen";
-import DriverEarningsScreen from "./screens/DriverEarningsScreen";
-import PaymentMethodsScreen from "./screens/PaymentMethodsScreen";
-import RouteConfirmationScreen from "./screens/RouteConfirmationScreen";
-import MessageScreen from "./screens/MessageScreen";
-import DeliveryFeedbackScreen from "./screens/DeliveryFeedbackScreen";
-import DeliveryTrackingScreen from "./screens/DeliveryTrackingScreen";
-import EnRouteToPickupScreen from "./screens/EnRouteToPickupScreen";
-import GpsNavigationScreen from "./screens/GpsNavigationScreen";
-
-// NEW SCREENS - Add these imports
-import PickupConfirmationScreen from "./screens/PickupConfirmationScreen";
-import DeliveryNavigationScreen from "./screens/DeliveryNavigationScreen";
-import DeliveryConfirmationScreen from "./screens/DeliveryConfirmationScreen";
-import CustomerClaimsScreen from "./screens/CustomerClaimsScreen";
-
-// CUSTOMER PROFILE SCREENS - Add these imports
-import CustomerHelpScreen from "./screens/CustomerHelpScreen";
-import CustomerWalletScreen from "./screens/CustomerWalletScreen";
-import CustomerPersonalInfoScreen from "./screens/CustomerPersonalInfoScreen";
-import CustomerSafetyScreen from "./screens/CustomerSafetyScreen";
-import CustomerSettingsScreen from "./screens/CustomerSettingsScreen";
-
-// DRIVER ONBOARDING SCREENS - Add these imports
-import DriverOnboardingScreen from "./screens/DriverOnboardingScreen";
-import DriverOnboardingCompleteScreen from "./screens/DriverOnboardingCompleteScreen";
-import DriverPaymentSettingsScreen from "./screens/DriverPaymentSettingsScreen";
-
-// TERMS AND PRIVACY SCREEN
-import TermsAndPrivacyScreen from "./screens/TermsAndPrivacyScreen";
+// Driver screens
+import DriverMessagesScreen from "./screens/driver/DriverMessagesScreen";
+import DriverPreferencesScreen from "./screens/driver/DriverPreferencesScreen";
+import DriverEarningsScreen from "./screens/driver/DriverEarningsScreen";
+import RouteConfirmationScreen from "./screens/driver/RouteConfirmationScreen";
+import EnRouteToPickupScreen from "./screens/driver/EnRouteToPickupScreen";
+import GpsNavigationScreen from "./screens/driver/GpsNavigationScreen";
+import PickupConfirmationScreen from "./screens/driver/PickupConfirmationScreen";
+import DeliveryNavigationScreen from "./screens/driver/DeliveryNavigationScreen";
+import DeliveryConfirmationScreen from "./screens/driver/DeliveryConfirmationScreen";
+import DriverOnboardingScreen from "./screens/driver/DriverOnboardingScreen";
+import DriverOnboardingCompleteScreen from "./screens/driver/DriverOnboardingCompleteScreen";
+import DriverPaymentSettingsScreen from "./screens/driver/DriverPaymentSettingsScreen";
 
 const Stack = createNativeStackNavigator();
 
