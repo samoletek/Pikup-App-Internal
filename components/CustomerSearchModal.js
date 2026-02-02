@@ -1,3 +1,4 @@
+// CustomerSearchModal - Updated UX for current location
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import {
   View,
@@ -49,79 +50,79 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
   // Animation states for enhanced UX
   const [rotationAnim] = useState(new Animated.Value(0));
-  const [pulseAnim] = useState(new Animated.Value(1));
   const [showLocationSuccess, setShowLocationSuccess] = useState(false);
 
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
-  // Mapbox Geocoding API for autocomplete
-  const searchPlaces = async (query, fieldType) => {
+  // Ref to track expanded state for PanResponder (closure issue workaround)
+  const isExpandedRef = useRef(false);
+
+  // Debounce ref for search
+  const searchTimeoutRef = useRef(null);
+
+  // Mapbox Geocoding API for autocomplete (debounced)
+  const searchPlaces = (query, fieldType) => {
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     if (!query || query.length < 2) {
       if (fieldType === 'pickup') setPickupSuggestions([]);
       if (fieldType === 'dropoff') setDropoffSuggestions([]);
       return;
     }
 
-    try {
-      setIsLoadingSuggestions(true);
-
-      // Get user location for proximity bias (optional)
-      let proximityParam = '';
+    // Debounce: wait 300ms before making API call
+    searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const userLocation = await MapboxLocationService.getCurrentLocation();
-        if (userLocation) {
-          // Mapbox uses proximity parameter: longitude,latitude (note the order!)
-          proximityParam = `&proximity=${userLocation.longitude},${userLocation.latitude}`;
-        }
-      } catch (locationError) {
-        console.log('Could not get user location for proximity bias');
-      }
+        setIsLoadingSuggestions(true);
 
-      const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+        const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
 
-      // Mapbox Geocoding API endpoint
-      // Limit to US addresses, autocomplete mode, limit 5 results
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
-        `access_token=${accessToken}` +
-        `&country=us` + // Limit to US
-        `&types=address,poi` + // Address and points of interest
-        `&limit=5` + // Max 5 results
-        `&autocomplete=true` + // Enable autocomplete
-        proximityParam
-      );
+        // Mapbox Geocoding API endpoint
+        // Limit to US addresses, autocomplete mode, limit 5 results
+        const response = await fetch(
+          `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+          `access_token=${accessToken}` +
+          `&country=us` + // Limit to US
+          `&types=address,poi` + // Address and points of interest
+          `&limit=5` + // Max 5 results
+          `&autocomplete=true` // Enable autocomplete
+        );
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (data.features && data.features.length > 0) {
-        const formattedSuggestions = data.features.map(feature => ({
-          id: feature.id,
-          name: feature.text, // Main text (e.g., "Main Street")
-          address: feature.place_name.replace(feature.text + ', ', ''), // Secondary text
-          full_description: feature.place_name, // Full formatted address
-          coordinates: {
-            latitude: feature.center[1], // Mapbox returns [lng, lat]
-            longitude: feature.center[0]
+        if (data.features && data.features.length > 0) {
+          const formattedSuggestions = data.features.map(feature => ({
+            id: feature.id,
+            name: feature.text, // Main text (e.g., "Main Street")
+            address: feature.place_name.replace(feature.text + ', ', ''), // Secondary text
+            full_description: feature.place_name, // Full formatted address
+            coordinates: {
+              latitude: feature.center[1], // Mapbox returns [lng, lat]
+              longitude: feature.center[0]
+            }
+          }));
+
+          if (fieldType === 'pickup') {
+            setPickupSuggestions(formattedSuggestions);
+          } else if (fieldType === 'dropoff') {
+            setDropoffSuggestions(formattedSuggestions);
           }
-        }));
-
-        if (fieldType === 'pickup') {
-          setPickupSuggestions(formattedSuggestions);
-        } else if (fieldType === 'dropoff') {
-          setDropoffSuggestions(formattedSuggestions);
+        } else {
+          console.log('Mapbox Geocoding: No results found');
+          if (fieldType === 'pickup') setPickupSuggestions([]);
+          if (fieldType === 'dropoff') setDropoffSuggestions([]);
         }
-      } else {
-        console.log('Mapbox Geocoding: No results found');
+      } catch (error) {
+        console.error('Mapbox geocoding error:', error);
         if (fieldType === 'pickup') setPickupSuggestions([]);
         if (fieldType === 'dropoff') setDropoffSuggestions([]);
+      } finally {
+        setIsLoadingSuggestions(false);
       }
-    } catch (error) {
-      console.error('Mapbox geocoding error:', error);
-      if (fieldType === 'pickup') setPickupSuggestions([]);
-      if (fieldType === 'dropoff') setDropoffSuggestions([]);
-    } finally {
-      setIsLoadingSuggestions(false);
-    }
+    }, 300);
   };
 
   // Animation helper functions
@@ -150,63 +151,20 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     setTimeout(() => setShowLocationSuccess(false), 1500);
   };
 
-  // Get current location and reverse geocode to address
-  const setPickupFromCurrentLocation = async () => {
-    try {
-      startLocationLoading();
-
-      // Get user's current location
-      const location = await MapboxLocationService.getCurrentLocation();
-
-      if (location) {
-        // Store coordinates immediately
-        setPickupCoordinates({
-          latitude: location.latitude,
-          longitude: location.longitude
-        });
-
-        // Reverse geocode to get address
-        try {
-          const addressData = await MapboxLocationService.reverseGeocode(
-            location.latitude,
-            location.longitude
-          );
-
-          if (addressData && addressData.address) {
-            setPickup(addressData.address);
-            showSuccessAnimation();
-          } else {
-            // Fallback to coordinates display
-            setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-            showSuccessAnimation();
-          }
-        } catch (geocodeError) {
-          console.log('Reverse geocoding failed, using coordinates:', geocodeError);
-          // Fallback to coordinates display
-          setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-          showSuccessAnimation();
-        }
-      }
-    } catch (error) {
-      console.error('Error getting current location:', error);
-      // Don't show alert - just fail silently for auto-population
-    } finally {
-      stopLocationLoading();
-    }
-  };
-
-  // Manual current location button press
-  const handleUseCurrentLocation = async () => {
+  // Get current location for pickup or dropoff field
+  const handleUseCurrentLocation = async (fieldType = 'pickup') => {
     try {
       startLocationLoading();
 
       const location = await MapboxLocationService.getCurrentLocation();
 
       if (location) {
-        setPickupCoordinates({
+        const coordinates = {
           latitude: location.latitude,
           longitude: location.longitude
-        });
+        };
+
+        let addressText = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
 
         try {
           const addressData = await MapboxLocationService.reverseGeocode(
@@ -215,20 +173,24 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
           );
 
           if (addressData && addressData.address) {
-            setPickup(addressData.address);
-            showSuccessAnimation();
-          } else {
-            setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-            showSuccessAnimation();
+            addressText = addressData.address;
           }
         } catch (geocodeError) {
           console.log('Reverse geocoding failed, using coordinates:', geocodeError);
-          setPickup(`${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`);
-          showSuccessAnimation();
         }
 
-        // Clear any existing suggestions when using current location
-        setPickupSuggestions([]);
+        // Set the appropriate field based on fieldType
+        if (fieldType === 'pickup') {
+          setPickup(addressText);
+          setPickupCoordinates(coordinates);
+          setPickupSuggestions([]);
+        } else {
+          setDropoff(addressText);
+          setDropoffCoordinates(coordinates);
+          setDropoffSuggestions([]);
+        }
+
+        showSuccessAnimation();
         setActiveField(null);
       }
     } catch (error) {
@@ -301,11 +263,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       console.log('CustomerSearchModal is now visible');
       translateY.setValue(SCREEN_HEIGHT - COLLAPSED_HEIGHT);
       setIsExpanded(false);
-
-      // Auto-fill pickup location only if field is empty
-      if (!pickup?.trim()) {
-        setPickupFromCurrentLocation();
-      }
+      // Location is now set only by user request via "Use current location" option
     } else {
       // Reset form data when modal closes
       console.log('CustomerSearchModal is now hidden, resetting form');
@@ -323,6 +281,11 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
       setDropoffCoordinates(null);
     }
   }, [visible]);
+
+  // Keep ref in sync with state for PanResponder
+  useEffect(() => {
+    isExpandedRef.current = isExpanded;
+  }, [isExpanded]);
 
   // Improved pan responder with better gesture handling
   const panResponder = useRef(
@@ -346,34 +309,42 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
         const currentY = translateY._value;
         const velocity = gestureState.vy;
+        const collapsedPosition = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
 
         let finalY;
         let shouldExpand;
         let shouldClose = false;
 
-        if (velocity > 1.5) {
-          if (currentY > SCREEN_HEIGHT - COLLAPSED_HEIGHT - 100) {
-            finalY = MODAL_HEIGHT;
+        // If in collapsed state (not expanded) and swiping down, always close
+        if (!isExpandedRef.current && (velocity > 0.5 || gestureState.dy > 30)) {
+          finalY = SCREEN_HEIGHT;
+          shouldClose = true;
+        } else if (velocity > 1.5) {
+          // Fast swipe down from expanded state
+          if (currentY > collapsedPosition - 100) {
+            finalY = SCREEN_HEIGHT;
             shouldClose = true;
           } else {
-            finalY = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
+            finalY = collapsedPosition;
             shouldExpand = false;
           }
         } else if (velocity < -1.5) {
+          // Fast swipe up - expand
           finalY = 100;
           shouldExpand = true;
         } else {
-          const expandedThreshold = (100 + SCREEN_HEIGHT - COLLAPSED_HEIGHT) / 2;
-          const closeThreshold = SCREEN_HEIGHT - COLLAPSED_HEIGHT + 50;
+          // Slow gesture - use position thresholds
+          const expandedThreshold = (100 + collapsedPosition) / 2;
+          const closeThreshold = collapsedPosition + 30;
 
           if (currentY < expandedThreshold) {
             finalY = 100;
             shouldExpand = true;
           } else if (currentY > closeThreshold) {
-            finalY = MODAL_HEIGHT;
+            finalY = SCREEN_HEIGHT;
             shouldClose = true;
           } else {
-            finalY = SCREEN_HEIGHT - COLLAPSED_HEIGHT;
+            finalY = collapsedPosition;
             shouldExpand = false;
           }
         }
@@ -385,7 +356,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
             tension: 100,
             friction: 8,
           }).start(() => {
-            translateY.setValue(MODAL_HEIGHT);
+            translateY.setValue(SCREEN_HEIGHT);
             onClose();
           });
         } else {
@@ -436,12 +407,12 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
 
   const closeModal = () => {
     Animated.spring(translateY, {
-      toValue: MODAL_HEIGHT,
+      toValue: SCREEN_HEIGHT,
       useNativeDriver: false,
       tension: 100,
       friction: 8,
     }).start(() => {
-      translateY.setValue(MODAL_HEIGHT);
+      translateY.setValue(SCREEN_HEIGHT);
       onClose();
     });
   };
@@ -650,25 +621,27 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
   // Handle text input changes with API calls
   const handlePickupChange = (text) => {
     setPickup(text);
-    setActiveField('pickup');
-    searchPlaces(text, 'pickup');
-    // Clear stored coordinates when user types manually
-    setPickupCoordinates(null);
+    // Only clear coordinates if they were set (avoid unnecessary re-renders)
+    if (pickupCoordinates !== null) {
+      setPickupCoordinates(null);
+    }
     if (text.length === 0) {
       setPickupSuggestions([]);
-      setActiveField(null);
+    } else {
+      searchPlaces(text, 'pickup');
     }
   };
 
   const handleDropoffChange = (text) => {
     setDropoff(text);
-    setActiveField('dropoff');
-    searchPlaces(text, 'dropoff');
-    // Clear stored coordinates when user types manually
-    setDropoffCoordinates(null);
+    // Only clear coordinates if they were set (avoid unnecessary re-renders)
+    if (dropoffCoordinates !== null) {
+      setDropoffCoordinates(null);
+    }
     if (text.length === 0) {
       setDropoffSuggestions([]);
-      setActiveField(null);
+    } else {
+      searchPlaces(text, 'dropoff');
     }
   };
 
@@ -720,36 +693,15 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
     return 'Schedule for Later';
   };
 
-  // Pulse animation for location button when field is empty
-  useEffect(() => {
-    if (!pickup.trim() && !isLoadingCurrentLocation) {
-      const pulse = () => {
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ]).start(pulse);
-      };
-      pulse();
-    } else {
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(1);
-    }
-  }, [pickup, isLoadingCurrentLocation]);
-
   useEffect(() => {
     return () => {
       translateY.removeAllListeners();
       translateY.stopAnimation();
       rotationAnim.stopAnimation();
-      pulseAnim.stopAnimation();
+      // Clear search timeout on unmount
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -875,43 +827,10 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       onFocus={() => setActiveField('pickup')}
                       autoFocus={false}
                     />
-                    {!pickup.trim() && !isLoadingCurrentLocation && (
-                      <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                        <TouchableOpacity
-                          onPress={handleUseCurrentLocation}
-                          style={styles.currentLocationButton}
-                        >
-                          <Ionicons name="location" size={18} color="#00D4AA" />
-                        </TouchableOpacity>
-                      </Animated.View>
-                    )}
-                    {isLoadingCurrentLocation && (
-                      <Animated.View
-                        style={[
-                          styles.loadingContainer,
-                          {
-                            transform: [{
-                              rotate: rotationAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: ['0deg', '360deg']
-                              })
-                            }]
-                          }
-                        ]}
-                      >
-                        <Ionicons name="refresh" size={18} color="#00D4AA" />
-                      </Animated.View>
-                    )}
-                    {showLocationSuccess && (
-                      <Animated.View style={styles.successIndicator}>
-                        <Ionicons name="checkmark-circle" size={18} color="#00D4AA" />
-                      </Animated.View>
-                    )}
                     {pickup.trim() && (
                       <TouchableOpacity onPress={() => {
                         setPickup('');
                         setPickupSuggestions([]);
-                        setActiveField(null);
                         setPickupCoordinates(null);
                       }}>
                         <Ionicons name="close-circle" size={18} color="#666" />
@@ -939,7 +858,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                       <TouchableOpacity onPress={() => {
                         setDropoff('');
                         setDropoffSuggestions([]);
-                        setActiveField(null);
                         setDropoffCoordinates(null);
                       }}>
                         <Ionicons name="close-circle" size={18} color="#666" />
@@ -949,49 +867,123 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm }, ref) =>
                 </View>
 
                 {/* Live Places API suggestions when typing, otherwise show static suggestions */}
-                {activeField === 'pickup' && pickupSuggestions.length > 0 ? (
+                {activeField === 'pickup' ? (
                   <>
-                    <Text style={styles.suggestionsTitle}>
-                      {isLoadingSuggestions ? 'Searching...' : 'Pickup Suggestions'}
-                    </Text>
-                    {pickupSuggestions.map((place) => (
+                    {/* Use Current Location Option - visible only when field is empty */}
+                    {!pickup.trim() && (
                       <TouchableOpacity
-                        key={place.id}
-                        style={styles.suggestionRow}
-                        onPress={() => handlePlaceSelection(place, 'pickup')}
+                        style={styles.currentLocationRow}
+                        onPress={() => handleUseCurrentLocation('pickup')}
                         activeOpacity={0.7}
+                        disabled={isLoadingCurrentLocation}
                       >
-                        <View style={styles.suggestionIcon}>
-                          <Ionicons name="location-outline" size={20} color="#00D4AA" />
+                        <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                          <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00D4AA" />
                         </View>
                         <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionName}>{place.name}</Text>
-                          <Text style={styles.suggestionAddress}>{place.address}</Text>
+                          <Text style={styles.suggestionName}>Use current location</Text>
+                          <Text style={styles.suggestionAddress}>
+                            {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                          </Text>
                         </View>
+                        {isLoadingCurrentLocation && (
+                          <Animated.View
+                            style={{
+                              transform: [{
+                                rotate: rotationAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg']
+                                })
+                              }]
+                            }}
+                          >
+                            <Ionicons name="refresh" size={18} color="#00D4AA" />
+                          </Animated.View>
+                        )}
                       </TouchableOpacity>
-                    ))}
+                    )}
+                    {pickupSuggestions.length > 0 && (
+                      <>
+                        <Text style={styles.suggestionsTitle}>
+                          {isLoadingSuggestions ? 'Searching...' : 'Pickup Suggestions'}
+                        </Text>
+                        {pickupSuggestions.map((place) => (
+                          <TouchableOpacity
+                            key={place.id}
+                            style={styles.suggestionRow}
+                            onPress={() => handlePlaceSelection(place, 'pickup')}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.suggestionIcon}>
+                              <Ionicons name="location-outline" size={20} color="#00D4AA" />
+                            </View>
+                            <View style={styles.suggestionContent}>
+                              <Text style={styles.suggestionName}>{place.name}</Text>
+                              <Text style={styles.suggestionAddress}>{place.address}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
                   </>
-                ) : activeField === 'dropoff' && dropoffSuggestions.length > 0 ? (
+                ) : activeField === 'dropoff' ? (
                   <>
-                    <Text style={styles.suggestionsTitle}>
-                      {isLoadingSuggestions ? 'Searching...' : 'Destination Suggestions'}
-                    </Text>
-                    {dropoffSuggestions.map((place) => (
+                    {/* Use Current Location Option - visible only when field is empty */}
+                    {!dropoff.trim() && (
                       <TouchableOpacity
-                        key={place.id}
-                        style={styles.suggestionRow}
-                        onPress={() => handlePlaceSelection(place, 'dropoff')}
+                        style={styles.currentLocationRow}
+                        onPress={() => handleUseCurrentLocation('dropoff')}
                         activeOpacity={0.7}
+                        disabled={isLoadingCurrentLocation}
                       >
-                        <View style={styles.suggestionIcon}>
-                          <Ionicons name="location-outline" size={20} color="#A77BFF" />
+                        <View style={[styles.suggestionIcon, styles.currentLocationIcon]}>
+                          <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#A77BFF" />
                         </View>
                         <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionName}>{place.name}</Text>
-                          <Text style={styles.suggestionAddress}>{place.address}</Text>
+                          <Text style={styles.suggestionName}>Use current location</Text>
+                          <Text style={styles.suggestionAddress}>
+                            {isLoadingCurrentLocation ? 'Getting location...' : 'Your current GPS location'}
+                          </Text>
                         </View>
+                        {isLoadingCurrentLocation && (
+                          <Animated.View
+                            style={{
+                              transform: [{
+                                rotate: rotationAnim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg']
+                                })
+                              }]
+                            }}
+                          >
+                            <Ionicons name="refresh" size={18} color="#A77BFF" />
+                          </Animated.View>
+                        )}
                       </TouchableOpacity>
-                    ))}
+                    )}
+                    {dropoffSuggestions.length > 0 && (
+                      <>
+                        <Text style={styles.suggestionsTitle}>
+                          {isLoadingSuggestions ? 'Searching...' : 'Destination Suggestions'}
+                        </Text>
+                        {dropoffSuggestions.map((place) => (
+                          <TouchableOpacity
+                            key={place.id}
+                            style={styles.suggestionRow}
+                            onPress={() => handlePlaceSelection(place, 'dropoff')}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.suggestionIcon}>
+                              <Ionicons name="location-outline" size={20} color="#A77BFF" />
+                            </View>
+                            <View style={styles.suggestionContent}>
+                              <Text style={styles.suggestionName}>{place.name}</Text>
+                              <Text style={styles.suggestionAddress}>{place.address}</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </>
+                    )}
                   </>
                 ) : null}
 
@@ -1385,20 +1377,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '500',
   },
-  currentLocationButton: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+  currentLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: 'rgba(167, 123, 255, 0.08)',
   },
-  loadingContainer: {
-    padding: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
-    borderRadius: 4,
-  },
-  successIndicator: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0, 212, 170, 0.1)',
+  currentLocationIcon: {
+    backgroundColor: 'rgba(0, 212, 170, 0.15)',
   },
 });
 
