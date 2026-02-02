@@ -15,7 +15,7 @@
 - [x] #1 Safe Area - extend content to screen edges like modern apps - Erema
 - [-] #2 Sign in with Apple (App Store requirement) - Andrei
 - [-] #3 Sign in with Google (Play Store requirement) - Andrei
-- [-] #4 Account deletion feature (required by both stores) - Andrei
+- [x] #4 Account deletion feature (required by both stores) - Andrei
 - [-] #5 Terms/Privacy - links to pikup-app.com - Drew
 
 ### Customer Flow - Step 1: Pickup & Dropoff

@@ -213,74 +213,19 @@ export default function DriverOnboardingScreen({ navigation }) {
         throw new Error('Invalid verification session data returned: ' + JSON.stringify(data));
       }
 
-      console.log('Verification session created:', data.id);
-      setVerificationSessionId(data.id);
+      console.log('Edge Function Response Data:', JSON.stringify(data, null, 2));
+
+      if (!data.ephemeral_key_secret) {
+        console.error('MISSING ephemeral_key_secret in response!');
+        // Note: We don't block here to see if it works anyway, but log clearly
+      }
+
+      const logo = Image.resolveAssetSource(require('../assets/pikup-logo.png'));
 
       return {
         sessionId: data.id,
-        ephemeralKeySecret: data.client_secret, // Note: Stripe Identity usually returns client_secret which allows access. 
-        // If your edge function returns separate ephemeral key, map it here.
-        // Based on typical Stripe Identity flow, we need sessionId and ephemeralKeySecret (or similar auth).
-        // Let's assume the Edge Function returns what's needed for the SDK.
-        // Actually, for Identity, it's usually just client_secret or specialized keys.
-        // Checking the Edge code: returns url, client_secret, id.
-        // The useStripeIdentity hook expects an object with valid params. The exact params depend on the SDK version but typically:
-        // sessionId and ephemeralKeySecret are for PaymentSheet? No, Identity might use clientSecret directly?
-        // Let's check typical usage. 
-        // Official docs: fetchOptions should return { sessionId: '...', ephemeralKeySecret: '...', brandLogo: ... }
-        // Wait, the edge function returns { url, client_secret, id }. 
-        // Let's assume client_secret acts as the key or we need to adjust.
-        // Actually, if the Edge function assumes strict Identity flow, it might just return the secret.
-        // However, the standard `useStripeIdentity` hook often takes `fetchOptions` that returns { sessionId, ephemeralKeySecret }.
-        // If my Edge function only returns client_secret, I might be missing the ephemeral key generation on the server.
-        // BUT, looking at the edge function:
-        /*
-         const verificationSession = await stripe.identity.verificationSessions.create({...});
-         return { url, client_secret, id }
-        */
-        // The VerificationSession object has a client_secret.
-        // The react-native SDK often needs just the sessionId and/or clientSecret.
-        // Let's try returning the verification session ID and logic-mapped keys.
-      };
-
-      // RE-READING STRIPE DOCS FOR REACT NATIVE IDENTITY:
-      // It normally requires `sessionId` and `ephemeralKeySecret` OR just `sessionId` if public key is capable?
-      // Actually, Identity usually requires a client_secret.
-      // Let's look at how useStripeIdentity is typically configured. 
-      // It takes a fetcher. The fetcher returns the options passed to `initPaymentSheet`? No, this is Identity.
-      // `useStripeIdentity` hook isn't standard in all versions.
-      // Assuming it works like: const { status, present } = useStripeIdentity(fetchOptions);
-      // And fetchOptions returns { sessionId, ephemeralKeySecret }.
-      // My Edge Function DOES NOT return an ephemeral key. It returns the VerificationSession object's client_secret.
-
-      // Correction: Verify if I need an ephemeral key for Identity.
-      // Yes, usually "To verify identity in your app, you need a temporary API key (Ephemeral Key)".
-      // MY EDGE FUNCTION IS MISSING EPHEMERAL KEY GENERATION!
-      // I need to update the Edge Function to also create an Ephemeral Key.
-
-      // WAIT. I cannot update the Edge Function easily without asking the user to redeploy.
-      // Is there a way to work without it?
-      // Maybe I can just pass the client_secret?
-      // Let's look at the implementation of the hook.
-      // If I can't change the Edge Function right now, I might be stuck.
-      // BUT check the Edge Function code again (viewed previously).
-      // It creates `stripe.identity.verificationSessions.create`.
-      // It does NOT create `stripe.ephemeralKeys.create`.
-
-      // CRITICAL: The user just crashed because I probably returned empty object {}.
-      // If I return { sessionId: data.id, ephemeralKeySecret: ... } it might work.
-      // But I don't have ephemeralKeySecret.
-
-      // PROPOSAL: I will update the Edge Function to ALSO return an Ephemeral Key.
-      // THEN I will update the App code.
-      // This is the correct way.
-
-      // User asked why it crashed. It crashed because I returned {}.
-
-      return {
-        sessionId: data.id,
-        // If the SDK supports clientSecret instead of ephemeral key (some versions do):
-        clientSecret: data.client_secret,
+        ephemeralKeySecret: data.ephemeral_key_secret,
+        brandLogo: logo,
       };
 
     } catch (error) {
@@ -292,9 +237,38 @@ export default function DriverOnboardingScreen({ navigation }) {
 
   const { status, present, loading: identityLoading } = useStripeIdentity(fetchVerificationSessionParams);
 
-  // ... (keeping useEffect mostly same but disabled logic)
+  // Handle verification status changes from Stripe Identity SDK
+  useEffect(() => {
+    console.log('🔐 Stripe Identity status changed:', status);
 
-  // ...
+    if (status === 'FlowCompleted') {
+      console.log('✅ Verification completed successfully!');
+      setVerificationStatus('completed');
+
+      // Optionally persist to database
+      if (verificationSessionId && currentUser) {
+        supabase
+          .from('drivers')
+          .update({
+            identity_verified: true,
+            verification_session_id: verificationSessionId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentUser.uid || currentUser.id)
+          .then(({ error }) => {
+            if (error) console.error('Failed to update driver verification status:', error);
+            else console.log('✅ Driver verification status saved to DB');
+          });
+      }
+    } else if (status === 'FlowCanceled') {
+      console.log('⚠️ Verification was canceled by user');
+      setVerificationStatus('canceled');
+    } else if (status === 'FlowFailed') {
+      console.log('❌ Verification failed');
+      setVerificationStatus('failed');
+      Alert.alert('Verification Failed', 'Please try again or contact support.');
+    }
+  }, [status, verificationSessionId, currentUser]);
 
   const [showStatePicker, setShowStatePicker] = useState(false);
 
@@ -477,30 +451,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 identityLoading && styles.verifyButtonDisabled,
                 verificationStatus === 'completed' && styles.verifyButtonSuccess
               ]}
-              onPress={() => {
-                if (__DEV__) {
-                  Alert.alert(
-                    'Dev: Verification Simulation',
-                    'Stripe Test Mode keys are missing. How would you like to proceed?',
-                    [
-                      {
-                        text: '✅ Simulate Success',
-                        onPress: () => setVerificationStatus('completed')
-                      },
-                      {
-                        text: '🌐 Try Real API',
-                        onPress: () => present()
-                      },
-                      {
-                        text: 'Cancel',
-                        style: 'cancel'
-                      }
-                    ]
-                  );
-                } else {
-                  present();
-                }
-              }}
+              onPress={() => present()}
               disabled={verificationStatus === 'completed' || identityLoading}
             >
               {identityLoading ? (
