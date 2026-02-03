@@ -9,7 +9,7 @@ import {
     Dimensions,
     Alert,
     ActivityIndicator,
-    Modal
+    Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapboxLocationService from '../services/MapboxLocationService';
@@ -90,6 +90,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm, userLocat
     };
 
     const handleUseCurrentLocation = async (fieldType = 'pickup') => {
+        Keyboard.dismiss();
         try {
             setIsLoadingCurrentLocation(true);
             const location = await MapboxLocationService.getCurrentLocation();
@@ -124,6 +125,7 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm, userLocat
     };
 
     const handlePlaceSelection = (place, fieldType) => {
+        Keyboard.dismiss();
         const coords = { latitude: place.coordinates.latitude, longitude: place.coordinates.longitude };
         if (fieldType === 'pickup') {
             setPickup(place.full_description);
@@ -157,61 +159,93 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm, userLocat
         const isPickup = type === 'pickup';
         const value = isPickup ? pickup : dropoff;
         const setValue = isPickup ? setPickup : setDropoff;
-        const suggestions = isPickup ? pickupSuggestions : dropoffSuggestions;
 
         return (
-            <View style={{ marginBottom: 16, zIndex: activeField === type ? 10 : 1 }}>
-                <View style={styles.inputWrapper}>
-                    <Ionicons
-                        name={isPickup ? "location" : "navigate"}
-                        size={20}
-                        color={isPickup ? "#A77BFF" : "#FF7B7B"}
-                        style={styles.inputIcon}
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder={isPickup ? "Pickup Location" : "Where to?"}
-                        placeholderTextColor="#666"
-                        value={value}
-                        onChangeText={(text) => {
-                            setValue(text);
-                            setActiveField(type);
-                            searchPlaces(text, type);
-                            if (isPickup) setPickupCoordinates(null);
-                            else setDropoffCoordinates(null);
-                        }}
-                        onFocus={() => setActiveField(type)}
-                    />
-                    {value.length > 0 && (
-                        <TouchableOpacity onPress={() => {
-                            setValue('');
-                            if (isPickup) setPickupSuggestions([]); else setDropoffSuggestions([]);
-                        }}>
-                            <Ionicons name="close-circle" size={18} color="#666" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {activeField === type && suggestions.length > 0 && (
-                    <View style={styles.suggestionsContainer}>
-                        {suggestions.map((item) => (
-                            <TouchableOpacity
-                                key={item.id}
-                                style={styles.suggestionItem}
-                                onPress={() => handlePlaceSelection(item, type)}
-                            >
-                                <View style={styles.suggestionIcon}>
-                                    <Ionicons name="location-outline" size={20} color="#FFF" />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
-                                    <Text style={styles.suggestionAddr} numberOfLines={1}>{item.address}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+            <View style={styles.inputWrapper}>
+                <Ionicons
+                    name={isPickup ? "location" : "navigate"}
+                    size={20}
+                    color={isPickup ? "#A77BFF" : "#FF7B7B"}
+                    style={styles.inputIcon}
+                />
+                <TextInput
+                    style={styles.input}
+                    placeholder={isPickup ? "Pickup Location" : "Where to?"}
+                    placeholderTextColor="#666"
+                    value={value}
+                    onChangeText={(text) => {
+                        setValue(text);
+                        setActiveField(type);
+                        searchPlaces(text, type);
+                        if (isPickup) setPickupCoordinates(null);
+                        else setDropoffCoordinates(null);
+                    }}
+                    onFocus={() => setActiveField(type)}
+                />
+                {value.length > 0 && (
+                    <TouchableOpacity onPress={() => {
+                        setValue('');
+                        if (isPickup) setPickupSuggestions([]); else setDropoffSuggestions([]);
+                    }}>
+                        <Ionicons name="close-circle" size={18} color="#666" />
+                    </TouchableOpacity>
                 )}
             </View>
+        );
+    };
+
+    const renderSuggestions = () => {
+        if (!activeField) return null;
+
+        const suggestions = activeField === 'pickup' ? pickupSuggestions : dropoffSuggestions;
+
+        return (
+            <ScrollView
+                style={styles.suggestionsScroll}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Use current location - always first */}
+                <TouchableOpacity
+                    style={styles.suggestionItem}
+                    onPress={() => handleUseCurrentLocation(activeField)}
+                >
+                    <View style={[styles.suggestionIcon, { backgroundColor: '#A77BFF' }]}>
+                        {isLoadingCurrentLocation ? (
+                            <ActivityIndicator color="#FFF" size="small" />
+                        ) : (
+                            <Ionicons name="navigate" size={18} color="#FFF" />
+                        )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.suggestionTitle}>Use current location</Text>
+                    </View>
+                </TouchableOpacity>
+
+                {/* Loading indicator */}
+                {isLoadingSuggestions && (
+                    <View style={styles.loadingRow}>
+                        <ActivityIndicator color="#A77BFF" size="small" />
+                    </View>
+                )}
+
+                {/* Mapbox suggestions */}
+                {suggestions.map((item) => (
+                    <TouchableOpacity
+                        key={item.id}
+                        style={styles.suggestionItem}
+                        onPress={() => handlePlaceSelection(item, activeField)}
+                    >
+                        <View style={styles.suggestionIcon}>
+                            <Ionicons name="location-outline" size={18} color="#FFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
+                            <Text style={styles.suggestionAddr} numberOfLines={1}>{item.address}</Text>
+                        </View>
+                    </TouchableOpacity>
+                ))}
+            </ScrollView>
         );
     };
 
@@ -221,7 +255,6 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm, userLocat
             onClose={onClose}
             height={SCREEN_HEIGHT * 0.85}
             backgroundColor="#141426"
-            avoidKeyboard={true}
             renderHeader={(animateClose) => (
                 <View style={styles.header}>
                     <View style={{ width: 40 }} />
@@ -233,23 +266,16 @@ const CustomerSearchModal = forwardRef(({ visible, onClose, onConfirm, userLocat
             )}
         >
             <View style={styles.content}>
-                {renderInput('pickup')}
-                {renderInput('dropoff')}
+                {/* Input fields */}
+                <View style={styles.inputsContainer}>
+                    {renderInput('pickup')}
+                    {renderInput('dropoff')}
+                </View>
 
-                <TouchableOpacity
-                    style={styles.currentLocBtn}
-                    onPress={() => handleUseCurrentLocation(activeField || 'pickup')}
-                >
-                    {isLoadingCurrentLocation ? (
-                        <ActivityIndicator color="#A77BFF" size="small" />
-                    ) : (
-                        <Ionicons name="locate" size={20} color="#A77BFF" />
-                    )}
-                    <Text style={styles.currentLocText}>Use current location</Text>
-                </TouchableOpacity>
+                {/* Suggestions area - takes remaining space */}
+                {renderSuggestions()}
 
-                <View style={{ flex: 1 }} />
-
+                {/* Confirm button - stays at bottom */}
                 <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
                     <Text style={styles.confirmBtnText}>Continue</Text>
                     <Ionicons name="arrow-forward" size={20} color="#FFF" />
@@ -265,7 +291,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        marginBottom: 20,
+        marginBottom: 16,
         height: 50,
     },
     headerTitle: {
@@ -281,7 +307,10 @@ const styles = StyleSheet.create({
     content: {
         flex: 1,
         paddingHorizontal: 20,
-        paddingBottom: 20,
+    },
+    inputsContainer: {
+        gap: 12,
+        marginBottom: 16,
     },
     inputWrapper: {
         flexDirection: 'row',
@@ -303,34 +332,26 @@ const styles = StyleSheet.create({
     inputIcon: {
         marginRight: 4
     },
-    suggestionsContainer: {
-        position: 'absolute',
-        top: 60,
-        left: 0,
-        right: 0,
-        backgroundColor: '#1E1E2E',
-        borderRadius: 12,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: '#333',
-        maxHeight: 200,
-        zIndex: 100
+    suggestionsScroll: {
+        flex: 1,
+        marginBottom: 12,
     },
     suggestionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 4,
         borderBottomWidth: 1,
-        borderBottomColor: '#333'
+        borderBottomColor: '#2A2A3B'
     },
     suggestionIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#333',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 12
+        marginRight: 14
     },
     suggestionTitle: {
         color: '#FFF',
@@ -339,20 +360,12 @@ const styles = StyleSheet.create({
         marginBottom: 2
     },
     suggestionAddr: {
-        color: '#AAA',
-        fontSize: 12
+        color: '#888',
+        fontSize: 13
     },
-    currentLocBtn: {
-        flexDirection: 'row',
+    loadingRow: {
+        paddingVertical: 16,
         alignItems: 'center',
-        marginTop: 8,
-        padding: 12
-    },
-    currentLocText: {
-        color: '#A77BFF',
-        fontWeight: '600',
-        marginLeft: 12,
-        fontSize: 16
     },
     confirmBtn: {
         backgroundColor: '#A77BFF',
@@ -361,7 +374,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         height: 56,
         borderRadius: 28,
-        marginTop: 20,
         marginBottom: 20
     },
     confirmBtnText: {
