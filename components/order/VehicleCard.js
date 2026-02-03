@@ -7,7 +7,6 @@ import {
     Image,
     ActivityIndicator
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
 
 // Vehicle data - same as VehicleSelectionModal
@@ -60,13 +59,6 @@ const VehicleCard = ({
             onPress={() => onSelect(vehicle)}
             activeOpacity={0.8}
         >
-            {/* Selected indicator */}
-            {isSelected && (
-                <View style={styles.selectedBadge}>
-                    <Ionicons name="checkmark-circle" size={20} color="#A77BFF" />
-                </View>
-            )}
-
             {/* Vehicle Image */}
             <Image source={vehicle.image} style={styles.vehicleImage} />
 
@@ -108,11 +100,6 @@ const styles = StyleSheet.create({
     cardSelected: {
         borderColor: colors.primary,
         backgroundColor: '#252538'
-    },
-    selectedBadge: {
-        position: 'absolute',
-        top: spacing.md,
-        right: spacing.md
     },
     vehicleImage: {
         width: 80,

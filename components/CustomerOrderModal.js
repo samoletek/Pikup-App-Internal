@@ -5,6 +5,7 @@ import {
     TextInput,
     StyleSheet,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     ScrollView,
     Dimensions,
     Alert,
@@ -15,6 +16,7 @@ import {
     Platform,
     Modal
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -24,6 +26,10 @@ import OrderItemCard from './order/OrderItemCard';
 import LocationDetailsStep from './order/LocationDetailsStep';
 import VehicleCard, { VEHICLES } from './order/VehicleCard';
 import { colors, borderRadius, spacing, typography, shadows } from '../styles/theme';
+
+const RECENT_ADDRESSES_KEY = '@pikup_recent_addresses';
+const MAX_RECENT_ADDRESSES = 5;
+const MAX_SUGGESTIONS = 10;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -66,7 +72,35 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     const [activeField, setActiveField] = useState(null);
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
     const [isLoadingCurrentLocation, setIsLoadingCurrentLocation] = useState(false);
+    const [recentAddresses, setRecentAddresses] = useState([]);
     const searchTimeoutRef = useRef(null);
+
+    // Load recent addresses from storage
+    const loadRecentAddresses = async () => {
+        try {
+            const stored = await AsyncStorage.getItem(RECENT_ADDRESSES_KEY);
+            if (stored) {
+                setRecentAddresses(JSON.parse(stored));
+            }
+        } catch (error) {
+            console.log('Failed to load recent addresses:', error);
+        }
+    };
+
+    // Save address to recent
+    const saveToRecentAddresses = async (place) => {
+        try {
+            const newRecent = [
+                place,
+                ...recentAddresses.filter(item => item.id !== place.id)
+            ].slice(0, MAX_RECENT_ADDRESSES);
+
+            setRecentAddresses(newRecent);
+            await AsyncStorage.setItem(RECENT_ADDRESSES_KEY, JSON.stringify(newRecent));
+        } catch (error) {
+            console.log('Failed to save recent address:', error);
+        }
+    };
 
     // Step 2 specific state
     const [expandedItemId, setExpandedItemId] = useState(null);
@@ -75,9 +109,11 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [datePickerMode, setDatePickerMode] = useState('date'); // 'date' or 'time'
 
-    // Reset when modal closes
+    // Reset when modal closes, load recent when opens
     useEffect(() => {
-        if (!visible) {
+        if (visible) {
+            loadRecentAddresses();
+        } else {
             setCurrentStep(1);
             setOrderData({
                 pickup: { address: '', coordinates: null },
@@ -313,6 +349,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     };
 
     const handlePlaceSelection = (place, fieldType) => {
+        Keyboard.dismiss();
+
         const locationData = {
             address: place.full_description,
             coordinates: place.coordinates
@@ -326,9 +364,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
         if (fieldType === 'pickup') setPickupSuggestions([]);
         else setDropoffSuggestions([]);
         setActiveField(null);
+
+        // Save to recent addresses
+        saveToRecentAddresses(place);
     };
 
     const handleUseCurrentLocation = async (fieldType = 'pickup') => {
+        Keyboard.dismiss();
         try {
             setIsLoadingCurrentLocation(true);
             const location = await MapboxLocationService.getCurrentLocation();
@@ -420,6 +462,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
             const isPickup = type === 'pickup';
             const value = isPickup ? orderData.pickup.address : orderData.dropoff.address;
             const suggestions = isPickup ? pickupSuggestions : dropoffSuggestions;
+            const hasSearchQuery = value.length >= 2;
 
             return (
                 <View style={{ marginBottom: 16, zIndex: activeField === type ? 10 : 1 }}>
@@ -455,47 +498,103 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                         )}
                     </View>
 
-                    {activeField === type && suggestions.length > 0 && (
+                    {/* Suggestions dropdown - show on focus */}
+                    {activeField === type && (
                         <View style={styles.suggestionsContainer}>
-                            {suggestions.map((item) => (
-                                <TouchableOpacity
-                                    key={item.id}
-                                    style={styles.suggestionItem}
-                                    onPress={() => handlePlaceSelection(item, type)}
-                                >
-                                    <View style={styles.suggestionIcon}>
-                                        <Ionicons name="location-outline" size={20} color="#FFF" />
+                            {/* Use current location */}
+                            <TouchableOpacity
+                                style={styles.suggestionItem}
+                                onPress={() => handleUseCurrentLocation(type)}
+                            >
+                                <View style={[styles.suggestionIcon, { backgroundColor: colors.primary }]}>
+                                    {isLoadingCurrentLocation ? (
+                                        <ActivityIndicator color="#FFF" size="small" />
+                                    ) : (
+                                        <Ionicons name="compass" size={20} color="#FFF" />
+                                    )}
+                                </View>
+                                <Text style={styles.suggestionTitle}>Use current location</Text>
+                            </TouchableOpacity>
+
+                            {/* Recent addresses */}
+                            {!hasSearchQuery && recentAddresses.length > 0 && (
+                                <>
+                                    <View style={styles.sectionLabelRow}>
+                                        <View style={styles.sectionLine} />
+                                        <Text style={styles.sectionLabelText}>Recent</Text>
+                                        <View style={styles.sectionLine} />
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
-                                        <Text style={styles.suggestionAddr} numberOfLines={1}>{item.address}</Text>
+                                    {recentAddresses.map((item, index) => (
+                                        <TouchableOpacity
+                                            key={`recent-${item.id}-${index}`}
+                                            style={styles.suggestionItem}
+                                            onPress={() => handlePlaceSelection(item, type)}
+                                        >
+                                            <View style={styles.suggestionIcon}>
+                                                <Ionicons name="time-outline" size={20} color="#FFF" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
+                                                <Text style={styles.suggestionAddr} numberOfLines={1}>{item.address}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </>
+                            )}
+
+                            {/* Loading */}
+                            {isLoadingSuggestions && (
+                                <View style={styles.loadingRow}>
+                                    <ActivityIndicator color={colors.primary} size="small" />
+                                </View>
+                            )}
+
+                            {/* Suggestions */}
+                            {suggestions.length > 0 && (
+                                <>
+                                    <View style={styles.sectionLabelRow}>
+                                        <View style={styles.sectionLine} />
+                                        <Text style={styles.sectionLabelText}>Suggestions</Text>
+                                        <View style={styles.sectionLine} />
                                     </View>
-                                </TouchableOpacity>
-                            ))}
+                                    {suggestions.map((item) => (
+                                        <TouchableOpacity
+                                            key={item.id}
+                                            style={styles.suggestionItem}
+                                            onPress={() => handlePlaceSelection(item, type)}
+                                        >
+                                            <View style={styles.suggestionIcon}>
+                                                <Ionicons name="location-outline" size={20} color="#FFF" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
+                                                <Text style={styles.suggestionAddr} numberOfLines={1}>{item.address}</Text>
+                                            </View>
+                                        </TouchableOpacity>
+                                    ))}
+                                </>
+                            )}
                         </View>
                     )}
                 </View>
             );
         };
 
+        // Close suggestions when tapping outside
+        const handleOutsideTap = () => {
+            if (activeField) {
+                setActiveField(null);
+                Keyboard.dismiss();
+            }
+        };
+
         return (
-            <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
-                {renderAddressInput('pickup')}
-                {renderAddressInput('dropoff')}
+            <TouchableWithoutFeedback onPress={handleOutsideTap}>
+                <ScrollView style={styles.stepContent} keyboardShouldPersistTaps="handled">
+                    {renderAddressInput('pickup')}
+                    {renderAddressInput('dropoff')}
 
-                <TouchableOpacity
-                    style={styles.currentLocBtn}
-                    onPress={() => handleUseCurrentLocation(activeField || 'pickup')}
-                >
-                    {isLoadingCurrentLocation ? (
-                        <ActivityIndicator color="#A77BFF" size="small" />
-                    ) : (
-                        <Ionicons name="locate" size={20} color="#A77BFF" />
-                    )}
-                    <Text style={styles.currentLocText}>Use current location</Text>
-                </TouchableOpacity>
-
-                {/* Schedule Toggle */}
+                    {/* Schedule Toggle */}
                 <View style={styles.scheduleSection}>
                     <Text style={styles.sectionLabel}>When?</Text>
                     <View style={styles.scheduleToggle}>
@@ -643,7 +742,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                         </View>
                     )}
                 </View>
-            </ScrollView>
+                </ScrollView>
+            </TouchableWithoutFeedback>
         );
     };
 
@@ -953,9 +1053,7 @@ const styles = StyleSheet.create({
     suggestionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: spacing.base,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border.default
+        padding: spacing.base
     },
     suggestionIcon: {
         width: 32,
@@ -968,6 +1066,31 @@ const styles = StyleSheet.create({
     },
     suggestionTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginBottom: 2 },
     suggestionAddr: { color: colors.text.secondary, fontSize: typography.fontSize.sm },
+    sectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.xs,
+        marginTop: spacing.xs
+    },
+    sectionLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: colors.border.default,
+        marginHorizontal: spacing.md
+    },
+    sectionLabelText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        paddingHorizontal: spacing.sm
+    },
+    loadingRow: {
+        paddingVertical: spacing.sm,
+        alignItems: 'center'
+    },
     currentLocBtn: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, padding: spacing.md },
     currentLocText: { color: colors.text.link, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.md, fontSize: typography.fontSize.md },
     scheduleSection: { marginTop: spacing.xl },
