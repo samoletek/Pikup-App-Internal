@@ -184,14 +184,22 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                 }
                 return true;
             case 3:
-                if (!orderData.pickupDetails.floor) {
-                    Alert.alert('Missing Info', 'Please enter the floor number.');
+                if (!orderData.pickupDetails.buildingName?.trim()) {
+                    Alert.alert('Missing Info', 'Please enter the Store or Building Name.');
+                    return false;
+                }
+                if (!orderData.pickupDetails.unitNumber?.trim()) {
+                    Alert.alert('Missing Info', 'Please enter the Unit or Floor number.');
                     return false;
                 }
                 return true;
             case 4:
-                if (!orderData.dropoffDetails.floor) {
-                    Alert.alert('Missing Info', 'Please enter the floor number.');
+                if (!orderData.dropoffDetails.buildingName?.trim()) {
+                    Alert.alert('Missing Info', 'Please enter the Store or Building Name.');
+                    return false;
+                }
+                if (!orderData.dropoffDetails.unitNumber?.trim()) {
+                    Alert.alert('Missing Info', 'Please enter the Unit or Floor number.');
                     return false;
                 }
                 return true;
@@ -362,6 +370,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
             description: '',
             photos: [],
             isFragile: false,
+            condition: 'used', // Default to used
             hasInsurance: false,
             invoicePhoto: null
         };
@@ -723,7 +732,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
         return (
             <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
                 {/* Route Summary */}
-                <View style={styles.summaryCard}>
+                <TouchableOpacity style={styles.summaryCard} onPress={() => setCurrentStep(1)} activeOpacity={0.7}>
                     <Text style={styles.summaryCardTitle}>Route</Text>
                     <View style={styles.routeRow}>
                         <View style={[styles.routeDot, { backgroundColor: '#A77BFF' }]} />
@@ -731,13 +740,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                     </View>
                     <View style={styles.routeLine} />
                     <View style={styles.routeRow}>
-                        <View style={[styles.routeDot, { backgroundColor: '#FF7B7B' }]} />
+                        <View style={[styles.routeDot, { backgroundColor: '#00D4AA' }]} />
                         <Text style={styles.routeAddress} numberOfLines={1}>{orderData.dropoff.address}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Items Summary */}
-                <View style={styles.summaryCard}>
+                <TouchableOpacity style={styles.summaryCard} onPress={() => setCurrentStep(2)} activeOpacity={0.7}>
                     <Text style={styles.summaryCardTitle}>Items ({orderData.items.length})</Text>
                     {orderData.items.map(item => (
                         <View key={item.id} style={styles.itemSummaryRow}>
@@ -748,16 +757,16 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                             </View>
                         </View>
                     ))}
-                </View>
+                </TouchableOpacity>
 
                 {/* Vehicle */}
-                <View style={styles.summaryCard}>
+                <TouchableOpacity style={styles.summaryCard} onPress={() => setCurrentStep(5)} activeOpacity={0.7}>
                     <Text style={styles.summaryCardTitle}>Vehicle</Text>
                     <View style={styles.vehicleSummary}>
                         <Image source={orderData.selectedVehicle?.image} style={styles.vehicleSummaryImg} />
                         <Text style={styles.vehicleSummaryName}>{orderData.selectedVehicle?.type}</Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Price Breakdown */}
                 <View style={styles.summaryCard}>
@@ -857,11 +866,20 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
 
                 {/* Continue Button */}
                 <View style={[styles.footer, { paddingBottom: 16 }]}>
-                    <TouchableOpacity style={styles.continueBtn} onPress={handleContinue}>
-                        <Text style={styles.continueBtnText}>
+                    <TouchableOpacity
+                        style={[
+                            styles.continueBtn,
+                            currentStep === 6 && { backgroundColor: '#00D4AA' }
+                        ]}
+                        onPress={handleContinue}
+                    >
+                        <Text style={[
+                            styles.continueBtnText,
+                            currentStep === 6 && { marginRight: 0 } // Center text when no icon
+                        ]}>
                             {currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
                         </Text>
-                        <Ionicons name={currentStep === 6 ? 'checkmark' : 'arrow-forward'} size={20} color="#FFF" />
+                        {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color="#FFF" />}
                     </TouchableOpacity>
                 </View>
             </View>
@@ -1020,6 +1038,30 @@ const styles = StyleSheet.create({
     },
 
     // Step 2 Styles
+    aiPhotoBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing.md
+    },
+    aiPhotoIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md
+    },
+    aiPhotoTextContainer: { flex: 1 },
+    aiPhotoTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    aiPhotoSubtitle: { color: colors.text.secondary, fontSize: typography.fontSize.xs, marginTop: 2 },
+    divider: { height: 1, backgroundColor: colors.border.default, marginBottom: spacing.md },
+
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
     emptyStateText: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.base },
     emptyStateSubtext: { color: colors.text.placeholder, fontSize: typography.fontSize.base, marginTop: spacing.sm },

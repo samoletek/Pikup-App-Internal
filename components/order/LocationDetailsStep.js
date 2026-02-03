@@ -37,18 +37,44 @@ const LocationDetailsStep = ({
                 </View>
             </View>
 
-            {/* Floor Number */}
-            <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Floor Number *</Text>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter floor number"
-                    placeholderTextColor="#666"
-                    keyboardType="number-pad"
-                    value={details.floor}
-                    onChangeText={(text) => onUpdate({ ...details, floor: text })}
-                />
+            {/* Building & Unit Row */}
+            <View style={[styles.field, { flexDirection: 'row' }]}>
+                <View style={{ flex: 1, marginRight: spacing.md }}>
+                    <Text style={styles.fieldLabel} numberOfLines={1}>Store or building name *</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="e.g. Business"
+                        placeholderTextColor="#666"
+                        value={details.buildingName}
+                        onChangeText={(text) => onUpdate({ ...details, buildingName: text })}
+                    />
+                </View>
+                <View style={{ width: 100 }}>
+                    <Text style={styles.fieldLabel} numberOfLines={1}>Unit/floor *</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="Apt/Flr"
+                        placeholderTextColor="#666"
+                        value={details.unitNumber}
+                        onChangeText={(text) => onUpdate({ ...details, unitNumber: text })}
+                    />
+                </View>
             </View>
+
+            {/* Order Confirmation - Pickup Only */}
+            {isPickup && (
+                <View style={[styles.field, { marginTop: -spacing.md }]}>
+                    <Text style={styles.fieldLabel}>Order Confirmation Number</Text>
+                    <TextInput
+                        style={styles.textInput}
+                        placeholder="E.g. AB123"
+                        placeholderTextColor="#666"
+                        value={details.orderNumber}
+                        onChangeText={(text) => onUpdate({ ...details, orderNumber: text })}
+                    />
+                    <Text style={styles.helperText}>This helps drivers verify your purchase with stores.</Text>
+                </View>
+            )}
 
             {/* Elevator Toggle */}
             <View style={styles.field}>
@@ -208,7 +234,8 @@ const styles = StyleSheet.create({
         textAlignVertical: 'top'
     },
     toggleRow: {
-        flexDirection: 'row'
+        flexDirection: 'row',
+        gap: spacing.sm
     },
     toggleBtn: {
         flex: 1,
@@ -217,8 +244,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: colors.background.input,
         borderRadius: borderRadius.md,
-        paddingVertical: 14,
-        marginRight: spacing.sm
+        paddingVertical: 14
     },
     toggleBtnActive: {
         backgroundColor: colors.primary
@@ -242,6 +268,11 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize.sm,
         marginLeft: spacing.sm,
         flex: 1
+    },
+    helperText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.sm,
+        marginTop: spacing.xs
     }
 });
 

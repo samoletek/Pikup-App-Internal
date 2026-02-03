@@ -136,6 +136,52 @@ const OrderItemCard = ({
             {/* Expanded Content */}
             {isExpanded && (
                 <View style={styles.cardContent}>
+                    {/* Add Photo Button (Top) */}
+                    <TouchableOpacity
+                        style={styles.addPhotoBtnTop}
+                        onPress={() => {
+                            if (item.photos.length >= MAX_PHOTOS) {
+                                Alert.alert('Limit Reached', `Maximum ${MAX_PHOTOS} photos per item.`);
+                                return;
+                            }
+                            Alert.alert(
+                                'Add Photo',
+                                'Choose an option:',
+                                [
+                                    { text: 'Take Photo', onPress: handleTakePhoto },
+                                    { text: 'Choose from Library', onPress: handleAddPhoto },
+                                    { text: 'Cancel', style: 'cancel' }
+                                ]
+                            );
+                        }}
+                    >
+                        <Ionicons name="camera" size={24} color="#FFF" />
+                        <View style={{ marginLeft: 12 }}>
+                            <Text style={styles.addPhotoBtnTopTitle}>Add Photo (up to {MAX_PHOTOS})</Text>
+                            <Text style={styles.addPhotoBtnTopSubtitle}>Take a photo or choose from gallery</Text>
+                        </View>
+                        <Ionicons name="add-circle" size={24} color="#A77BFF" style={{ marginLeft: 'auto' }} />
+                    </TouchableOpacity>
+
+                    {/* Photo Preview Grid (Moved here) */}
+                    {item.photos.length > 0 && (
+                        <View style={styles.photoGridTop}>
+                            {item.photos.map((uri, index) => (
+                                <View key={index} style={styles.photoContainer}>
+                                    <Image source={{ uri }} style={styles.photo} />
+                                    <TouchableOpacity
+                                        style={styles.removePhotoBtn}
+                                        onPress={() => handleRemovePhoto(index)}
+                                    >
+                                        <View style={styles.removePhotoIconBg}>
+                                            <Ionicons name="close" size={14} color="#FFF" />
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     {/* Name Input */}
                     <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Item Name *</Text>
@@ -162,33 +208,28 @@ const OrderItemCard = ({
                         />
                     </View>
 
-                    {/* Photos */}
+                    {/* Condition Toggle (New / Used) */}
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Photos ({item.photos.length}/{MAX_PHOTOS})</Text>
-                        <View style={styles.photoGrid}>
-                            {item.photos.map((uri, index) => (
-                                <View key={index} style={styles.photoContainer}>
-                                    <Image source={{ uri }} style={styles.photo} />
-                                    <TouchableOpacity
-                                        style={styles.removePhotoBtn}
-                                        onPress={() => handleRemovePhoto(index)}
-                                    >
-                                        <Ionicons name="close-circle" size={22} color="#FF4444" />
-                                    </TouchableOpacity>
-                                </View>
-                            ))}
-                            {item.photos.length < MAX_PHOTOS && (
-                                <View style={styles.addPhotoButtons}>
-                                    <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddPhoto}>
-                                        <Ionicons name="images-outline" size={24} color="#A77BFF" />
-                                        <Text style={styles.addPhotoBtnText}>Gallery</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.addPhotoBtn} onPress={handleTakePhoto}>
-                                        <Ionicons name="camera-outline" size={24} color="#A77BFF" />
-                                        <Text style={styles.addPhotoBtnText}>Camera</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
+                        <Text style={styles.fieldLabel}>Condition</Text>
+                        <View style={styles.conditionBtnGroup}>
+                            <TouchableOpacity
+                                style={[styles.conditionBtn, item.condition === 'new' && styles.conditionBtnActive]}
+                                onPress={() => {
+                                    // New = Auto insurance ON (user can toggle off later)
+                                    onUpdate({ ...item, condition: 'new', hasInsurance: true });
+                                }}
+                            >
+                                <Text style={[styles.conditionBtnText, item.condition === 'new' && styles.conditionBtnTextActive]}>New</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.conditionBtn, (item.condition === 'used' || !item.condition) && styles.conditionBtnActive]} // Default visual to Used
+                                onPress={() => {
+                                    // Used = Insurance OFF and Disabled
+                                    onUpdate({ ...item, condition: 'used', hasInsurance: false });
+                                }}
+                            >
+                                <Text style={[styles.conditionBtnText, (item.condition === 'used' || !item.condition) && styles.conditionBtnTextActive]}>Used</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -209,15 +250,33 @@ const OrderItemCard = ({
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.toggleBtn, item.hasInsurance && styles.toggleBtnActive]}
-                            onPress={() => onUpdate({ ...item, hasInsurance: !item.hasInsurance })}
+                            style={[
+                                styles.toggleBtn,
+                                item.hasInsurance && styles.toggleBtnActive,
+                                (item.condition === 'used' || !item.condition) && styles.toggleBtnDisabled
+                            ]}
+                            onPress={() => {
+                                if (item.condition === 'used' || !item.condition) {
+                                    Alert.alert('Insurance Unavailable', 'Only new items with a valid invoice can be insured.');
+                                    return;
+                                }
+                                onUpdate({ ...item, hasInsurance: !item.hasInsurance });
+                            }}
+                            activeOpacity={(item.condition === 'used' || !item.condition) ? 1 : 0.7}
                         >
                             <Ionicons
-                                name="shield-checkmark-outline"
+                                name={item.hasInsurance ? "shield-checkmark" : "shield-checkmark-outline"}
                                 size={20}
-                                color={item.hasInsurance ? '#FFF' : '#888'}
+                                color={
+                                    (item.condition === 'used' || !item.condition) ? '#444' :
+                                        (item.hasInsurance ? '#FFF' : '#888')
+                                }
                             />
-                            <Text style={[styles.toggleText, item.hasInsurance && styles.toggleTextActive]}>
+                            <Text style={[
+                                styles.toggleText,
+                                item.hasInsurance && styles.toggleTextActive,
+                                (item.condition === 'used' || !item.condition) && styles.toggleTextDisabled
+                            ]}>
                                 Insurance
                             </Text>
                         </TouchableOpacity>
@@ -230,14 +289,15 @@ const OrderItemCard = ({
                                 Upload invoice to confirm item is new
                             </Text>
                             {item.invoicePhoto ? (
-                                <View style={styles.invoicePreview}>
-                                    <Image source={{ uri: item.invoicePhoto }} style={styles.invoiceImage} />
+                                <View style={{ position: 'relative', alignSelf: 'flex-start' }}>
+                                    <Image source={{ uri: item.invoicePhoto }} style={[styles.invoiceImage, { marginRight: 0 }]} />
                                     <TouchableOpacity
-                                        style={styles.removeInvoiceBtn}
+                                        style={styles.removePhotoBtn}
                                         onPress={() => onUpdate({ ...item, invoicePhoto: null })}
                                     >
-                                        <Ionicons name="trash-outline" size={18} color="#FF4444" />
-                                        <Text style={styles.removeInvoiceText}>Remove</Text>
+                                        <View style={styles.removePhotoIconBg}>
+                                            <Ionicons name="close" size={14} color="#FFF" />
+                                        </View>
                                     </TouchableOpacity>
                                 </View>
                             ) : (
@@ -333,7 +393,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.base
     },
     fieldLabel: {
-        color: colors.text.muted,
+        color: '#FFF', // Updated to white per user request
         fontSize: typography.fontSize.sm,
         fontWeight: typography.fontWeight.semibold,
         marginBottom: spacing.sm,
@@ -368,33 +428,78 @@ const styles = StyleSheet.create({
     },
     removePhotoBtn: {
         position: 'absolute',
-        top: -8,
-        right: -8
+        top: -6,
+        right: -6,
+        zIndex: 10
     },
-    addPhotoButtons: {
-        flexDirection: 'row'
-    },
-    addPhotoBtn: {
-        width: 80,
-        height: 80,
-        borderRadius: borderRadius.sm,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        borderStyle: 'dashed',
+    removePhotoIconBg: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#FF4444',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: spacing.sm
+        borderWidth: 1.5,
+        borderColor: colors.background.tertiary // Matches card bg to create "cutout" effect
     },
-    addPhotoBtnText: {
-        color: colors.primary,
+    addPhotoBtnTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing.md,
+        marginTop: spacing.md // Added top spacing
+    },
+    addPhotoBtnTopTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.semibold
+    },
+    addPhotoBtnTopSubtitle: {
+        color: colors.text.secondary,
         fontSize: typography.fontSize.xs,
-        fontWeight: typography.fontWeight.semibold,
-        marginTop: spacing.xs
+        marginTop: 2
+    },
+    photoGridTop: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginBottom: spacing.base
     },
     toggleRow: {
         flexDirection: 'row',
-        marginTop: spacing.base
+        marginTop: spacing.sm,
+        gap: spacing.sm // Use gap for consistent spacing
     },
+    // ... (skipping condition styles) ...
+    conditionBtnGroup: {
+        flexDirection: 'row',
+        backgroundColor: colors.background.input,
+        borderRadius: borderRadius.full,
+        padding: 2, // Reduced padding to bring buttons closer to edges
+        marginBottom: spacing.base // Add margin bottom to group instead
+    },
+    conditionBtn: {
+        flex: 1,
+        paddingVertical: spacing.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: borderRadius.xl
+    },
+    conditionBtnActive: {
+        backgroundColor: colors.primary
+    },
+    conditionBtnText: {
+        color: colors.text.muted,
+        fontWeight: typography.fontWeight.semibold
+        // Removed fontSize: typography.fontSize.sm to match toggleText default size
+    },
+    conditionBtnTextActive: {
+        color: colors.white
+    },
+    // ...
     toggleBtn: {
         flex: 1,
         flexDirection: 'row',
@@ -402,8 +507,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         backgroundColor: colors.background.input,
         borderRadius: borderRadius.md,
-        paddingVertical: 14,
-        marginRight: spacing.sm
+        paddingVertical: 14
+        // Removed marginRight, handled by gap in parent
     },
     toggleBtnActive: {
         backgroundColor: colors.primary
@@ -415,6 +520,12 @@ const styles = StyleSheet.create({
     },
     toggleTextActive: {
         color: colors.white
+    },
+    toggleBtnDisabled: {
+        // No background change, just disable interaction visual via text/icon
+    },
+    toggleTextDisabled: {
+        color: '#444'
     },
     invoiceSection: {
         marginTop: spacing.base,
