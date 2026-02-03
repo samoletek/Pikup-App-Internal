@@ -78,15 +78,15 @@
 - [x] #24 Remove address display (already confirmed in Step 1) - drew
 - [x] #25 Remove duplicate photo area - drew
 - [x] #26 Fix photo delete button overflow - drew
-- [ ] #27 Add New/Used selection toggle
-- [ ] #28 Insurance logic: New = auto-insured, Used = disclaimer
+- [x] #27 Add New/Used selection toggle
+- [x] #28 Insurance logic: New = auto-insured, Used = disclaimer
 - [ ] #29 Add AI analysis feature (fix later - reimplement)
 - [x] #30 Enlarge Description field - drew
 
 ### Customer Flow - Step 4: Summary
-- [ ] #36 Tap on summary item jumps to that step
+- [x] #36 Tap on summary item jumps to that step
 - [x] #37 Fix button container overflow
-- [ ] #38 Handle unavailable insurance state
+- [x] #38 Handle unavailable insurance state
 - [ ] #39 Audit all price calculations - drew
 
 ### Milestone 2 Deliverables
