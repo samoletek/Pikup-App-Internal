@@ -80,14 +80,14 @@
 - [x] #26 Fix photo delete button overflow - drew
 - [ ] #27 Add New/Used selection toggle
 - [ ] #28 Insurance logic: New = auto-insured, Used = disclaimer
-- [ ] #29 Remove AI analysis feature (fix later - reimplement)
+- [ ] #29 Add AI analysis feature (fix later - reimplement)
 - [x] #30 Enlarge Description field - drew
 
 ### Customer Flow - Step 4: Summary
 - [ ] #36 Tap on summary item jumps to that step
-- [ ] #37 Fix button container overflow
+- [x] #37 Fix button container overflow
 - [ ] #38 Handle unavailable insurance state
-- [ ] #39 Audit all price calculations
+- [ ] #39 Audit all price calculations - drew
 
 ### Milestone 2 Deliverables
 - [ ] Complete customer request flow with proper navigation
