@@ -68,165 +68,130 @@ export default function CustomerProfileScreen({ navigation }) {
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Info */}
-        <View style={[styles.profileSection, { paddingTop: insets.top + 20 }]}>
-          <View style={styles.nameSection}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <TouchableOpacity 
-              style={styles.profileButton}
-              onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
-            >
-              {profileImage ? (
-                <Image source={{ uri: profileImage }} style={styles.profileImage} />
-              ) : (
-                <View style={styles.profileInitials}>
-                  <Text style={styles.profileInitialsText}>
-                    {displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                  </Text>
+        {/* Profile Card - Airbnb Style */}
+        <View style={[styles.profileCard, { marginTop: insets.top + 20 }]}>
+          <View style={styles.profileCardContent}>
+            {/* Left Side - Avatar & Info */}
+            <View style={styles.profileLeftSide}>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
+              >
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                ) : (
+                  <View style={styles.profileInitials}>
+                    <Text style={styles.profileInitialsText}>
+                      {displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                {/* Verified Badge on Avatar */}
+                <View style={styles.verifiedBadgeOnAvatar}>
+                  <Ionicons name="checkmark" size={12} color="#fff" />
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
 
-          <View style={styles.ratingSection}>
-            <View style={styles.ratingItem}>
-              <Ionicons name="star" size={16} color="#A77BFF" />
-              <Text style={styles.ratingText}>{customerProfile?.rating || '5.0'}</Text>
+              <Text style={styles.userName}>{displayName}</Text>
+
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color="#A77BFF" />
+                <Text style={styles.ratingText}>{customerProfile?.rating || '5.0'}</Text>
+              </View>
             </View>
-            <View style={styles.divider} />
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>Verified</Text>
+
+            {/* Right Side - Stats */}
+            <View style={styles.statsColumn}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{customerProfile?.totalTrips || '0'}</Text>
+                <Text style={styles.statLabel}>Trips</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{customerProfile?.totalReviews || '0'}</Text>
+                <Text style={styles.statLabel}>Reviews</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{customerProfile?.yearsOnApp || '1'}</Text>
+                <Text style={styles.statLabel}>Years on Pikup</Text>
+              </View>
             </View>
           </View>
-
-          {/* Profile Type Selector */}
-          <TouchableOpacity style={styles.profileSelector}>
-            <Text style={styles.profileSelectorText}>Personal</Text>
-            <Ionicons name="person" size={16} color="#A77BFF" />
-            <Ionicons
-              name="chevron-down"
-              size={20}
-              color="#999"
-              style={{ marginLeft: "auto" }}
-            />
-          </TouchableOpacity>
         </View>
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("CustomerHelpScreen")}
           >
-            <Ionicons name="help-circle-outline" size={24} color="#A77BFF" />
+            <Ionicons name="help-circle-outline" size={32} color="#A77BFF" />
             <Text style={styles.actionText}>Help</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
+          <View style={styles.actionDivider} />
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("CustomerWalletScreen")}
           >
-            <Ionicons name="wallet-outline" size={24} color="#A77BFF" />
+            <Ionicons name="wallet-outline" size={32} color="#A77BFF" />
             <Text style={styles.actionText}>Wallet</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => navigation.navigate("CustomerActivityScreen")}
-          >
-            <Ionicons name="time-outline" size={24} color="#A77BFF" />
-            <Text style={styles.actionText}>Activity</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Promo Section */}
-        <View style={styles.promoSection}>
-          <View style={styles.promoContent}>
-            <Text style={styles.promoTitle}>Enjoy 17% off rides</Text>
-            <Text style={styles.promoSubtitle}>
-              Go rediscover your city for less →
-            </Text>
-          </View>
-          <View style={styles.promoIcon}>
-            <Text style={styles.promoIconText}>%</Text>
-          </View>
-        </View>
 
         {/* Menu Sections */}
         <View style={styles.menuSections}>
-          {/* Payment Options */}
-          <TouchableOpacity 
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerWalletScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="card-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Payment</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          {/* Personal Information */}
-          <TouchableOpacity 
+          {/* View Profile */}
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
           >
             <View style={styles.menuItemLeft}>
               <Ionicons name="person-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Personal Information</Text>
+              <Text style={styles.menuItemTitle}>View Profile</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          {/* Claims - NEW */}
-          <TouchableOpacity style={styles.menuItem} onPress={handleClaimsPress}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Claims</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          {/* Activity */}
-          <TouchableOpacity 
+          {/* Notifications */}
+          <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerActivityScreen")}
+            onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="time-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Activity</Text>
+              <Ionicons name="notifications-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>Notifications</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          {/* Messages */}
-          <TouchableOpacity 
+          {/* My Addresses */}
+          <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerMessagesScreen")}
+            onPress={() => navigation.navigate("Home")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="chatbubble-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Messages</Text>
+              <Ionicons name="location-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>My Addresses</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          {/* Terms & Privacy */}
-          <TouchableOpacity 
+          {/* My Orders */}
+          <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("TermsAndPrivacyScreen")}
+            onPress={() => navigation.navigate("Activity")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="document-text-outline"
-                size={20}
-                color="#A77BFF"
-              />
-              <Text style={styles.menuItemTitle}>Terms & Privacy</Text>
+              <Ionicons name="receipt-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>My Orders</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
           {/* Settings */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
@@ -237,14 +202,44 @@ export default function CustomerProfileScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
 
-          {/* Help */}
-          <TouchableOpacity 
+          {/* Claims */}
+          <TouchableOpacity style={styles.menuItem} onPress={handleClaimsPress}>
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="shield-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>Claims</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+
+          {/* Terms of Service */}
+          <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerHelpScreen")}
+            onPress={() => navigation.navigate("TermsAndPrivacyScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="help-circle-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Help</Text>
+              <Ionicons name="document-text-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>Terms of Service</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+
+          {/* Privacy Policy */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate("TermsAndPrivacyScreen")}
+          >
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="lock-closed-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>Privacy Policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#666" />
+          </TouchableOpacity>
+
+          {/* About Pikup */}
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="information-circle-outline" size={20} color="#A77BFF" />
+              <Text style={styles.menuItemTitle}>About Pikup</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#666" />
           </TouchableOpacity>
@@ -269,61 +264,69 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  profileSection: {
+  profileCard: {
     backgroundColor: "#141426",
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#2A2A3B",
+    padding: 20,
   },
-  nameSection: {
+  profileCardContent: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  userName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-    textTransform: "capitalize",
-  },
-  profileButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#1A1A3A",
-    justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden",
+  },
+  profileLeftSide: {
+    alignItems: "center",
+    flex: 1,
+  },
+  avatarContainer: {
+    position: "relative",
   },
   profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   profileInitials: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: "#A77BFF",
     justifyContent: "center",
     alignItems: "center",
   },
   profileInitialsText: {
     color: "#fff",
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: "600",
   },
-  ratingSection: {
-    flexDirection: "row",
+  verifiedBadgeOnAvatar: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#A77BFF",
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: "#141426",
   },
-  ratingItem: {
+  userName: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#fff",
+    textTransform: "capitalize",
+    marginTop: 12,
+  },
+  ratingRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginTop: 4,
   },
   ratingText: {
     fontSize: 14,
@@ -331,44 +334,38 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginLeft: 4,
   },
-  divider: {
-    width: 1,
-    height: 16,
-    backgroundColor: "#2A2A3B",
-    marginHorizontal: 12,
+  statsColumn: {
+    alignItems: "flex-start",
+    paddingLeft: 10,
   },
-  verifiedBadge: {
-    backgroundColor: "#1A3A2E",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  verifiedText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#00D4AA",
-  },
-  profileSelector: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1A1A3A",
-    paddingHorizontal: 12,
+  statItem: {
     paddingVertical: 8,
-    borderRadius: 8,
   },
-  profileSelectorText: {
-    fontSize: 14,
-    fontWeight: "500",
+  statNumber: {
+    fontSize: 20,
+    fontWeight: "bold",
     color: "#fff",
-    marginRight: 6,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: "#888",
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 120,
+    height: 1,
+    backgroundColor: "#2A2A3B",
   },
   quickActions: {
     flexDirection: "row",
     backgroundColor: "#141426",
-    paddingVertical: 20,
+    paddingVertical: 24,
     paddingHorizontal: 20,
     justifyContent: "space-around",
-    marginBottom: 8,
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#2A2A3B",
   },
@@ -377,51 +374,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionText: {
-    fontSize: 12,
-    color: "#fff",
-    marginTop: 4,
-  },
-  promoSection: {
-    backgroundColor: "#141426",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#2A2A3B",
-  },
-  promoContent: {
-    flex: 1,
-  },
-  promoTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  promoSubtitle: {
     fontSize: 14,
-    color: "#999",
+    color: "#fff",
+    marginTop: 8,
   },
-  promoIcon: {
-    width: 50,
+  actionDivider: {
+    width: 1,
     height: 50,
-    backgroundColor: "#2A1F3D",
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  promoIconText: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#A77BFF",
+    backgroundColor: "#2A2A3B",
   },
   menuSections: {
     backgroundColor: "#141426",
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#2A2A3B",
+    overflow: "hidden",
   },
   menuItem: {
     flexDirection: "row",
@@ -445,14 +414,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#141426",
     paddingHorizontal: 20,
     paddingVertical: 16,
-    marginBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "#2A2A3B",
+    alignItems: "center",
   },
   logoutText: {
     fontSize: 16,
     color: "#ff4444",
     fontWeight: "500",
+    textAlign: "center",
   },
   bottomSpacing: {
     height: 40,

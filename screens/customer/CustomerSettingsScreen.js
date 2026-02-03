@@ -242,41 +242,6 @@ export default function CustomerSettingsScreen({ navigation }) {
         </View>
 
 
-        {/* About and Legal */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About & Legal</Text>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="information-circle-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>About PikUp</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="document-text-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Terms of Service</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Privacy Policy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-        </View>
-
         {/* Data & Storage */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Data & Storage</Text>
