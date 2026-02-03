@@ -87,7 +87,6 @@
 - [ ] #36 Tap on summary item jumps to that step
 - [x] #37 Fix button container overflow
 - [ ] #38 Handle unavailable insurance state
-- [ ] #39 Audit all price calculations - drew
 
 ### Milestone 2 Deliverables
 - [ ] Complete customer request flow with proper navigation
@@ -110,7 +109,7 @@
 - [ ] #46 Center "No messages" empty state
 
 ### Customer Flow - Account Screen
-- [ ] #47 Account deletion (App Store requirement)
+- [x] #47 Account deletion (App Store requirement)
 - [ ] #48 Remove Driver toggle - separate accounts
 - [ ] #49 Remove Wallet for customer - direct payment
 - [ ] #50 Remove duplicate buttons (already in tab bar)
@@ -129,6 +128,7 @@
 
 ### Backend / Infrastructure
 - [ ] #70 Dynamic pricing algorithm
+- [ ] #39 Audit all price calculations
 
 ### New Features (from Jan 24 call)
 - [ ] #72 Multiple items - grid for adding items
