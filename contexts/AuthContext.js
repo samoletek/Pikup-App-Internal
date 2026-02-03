@@ -1,6 +1,6 @@
 // contexts/AuthContext.js - Migrated to Supabase
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import { supabase } from '../config/supabase'; // Supabase Client
 import * as ImageManipulator from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer'; // Setup required for Supabase Storage uploads
@@ -11,6 +11,7 @@ import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import * as Linking from 'expo-linking';
 WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext();
@@ -434,6 +435,18 @@ export function AuthProvider({ children }) {
           const userType = md.user_type;
 
           if (userType) {
+            // Check for role mismatch
+            const expectedRole = await AsyncStorage.getItem('expected_role');
+            if (expectedRole && expectedRole !== userType) {
+              console.log(`⚠️ Role mismatch! Expected: ${expectedRole}, Actual: ${userType}`);
+              Alert.alert(
+                'Account Switched',
+                `This account is registered as a ${userType.charAt(0).toUpperCase() + userType.slice(1)}. Logging you in as a ${userType}.`,
+                [{ text: 'OK' }]
+              );
+              await AsyncStorage.removeItem('expected_role');
+            }
+
             // OPTIMISTIC RESTORE
             const optimisticProfile = {
               id: session.user.id,
@@ -833,56 +846,65 @@ export function AuthProvider({ children }) {
     webClientId: Constants.expoConfig?.extra?.google?.webClientId || 'placeholder_web_client_id',
   });
 
+  // Helper to extract params from URL fragment
+  const extractParamsFromUrl = (url) => {
+    const params = {};
+    const regex = /([^&=]+)=([^&]*)/g;
+    const fragmentString = url.split('#')[1] || url.split('?')[1];
+    if (fragmentString) {
+      let m;
+      while ((m = regex.exec(fragmentString))) {
+        params[decodeURIComponent(m[1])] = decodeURIComponent(m[2]);
+      }
+    }
+    return params;
+  };
+
   async function signInWithGoogle(userRole = 'customer') {
-    // Note: Use the updated Google Auth flow with Supabase
-    // This assumes you have configured the Google Auth Provider in Supabase Dashboard
-    // and handled the URL redirects properly in the app.config.js / scheme
     setLoading(true);
     try {
-      // Since the setup for Google Sign In with Supabase + Expo can vary (WebView vs Native),
-      // and we had a native implementation before, we should stick to passing the ID Token if possible.
-      // However, Google.useAuthRequest returns an id_token we can use.
+      const redirectUri = 'pikup://params'; // Must match Supabase Allowed Redirects
+      console.log('Starting Google Auth with redirect:', redirectUri);
 
-      // Assuming the component calling this has handled the prompt and passed us the token?
-      // NO, the original code did the request HERE.
-      // BUT, useAuthRequest is a HOOK. It cannot be used inside this async function.
-      // It must be used in the Component.
-
-      // CRITICAL: The previous implementation likely had the hook in the Component
-      // and passed the result here, OR used a different approach.
-      // Let's check how it was used.
-      // The grep showed: `async function signInWithGoogle(userRole = 'customer')`
-      // And it used `Google.useAuthRequest`? No, you can't use hooks in functions.
-      // It probably used `Google.logInAsync` (deprecated) or similar?
-      // Or the grep missed context.
-
-      // Wait, line 1264: `async function signInWithGoogle`
-      // Original code:
-      /*
-      const [request, response, promptAsync] = Google.useAuthRequest({ ... });
-      ...
-      useEffect(() => { ... if response?.type === 'success' ... signInWithGoogle(...) }, [response]);
-      */
-
-      // NO, `AuthContext` usually exposes the function to call.
-      // Inspecting the original file content from ViewFile earlier would verify this.
-      // I'll leave a placeholder or try to implement `supabase.auth.signInWithOAuth`.
-
-      // Using `signInWithOAuth` starts a browser session.
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'pikup://params' // Need to verify scheme
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true
         }
       });
 
       if (error) throw error;
 
-      // Note: signInWithOAuth in React Native usually requires a URL listener to complete the process.
-      // Supabase's `initializeAuth` (which I refactored) handles the session restoration.
+      if (data?.url) {
+        console.log('Opening WebBrowser with URL:', data.url);
+        // Use preferEphemeralSession to try to avoid the "wants to use" system alert (iOS 13+)
+        // and prevent cookie sharing conflicts.
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri, {
+          preferEphemeralSession: true
+        });
 
-      // Returning data here might be effectively starting the flow, but the *result* comes later via deep link.
-      return data;
+        console.log('WebBrowser result:', result.type);
+        if (result.type === 'success' && result.url) {
+          console.log('Auth success, parsing params...');
+          const { access_token, refresh_token } = extractParamsFromUrl(result.url);
+
+          if (access_token && refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            if (sessionError) throw sessionError;
+            console.log('Supabase session set successfully');
+            return { success: true };
+          } else {
+            console.warn('No tokens found in URL');
+            throw new Error('Authentication failed: No tokens received');
+          }
+        } else {
+          return { canceled: true };
+        }
+      }
 
     } catch (error) {
       console.error('Google Sign In Error:', error);

@@ -14,7 +14,7 @@
 ### Global / Critical
 - [x] #1 Safe Area - extend content to screen edges like modern apps
 - [-] #2 Sign in with Apple (App Store requirement)
-- [-] #3 Sign in with Google (Play Store requirement)
+- [x] #3 Sign in with Google (Play Store requirement)
 - [x] #4 Account deletion feature (required by both stores)
 - [-] #5 Terms/Privacy - links to pikup-app.com (need to create)
 

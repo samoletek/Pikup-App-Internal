@@ -36,16 +36,16 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [currentModal, setCurrentModal] = useState(null); // 'offline', 'driving', 'navigation'
   const [activeJob, setActiveJob] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  
+
   // Request modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showAllRequests, setShowAllRequests] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  
+
   // New incoming request modal state
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState(null);
-  
+
   // State for tracking available requests
   const [availableRequests, setAvailableRequests] = useState([]);
   const [lastRefreshTime, setLastRefreshTime] = useState(null);
@@ -54,17 +54,17 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [acceptedRequestId, setAcceptedRequestId] = useState(null);
-  
+
   // Driver session tracking
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  
+
   // Location tracking
   const locationSubscription = useRef(null);
   const mapRef = useRef(null);
-  
+
   // Background refresh interval
   const backgroundRefreshInterval = useRef(null);
-  
+
   // Heartbeat throttling
   const lastHeartbeatAt = useRef(0);
   const HEARTBEAT_INTERVAL_MS = 20000; // 20 seconds
@@ -75,11 +75,11 @@ export default function DriverHomeScreen({ navigation, route }) {
     const R = 3959; // Earth's radius in miles
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
 
@@ -216,12 +216,12 @@ export default function DriverHomeScreen({ navigation, route }) {
   // Auto-refresh functions
   const startAutoRefresh = () => {
     console.log('Starting auto-refresh...');
-    
+
     // Background refresh to update request count every 30 seconds
     backgroundRefreshInterval.current = setInterval(async () => {
       if (isOnline) {
         console.log('Background refresh of requests...');
-        
+
         // Check for expired requests first
         try {
           const expiredCount = await checkExpiredRequests();
@@ -231,7 +231,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         } catch (error) {
           console.error('Error checking expired requests:', error);
         }
-        
+
         // Then load fresh requests
         loadRequests(false);
       }
@@ -248,13 +248,13 @@ export default function DriverHomeScreen({ navigation, route }) {
   const loadRequests = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     setError(null);
-    
+
     try {
       console.log('Loading available pickup requests...');
-      
+
       // Get requests that are already properly formatted by getAvailableRequests
       const requests = await getAvailableRequests();
-      
+
       setAvailableRequests(requests);
       setLastRefreshTime(new Date());
       console.log(`Loaded ${requests.length} real requests from Firebase`);
@@ -285,7 +285,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
-    
+
     setRegion(newRegion);
     setDriverLocation({
       latitude: loc.coords.latitude,
@@ -306,7 +306,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           longitude: loc.coords.longitude,
         };
         setDriverLocation(newLocation);
-        
+
         // Update driver heartbeat in backend when online (throttled)
         if (isOnline && currentUser?.uid) {
           const now = Date.now();
@@ -317,12 +317,12 @@ export default function DriverHomeScreen({ navigation, route }) {
             });
           }
         }
-        
+
         // Update driver location in database if there's an active job
         if (activeJob?.id) {
           updateDriverLocation(activeJob.id, newLocation);
         }
-        
+
         // Update map region to follow driver
         if (mapRef.current && (currentModal === 'driving' || currentModal === 'navigation')) {
           mapRef.current.animateToRegion({
@@ -345,7 +345,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const showModal = (modalType, data = null) => {
     setCurrentModal(modalType);
     if (data) setActiveJob(data);
-    
+
     // Animate modal in
     Animated.spring(slideAnim, {
       toValue: 1,
@@ -368,35 +368,35 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const handleGoOnline = async () => {
     if (isOnline || !currentUser?.uid) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Check location permissions
       let { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status !== 'granted') {
         alert('Location permission is required to go online.');
         setLoading(false);
         return;
       }
-      
+
       // Get current location
       let location = await Location.getCurrentPositionAsync({});
       const driverPos = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
-      
+
       setDriverLocation(driverPos);
-      
+
       // Set driver online in backend
       const sessionId = await setDriverOnline(currentUser.uid, driverPos);
       setCurrentSessionId(sessionId);
-      
+
       // Set local state
       setIsOnline(true);
-      
+
       console.log('Driver is now online with session:', sessionId);
     } catch (error) {
       console.error('Error going online:', error);
@@ -408,24 +408,24 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const handleGoOffline = () => {
     if (!isOnline) return;
-    
+
     showModal('offline');
   };
 
   const confirmGoOffline = async () => {
     if (!currentUser?.uid) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Set driver offline in backend
       await setDriverOffline(currentUser.uid);
       setCurrentSessionId(null);
-      
+
       // Set local state
       setIsOnline(false);
       hideModal();
-      
+
       console.log('Driver is now offline');
     } catch (error) {
       console.error('Error going offline:', error);
@@ -447,10 +447,10 @@ export default function DriverHomeScreen({ navigation, route }) {
       console.log('Accepting request:', request.id);
       // Accept the request
       await acceptRequest(request.id);
-      
+
       // Start monitoring the accepted request
       setAcceptedRequestId(request.id);
-      
+
       // Close modal and navigate to GPS navigation
       setShowRequestModal(false);
       setShowAllRequests(false);
@@ -477,11 +477,11 @@ export default function DriverHomeScreen({ navigation, route }) {
     try {
       console.log('Accepting incoming request:', request.id);
       await acceptRequest(request.id);
-      
+
       setAcceptedRequestId(request.id);
       setShowIncomingModal(false);
       setIncomingRequest(null);
-      
+
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       console.error('Error accepting incoming request:', error);
@@ -494,10 +494,10 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowIncomingModal(false);
     setIncomingRequest(null);
     console.log('Declined incoming request:', currentRequestId);
-    
+
     // Remove the declined request from available requests
     setAvailableRequests(prev => prev.filter(req => req.id !== currentRequestId));
-    
+
     // After a short delay, show the next request if available
     setTimeout(() => {
       setAvailableRequests(current => {
@@ -505,10 +505,10 @@ export default function DriverHomeScreen({ navigation, route }) {
           const nextRequest = current[0];
           setIncomingRequest(nextRequest);
           setShowIncomingModal(true);
-          
+
           // Haptic feedback for next request
           // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          
+
           console.log('Auto-showing next request after decline:', nextRequest.id);
         }
         return current;
@@ -530,10 +530,10 @@ export default function DriverHomeScreen({ navigation, route }) {
         const firstRequest = availableRequests[0];
         setIncomingRequest(firstRequest);
         setShowIncomingModal(true);
-        
+
         // Haptic feedback for incoming request (like Uber)
         // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
+
         console.log('Auto-showing incoming request:', firstRequest.id);
       }, 1000); // 1 second delay
 
@@ -543,10 +543,10 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const getRefreshTimeText = () => {
     if (!lastRefreshTime) return 'Not yet refreshed';
-    
+
     const now = new Date();
     const diff = Math.floor((now - lastRefreshTime) / 1000); // seconds
-    
+
     if (diff < 60) return `Updated ${diff} seconds ago`;
     if (diff < 3600) return `Updated ${Math.floor(diff / 60)} minutes ago`;
     return `Updated ${Math.floor(diff / 3600)} hours ago`;
@@ -599,7 +599,7 @@ export default function DriverHomeScreen({ navigation, route }) {
             followUserLocation={isOnline}
             followUserMode={isOnline ? 'compass' : 'none'}
           />
-          
+
           {/* Show user location */}
           <Mapbox.UserLocation
             visible={true}
@@ -612,9 +612,9 @@ export default function DriverHomeScreen({ navigation, route }) {
             if (!request?.pickup?.coordinates?.longitude || !request?.pickup?.coordinates?.latitude) {
               return null;
             }
-            
+
             const isSelected = selectedRequest && selectedRequest.id === request.id;
-            
+
             return (
               <Mapbox.PointAnnotation
                 key={request.id}
@@ -632,7 +632,7 @@ export default function DriverHomeScreen({ navigation, route }) {
               </Mapbox.PointAnnotation>
             );
           })}
-          
+
           {/* Show route if active */}
           {routeCoordinates.length > 0 && routeCoordinates.every(coord => coord?.longitude && coord?.latitude) && (
             <Mapbox.ShapeSource
@@ -661,22 +661,11 @@ export default function DriverHomeScreen({ navigation, route }) {
       )}
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.leftSection}>
-          <Image 
-            source={require('../../assets/pikup-logo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-          {/* Fallback text logo - uncomment to use instead of image */}
-          {/* <Text style={styles.appName}>PikUp</Text> */}
-          <View style={styles.statusContainer}>
-            <View style={[styles.statusIndicator, isOnline ? styles.onlineIndicator : styles.offlineIndicator]} />
-            <Text style={styles.statusText}>
-              {isOnline ? 'Online' : 'Offline'}
-            </Text>
-          </View>
-        </View>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top - 15, 20) }]}>
+        <Image
+          source={require('../../assets/pikup-logo.png')}
+          style={styles.logoImage}
+        />
       </View>
 
       {/* Bottom Panel */}
@@ -687,7 +676,7 @@ export default function DriverHomeScreen({ navigation, route }) {
               <Text style={styles.waitTimeText}>{waitTime} wait in your area</Text>
               <Text style={styles.waitTimeSubtext}>Average wait for 10 pickup request over the last hour</Text>
             </View>
-            
+
             <View style={styles.progressContainer}>
               <Text style={styles.progressLabel}>Current Progress</Text>
               <View style={styles.progressBarContainer}>
@@ -695,8 +684,8 @@ export default function DriverHomeScreen({ navigation, route }) {
               </View>
               <Text style={styles.nextLevelText}>Next Level: Gold</Text>
             </View>
-            
-            <TouchableOpacity 
+
+            <TouchableOpacity
               style={styles.goOfflineButton}
               onPress={handleGoOffline}
               activeOpacity={0.8}
@@ -706,7 +695,7 @@ export default function DriverHomeScreen({ navigation, route }) {
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.goOnlineButtonContainer}
             onPress={handleGoOnline}
             activeOpacity={0.8}
@@ -726,7 +715,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </View>
-      
+
       {/* View All Requests Button (only when online and requests available) */}
       {/* {isOnline && availableRequests.length > 0 && (
         <View style={styles.viewAllButtonContainer}>
@@ -754,7 +743,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       {/* Current Modal */}
       {currentModal && (
-        <Animated.View 
+        <Animated.View
           style={[
             styles.modalContainer,
             {
@@ -803,11 +792,12 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       {/* Offline Dashboard Overlay */}
       {!isOnline && (
-        <OfflineDashboard 
+        <OfflineDashboard
           onGoOnline={handleGoOnline}
           navigation={navigation}
         />
       )}
+
     </View>
   );
 }
@@ -821,23 +811,22 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 10,
   },
-  leftSection: {
-    alignItems: 'flex-start',
-  },
   logoImage: {
-    width: 350,
-    aspectRatio: 4.08,
-    height: undefined,
-    resizeMode: "contain",
-    marginTop: -25,
-    marginBottom: -55,
+    width: '22%',
+    height: 20.4,
+    resizeMode: 'contain',
+    marginTop: 10,
   },
   appName: {
     fontSize: 28,
