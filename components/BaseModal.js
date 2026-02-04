@@ -7,8 +7,6 @@ import {
     PanResponder,
     Dimensions,
     Modal,
-    Platform,
-    Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -28,16 +26,12 @@ const BaseModal = forwardRef(({
     containerStyle,
     renderHeader,
     backgroundColor = '#FFFFFF', // Default to white, can be overridden
-    avoidKeyboard = false,
     onBackdropPress, // Optional: custom handler for backdrop tap (e.g., show confirmation)
 }, ref) => {
     const insets = useSafeAreaInsets();
 
     // Single animation value - backdrop interpolates from this
     const translateY = useRef(new Animated.Value(height)).current;
-
-    // Keyboard handling
-    const keyboardOffset = useRef(new Animated.Value(0)).current;
 
     // Animate close: slide down, then call onClose
     const animateClose = useCallback(() => {
@@ -141,38 +135,6 @@ const BaseModal = forwardRef(({
         }
     }, [visible]); // Removed 'height' to prevent slide animation on height changes
 
-    // Keyboard listeners
-    useEffect(() => {
-        if (!avoidKeyboard) return;
-
-        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-        const onKeyboardShow = (e) => {
-            Animated.timing(keyboardOffset, {
-                toValue: -e.endCoordinates.height,
-                duration: 250,
-                useNativeDriver: true,
-            }).start();
-        };
-
-        const onKeyboardHide = () => {
-            Animated.timing(keyboardOffset, {
-                toValue: 0,
-                duration: 250,
-                useNativeDriver: true,
-            }).start();
-        };
-
-        const showListener = Keyboard.addListener(showEvent, onKeyboardShow);
-        const hideListener = Keyboard.addListener(hideEvent, onKeyboardHide);
-
-        return () => {
-            showListener.remove();
-            hideListener.remove();
-        };
-    }, [avoidKeyboard]);
-
     // Backdrop opacity interpolated from translateY
     const backdropOpacity = translateY.interpolate({
         inputRange: [0, height],
@@ -185,6 +147,7 @@ const BaseModal = forwardRef(({
             visible={visible}
             transparent
             animationType="none"
+            statusBarTranslucent={true}
             onRequestClose={animateClose}
         >
             {/* Backdrop - opacity derived from translateY via interpolate */}
@@ -206,8 +169,10 @@ const BaseModal = forwardRef(({
                     {
                         backgroundColor: backgroundColor,
                         height: height,
-                        // Combine animations
-                        transform: [{ translateY }, { translateY: keyboardOffset }],
+                        // Use top positioning - modal slides from bottom (SCREEN_HEIGHT) to its final position
+                        top: SCREEN_HEIGHT - height,
+                        // Only translateY for animation, no keyboardOffset needed with top positioning
+                        transform: [{ translateY }],
                     },
                     containerStyle,
                 ]}
@@ -247,8 +212,9 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 0,
         right: 0,
-        bottom: 0,
-        borderRadius: 20,
+        // Using top positioning instead of bottom to prevent keyboard from pushing modal up
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
         zIndex: 999,
         overflow: 'hidden',
         // Shadow for elevation look
