@@ -23,7 +23,9 @@ module.exports = {
 
     ios: {
       supportsTablet: true,
-      bundleIdentifier: "com.pikup.main",
+      usesAppleSignIn: true,
+      appleTeamId: "99LU49ANLX",
+      bundleIdentifier: "io.architeq.pikup",
       googleServicesFile: "./GoogleService-Info.plist",
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,

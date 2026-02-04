@@ -12,6 +12,7 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import * as Linking from 'expo-linking';
+import * as AppleAuthentication from 'expo-apple-authentication';
 WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext();

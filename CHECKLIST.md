@@ -13,7 +13,7 @@
 
 ### Global / Critical
 - [x] #1 Safe Area - extend content to screen edges like modern apps
-- [ ] #2 Sign in with Apple (App Store requirement)
+- [x] #2 Sign in with Apple (App Store requirement)
 - [x] #3 Sign in with Google (Play Store requirement)
 - [x] #4 Account deletion feature (required by both stores)
 - [ ] #5 Terms/Privacy - links to pikup-app.com (need to create)
@@ -37,7 +37,7 @@
 - [x] #80 Redkik API authentication 
 
 ### Milestone 1 Deliverables
-- [ ] Working social authentication (Apple + Google)
+- [x] Working social authentication (Apple + Google)
 - [x] Account deletion functionality
 - [x] Supabase backend configured and migrated
 - [x] Fixed modal system with proper navigation
