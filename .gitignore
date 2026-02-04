@@ -63,3 +63,7 @@ server-updates.js
 
 # MCP Configuration
 .agent/
+
+# Claude local context
+cloud.md
+.claude/
