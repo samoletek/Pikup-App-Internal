@@ -24,16 +24,16 @@ export default function CustomerActivityScreen({ navigation, route }) {
   const [stats, setStats] = useState({ totalTrips: 0, totalSpent: 0, avgRating: 0 });
   const [driverProfile, setDriverProfile] = useState(null);
   const [customerProfile, setCustomerProfile] = useState(null);
-  
+
   // Get parameters from route if available (for demo mode)
   const { requestId, status, request, driverLocation, pickupPhotos } = route.params || {};
-  
+
   // Get AuthContext
   const { getUserPickupRequests, currentUser, getUserProfile } = useAuth();
-  
+
   // If we have a requestId and status, we're in an active trip
   const isActiveTrip = !!requestId && !!status;
-  
+
   // Load driver profile when we have an active trip
   useEffect(() => {
     if (request?.assignedDriverId && !driverProfile) {
@@ -63,7 +63,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
       loadCustomerProfile();
     }
   }, [currentUser]);
-  
+
   // Fetch user's trip history
   const fetchTrips = async () => {
     if (!currentUser) {
@@ -74,12 +74,12 @@ export default function CustomerActivityScreen({ navigation, route }) {
     try {
       setLoading(true);
       const userTrips = await getUserPickupRequests();
-      
+
       // Transform Firebase data to match UI format
       const transformedTrips = userTrips.map(trip => {
         const completedAt = trip.completedAt || trip.createdAt;
         const date = new Date(completedAt);
-        
+
         return {
           id: trip.id,
           date: formatDate(date),
@@ -98,22 +98,22 @@ export default function CustomerActivityScreen({ navigation, route }) {
           createdAt: trip.createdAt
         };
       });
-      
+
       setTrips(transformedTrips);
-      
+
       // Calculate real statistics
       const completedTrips = transformedTrips.filter(trip => trip.status === 'completed');
       const totalSpent = completedTrips.reduce((sum, trip) => {
         const amount = parseFloat(trip.amount.replace('$', ''));
         return sum + (isNaN(amount) ? 0 : amount);
       }, 0);
-      
+
       setStats({
         totalTrips: completedTrips.length,
         totalSpent: totalSpent,
         avgRating: customerProfile?.customerProfile?.rating || 5.0
       });
-      
+
     } catch (error) {
       console.error('Error fetching trips:', error);
     } finally {
@@ -130,12 +130,12 @@ export default function CustomerActivityScreen({ navigation, route }) {
       });
       return;
     }
-    
+
     // Otherwise, show the active tab if there's an active trip
     if (isActiveTrip) {
       setSelectedTab('active');
     }
-    
+
     // Fetch trips when component mounts
     fetchTrips();
   }, [isActiveTrip, requestId, status, navigation, currentUser]);
@@ -145,7 +145,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
     const now = new Date();
     const diffTime = Math.abs(now - date);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 1) {
       return `Today, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
     } else if (diffDays === 2) {
@@ -228,7 +228,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
       default: return 'help-circle';
     }
   };
-  
+
   const getStatusText = (status) => {
     switch (status) {
       case 'pending': return 'Finding driver';
@@ -245,10 +245,10 @@ export default function CustomerActivityScreen({ navigation, route }) {
     <TouchableOpacity key={trip.id} style={styles.tripCard}>
       <View style={styles.tripHeader}>
         <View style={styles.tripStatusContainer}>
-          <Ionicons 
-            name={getStatusIcon(trip.status)} 
-            size={16} 
-            color={getStatusColor(trip.status)} 
+          <Ionicons
+            name={getStatusIcon(trip.status)}
+            size={16}
+            color={getStatusColor(trip.status)}
           />
           <Text style={[styles.tripStatus, { color: getStatusColor(trip.status) }]}>
             {getStatusText(trip.status)}
@@ -267,9 +267,9 @@ export default function CustomerActivityScreen({ navigation, route }) {
             <Text style={styles.addressText}>{trip.pickup}</Text>
           </View>
         </View>
-        
+
         <View style={styles.routeLine} />
-        
+
         <View style={styles.routePoint}>
           <View style={styles.dropoffDot} />
           <View style={styles.addressContainer}>
@@ -297,7 +297,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
           <Ionicons name="star" size={12} color="#FFD700" style={{ marginLeft: 4 }} />
           <Text style={styles.ratingText}>{trip.driverRating}</Text>
         </View>
-        
+
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
             <Ionicons name="time-outline" size={14} color="#999" />
@@ -330,29 +330,29 @@ export default function CustomerActivityScreen({ navigation, route }) {
       </View>
     </TouchableOpacity>
   );
-  
+
   const renderActiveTrip = () => {
     if (!isActiveTrip) return null;
-    
+
     const isPickupStage = status === 'arrivedAtPickup';
     const isDeliveryStage = status === 'arrivedAtDropoff';
     const isEnRoute = status === 'enRouteToDropoff';
-    
+
     return (
       <View style={styles.activeTripContainer}>
         <View style={styles.activeTripHeader}>
           <View style={styles.tripStatusContainer}>
-            <Ionicons 
-              name={getStatusIcon(status)} 
-              size={20} 
-              color={getStatusColor(status)} 
+            <Ionicons
+              name={getStatusIcon(status)}
+              size={20}
+              color={getStatusColor(status)}
             />
             <Text style={[styles.activeTripStatus, { color: getStatusColor(status) }]}>
               {getStatusText(status)}
             </Text>
           </View>
         </View>
-        
+
         {isEnRoute && driverLocation && (
           <View style={styles.mapContainer}>
             <MapView
@@ -378,7 +378,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
             </MapView>
           </View>
         )}
-        
+
         <View style={styles.activeTripDetails}>
           <View style={styles.routeContainer}>
             <View style={styles.routePoint}>
@@ -388,9 +388,9 @@ export default function CustomerActivityScreen({ navigation, route }) {
                 <Text style={styles.addressText}>{request?.pickup?.address || '123 Main Street'}</Text>
               </View>
             </View>
-            
+
             <View style={[styles.routeLine, isPickupStage ? styles.activeRouteLine : {}]} />
-            
+
             <View style={styles.routePoint}>
               <View style={[styles.dropoffDot, isDeliveryStage ? styles.activeDropoffDot : {}]} />
               <View style={styles.addressContainer}>
@@ -399,7 +399,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
               </View>
             </View>
           </View>
-          
+
           <View style={styles.driverInfoContainer}>
             <View style={styles.driverAvatarContainer}>
               <Ionicons name="person" size={24} color="#fff" />
@@ -418,7 +418,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
               <Ionicons name="chatbubble" size={20} color="#A77BFF" />
             </TouchableOpacity>
           </View>
-          
+
           {pickupPhotos && pickupPhotos.length > 0 && (
             <View style={styles.photosContainer}>
               <Text style={styles.photosTitle}>Pickup Photos</Text>
@@ -431,9 +431,9 @@ export default function CustomerActivityScreen({ navigation, route }) {
               </ScrollView>
             </View>
           )}
-          
+
           {isDeliveryStage && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.feedbackButton}
               onPress={() => navigation.navigate('DeliveryFeedbackScreen', { requestId, requestData: request })}
             >
@@ -447,26 +447,25 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      {/* Summary Stats - Top */}
+      {/* Header */}
       {!isActiveTrip && (
-        <View style={[styles.summaryContainer, { paddingTop: insets.top + 10 }]}>
-          <View style={styles.statCard}>
-            <Ionicons name="trending-up" size={16} color="#00D4AA" />
-            <Text style={styles.statNumber}>{stats.totalTrips}</Text>
-            <Text style={styles.statLabel}>Trips</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="wallet" size={16} color="#A77BFF" />
-            <Text style={styles.statNumber}>${stats.totalSpent.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Spent</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="star" size={16} color="#FFD700" />
-            <Text style={styles.statNumber}>{stats.avgRating.toFixed(1)}</Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
+        <View style={{
+          paddingTop: insets.top,
+          paddingHorizontal: 20,
+          paddingBottom: 10,
+          backgroundColor: '#0A0A1F'
+        }}>
+          <Text style={{
+            fontSize: 34,
+            fontWeight: 'bold',
+            color: '#fff'
+          }}>
+            Activity
+          </Text>
         </View>
       )}
+
+
 
       {/* Trip List - Main content area */}
       <Animated.View style={[styles.listContainer, { opacity: fadeAnim }, isActiveTrip && { paddingTop: insets.top + 10 }]}>
@@ -488,7 +487,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
             <Text style={styles.emptyTitle}>No trips found</Text>
             <Text style={styles.emptyText}>
               {selectedTab === 'recent' ? 'No recent trips to show' :
-               'You haven\'t made any trips yet'}
+                'You haven\'t made any trips yet'}
             </Text>
             {selectedTab === 'all' && (
               <TouchableOpacity
@@ -770,7 +769,7 @@ const styles = StyleSheet.create({
   bottomSpacing: {
     height: 20,
   },
-  
+
   // Active trip styles
   activeTripContainer: {
     flex: 1,
@@ -891,7 +890,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  
+
   // Loading and empty states
   loadingContainer: {
     flex: 1,

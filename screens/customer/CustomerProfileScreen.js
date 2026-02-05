@@ -33,7 +33,7 @@ export default function CustomerProfileScreen({ navigation }) {
           ? `${profile.firstName} ${profile.lastName}`
           : currentUser?.email?.split("@")[0] || "User");
       setDisplayName(name);
-      
+
       // Load profile image
       await getProfileImage?.();
     } catch (error) {
@@ -64,12 +64,28 @@ export default function CustomerProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={{
+        paddingTop: insets.top,
+        paddingHorizontal: 20,
+        paddingBottom: 10,
+        backgroundColor: '#0A0A1F'
+      }}>
+        <Text style={{
+          fontSize: 34,
+          fontWeight: 'bold',
+          color: '#fff'
+        }}>
+          Account
+        </Text>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Card - Airbnb Style */}
-        <View style={[styles.profileCard, { marginTop: insets.top + 20 }]}>
+        <View style={[styles.profileCard, { marginTop: 0 }]}>
           <View style={styles.profileCardContent}>
             {/* Left Side - Avatar & Info */}
             <View style={styles.profileLeftSide}>

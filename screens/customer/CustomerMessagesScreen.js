@@ -27,16 +27,16 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   const loadConversations = async () => {
     if (!currentUser) return;
-    
+
     try {
       setLoading(true);
       const userConversations = await getConversations(currentUser.uid, 'customer');
-      
+
       // Filter out invalid conversations
-      const validConversations = userConversations.filter(conv => 
+      const validConversations = userConversations.filter(conv =>
         conv.customerId && conv.driverId && conv.requestId
       );
-      
+
       setConversations(validConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
@@ -55,7 +55,7 @@ export default function CustomerMessagesScreen({ navigation }) {
     const date = new Date(timestamp);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hr ago`;
@@ -99,17 +99,17 @@ export default function CustomerMessagesScreen({ navigation }) {
     const driverName = conversation.driverId === 'support' ? 'Support Team' : `Driver ${conversation.driverId.substring(0, 8)}`;
     const isUnread = conversation.unreadByCustomer > 0;
     const status = conversation.driverId === 'support' ? 'support' : 'active';
-    
+
     return (
-      <TouchableOpacity 
-        key={conversation.id} 
+      <TouchableOpacity
+        key={conversation.id}
         style={[styles.messageItem, isUnread && styles.unreadMessage]}
         onPress={() => {
-          navigation.navigate('MessageScreen', { 
+          navigation.navigate('MessageScreen', {
             conversationId: conversation.id,
             driverId: conversation.driverId,
             driverName: driverName,
-            requestId: conversation.requestId 
+            requestId: conversation.requestId
           });
         }}
       >
@@ -136,10 +136,10 @@ export default function CustomerMessagesScreen({ navigation }) {
             <View style={styles.tripInfo}>
               <Ionicons name="car-outline" size={12} color="#A77BFF" />
               <Text style={styles.tripId}>Request #{conversation.requestId.substring(0, 8)}</Text>
-              <Ionicons 
-                name={getStatusIcon(status)} 
-                size={12} 
-                color={getStatusColor(status)} 
+              <Ionicons
+                name={getStatusIcon(status)}
+                size={12}
+                color={getStatusColor(status)}
                 style={{ marginLeft: 8 }}
               />
             </View>
@@ -157,8 +157,24 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={{
+        paddingTop: insets.top,
+        paddingHorizontal: 20,
+        paddingBottom: 10,
+        backgroundColor: '#0A0A1F'
+      }}>
+        <Text style={{
+          fontSize: 34,
+          fontWeight: 'bold',
+          color: '#fff'
+        }}>
+          Messages
+        </Text>
+      </View>
+
       {/* Search Bar - Top */}
-      <View style={[styles.searchContainer, { paddingTop: insets.top + 10 }]}>
+      <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#999" />
           <TextInput
