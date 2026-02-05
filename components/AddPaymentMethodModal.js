@@ -1,57 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   Alert,
-  Animated,
+  ActivityIndicator,
+  Keyboard,
   Dimensions,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { CardField, useStripe } from '@stripe/stripe-react-native';
-import { usePayment } from '../contexts/PaymentContext';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { CardField, useStripe } from "@stripe/stripe-react-native";
+import { usePayment } from "../contexts/PaymentContext";
+import BaseModal from "./BaseModal";
 
-const { height } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function AddPaymentMethodModal({ visible, onClose }) {
+// Use consistent button style from AuthModal
+const Button = ({ title, onPress, variant = 'primary', disabled, loading, style, icon }) => {
+  const isPrimary = variant === 'primary';
+  const backgroundColor = isPrimary ? '#00D4AA' : 'transparent';
+  const textColor = isPrimary ? '#FFFFFF' : '#00D4AA';
+  const borderColor = isPrimary ? 'transparent' : '#00D4AA';
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.btn,
+        { backgroundColor, borderColor, borderWidth: isPrimary ? 0 : 1, opacity: disabled ? 0.6 : 1 },
+        style
+      ]}
+      onPress={onPress}
+      disabled={disabled || loading}
+    >
+      {loading ? (
+        <ActivityIndicator color={textColor} />
+      ) : (
+        <View style={styles.btnContent}>
+          {icon && <Ionicons name={icon} size={20} color={textColor} style={{ marginRight: 8 }} />}
+          <Text style={[styles.btnText, { color: textColor }]}>{title}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+};
+
+export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
   const [cardDetails, setCardDetails] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [slideAnim] = useState(new Animated.Value(height));
   const stripe = useStripe();
   const { savePaymentMethod } = usePayment();
 
-  React.useEffect(() => {
+  // Reset state when modal opens
+  useEffect(() => {
     if (visible) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
-    } else {
-      Animated.spring(slideAnim, {
-        toValue: height,
-        useNativeDriver: true,
-        tension: 100,
-        friction: 8,
-      }).start();
+      setCardDetails(null);
+      setLoading(false);
     }
   }, [visible]);
-
-  const handleClose = () => {
-    Animated.spring(slideAnim, {
-      toValue: height,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start(() => {
-      onClose();
-      // Reset form
-      setCardDetails(null);
-    });
-  };
 
   const handleAddCard = async () => {
     if (!cardDetails?.complete) {
@@ -60,6 +66,7 @@ export default function AddPaymentMethodModal({ visible, onClose }) {
     }
 
     setLoading(true);
+    Keyboard.dismiss();
 
     try {
       // Create payment method with Stripe
@@ -74,7 +81,7 @@ export default function AddPaymentMethodModal({ visible, onClose }) {
 
       // Safely access card properties with fallbacks
       const cardInfo = paymentMethod?.card || {};
-      
+
       // Create payment method object for our app
       const newPaymentMethod = {
         id: paymentMethod.id,
@@ -94,9 +101,16 @@ export default function AddPaymentMethodModal({ visible, onClose }) {
 
       if (result.success) {
         Alert.alert(
-          'Payment Method Added',
-          'Your card has been added successfully!',
-          [{ text: 'OK', onPress: handleClose }]
+          'Success',
+          'Payment method added successfully!',
+          [{
+            text: 'OK',
+            onPress: () => {
+              // Call success callback then close
+              if (onSuccess) onSuccess();
+              onClose();
+            }
+          }]
         );
       } else {
         throw new Error(result.error || 'Failed to save payment method');
@@ -109,66 +123,47 @@ export default function AddPaymentMethodModal({ visible, onClose }) {
     }
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="none"
-      statusBarTranslucent={true}
-    >
-      {/* Backdrop */}
-      <TouchableOpacity 
-        style={styles.backdrop} 
-        activeOpacity={1}
-        onPress={handleClose}
-      >
-        <View style={styles.backdropOverlay} />
+  const renderHeader = (closeModal) => (
+    <View style={styles.header}>
+      <Text style={styles.title}>Add Payment Method</Text>
+      <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+        <Ionicons name="close" size={24} color="#fff" />
       </TouchableOpacity>
+    </View>
+  );
 
-      {/* Modal Content */}
-      <Animated.View
-        style={[
-          styles.modalContainer,
-          {
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-        {/* Handle */}
-        <View style={styles.handleContainer}>
-          <View style={styles.handle} />
-        </View>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Add Payment Method</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
+  return (
+    <BaseModal
+      visible={visible}
+      onClose={onClose}
+      height={SCREEN_HEIGHT * 0.75}
+      backgroundColor="#141426" // Match AuthModal background
+      renderHeader={renderHeader}
+      showHandle={true}
+      handleStyle={{ backgroundColor: '#2A2A3B' }} // Match dark theme handle
+    >
+      {() => (
         <View style={styles.content}>
           {/* Security Notice */}
           <View style={styles.securityNotice}>
             <Ionicons name="shield-checkmark" size={20} color="#00D4AA" />
             <Text style={styles.securityText}>
-              Your payment information is encrypted and secure
+              Encrypted & Secure
             </Text>
           </View>
 
           {/* Card Input Section */}
           <View style={styles.cardSection}>
-            <Text style={styles.sectionTitle}>Card Information</Text>
-            
+            <Text style={styles.sectionLabel}>Card Details</Text>
+
             <View style={styles.cardFieldContainer}>
               <CardField
                 postalCodeEnabled={true}
                 placeholders={{
-                  number: '4242 4242 4242 4242',
+                  number: '0000 0000 0000 0000',
                   expiration: 'MM/YY',
                   cvc: 'CVC',
-                  postalCode: '12345',
+                  postalCode: 'ZIP Code',
                 }}
                 cardStyle={styles.cardField}
                 style={styles.cardFieldWrapper}
@@ -178,224 +173,172 @@ export default function AddPaymentMethodModal({ visible, onClose }) {
               />
             </View>
 
-            {/* Card Brands */}
-            <View style={styles.cardBrands}>
-              <Text style={styles.cardBrandsText}>We accept:</Text>
-              <View style={styles.brandIcons}>
-                <View style={styles.brandIcon}>
-                  <Text style={styles.brandText}>VISA</Text>
-                </View>
-                <View style={styles.brandIcon}>
-                  <Text style={styles.brandText}>MC</Text>
-                </View>
-                <View style={styles.brandIcon}>
-                  <Text style={styles.brandText}>AMEX</Text>
-                </View>
+            {/* Supported Brands */}
+            <View style={styles.brandsContainer}>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>VISA</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Mastercard</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Amex</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Discover</Text>
               </View>
             </View>
           </View>
 
           {/* Features */}
-          <View style={styles.featuresSection}>
+          <View style={styles.featuresList}>
             <View style={styles.featureItem}>
-              <Ionicons name="flash" size={16} color="#00D4AA" />
-              <Text style={styles.featureText}>Fast and secure payments</Text>
+              <Ionicons name="checkmark-circle" size={16} color="#444" />
+              <Text style={styles.featureText}>Instant verification</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="refresh" size={16} color="#00D4AA" />
-              <Text style={styles.featureText}>Easy to update or remove</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="lock-closed" size={16} color="#00D4AA" />
-              <Text style={styles.featureText}>Bank-level encryption</Text>
+              <Ionicons name="checkmark-circle" size={16} color="#444" />
+              <Text style={styles.featureText}>Secure storage</Text>
             </View>
           </View>
-        </View>
 
-        {/* Add Button */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[
-              styles.addButton,
-              (!cardDetails?.complete || loading) && styles.addButtonDisabled
-            ]} 
-            onPress={handleAddCard}
-            disabled={!cardDetails?.complete || loading}
-          >
-            {loading ? (
-              <Text style={styles.addButtonText}>Adding...</Text>
-            ) : (
-              <>
-                <Ionicons name="add-circle-outline" size={20} color="#fff" />
-                <Text style={styles.addButtonText}>Add Payment Method</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {/* Action Button */}
+          <View style={styles.footer}>
+            <Button
+              title="Add Payment Method"
+              onPress={handleAddCard}
+              loading={loading}
+              disabled={!cardDetails?.complete}
+              icon="add-circle-outline"
+            />
+          </View>
         </View>
-      </Animated.View>
-    </Modal>
+      )}
+    </BaseModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdropOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContainer: {
-    backgroundColor: '#0A0A1F',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: height * 0.85,
-  },
-  handleContainer: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#333',
-    borderRadius: 2,
-  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 15,
+    marginBottom: 20,
   },
   title: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  closeButton: {
+    padding: 4,
   },
   content: {
+    flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 10,
   },
   securityNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A3A2E',
-    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 212, 170, 0.1)",
+    paddingVertical: 10,
     borderRadius: 8,
-    marginBottom: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "rgba(0, 212, 170, 0.2)",
   },
   securityText: {
-    color: '#00D4AA',
+    color: "#00D4AA",
     fontSize: 14,
+    fontWeight: "600",
     marginLeft: 8,
-    fontWeight: '500',
   },
   cardSection: {
-    backgroundColor: '#141426',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
+    marginBottom: 24,
   },
-  sectionTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 16,
+  sectionLabel: {
+    color: "#ccc",
+    fontSize: 14,
+    marginBottom: 10,
+    marginLeft: 4,
   },
   cardFieldContainer: {
-    backgroundColor: '#1A1A3A',
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: '#222233',
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#444',
+    paddingVertical: 4,
   },
   cardFieldWrapper: {
     height: 50,
+    marginVertical: 5,
   },
   cardField: {
-    backgroundColor: '#1A1A3A',
+    backgroundColor: '#222233',
     textColor: '#FFFFFF',
     placeholderColor: '#666666',
-    borderRadius: 8,
+    borderRadius: 30,
     fontSize: 16,
+    cursorColor: '#00D4AA',
+    textErrorColor: '#FF4444',
   },
-  cardBrands: {
+  brandsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  cardBrandsText: {
-    color: '#999',
-    fontSize: 14,
-  },
-  brandIcons: {
-    flexDirection: 'row',
+    marginTop: 12,
     gap: 8,
   },
-  brandIcon: {
-    backgroundColor: '#1A1A3A',
+  brandBadge: {
+    backgroundColor: '#141426',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   brandText: {
-    color: '#999',
+    color: '#666',
     fontSize: 10,
     fontWeight: 'bold',
   },
-  featuresSection: {
-    backgroundColor: '#141426',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
+  featuresList: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 'auto',
+    gap: 16,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
   },
   featureText: {
-    color: '#999',
-    fontSize: 14,
-    marginLeft: 8,
+    color: '#666',
+    fontSize: 12,
+    marginLeft: 4,
   },
-  buttonContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 20,
-    backgroundColor: '#0A0A1F',
-    borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+  footer: {
+    paddingBottom: 20,
   },
-  addButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 25,
-    paddingVertical: 16,
-    flexDirection: 'row',
+  // Button Styles
+  btn: {
+    height: 56,
+    borderRadius: 30,
+    marginTop: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00D4AA',
+    shadowColor: "#00D4AA",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 4,
   },
-  addButtonDisabled: {
-    backgroundColor: '#333',
-    shadowOpacity: 0,
-    elevation: 0,
+  btnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  addButtonText: {
-    color: '#fff',
+  btnText: {
     fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontWeight: "600",
   },
 });

@@ -6,10 +6,10 @@ import { useAuth } from "./contexts/AuthContext";
 // Shared screens
 import WelcomeScreen from "./screens/shared/WelcomeScreen";
 import AuthScreen from "./screens/shared/AuthScreen";
-import RoleSelectionScreen from "./screens/shared/RoleSelectionScreen";
+// RoleSelectionScreen removed - role selection is now on WelcomeScreen
 import MessageScreen from "./screens/shared/MessageScreen";
 import DeliveryFeedbackScreen from "./screens/shared/DeliveryFeedbackScreen";
-import TermsAndPrivacyScreen from "./screens/shared/TermsAndPrivacyScreen";
+// TermsAndPrivacyScreen removed - opens via Linking.openURL now
 
 // Import Tab Navigators
 import CustomerTabNavigator from "./navigation/CustomerTabNavigator";
@@ -26,6 +26,7 @@ import CustomerSafetyScreen from "./screens/customer/CustomerSafetyScreen";
 import CustomerSettingsScreen from "./screens/customer/CustomerSettingsScreen";
 import DeliveryTrackingScreen from "./screens/customer/DeliveryTrackingScreen";
 import PaymentMethodsScreen from "./screens/customer/PaymentMethodsScreen";
+import OrderSummaryScreen from "./screens/customer/OrderSummaryScreen";
 
 // Driver screens
 import DriverMessagesScreen from "./screens/driver/DriverMessagesScreen";
@@ -48,8 +49,8 @@ const AuthStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
     <Stack.Screen name="AuthScreen" component={AuthScreen} />
-    <Stack.Screen name="RoleSelectionScreen" component={RoleSelectionScreen} />
-    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+
+
   </Stack.Navigator>
 );
 
@@ -74,7 +75,8 @@ const CustomerStack = () => (
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
     <Stack.Screen name="DeliveryFeedbackScreen" component={DeliveryFeedbackScreen} />
     <Stack.Screen name="DeliveryTrackingScreen" component={DeliveryTrackingScreen} />
-    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+    <Stack.Screen name="OrderSummaryScreen" component={OrderSummaryScreen} />
+
   </Stack.Navigator>
 );
 
@@ -104,7 +106,7 @@ const DriverStack = () => (
 
     {/* Shared */}
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
-    <Stack.Screen name="TermsAndPrivacyScreen" component={TermsAndPrivacyScreen} />
+
   </Stack.Navigator>
 );
 

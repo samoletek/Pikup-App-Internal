@@ -14,14 +14,14 @@ import DeliveryPhotosModal from './DeliveryPhotosModal';
 
 const { width } = Dimensions.get('window');
 
-export default function DeliveryStatusTracker({ 
-  requestId, 
+export default function DeliveryStatusTracker({
+  requestId,
   onDeliveryComplete,
   onViewFullTracker,
   expanded = false
 }) {
   const { getRequestById } = useAuth();
-  
+
   const [requestData, setRequestData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -44,15 +44,15 @@ export default function DeliveryStatusTracker({
   useEffect(() => {
     if (requestId) {
       fetchRequestData();
-      
+
       // Set up polling for updates every 15 seconds
       const interval = setInterval(() => {
         fetchRequestData(false); // Don't show loading indicator for refreshes
       }, 15000);
-      
+
       setRefreshInterval(interval);
     }
-    
+
     return () => {
       if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -64,7 +64,7 @@ export default function DeliveryStatusTracker({
   useEffect(() => {
     if (requestData && requestData.status === 'completed' && onDeliveryComplete) {
       onDeliveryComplete(requestData);
-      
+
       // Stop polling when delivery is complete
       if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -76,7 +76,7 @@ export default function DeliveryStatusTracker({
     if (showLoader) {
       setLoading(true);
     }
-    
+
     try {
       const data = await getRequestById(requestId);
       setRequestData(data);
@@ -100,7 +100,7 @@ export default function DeliveryStatusTracker({
 
   const getCurrentStatusIndex = () => {
     if (!requestData || !requestData.status) return 0;
-    
+
     const currentStatus = requestData.status;
     const index = statusSteps.findIndex(step => step.key === currentStatus);
     return index >= 0 ? index : 0;
@@ -112,10 +112,10 @@ export default function DeliveryStatusTracker({
 
   const formatETA = () => {
     if (!requestData) return '-- min';
-    
+
     // Calculate ETA based on status
     const currentStatus = getCurrentStatusIndex();
-    
+
     if (currentStatus === 0) return '10-15 min';
     if (currentStatus === 1) return '5-10 min';
     if (currentStatus === 2) return 'Arrived';
@@ -127,10 +127,10 @@ export default function DeliveryStatusTracker({
 
   const renderCompactView = () => {
     if (!requestData) return null;
-    
+
     const currentIndex = getCurrentStatusIndex();
     const currentStep = statusSteps[currentIndex] || statusSteps[0];
-    
+
     return (
       <TouchableOpacity style={styles.compactContainer} onPress={onViewFullTracker || toggleExpanded}>
         <View style={styles.compactContent}>
@@ -155,7 +155,7 @@ export default function DeliveryStatusTracker({
     const currentIndex = getCurrentStatusIndex();
     const isActive = index <= currentIndex;
     const isCurrent = index === currentIndex;
-    
+
     return (
       <View key={step.key} style={styles.statusStep}>
         <View style={styles.statusIconContainer}>
@@ -164,13 +164,13 @@ export default function DeliveryStatusTracker({
             isActive ? styles.activeDot : styles.inactiveDot,
             isCurrent ? styles.currentDot : null
           ]}>
-            <Ionicons 
-              name={step.icon} 
-              size={16} 
-              color={isActive ? '#fff' : '#666'} 
+            <Ionicons
+              name={step.icon}
+              size={16}
+              color={isActive ? '#fff' : '#666'}
             />
           </View>
-          
+
           {index < statusSteps.length - 1 && (
             <View style={[
               styles.statusLine,
@@ -178,7 +178,7 @@ export default function DeliveryStatusTracker({
             ]} />
           )}
         </View>
-        
+
         <View style={styles.statusTextContainer}>
           <Text style={[
             styles.statusLabel,
@@ -187,7 +187,7 @@ export default function DeliveryStatusTracker({
           ]}>
             {step.label}
           </Text>
-          
+
           {isCurrent && (
             <Text style={styles.statusDescription}>{step.description}</Text>
           )}
@@ -200,15 +200,15 @@ export default function DeliveryStatusTracker({
     const hasPickupPhotos = requestData?.pickupPhotos && requestData.pickupPhotos.length > 0;
     const hasDeliveryPhotos = requestData?.dropoffPhotos && requestData.dropoffPhotos.length > 0;
     const currentIndex = getCurrentStatusIndex();
-    
+
     if (currentIndex < 3 || (!hasPickupPhotos && !hasDeliveryPhotos)) {
       return null;
     }
-    
+
     return (
       <View style={styles.photoButtonsContainer}>
         {hasPickupPhotos && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.photoButton}
             onPress={() => handleViewPhotos('pickup')}
           >
@@ -216,9 +216,9 @@ export default function DeliveryStatusTracker({
             <Text style={styles.photoButtonText}>Pickup Photos</Text>
           </TouchableOpacity>
         )}
-        
+
         {hasDeliveryPhotos && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.photoButton}
             onPress={() => handleViewPhotos('delivery')}
           >
@@ -234,9 +234,9 @@ export default function DeliveryStatusTracker({
     if (!requestData || !requestData.assignedDriverEmail) {
       return null;
     }
-    
+
     const driverName = requestData.assignedDriverEmail.split('@')[0];
-    
+
     return (
       <View style={styles.driverInfoContainer}>
         <View style={styles.driverInfo}>
@@ -293,16 +293,16 @@ export default function DeliveryStatusTracker({
           </TouchableOpacity>
         </View>
       </View>
-      
+
       {renderDriverInfo()}
-      
+
       <View style={styles.statusContainer}>
         {statusSteps.map(renderStatusStep)}
       </View>
-      
-      
+
+
       {renderPhotoButtons()}
-      
+
       {requestData && (
         <DeliveryPhotosModal
           visible={showPhotosModal}
@@ -310,7 +310,7 @@ export default function DeliveryStatusTracker({
           pickupPhotos={requestData.pickupPhotos || []}
           deliveryPhotos={requestData.dropoffPhotos || []}
           requestDetails={requestData}
-          activeTab={activePhotoType}
+          initialTab={activePhotoType}
         />
       )}
     </View>

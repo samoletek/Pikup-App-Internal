@@ -3,31 +3,41 @@ import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   Image,
   ScrollView,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import BaseModal from './BaseModal';
 
-const { width } = Dimensions.get('window');
+const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function DeliveryPhotosModal({ 
-  visible, 
-  onClose, 
-  pickupPhotos = [], 
+export default function DeliveryPhotosModal({
+  visible,
+  onClose,
+  pickupPhotos = [],
   deliveryPhotos = [],
-  requestDetails
+  requestDetails,
+  initialTab = 'pickup'
 }) {
-  const [activeTab, setActiveTab] = useState('pickup');
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Update active tab when visible or initialTab changes
+  useEffect(() => {
+    if (visible) {
+      setActiveTab(initialTab);
+    }
+  }, [visible, initialTab]);
 
   const renderNoPhotosMessage = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="images-outline" size={48} color="#666" />
+      <View style={styles.emptyIconContainer}>
+        <Ionicons name="images-outline" size={40} color="#666" />
+      </View>
       <Text style={styles.emptyStateText}>
-        {activeTab === 'pickup' 
-          ? 'No pickup photos available' 
+        {activeTab === 'pickup'
+          ? 'No pickup photos available'
           : 'No delivery photos available'}
       </Text>
     </View>
@@ -39,215 +49,237 @@ export default function DeliveryPhotosModal({
     }
 
     return (
-      <ScrollView 
-        horizontal 
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={styles.photoScroll}
-      >
-        {photos.map((photo, index) => (
-          <View key={index} style={styles.photoContainer}>
-            <Image 
-              source={{ uri: photo.uri }} 
-              style={styles.photo}
-              resizeMode="cover"
-            />
-            <View style={styles.photoOverlay}>
-              <Text style={styles.photoIndex}>{index + 1}/{photos.length}</Text>
+      <View style={styles.photosWrapper}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.photoScroll}
+          contentContainerStyle={styles.photoScrollContent}
+        >
+          {photos.map((photo, index) => (
+            <View key={index} style={styles.photoContainer}>
+              <Image
+                source={{ uri: photo.uri || photo }}
+                style={styles.photo}
+                resizeMode="cover"
+              />
+              <View style={styles.photoOverlay}>
+                <Text style={styles.photoIndex}>{index + 1} / {photos.length}</Text>
+              </View>
             </View>
-          </View>
-        ))}
-      </ScrollView>
+          ))}
+        </ScrollView>
+      </View>
     );
   };
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Verification Photos</Text>
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={onClose}
-            >
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
+  const renderHeader = (closeModal) => (
+    <View style={styles.header}>
+      <Text style={styles.title}>Delivery Photos</Text>
+      <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+        <Ionicons name="close" size={24} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
 
+  return (
+    <BaseModal
+      visible={visible}
+      onClose={onClose}
+      height={SCREEN_HEIGHT * 0.85}
+      backgroundColor="#141426"
+      renderHeader={renderHeader}
+      showHandle={true}
+      handleStyle={{ backgroundColor: '#2A2A3B' }}
+    >
+      {() => (
+        <View style={styles.content}>
           {requestDetails && (
             <View style={styles.requestInfo}>
-              <Text style={styles.requestTitle}>{requestDetails.item?.description || 'Item'}</Text>
-              <Text style={styles.requestDate}>
-                {new Date(requestDetails.createdAt).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric',
-                  year: 'numeric'
-                })}
-              </Text>
+              <View style={styles.requestIcon}>
+                <Ionicons name="cube-outline" size={20} color="#A77BFF" />
+              </View>
+              <View style={styles.requestTexts}>
+                <Text style={styles.requestTitle}>{requestDetails.item?.description || 'Package details'}</Text>
+                <Text style={styles.requestDate}>
+                  {new Date(requestDetails.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </Text>
+              </View>
             </View>
           )}
 
           <View style={styles.tabContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.tab, activeTab === 'pickup' && styles.activeTab]}
               onPress={() => setActiveTab('pickup')}
             >
               <Text style={[styles.tabText, activeTab === 'pickup' && styles.activeTabText]}>
-                Pickup Photos
+                Pickup
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.tab, activeTab === 'delivery' && styles.activeTab]}
               onPress={() => setActiveTab('delivery')}
             >
               <Text style={[styles.tabText, activeTab === 'delivery' && styles.activeTabText]}>
-                Delivery Photos
+                Delivery
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.photosContainer}>
+          <View style={styles.mainContainer}>
             {activeTab === 'pickup' ? renderPhotos(pickupPhotos) : renderPhotos(deliveryPhotos)}
           </View>
-
-          <TouchableOpacity 
-            style={styles.closeModalButton}
-            onPress={onClose}
-          >
-            <Text style={styles.closeModalText}>Close</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-    </Modal>
+      )}
+    </BaseModal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#141426',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    height: '80%',
-  },
-  modalHeader: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
-  modalTitle: {
+  title: {
+    color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
   },
   closeButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 4,
+  },
+  content: {
+    flex: 1,
   },
   requestInfo: {
-    backgroundColor: '#1E1E38',
-    borderRadius: 12,
-    padding: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#222233',
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 12,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#2A2A3B',
   },
+  requestIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(167, 123, 255, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  requestTexts: {
+    flex: 1,
+  },
   requestTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#fff',
-    marginBottom: 5,
+    marginBottom: 2,
   },
   requestDate: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: 12,
+    color: '#888',
   },
   tabContainer: {
     flexDirection: 'row',
+    marginHorizontal: 20,
     marginBottom: 20,
+    backgroundColor: '#222233',
+    borderRadius: 30,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#2A2A3B',
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: '#2A2A3B',
+    borderRadius: 26,
   },
   activeTab: {
-    borderBottomColor: '#A77BFF',
+    backgroundColor: '#2A2A3B',
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#999',
+    color: '#666',
   },
   activeTabText: {
-    color: '#A77BFF',
+    color: '#fff',
+    fontWeight: '600',
   },
-  photosContainer: {
+  mainContainer: {
     flex: 1,
-    marginBottom: 20,
+    backgroundColor: '#000', // Black background for photos
+  },
+  photosWrapper: {
+    flex: 1,
   },
   photoScroll: {
     flex: 1,
   },
+  photoScrollContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoContainer: {
-    width: width - 40,
+    width: width,
     height: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
   },
   photo: {
     width: '100%',
     height: '100%',
+    resizeMode: 'contain', // Changed to contain to see full photo
   },
   photoOverlay: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
+    bottom: 40,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(20, 20, 38, 0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   photoIndex: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#141426',
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   emptyStateText: {
-    color: '#666',
+    color: '#888',
     fontSize: 16,
-    marginTop: 10,
   },
-  closeModalButton: {
-    backgroundColor: '#A77BFF',
-    borderRadius: 25,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  closeModalText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-}); 
+});

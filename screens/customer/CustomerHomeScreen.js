@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -17,10 +16,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePayment } from "../../contexts/PaymentContext";
 
 import CustomerOrderModal from "../../components/CustomerOrderModal";
-// Legacy modals - will be removed after full migration
-import SummaryDetailsModal from "../../components/SummaryDetailsModal";
-import VehicleSelectionModal from "../../components/VehicleSelectionModal";
-import PriceSummaryModal from "../../components/PriceSummaryModal";
+// Legacy modals removed - CustomerOrderModal handles full 6-step flow
 import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
@@ -38,13 +34,9 @@ export default function CustomerHomeScreen({ navigation }) {
 
   // Modal states
   const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [summaryModalVisible, setSummaryModalVisible] = useState(false);
-  const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
-  const [priceModalVisible, setPriceModalVisible] = useState(false);
+  // Legacy modal states removed - using CustomerOrderModal + OrderSummaryScreen flow
   const [selectedLocations, setSelectedLocations] = useState(null);
-  const [summaryData, setSummaryData] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   // New states for enhanced ride details
   const [calculatedDistance, setCalculatedDistance] = useState(null);
@@ -65,35 +57,8 @@ export default function CustomerHomeScreen({ navigation }) {
     }
   }, [selectedLocations]);
 
-  // Handle return from PaymentMethodsScreen
-  useFocusEffect(
-    React.useCallback(() => {
-      // Check if we're returning from PaymentMethodsScreen with booking context
-      const unsubscribe = navigation.addListener('focus', () => {
-        // Get the route params
-        const params = navigation.getState()?.routes?.find(route => route.name === 'CustomerHomeScreen')?.params;
 
-        if (params?.returnFromPayment && params?.bookingContext) {
-          // Restore the booking context
-          const { bookingContext } = params;
-          setSelectedLocations(bookingContext.selectedLocations);
-          setSelectedVehicle(bookingContext.selectedVehicle);
-          setSummaryData(bookingContext.summaryData);
-          setCalculatedDistance(bookingContext.calculatedDistance);
-          setEstimatedDuration(bookingContext.estimatedDuration);
-          setRideId(bookingContext.rideId);
-
-          // Re-open the price modal
-          setPriceModalVisible(true);
-
-          // Clear the return params
-          navigation.setParams({ returnFromPayment: false, bookingContext: null });
-        }
-      });
-
-      return unsubscribe;
-    }, [navigation])
-  );
+  // useFocusEffect removed - no longer needed after modal cleanup
 
   const calculateRouteDetails = async () => {
     if (!selectedLocations?.pickup || !selectedLocations?.dropoff) {
@@ -346,10 +311,19 @@ export default function CustomerHomeScreen({ navigation }) {
   const handleVehicleSelection = (vehicle) => {
     setSelectedVehicle(vehicle);
 
-
-
     setVehicleModalVisible(false);
-    setPriceModalVisible(true);
+
+    // Navigate to OrderSummaryScreen instead of showing modal
+    navigation.navigate('OrderSummaryScreen', {
+      selectedVehicle: vehicle,
+      selectedLocations,
+      total: null,
+      isDemo: false,
+      distance: calculatedDistance,
+      duration: estimatedDuration,
+      rideId,
+      summaryData,
+    });
   };
 
   // Helper function to calculate total
@@ -575,50 +549,36 @@ export default function CustomerHomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* New Multi-Step Order Modal */}
+      {/* CustomerOrderModal - Full 6-step ordering flow */}
       <CustomerOrderModal
         visible={searchModalVisible}
         onClose={handleSearchClose}
         onConfirm={(orderData) => {
-          console.log('Order confirmed:', orderData);
-          // TODO: Process the complete order
+          console.log('Order confirmed, navigating to summary:', orderData);
           handleSearchClose();
+
+          // Navigate to OrderSummaryScreen with order data
+          // Map orderData structure to OrderSummaryScreen expected props
+          navigation.navigate('OrderSummaryScreen', {
+            selectedVehicle: orderData.selectedVehicle,
+            selectedLocations: {
+              pickup: orderData.pickup,
+              dropoff: orderData.dropoff,
+            },
+            total: null,
+            isDemo: false,
+            distance: orderData.distance,
+            duration: orderData.duration,
+            rideId: `ride_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            summaryData: {
+              items: orderData.items,
+              pickupDetails: orderData.pickupDetails,
+              dropoffDetails: orderData.dropoffDetails,
+              itemValue: orderData.items?.reduce((sum, item) => sum + (item.value || 0), 0) || 500,
+            },
+          });
         }}
         userLocation={userLocation}
-      />
-
-      <SummaryDetailsModal
-        visible={summaryModalVisible}
-        onClose={handleSummaryClose}
-        onNext={handleSummaryNext}
-        selectedLocations={selectedLocations}
-        isUploadingPhotos={isUploadingPhotos}
-      />
-
-      <VehicleSelectionModal
-        visible={vehicleModalVisible}
-        onClose={() => setVehicleModalVisible(false)}
-        onNext={handleVehicleSelection}
-        description={summaryData?.itemDescription || ""}
-        selectedLocations={selectedLocations}
-        summaryData={summaryData}
-      />
-
-      {/* UPDATED: PriceSummaryModal with new props */}
-      <PriceSummaryModal
-        visible={priceModalVisible}
-        onClose={() => setPriceModalVisible(false)}
-        onSchedulePickup={handleSchedulePickup}
-        selectedVehicle={selectedVehicle}
-        selectedLocations={selectedLocations}
-        total={null} // Let PriceSummaryModal calculate its own total using server pricing
-        isDemo={false}
-        // NEW PROPS FOR ENHANCED FUNCTIONALITY
-        distance={calculatedDistance}
-        duration={estimatedDuration}
-        rideId={rideId}
-        // Payment method navigation callback
-        onNavigateToPaymentMethods={handleNavigateToPaymentMethods}
       />
     </View>
   );

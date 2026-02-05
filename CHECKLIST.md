@@ -54,34 +54,34 @@
 ### Global
 - [ ] #6 Apple HIG compliance (navigation, buttons, modals)
 - [ ] #7 Device consistency across screen sizes
+- [ ] #99 Components refactoring
 
 ### Authentication Screens
 - [x] #8 Forgot Password flow (UI)
-- [x] #9 Loading states (spinners, disabled buttons) - andrei
+- [x] #9 Loading states (spinners, disabled buttons)
 - [x] #10 Error handling on all failures
-- [x] #11 Back button on Sign Up screen - drew
+- [x] #11 Back button on Sign Up screen
 
 ### Customer Flow - Home Screen
-- [x] #12 Logo positioning fix - andrei
-- [x] #13 Search field - fix touch area (only 30% clickable) - andrei
-- [x] #14 UX fix - search opens A/B modal confusion - andrei
-- [x] #15 Remove duplicate buttons (Request Pickup vs search) - drew
+- [x] #12 Logo positioning fix
+- [x] #13 Search field - fix touch area (only 30% clickable)
+- [x] #14 UX fix - search opens A/B modal confusion
+- [x] #15 Remove duplicate buttons (Request Pickup vs search)
 
 ### Customer Flow - Request Flow (Multi-Step Modal)
-- [x] #16 Add back navigation between request steps - drew
-- [x] #17 Fixed bottom button on all steps - drew
-- [x] #18 Unified modal component across steps - drew
-- [x] #19 Fix black screen flash when closing modals - drew
-- [x] #20 Prevent progress reset on tap outside modal - drew
+- [x] #16 Add back navigation between request steps
+- [x] #17 Fixed bottom button on all steps
+- [x] #18 Unified modal component across steps
+- [x] #19 Fix black screen flash when closing modals
+- [x] #20 Prevent progress reset on tap outside modal
 
 ### Customer Flow - Step 2: Item Details
-- [x] #24 Remove address display (already confirmed in Step 1) - drew
-- [x] #25 Remove duplicate photo area - drew
-- [x] #26 Fix photo delete button overflow - drew
+- [x] #24 Remove address display (already confirmed in Step 1)
+- [x] #25 Remove duplicate photo area
+- [x] #26 Fix photo delete button overflow
 - [x] #27 Add New/Used selection toggle
 - [x] #28 Insurance logic: New = auto-insured, Used = disclaimer
-- [ ] #29 Add AI analysis feature (fix later - reimplement)
-- [x] #30 Enlarge Description field - drew
+- [x] #30 Enlarge Description field
 
 ### Customer Flow - Step 4: Summary
 - [x] #36 Tap on summary item jumps to that step
@@ -89,7 +89,8 @@
 - [x] #38 Handle unavailable insurance state
 - [ ] Apple HIG compliant interface
 - [ ] Working authentication with password reset
-- [ ] New/Used item selection with insurance logic
+- [ ] 0 Useless components
+- [x] New/Used item selection with insurance logic
 
 ---
 
@@ -97,6 +98,9 @@
 
 **Timeline:** 2-3 weeks  
 **Focus:** Messaging, account screens, driver onboarding, new features
+
+### Previous
+- [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement)
 
 ### Customer Flow - Messages Screen
 - [ ] #43 Fix messaging - currently not functional

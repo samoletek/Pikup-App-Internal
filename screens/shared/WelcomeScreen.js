@@ -45,14 +45,8 @@ export default function WelcomeScreen({ navigation }) {
           const termsStatus = await checkTermsAcceptance(currentUser.uid);
           console.log('Terms status:', termsStatus);
 
-          if (termsStatus.needsAcceptance) {
-            console.log('Navigating to ConsentGateScreen');
-            navigation.replace('ConsentGateScreen', {
-              missingVersions: termsStatus.missingVersions,
-              role: userType
-            });
-            return;
-          }
+          // ConsentGateScreen removed - terms handled elsewhere
+          // Skip terms check, go directly to appropriate screen
 
           if (userType === "driver") {
             console.log('User is driver, checking profile...');

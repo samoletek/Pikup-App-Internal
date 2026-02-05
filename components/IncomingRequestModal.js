@@ -1,50 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Modal, 
-  TouchableOpacity, 
-  Image, 
-  ScrollView, 
-  Animated,
-  Platform,
-  Dimensions
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Dimensions,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import BaseModal from './BaseModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function IncomingRequestModal({ 
-  visible, 
-  request, 
-  onAccept, 
+export default function IncomingRequestModal({
+  visible,
+  request,
+  onAccept,
   onDecline,
-  onMessage 
+  onMessage
 }) {
   const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const timerRef = useRef(null);
 
   useEffect(() => {
     if (visible && request) {
-      // Animate in
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 65,
-          friction: 11,
-          useNativeDriver: true,
-        })
-      ]).start();
-
       // Start countdown timer
       setTimeRemaining(120);
       timerRef.current = setInterval(() => {
@@ -59,20 +41,6 @@ export default function IncomingRequestModal({
         });
       }, 1000);
     } else {
-      // Animate out
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: SCREEN_HEIGHT,
-          duration: 250,
-          useNativeDriver: true,
-        })
-      ]).start();
-
       // Clear timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -98,6 +66,11 @@ export default function IncomingRequestModal({
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
+    // onClose prop in BaseModal maps to onDecline here essentially, 
+    // but BaseModal calls onClose when backdrop pressed.
+    // We should decide if backdrop press declines. Usually yes for incoming requests?
+    // Actually, usually incoming requests are modal and require explicit action. 
+    // BaseModal's onClose will be called on drag down or backdrop.
     onDecline();
   };
 
@@ -128,48 +101,36 @@ export default function IncomingRequestModal({
   const displayPhotos = Array.isArray(request?.photos)
     ? request.photos
     : Array.isArray(request?.item?.photos)
-    ? request.item.photos
-    : [];
+      ? request.item.photos
+      : [];
+
+  const renderHeader = (closeModal) => (
+    <View style={styles.header}>
+      <Text style={styles.title}>Incoming Request</Text>
+    </View>
+  );
 
   return (
-    <Modal
+    <BaseModal
       visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
+      onClose={handleDecline} // Identify backdrop/drag down as decline/dismiss
+      height={SCREEN_HEIGHT * 0.9}
+      backgroundColor="#141426"
+      renderHeader={renderHeader}
+      showHandle={true}
+      handleStyle={{ backgroundColor: '#2A2A3B' }}
     >
-      <Animated.View 
-        style={[
-          styles.overlay,
-          {
-            opacity: fadeAnim
-          }
-        ]}
-      >
-        <Animated.View 
-          style={[
-            styles.container,
-            {
-              transform: [{ translateY: slideAnim }]
-            }
-          ]}
-        >
-          {/* Header with Modern Design */}
-          <View style={styles.header}>
-            <View style={styles.handleBar} />
-            <Text style={styles.title}>Incoming Request</Text>
-          </View>
-
-          {/* Main Content */}
-          <View style={styles.content}>
+      {() => (
+        <View style={styles.content}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
             {/* Earnings and Category Row */}
             <View style={styles.earningsRow}>
               <Text style={styles.earningsAmount}>{request.price || '$0.00'}</Text>
               <View style={styles.categoryBadge}>
-                <Ionicons 
-                  name={getItemTypeIcon(request.item?.type)} 
-                  size={14} 
-                  color="#8B5CF6" 
+                <Ionicons
+                  name={getItemTypeIcon(request.item?.type)}
+                  size={14}
+                  color="#8B5CF6"
                   style={styles.categoryIcon}
                 />
                 <Text style={styles.categoryText}>{request.item?.type || 'Item'}</Text>
@@ -180,11 +141,11 @@ export default function IncomingRequestModal({
             <View style={styles.timerContainer}>
               <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
               <View style={styles.timerBar}>
-                <View 
+                <View
                   style={[
                     styles.timerProgress,
                     { width: `${(timeRemaining / 120) * 100}%` }
-                  ]} 
+                  ]}
                 />
               </View>
             </View>
@@ -242,8 +203,8 @@ export default function IncomingRequestModal({
 
             {/* Item Photos */}
             {displayPhotos.length > 0 ? (
-              <ScrollView 
-                horizontal 
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.photosContainer}
               >
@@ -252,13 +213,13 @@ export default function IncomingRequestModal({
                   const src = typeof photo === 'string'
                     ? { uri: photo }
                     : photo?.url
-                    ? { uri: photo.url }
-                    : photo?.uri
-                    ? { uri: photo.uri }
-                    : null;
-                  
+                      ? { uri: photo.url }
+                      : photo?.uri
+                        ? { uri: photo.uri }
+                        : null;
+
                   if (!src) return null;
-                  
+
                   return (
                     <View key={index} style={styles.photoWrapper}>
                       <Image source={src} style={styles.itemPhoto} />
@@ -268,8 +229,8 @@ export default function IncomingRequestModal({
               </ScrollView>
             ) : (
               // Mock photos for demonstration
-              <ScrollView 
-                horizontal 
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.photosContainer}
               >
@@ -287,9 +248,9 @@ export default function IncomingRequestModal({
             <View style={styles.customerContainer}>
               <View style={styles.customerLeft}>
                 <View style={styles.customerPhotoContainer}>
-                  <Image 
+                  <Image
                     source={
-                      request.customer?.photo 
+                      request.customer?.photo
                         ? { uri: request.customer.photo }
                         : require('../assets/profile.png')
                     }
@@ -302,11 +263,11 @@ export default function IncomingRequestModal({
                   </Text>
                   <View style={styles.ratingContainer}>
                     {[...Array(5)].map((_, i) => (
-                      <Ionicons 
+                      <Ionicons
                         key={i}
-                        name="star" 
-                        size={12} 
-                        color={i < Math.floor(request.customer?.rating || 5) ? '#FFD700' : '#333'} 
+                        name="star"
+                        size={12}
+                        color={i < Math.floor(request.customer?.rating || 5) ? '#FFD700' : '#333'}
                       />
                     ))}
                     <Text style={styles.ratingText}>
@@ -325,7 +286,7 @@ export default function IncomingRequestModal({
             {/* Action Buttons */}
             <View style={styles.actionsContainer}>
               {/* Message Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.messageButton}
                 onPress={() => onMessage(request)}
                 activeOpacity={0.8}
@@ -334,7 +295,7 @@ export default function IncomingRequestModal({
               </TouchableOpacity>
 
               {/* Decline Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.declineButton}
                 onPress={handleDecline}
                 activeOpacity={0.8}
@@ -343,7 +304,7 @@ export default function IncomingRequestModal({
               </TouchableOpacity>
 
               {/* Accept Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.acceptButton}
                 onPress={handleAccept}
                 activeOpacity={0.8}
@@ -356,51 +317,17 @@ export default function IncomingRequestModal({
                 </LinearGradient>
               </TouchableOpacity>
             </View>
-          </View>
-        </Animated.View>
-      </Animated.View>
-    </Modal>
+          </ScrollView>
+        </View>
+      )}
+    </BaseModal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 8,
-    maxHeight: '90%',
-    // Modern modal outline
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-    borderBottomWidth: 0,
-    shadowColor: '#8B5CF6',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 20,
-  },
   header: {
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
     marginBottom: 8,
-  },
-  handleBar: {
-    width: 40,
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 2,
-    marginBottom: 12,
   },
   title: {
     fontSize: 18,
@@ -410,7 +337,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    flex: 1,
   },
   earningsRow: {
     flexDirection: 'row',
@@ -465,7 +392,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   locationCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: '#222233',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -534,7 +461,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   descriptionContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#222233',
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
@@ -577,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#222233',
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -630,11 +557,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 10,
   },
   messageButton: {
     width: 50,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 30,
     backgroundColor: 'rgba(139, 92, 246, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -647,7 +575,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#2a2a3e',
-    borderRadius: 25,
+    borderRadius: 30,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
@@ -659,7 +587,7 @@ const styles = StyleSheet.create({
   acceptButton: {
     flex: 1,
     height: 50,
-    borderRadius: 25,
+    borderRadius: 30,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(139, 92, 246, 0.5)',

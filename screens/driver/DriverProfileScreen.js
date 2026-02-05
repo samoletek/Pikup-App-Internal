@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -484,13 +485,13 @@ export default function DriverProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate('TermsAndPrivacyScreen')}
+            onPress={() => Linking.openURL('https://pikup-app.com/')}
           >
             <View style={styles.menuItemLeft}>
               <Ionicons name="document-text-outline" size={20} color="#00D4AA" />
               <Text style={styles.menuItemTitle}>Terms and Privacy</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color="#666" />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.menuItem}>

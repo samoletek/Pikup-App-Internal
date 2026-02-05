@@ -14,7 +14,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import HelpOptionsModal from '../shared/HelpOptionsModal';
+// HelpOptionsModal removed
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RouteConfirmationScreen({ route, navigation }) {
@@ -23,7 +23,7 @@ export default function RouteConfirmationScreen({ route, navigation }) {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('Furniture');
   const [helpNeeded, setHelpNeeded] = useState('yes');
-  const [modalVisible, setModalVisible] = useState(false);
+
 
   const categories = ['Furniture', 'Appliance', 'Electronic', 'Fragile'];
 
@@ -81,7 +81,6 @@ export default function RouteConfirmationScreen({ route, navigation }) {
                 style={[styles.toggleBtn, helpNeeded === 'yes' && styles.activeToggle]}
                 onPress={() => {
                   setHelpNeeded('yes');
-                  setModalVisible(true);
                 }}
               >
                 <Text style={helpNeeded === 'yes' ? styles.activeToggleText : styles.toggleText}>Yes</Text>
@@ -114,7 +113,7 @@ export default function RouteConfirmationScreen({ route, navigation }) {
             <Text style={styles.nextBtnText}>Next</Text>
           </TouchableOpacity>
 
-          <HelpOptionsModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+
         </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>

@@ -11,3 +11,4 @@ export { default as CustomerSafetyScreen } from './CustomerSafetyScreen';
 export { default as CustomerSettingsScreen } from './CustomerSettingsScreen';
 export { default as DeliveryTrackingScreen } from './DeliveryTrackingScreen';
 export { default as PaymentMethodsScreen } from './PaymentMethodsScreen';
+export { default as OrderSummaryScreen } from './OrderSummaryScreen';

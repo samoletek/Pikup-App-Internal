@@ -7,6 +7,7 @@ import {
   ScrollView,
   Image,
   Alert,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -33,7 +34,7 @@ export default function CustomerProfileScreen({ navigation }) {
           ? `${profile.firstName} ${profile.lastName}`
           : currentUser?.email?.split("@")[0] || "User");
       setDisplayName(name);
-      
+
       // Load profile image
       await getProfileImage?.();
     } catch (error) {
@@ -214,25 +215,25 @@ export default function CustomerProfileScreen({ navigation }) {
           {/* Terms of Service */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("TermsAndPrivacyScreen")}
+            onPress={() => Linking.openURL('https://pikup-app.com/')}
           >
             <View style={styles.menuItemLeft}>
               <Ionicons name="document-text-outline" size={20} color="#A77BFF" />
               <Text style={styles.menuItemTitle}>Terms of Service</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color="#666" />
           </TouchableOpacity>
 
           {/* Privacy Policy */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate("TermsAndPrivacyScreen")}
+            onPress={() => Linking.openURL('https://pikup-app.com/')}
           >
             <View style={styles.menuItemLeft}>
               <Ionicons name="lock-closed-outline" size={20} color="#A77BFF" />
               <Text style={styles.menuItemTitle}>Privacy Policy</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color="#666" />
           </TouchableOpacity>
 
           {/* About Pikup */}
