@@ -5,10 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Animated as RNAnimated,
   TextInput,
   Image,
   Alert,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +28,61 @@ export default function CustomerMessagesScreen({ navigation }) {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Reanimated Hooks
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const headerStyle = useAnimatedStyle(() => {
+    const headerHeight = interpolate(
+      scrollY.value,
+      [0, 100],
+      [50, 10],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      paddingBottom: headerHeight,
+      borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
+      borderBottomColor: '#2A2A3B',
+    };
+  });
+
+  const smallTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [40, 60],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const largeTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [0, 40],
+      [1, 0],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const headerContainerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      paddingTop: insets.top,
+      paddingHorizontal: 20,
+      backgroundColor: '#0A0A1F',
+      zIndex: 100,
+      justifyContent: 'center',
+      minHeight: 60 + insets.top
+    };
+  });
 
   useEffect(() => {
     loadConversations();
@@ -157,21 +220,25 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={{
-        paddingTop: insets.top,
-        paddingHorizontal: 20,
-        paddingBottom: 10,
-        backgroundColor: '#0A0A1F'
-      }}>
-        <Text style={{
-          fontSize: 34,
+      {/* Animated Header */}
+      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
+        {/* Small Title - Centered & Absolute */}
+        <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+            Messages
+          </Text>
+        </Animated.View>
+
+        {/* Large Title - Standard Flow */}
+        <Animated.Text style={[{
           fontWeight: 'bold',
-          color: '#fff'
-        }}>
+          color: '#fff',
+          fontSize: 34,
+          marginTop: 10
+        }, largeTitleStyle]}>
           Messages
-        </Text>
-      </View>
+        </Animated.Text>
+      </Animated.View>
 
       {/* Search Bar - Top */}
       <View style={styles.searchContainer}>
@@ -193,13 +260,16 @@ export default function CustomerMessagesScreen({ navigation }) {
           <Text style={styles.emptyStateTitle}>Loading conversations...</Text>
         </View>
       ) : filteredConversations.length > 0 ? (
-        <ScrollView
+        <Animated.ScrollView
           style={styles.messagesList}
           showsVerticalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingTop: 10 }}
         >
           {filteredConversations.map(renderConversationItem)}
           <View style={styles.bottomSpacing} />
-        </ScrollView>
+        </Animated.ScrollView>
       ) : (
         <View style={styles.emptyState}>
           <Ionicons name="chatbubbles-outline" size={64} color="#2A2A3B" />

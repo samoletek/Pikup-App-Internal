@@ -5,9 +5,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Animated as RNAnimated,
   Image,
   Alert,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../contexts/AuthContext";
@@ -17,6 +25,61 @@ export default function CustomerProfileScreen({ navigation }) {
   const { currentUser, logout, getUserProfile, profileImage, getProfileImage } = useAuth();
   const [customerProfile, setCustomerProfile] = useState(null);
   const [displayName, setDisplayName] = useState("User");
+
+  // Reanimated Hooks
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const headerStyle = useAnimatedStyle(() => {
+    const headerHeight = interpolate(
+      scrollY.value,
+      [0, 100],
+      [50, 10],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      paddingBottom: headerHeight,
+      borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
+      borderBottomColor: '#2A2A3B',
+    };
+  });
+
+  const smallTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [40, 60],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const largeTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [0, 40],
+      [1, 0],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const headerContainerAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      paddingTop: insets.top,
+      paddingHorizontal: 20,
+      backgroundColor: '#0A0A1F',
+      zIndex: 100,
+      justifyContent: 'center',
+      minHeight: 60 + insets.top
+    };
+  });
 
   useEffect(() => {
     loadCustomerProfile();
@@ -64,25 +127,32 @@ export default function CustomerProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={{
-        paddingTop: insets.top,
-        paddingHorizontal: 20,
-        paddingBottom: 10,
-        backgroundColor: '#0A0A1F'
-      }}>
-        <Text style={{
-          fontSize: 34,
-          fontWeight: 'bold',
-          color: '#fff'
-        }}>
-          Account
-        </Text>
-      </View>
+      {/* Animated Header */}
+      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
+        {/* Small Title - Centered & Absolute */}
+        <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+            Account
+          </Text>
+        </Animated.View>
 
-      <ScrollView
+        {/* Large Title - Standard Flow */}
+        <Animated.Text style={[{
+          fontWeight: 'bold',
+          color: '#fff',
+          fontSize: 34,
+          marginTop: 10
+        }, largeTitleStyle]}>
+          Account
+        </Animated.Text>
+      </Animated.View>
+
+      <Animated.ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        onScroll={scrollHandler}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingTop: 10 }}
       >
         {/* Profile Card - Airbnb Style */}
         <View style={[styles.profileCard, { marginTop: 0 }]}>
@@ -267,7 +337,7 @@ export default function CustomerProfileScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

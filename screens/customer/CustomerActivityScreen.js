@@ -5,10 +5,17 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Animated,
+  Animated as RNAnimated,
   Image,
   ActivityIndicator,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import MapboxMap from '../../components/mapbox/MapboxMap';
@@ -18,7 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function CustomerActivityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('recent');
-  const [fadeAnim] = useState(new Animated.Value(1));
+  const [fadeAnim] = useState(new RNAnimated.Value(1));
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ totalTrips: 0, totalSpent: 0, avgRating: 0 });
@@ -167,13 +174,13 @@ export default function CustomerActivityScreen({ navigation, route }) {
   };
 
   const animateTransition = (newTab) => {
-    Animated.sequence([
-      Animated.timing(fadeAnim, {
+    RNAnimated.sequence([
+      RNAnimated.timing(fadeAnim, {
         toValue: 0.5,
         duration: 150,
         useNativeDriver: true,
       }),
-      Animated.timing(fadeAnim, {
+      RNAnimated.timing(fadeAnim, {
         toValue: 1,
         duration: 150,
         useNativeDriver: true,
@@ -445,26 +452,89 @@ export default function CustomerActivityScreen({ navigation, route }) {
     );
   };
 
+  // Reanimated Hooks
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
+
+  const headerStyle = useAnimatedStyle(() => {
+    // Header height collapse
+    // Height: Expanded ~100 (auto) -> Collapsed ~50 + insets.top
+    const headerHeight = interpolate(
+      scrollY.value,
+      [0, 100],
+      [50, 10], // Reducing paddingBottom
+      Extrapolation.CLAMP
+    );
+
+    return {
+      paddingBottom: headerHeight,
+      borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
+      borderBottomColor: '#2A2A3B',
+    };
+  });
+
+  const smallTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [40, 60], // Fade in start/end scroll Y
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const largeTitleStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      scrollY.value,
+      [0, 40], // Fade out start/end scroll Y
+      [1, 0],
+      Extrapolation.CLAMP
+    );
+    return { opacity };
+  });
+
+  const headerContainerAnimatedStyle = useAnimatedStyle(() => {
+    // We always center items so Small Title is centered. 
+    // Large Title will be manually aligned or width 100%.
+    return {
+      // alignItems: 'center', // Remove this to let Large Title be left aligned, we handle Small Title with absolute positioning
+      paddingTop: insets.top,
+      paddingHorizontal: 20,
+      backgroundColor: '#0A0A1F',
+      zIndex: 100,
+      justifyContent: 'center', // Center vertically
+      minHeight: 60 + insets.top // Ensure minimum height for touch targets
+    };
+  });
+
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Animated Header */}
       {!isActiveTrip && (
-        <View style={{
-          paddingTop: insets.top,
-          paddingHorizontal: 20,
-          paddingBottom: 10,
-          backgroundColor: '#0A0A1F'
-        }}>
-          <Text style={{
-            fontSize: 34,
-            fontWeight: 'bold',
-            color: '#fff'
-          }}>
-            Activity
-          </Text>
-        </View>
-      )}
+        <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
+          {/* Small Title - Centered & Absolute */}
+          <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+              Activity
+            </Text>
+          </Animated.View>
 
+          {/* Large Title - Standard Flow */}
+          <Animated.Text style={[{
+            fontWeight: 'bold',
+            color: '#fff',
+            fontSize: 34,
+            marginTop: 10 // Give it some space from top
+          }, largeTitleStyle]}>
+            Activity
+          </Animated.Text>
+        </Animated.View>
+      )}
 
 
       {/* Trip List - Main content area */}
@@ -477,10 +547,16 @@ export default function CustomerActivityScreen({ navigation, route }) {
             <Text style={styles.loadingText}>Loading your trips...</Text>
           </View>
         ) : getFilteredTrips().length > 0 ? (
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <Animated.ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            contentContainerStyle={{ paddingTop: 10 }} // Add some top padding so content doesn't hide immediately
+          >
             {getFilteredTrips().map(renderTripCard)}
             <View style={styles.bottomSpacing} />
-          </ScrollView>
+          </Animated.ScrollView>
         ) : (
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={60} color="#666" />
