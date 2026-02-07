@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Image } from "react-native";
+import { View, Image, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./contexts/AuthContext";
+import { colors } from "./styles/theme";
+import { stackScreenOptions } from "./navigation/navigationTheme";
 
 // Shared screens
 import WelcomeScreen from "./screens/shared/WelcomeScreen";
@@ -46,17 +48,15 @@ const Stack = createNativeStackNavigator();
 
 // 1. Auth Stack (Unauthenticated)
 const AuthStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={stackScreenOptions}>
     <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
     <Stack.Screen name="AuthScreen" component={AuthScreen} />
-
-
   </Stack.Navigator>
 );
 
 // 2. Customer Stack (Authenticated as Customer)
 const CustomerStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={stackScreenOptions}>
     <Stack.Screen name="CustomerTabs" component={CustomerTabNavigator} />
 
     {/* Customer Specific Screens */}
@@ -76,13 +76,12 @@ const CustomerStack = () => (
     <Stack.Screen name="DeliveryFeedbackScreen" component={DeliveryFeedbackScreen} />
     <Stack.Screen name="DeliveryTrackingScreen" component={DeliveryTrackingScreen} />
     <Stack.Screen name="OrderSummaryScreen" component={OrderSummaryScreen} />
-
   </Stack.Navigator>
 );
 
 // 3. Driver Stack (Authenticated as Driver)
 const DriverStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator screenOptions={stackScreenOptions}>
     <Stack.Screen name="DriverTabs" component={DriverTabNavigator} />
 
     {/* Driver Specific Screens */}
@@ -106,7 +105,6 @@ const DriverStack = () => (
 
     {/* Shared */}
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
-
   </Stack.Navigator>
 );
 
@@ -117,11 +115,8 @@ export default function Navigation() {
 
   if (isInitializing) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0A0A1F' }}>
-        <Image
-          source={require('./assets/pikup-logo.png')}
-          style={{ width: '80%', height: 250, resizeMode: 'contain' }}
-        />
+      <View style={styles.loadingContainer}>
+        <Image source={require("./assets/pikup-logo.png")} style={styles.loadingLogo} />
       </View>
     );
   }
@@ -138,3 +133,17 @@ export default function Navigation() {
   // Default to Auth Stack if not logged in or role unknown
   return <AuthStack />;
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.background.primary,
+  },
+  loadingLogo: {
+    width: "80%",
+    height: 250,
+    resizeMode: "contain",
+  },
+});

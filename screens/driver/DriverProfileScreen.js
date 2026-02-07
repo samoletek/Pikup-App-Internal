@@ -1,28 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   Alert,
   Image,
   Linking,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
 export default function DriverProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, logout, getDriverProfile, getUserProfile, profileImage, getProfileImage, getDriverFeedback } = useAuth();
+  const {
+    currentUser,
+    logout,
+    getDriverProfile,
+    getUserProfile,
+    profileImage,
+    getProfileImage,
+    getDriverFeedback,
+  } = useAuth();
+
   const [driverProfile, setDriverProfile] = useState(null);
   const [displayName, setDisplayName] = useState("Driver");
   const [onboardingStatus, setOnboardingStatus] = useState({
     connectAccountCreated: false,
     onboardingComplete: false,
     documentsVerified: false,
-    canReceivePayments: false
+    canReceivePayments: false,
   });
   const [recentFeedback, setRecentFeedback] = useState([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
@@ -36,8 +51,7 @@ export default function DriverProfileScreen({ navigation }) {
       const profile = await getDriverProfile?.(currentUser?.uid);
       setDriverProfile(profile);
 
-      // Fetch canonical identity from /users/{uid}
-      const user = await getUserProfile(); // uses currentUser.uid internally
+      const user = await getUserProfile?.();
       const name =
         user?.name ||
         (user?.firstName && user?.lastName
@@ -45,487 +59,443 @@ export default function DriverProfileScreen({ navigation }) {
           : currentUser?.email?.split("@")[0] || "Driver");
       setDisplayName(name);
 
-      // Load profile image
       await getProfileImage?.();
 
-      if (profile) {
-        setOnboardingStatus({
-          connectAccountCreated: !!profile.connectAccountId,
-          onboardingComplete: profile.onboardingComplete || false,
-          documentsVerified: profile.documentsVerified || false,
-          canReceivePayments: profile.canReceivePayments || false
-        });
+      if (!profile) {
+        return;
+      }
 
-        // Load feedback if driver is verified
-        if (profile.canReceivePayments || profile.onboardingComplete) {
-          loadDriverFeedback();
-        }
+      setOnboardingStatus({
+        connectAccountCreated: !!profile.connectAccountId,
+        onboardingComplete: profile.onboardingComplete || false,
+        documentsVerified: profile.documentsVerified || false,
+        canReceivePayments: profile.canReceivePayments || false,
+      });
+
+      if (profile.canReceivePayments || profile.onboardingComplete) {
+        loadDriverFeedback();
       }
     } catch (error) {
-      console.error('Error loading driver profile:', error);
+      console.error("Error loading driver profile:", error);
     }
   };
 
   const loadDriverFeedback = async () => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid) {
+      return;
+    }
 
     setLoadingFeedback(true);
     try {
       const feedback = await getDriverFeedback(currentUser.uid, 5);
       setRecentFeedback(feedback);
     } catch (error) {
-      console.error('Error loading feedback:', error);
+      console.error("Error loading feedback:", error);
     } finally {
       setLoadingFeedback(false);
     }
   };
 
   const handleStartOnboarding = () => {
-    navigation.navigate('DriverOnboardingScreen');
+    navigation.navigate("DriverOnboardingScreen");
   };
 
   const handleResumeOnboarding = () => {
     if (onboardingStatus.connectAccountCreated) {
-      navigation.navigate('DriverOnboardingResumeScreen');
-    } else {
-      navigation.navigate('DriverOnboardingScreen');
+      navigation.navigate("DriverOnboardingResumeScreen");
+      return;
     }
+    navigation.navigate("DriverOnboardingScreen");
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'WelcomeScreen' }],
-            });
-          },
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          await logout();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "WelcomeScreen" }],
+          });
         },
-      ]
-    );
-  };
-
-  const handlePikUpPreferences = () => {
-    navigation.navigate('DriverPreferencesScreen');
+      },
+    ]);
   };
 
   const handleEarnings = () => {
     if (!onboardingStatus.canReceivePayments) {
       Alert.alert(
-        'Complete Setup Required',
-        'Please complete your driver onboarding to view earnings.',
+        "Complete Setup Required",
+        "Please complete your driver onboarding to view earnings.",
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Complete Setup', onPress: handleResumeOnboarding }
+          { text: "Cancel", style: "cancel" },
+          { text: "Complete Setup", onPress: handleResumeOnboarding },
         ]
       );
       return;
     }
-    navigation.navigate('DriverEarningsScreen');
+    navigation.navigate("DriverEarningsScreen");
   };
 
   const handlePaymentSettings = () => {
     if (!onboardingStatus.connectAccountCreated) {
       Alert.alert(
-        'Setup Required',
-        'Please complete driver onboarding first to manage payment settings.',
+        "Setup Required",
+        "Please complete driver onboarding first to manage payment settings.",
         [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Start Setup', onPress: handleStartOnboarding }
+          { text: "Cancel", style: "cancel" },
+          { text: "Start Setup", onPress: handleStartOnboarding },
         ]
       );
       return;
     }
-    navigation.navigate('DriverPaymentSettingsScreen');
+    navigation.navigate("DriverPaymentSettingsScreen");
   };
 
-  // Render onboarding status section
-  const renderOnboardingStatus = () => {
-    if (onboardingStatus.canReceivePayments) {
-      // Fully complete - show success banner
-      return (
-        <View style={styles.statusSection}>
-          <View style={styles.statusComplete}>
-            <View style={styles.statusLeft}>
-              <Ionicons name="checkmark-circle" size={24} color="#00D4AA" />
-              <View style={styles.statusText}>
-                <Text style={styles.statusTitle}>Ready to Earn!</Text>
-                <Text style={styles.statusSubtitle}>Your account is fully setup</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      );
-    } else if (onboardingStatus.connectAccountCreated) {
-      // Partial complete - show resume button
-      return (
-        <View style={styles.statusSection}>
-          <TouchableOpacity style={styles.statusIncomplete} onPress={handleResumeOnboarding}>
-            <View style={styles.statusLeft}>
-              <Ionicons name="time" size={24} color="#A77BFF" />
-              <View style={styles.statusText}>
-                <Text style={styles.statusTitle}>Complete Your Setup</Text>
-                <Text style={styles.statusSubtitle}>
-                  {!onboardingStatus.onboardingComplete
-                    ? 'Finish verification to start earning'
-                    : 'Documents pending review'
-                  }
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#A77BFF" />
-          </TouchableOpacity>
-        </View>
-      );
-    } else {
-      // Not started - show start button
-      return (
-        <View style={styles.statusSection}>
-          <TouchableOpacity style={styles.statusNotStarted} onPress={handleStartOnboarding}>
-            <View style={styles.statusLeft}>
-              <Ionicons name="alert-circle" size={24} color="#FF6B6B" />
-              <View style={styles.statusText}>
-                <Text style={styles.statusTitle}>Setup Required</Text>
-                <Text style={styles.statusSubtitle}>Complete onboarding to start earning</Text>
-              </View>
-            </View>
-            <View style={styles.setupButton}>
-              <Text style={styles.setupButtonText}>Start Setup</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-  };
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((namePart) => namePart[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+
+  const isReadyToEarn = onboardingStatus.canReceivePayments;
+  const completedTrips = isReadyToEarn ? String(driverProfile?.totalTrips || 156) : "--";
+  const acceptanceRate = isReadyToEarn
+    ? `${driverProfile?.acceptanceRate || 98}%`
+    : "--";
+  const ratingValue = isReadyToEarn ? String(driverProfile?.rating || "5.0") : "--";
+
+  const statusConfig = isReadyToEarn
+    ? {
+        title: "Ready to Earn",
+        subtitle: "Your account is fully set up",
+        icon: "checkmark-circle",
+        iconColor: colors.success,
+        backgroundColor: colors.background.successSubtle,
+        borderColor: colors.success,
+        ctaLabel: null,
+        onPress: null,
+      }
+    : onboardingStatus.connectAccountCreated
+      ? {
+          title: "Complete Your Setup",
+          subtitle: onboardingStatus.onboardingComplete
+            ? "Documents pending review"
+            : "Finish verification to start earning",
+          icon: "time",
+          iconColor: colors.primary,
+          backgroundColor: colors.background.elevated,
+          borderColor: colors.primary,
+          ctaLabel: "Continue",
+          onPress: handleResumeOnboarding,
+        }
+      : {
+          title: "Setup Required",
+          subtitle: "Complete onboarding to start earning",
+          icon: "alert-circle",
+          iconColor: colors.warning,
+          backgroundColor: colors.background.warningSubtle,
+          borderColor: colors.warning,
+          ctaLabel: "Start",
+          onPress: handleStartOnboarding,
+        };
+
+  const feedbackToRender = recentFeedback.slice(0, 3);
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <Text style={styles.headerTitle}>Driver Profile</Text>
-        </View>
-
-        {/* Onboarding Status - Always at top */}
-        {renderOnboardingStatus()}
-
-        {/* Profile Info Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.nameSection}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <TouchableOpacity
-              style={styles.profileButton}
-              onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
-            >
-              {profileImage ? (
-                <Image source={{ uri: profileImage }} style={styles.profileImage} />
-              ) : (
-                <View style={styles.profileInitials}>
-                  <Text style={styles.profileInitialsText}>
-                    {displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                  </Text>
+        <View style={[styles.profileCard, { marginTop: insets.top + spacing.lg }]}>
+          <View style={styles.profileCardContent}>
+            <View style={styles.profileLeftSide}>
+              <TouchableOpacity
+                style={styles.avatarContainer}
+                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+              >
+                {profileImage ? (
+                  <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                ) : (
+                  <View style={styles.profileInitials}>
+                    <Text style={styles.profileInitialsText}>{initials}</Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.verifiedBadgeOnAvatar,
+                    !isReadyToEarn && styles.verifiedBadgeOnAvatarPending,
+                  ]}
+                >
+                  <Ionicons name="checkmark" size={12} color={colors.white} />
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
 
-          <View style={styles.ratingSection}>
-            <View style={styles.ratingItem}>
-              <Ionicons name="star" size={16} color="#00D4AA" />
-              <Text style={styles.ratingText}>
-                {onboardingStatus.canReceivePayments ? (driverProfile?.rating || '5.0') : '--'}
-              </Text>
+              <Text style={styles.userName}>{displayName}</Text>
+
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color={colors.primary} />
+                <Text style={styles.ratingText}>{ratingValue}</Text>
+                <Text
+                  style={[
+                    styles.verifiedText,
+                    !isReadyToEarn && styles.verifiedTextPending,
+                  ]}
+                >
+                  {isReadyToEarn ? "Verified Driver" : "Pending Verification"}
+                </Text>
+              </View>
             </View>
-            <View style={styles.divider} />
-            <View style={styles.ratingItem}>
-              <Ionicons name="car-outline" size={16} color="#00D4AA" />
-              <Text style={styles.ratingText}>PikUp Driver</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={[
-              styles.verifiedBadge,
-              !onboardingStatus.canReceivePayments && styles.verifiedBadgePending
-            ]}>
-              <Text style={[
-                styles.verifiedText,
-                !onboardingStatus.canReceivePayments && styles.verifiedTextPending
-              ]}>
-                {onboardingStatus.canReceivePayments ? 'Verified' : 'Pending'}
-              </Text>
+
+            <View style={styles.statsColumn}>
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{completedTrips}</Text>
+                <Text style={styles.statLabel}>Trips</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{acceptanceRate}</Text>
+                <Text style={styles.statLabel}>Acceptance</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statItem}>
+                <Text style={styles.statNumber}>{ratingValue}</Text>
+                <Text style={styles.statLabel}>Rating</Text>
+              </View>
             </View>
           </View>
-
-          <TouchableOpacity style={styles.profileSelector}>
-            <Text style={styles.profileSelectorText}>Driver</Text>
-            <Ionicons name="car" size={16} color="#00D4AA" />
-            <Ionicons name="chevron-down" size={20} color="#999" style={{ marginLeft: 'auto' }} />
-          </TouchableOpacity>
         </View>
 
-        {/* Quick Actions - Driver Specific */}
+        <TouchableOpacity
+          activeOpacity={statusConfig.onPress ? 0.8 : 1}
+          disabled={!statusConfig.onPress}
+          style={[
+            styles.statusCard,
+            {
+              backgroundColor: statusConfig.backgroundColor,
+              borderColor: statusConfig.borderColor,
+            },
+          ]}
+          onPress={statusConfig.onPress}
+        >
+          <View style={styles.statusLeft}>
+            <Ionicons name={statusConfig.icon} size={22} color={statusConfig.iconColor} />
+            <View style={styles.statusText}>
+              <Text style={styles.statusTitle}>{statusConfig.title}</Text>
+              <Text style={styles.statusSubtitle}>{statusConfig.subtitle}</Text>
+            </View>
+          </View>
+
+          {statusConfig.ctaLabel ? (
+            <View style={styles.statusCta}>
+              <Text style={styles.statusCtaText}>{statusConfig.ctaLabel}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('CustomerHelpScreen')}
+            onPress={() => navigation.navigate("CustomerHelpScreen")}
           >
-            <Ionicons name="help-circle-outline" size={24} color="#00D4AA" />
+            <Ionicons
+              name="help-circle-outline"
+              size={32}
+              color={colors.primary}
+            />
             <Text style={styles.actionText}>Help</Text>
           </TouchableOpacity>
+          <View style={styles.actionDivider} />
           <TouchableOpacity
-            style={[styles.actionButton, !onboardingStatus.canReceivePayments && styles.actionButtonDisabled]}
-            onPress={handleEarnings}
+            style={[styles.actionButton, !isReadyToEarn && styles.actionButtonDisabled]}
+            onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
           >
             <Ionicons
               name="wallet-outline"
-              size={24}
-              color={onboardingStatus.canReceivePayments ? "#00D4AA" : "#666"}
+              size={32}
+              color={isReadyToEarn ? colors.primary : colors.text.muted}
             />
-            <Text style={[
-              styles.actionText,
-              !onboardingStatus.canReceivePayments && styles.actionTextDisabled
-            ]}>
+            <Text
+              style={[
+                styles.actionText,
+                !isReadyToEarn && styles.actionTextDisabled,
+              ]}
+            >
               Earnings
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* DRIVER EARNINGS - Conditional Display */}
-        {onboardingStatus.canReceivePayments ? (
-          <TouchableOpacity style={styles.earningsSection} onPress={handleEarnings}>
-            <View style={styles.earningsContent}>
-              <Text style={styles.earningsTitle}>Today's Earnings</Text>
-              <Text style={styles.earningsSubtitle}>Complete more trips to increase earnings →</Text>
-            </View>
-            <View style={styles.earningsIcon}>
-              <Ionicons name="cash" size={24} color="#00D4AA" />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.earningsDisabled} onPress={handleResumeOnboarding}>
-            <View style={styles.earningsContent}>
-              <Text style={styles.earningsTitle}>Earnings Locked</Text>
-              <Text style={styles.earningsSubtitle}>Complete setup to start earning →</Text>
-            </View>
-            <View style={styles.earningsIconDisabled}>
-              <Ionicons name="lock-closed" size={24} color="#666" />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* DRIVER BALANCE - Conditional Display */}
-        {onboardingStatus.canReceivePayments ? (
-          <TouchableOpacity style={styles.balanceSection} onPress={handleEarnings}>
-            <Text style={styles.balanceTitle}>Available Balance</Text>
-            <View style={styles.balanceRight}>
-              <Text style={styles.balanceAmount}>$247.80</Text>
-              <Ionicons name="chevron-forward" size={16} color="#666" />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.balanceSectionDisabled}>
-            <Text style={styles.balanceTitleDisabled}>Available Balance</Text>
-            <View style={styles.balanceRight}>
-              <Text style={styles.balanceAmountDisabled}>$0.00</Text>
-              <Ionicons name="lock-closed" size={16} color="#666" />
-            </View>
-          </View>
-        )}
-
-        {/* DRIVER PROGRESS - Conditional Display */}
-        {onboardingStatus.canReceivePayments ? (
-          <TouchableOpacity style={styles.progressSection} onPress={handleEarnings}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Weekly Progress</Text>
-              <Text style={styles.progressCount}>12/15 trips</Text>
-            </View>
-            <Text style={styles.progressSubtitle}>3 more trips to reach your weekly goal</Text>
-            <View style={styles.progressBar}>
-              <View style={styles.progressFill} />
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.progressSectionDisabled}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitleDisabled}>Weekly Progress</Text>
-              <Text style={styles.progressCountDisabled}>--/-- trips</Text>
-            </View>
-            <Text style={styles.progressSubtitleDisabled}>Complete setup to start tracking progress</Text>
-            <View style={styles.progressBarDisabled}>
-              <View style={styles.progressFillDisabled} />
-            </View>
-          </View>
-        )}
-
-        {/* DRIVER STATS */}
-        <View style={styles.statsSection}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {onboardingStatus.canReceivePayments ? (driverProfile?.rating || '5.0') : '--'}
+        <TouchableOpacity
+          style={[styles.infoCard, !isReadyToEarn && styles.infoCardDisabled]}
+          onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
+          activeOpacity={0.85}
+        >
+          <View style={styles.infoCardContent}>
+            <Text style={styles.infoCardTitle}>
+              {isReadyToEarn ? "Today's Earnings" : "Earnings Locked"}
             </Text>
-            <Text style={styles.statLabel}>Rating</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {onboardingStatus.canReceivePayments ? '156' : '--'}
+            <Text style={styles.infoCardSubtitle}>
+              {isReadyToEarn
+                ? "Complete more trips to increase earnings"
+                : "Complete setup to start earning"}
             </Text>
-            <Text style={styles.statLabel}>Total Trips</Text>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {onboardingStatus.canReceivePayments ? '98%' : '--'}
-            </Text>
-            <Text style={styles.statLabel}>Acceptance</Text>
+          <View
+            style={[
+              styles.infoIconCircle,
+              !isReadyToEarn && styles.infoIconCircleDisabled,
+            ]}
+          >
+            <Ionicons
+              name={isReadyToEarn ? "cash-outline" : "lock-closed-outline"}
+              size={22}
+              color={isReadyToEarn ? colors.success : colors.text.muted}
+            />
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* RECENT FEEDBACK */}
-        {onboardingStatus.canReceivePayments && (
-          <View style={styles.feedbackSection}>
+        {isReadyToEarn ? (
+          <View style={styles.feedbackCard}>
             <View style={styles.feedbackHeader}>
               <Text style={styles.feedbackTitle}>Recent Feedback</Text>
-              {recentFeedback.length > 0 && (
-                <Text style={styles.feedbackCount}>{recentFeedback.length} reviews</Text>
-              )}
+              {feedbackToRender.length > 0 ? (
+                <Text style={styles.feedbackCount}>
+                  {feedbackToRender.length} reviews
+                </Text>
+              ) : null}
             </View>
 
             {loadingFeedback ? (
-              <View style={styles.feedbackLoading}>
-                <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
-              </View>
-            ) : recentFeedback.length > 0 ? (
-              recentFeedback.slice(0, 3).map((feedback, index) => (
-                <View key={index} style={styles.feedbackItem}>
+              <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
+            ) : feedbackToRender.length > 0 ? (
+              feedbackToRender.map((feedback, index) => (
+                <View key={`${feedback.timestamp || "feedback"}-${index}`} style={styles.feedbackItem}>
                   <View style={styles.feedbackStars}>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Ionicons
                         key={star}
-                        name={star <= (feedback.rating || 5) ? 'star' : 'star-outline'}
+                        name={star <= (feedback.rating || 5) ? "star" : "star-outline"}
                         size={14}
-                        color={star <= (feedback.rating || 5) ? '#FFD700' : '#444'}
+                        color={star <= (feedback.rating || 5) ? colors.gold : colors.border.light}
                       />
                     ))}
                     <Text style={styles.feedbackDate}>
                       {feedback.timestamp
                         ? new Date(feedback.timestamp).toLocaleDateString()
-                        : ''}
+                        : ""}
                     </Text>
                   </View>
-                  {feedback.comment && (
-                    <Text style={styles.feedbackComment} numberOfLines={2}>
-                      "{feedback.comment}"
-                    </Text>
-                  )}
-                  {!feedback.comment && (
-                    <Text style={styles.feedbackNoComment}>No comment provided</Text>
-                  )}
+                  <Text style={styles.feedbackComment} numberOfLines={2}>
+                    {feedback.comment ? `"${feedback.comment}"` : "No comment provided"}
+                  </Text>
                 </View>
               ))
             ) : (
               <View style={styles.feedbackEmpty}>
-                <Ionicons name="chatbubble-outline" size={32} color="#444" />
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={24}
+                  color={colors.text.muted}
+                />
                 <Text style={styles.feedbackEmptyText}>No feedback yet</Text>
-                <Text style={styles.feedbackEmptySubtext}>
-                  Complete deliveries to receive customer reviews
-                </Text>
               </View>
             )}
           </View>
-        )}
+        ) : null}
 
-        {/* PIKUP PREFERENCES */}
-        <TouchableOpacity style={styles.preferencesSection} onPress={handlePikUpPreferences}>
-          <View style={styles.preferencesContent}>
-            <Text style={styles.preferencesTitle}>PikUp Preferences</Text>
-            <Text style={styles.preferencesSubtitle}>Set your pickup types, equipment & availability →</Text>
+        <TouchableOpacity
+          style={styles.infoCard}
+          onPress={() => navigation.navigate("DriverPreferencesScreen")}
+          activeOpacity={0.85}
+        >
+          <View style={styles.infoCardContent}>
+            <Text style={styles.infoCardTitle}>PikUp Preferences</Text>
+            <Text style={styles.infoCardSubtitle}>
+              Set pickup types, equipment and availability
+            </Text>
           </View>
-          <View style={styles.preferencesIcon}>
-            <Ionicons name="options" size={24} color="#A77BFF" />
+          <View style={styles.infoIconCircle}>
+            <Ionicons name="options-outline" size={22} color={colors.primary} />
           </View>
         </TouchableOpacity>
 
-        {/* Menu Items */}
         <View style={styles.menuSections}>
           <TouchableOpacity style={styles.menuItem} onPress={handlePaymentSettings}>
             <View style={styles.menuItemLeft}>
               <Ionicons
                 name="card-outline"
                 size={20}
-                color={onboardingStatus.connectAccountCreated ? "#00D4AA" : "#666"}
+                color={
+                  onboardingStatus.connectAccountCreated
+                    ? colors.primary
+                    : colors.text.muted
+                }
               />
-              <Text style={[
-                styles.menuItemTitle,
-                !onboardingStatus.connectAccountCreated && styles.menuItemTitleDisabled
-              ]}>
+              <Text
+                style={[
+                  styles.menuItemTitle,
+                  !onboardingStatus.connectAccountCreated && styles.menuItemTitleDisabled,
+                ]}
+              >
                 Payment Settings
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
+            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="person-outline" size={20} color="#00D4AA" />
+              <Ionicons name="person-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>Personal Information</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Linking.openURL('https://pikup-app.com/')}
+            onPress={() => Linking.openURL("https://pikup-app.com/")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="document-text-outline" size={20} color="#00D4AA" />
+              <Ionicons name="document-text-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>Terms and Privacy</Text>
             </View>
-            <Ionicons name="open-outline" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate("CustomerSafetyScreen")}
+          >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-checkmark-outline" size={20} color="#00D4AA" />
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color={colors.primary}
+              />
               <Text style={styles.menuItemTitle}>Safety</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('CustomerSettingsScreen')}
+            style={[styles.menuItem, styles.menuItemLast]}
+            onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="settings-outline" size={20} color="#00D4AA" />
+              <Ionicons name="settings-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>Settings</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate('CustomerHelpScreen')}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="help-circle-outline" size={20} color="#00D4AA" />
-              <Text style={styles.menuItemTitle}>Help</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
         </View>
 
-        {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
@@ -539,567 +509,340 @@ export default function DriverProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: '#141426',
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-
-  // Onboarding Status Styles
-  statusSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  statusComplete: {
-    backgroundColor: '#0D2818',
-    borderRadius: 12,
-    padding: 16,
+  profileCard: {
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#1A4D2E',
+    borderColor: colors.border.strong,
+    padding: spacing.lg,
   },
-  statusIncomplete: {
-    backgroundColor: '#1A1A3A',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#2A2A5B',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  profileCardContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  statusNotStarted: {
-    backgroundColor: '#2A1A1A',
-    borderRadius: 12,
-    padding: 16,
+  profileLeftSide: {
+    alignItems: "center",
+    flex: 1,
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  profileImage: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.circle,
+  },
+  profileInitials: {
+    width: 100,
+    height: 100,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileInitialsText: {
+    color: colors.white,
+    fontSize: 34,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  verifiedBadgeOnAvatar: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.success,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: colors.background.secondary,
+  },
+  verifiedBadgeOnAvatarPending: {
+    backgroundColor: colors.warning,
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: spacing.md,
+    textTransform: "capitalize",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.xs,
+  },
+  ratingText: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginLeft: spacing.xs,
+    marginRight: spacing.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  verifiedText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success,
+    fontWeight: typography.fontWeight.medium,
+  },
+  verifiedTextPending: {
+    color: colors.warning,
+  },
+  statsColumn: {
+    alignItems: "flex-start",
+    paddingLeft: spacing.md,
+  },
+  statItem: {
+    paddingVertical: spacing.sm,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statLabel: {
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 120,
+    height: 1,
+    backgroundColor: colors.border.strong,
+  },
+  statusCard: {
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#4A2A2A',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   statusLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   statusText: {
-    marginLeft: 12,
+    marginLeft: spacing.sm,
     flex: 1,
   },
   statusTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 2,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   statusSubtitle: {
-    fontSize: 14,
-    color: '#999',
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginTop: 2,
   },
-  setupButton: {
-    backgroundColor: '#A77BFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  setupButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  profileSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 8,
+  statusCta: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
-  nameSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  userName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    textTransform: 'capitalize',
-  },
-  profileButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#1A1A3A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  profileInitials: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#00D4AA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileInitialsText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '600',
-  },
-  ratingSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  ratingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginLeft: 4,
-  },
-  divider: {
-    width: 1,
-    height: 16,
-    backgroundColor: '#2A2A3B',
-    marginHorizontal: 12,
-  },
-  verifiedBadge: {
-    backgroundColor: '#1A3A2E',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  verifiedBadgePending: {
-    backgroundColor: '#3A2A1A',
-  },
-  verifiedText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#00D4AA',
-  },
-  verifiedTextPending: {
-    color: '#FFB366',
-  },
-  profileSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A3A',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  profileSelectorText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#fff',
-    marginRight: 6,
+  statusCtaText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   quickActions: {
-    flexDirection: 'row',
-    backgroundColor: '#141426',
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    justifyContent: 'space-around',
-    marginBottom: 8,
+    flexDirection: "row",
+    backgroundColor: colors.background.secondary,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "space-around",
+    alignItems: "center",
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   actionButton: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   actionButtonDisabled: {
     opacity: 0.5,
   },
   actionText: {
-    fontSize: 12,
-    color: '#fff',
-    marginTop: 4,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginTop: spacing.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   actionTextDisabled: {
-    color: '#666',
+    color: colors.text.muted,
   },
-
-  // Earnings section - enabled state
-  earningsSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  // Earnings section - disabled state
-  earningsDisabled: {
-    backgroundColor: '#1A1A1A',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-    opacity: 0.7,
-  },
-  earningsContent: {
-    flex: 1,
-  },
-  earningsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  earningsSubtitle: {
-    fontSize: 14,
-    color: '#999',
-  },
-  earningsIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#1A3A2E',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  earningsIconDisabled: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Balance section styles
-  balanceSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  balanceSectionDisabled: {
-    backgroundColor: '#1A1A1A',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-    opacity: 0.7,
-  },
-  balanceTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#fff',
-  },
-  balanceTitleDisabled: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
-  },
-  balanceRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  balanceAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-    marginRight: 8,
-  },
-  balanceAmountDisabled: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-    marginRight: 8,
-  },
-
-  // Progress section styles
-  progressSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  progressSectionDisabled: {
-    backgroundColor: '#1A1A1A',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-    opacity: 0.7,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  progressTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  progressTitleDisabled: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  progressCount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-  },
-  progressCountDisabled: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  progressSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 12,
-  },
-  progressSubtitleDisabled: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#2A2A3B',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarDisabled: {
-    height: 8,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    width: '80%',
-    height: '100%',
-    backgroundColor: '#00D4AA',
-  },
-  progressFillDisabled: {
-    width: '0%',
-    height: '100%',
-    backgroundColor: '#666',
-  },
-
-  statsSection: {
-    flexDirection: 'row',
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statNumber: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  statLabel: {
-    color: '#999',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  statDivider: {
+  actionDivider: {
     width: 1,
-    backgroundColor: '#2A2A3B',
-    marginHorizontal: 15,
+    height: 50,
+    backgroundColor: colors.border.strong,
   },
-  preferencesSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+  infoCard: {
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    flexDirection: "row",
+    alignItems: "center",
   },
-  preferencesContent: {
+  infoCardDisabled: {
+    opacity: 0.7,
+  },
+  infoCardContent: {
     flex: 1,
   },
-  preferencesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
+  infoCardTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
   },
-  preferencesSubtitle: {
-    fontSize: 14,
-    color: '#999',
+  infoCardSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
   },
-  preferencesIcon: {
+  infoIconCircle: {
     width: 50,
     height: 50,
-    backgroundColor: '#1A1A3A',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.elevated,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  infoIconCircleDisabled: {
+    backgroundColor: colors.background.tertiary,
+  },
+  feedbackCard: {
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+  },
+  feedbackHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  feedbackTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  feedbackCount: {
+    color: colors.text.link,
+    fontSize: typography.fontSize.base,
+  },
+  feedbackLoadingText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+  },
+  feedbackItem: {
+    backgroundColor: colors.background.elevated,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  feedbackStars: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  feedbackDate: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+  },
+  feedbackComment: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    fontStyle: "italic",
+  },
+  feedbackEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.lg,
+  },
+  feedbackEmptyText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.xs,
   },
   menuSections: {
-    backgroundColor: '#141426',
-    marginBottom: 8,
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
+    overflow: "hidden",
   },
   menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    borderBottomColor: colors.border.strong,
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
   },
   menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   menuItemTitle: {
-    fontSize: 16,
-    color: '#fff',
-    marginLeft: 12,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
+    marginLeft: spacing.md,
   },
   menuItemTitleDisabled: {
-    color: '#666',
+    color: colors.text.muted,
   },
   logoutButton: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
+    alignItems: "center",
   },
   logoutText: {
-    fontSize: 16,
-    color: '#ff4444',
-    fontWeight: '500',
+    fontSize: typography.fontSize.md,
+    color: colors.error,
+    fontWeight: typography.fontWeight.medium,
+    textAlign: "center",
   },
   bottomSpacing: {
     height: 40,
-  },
-
-  // Feedback Section Styles
-  feedbackSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  feedbackHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  feedbackTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  feedbackCount: {
-    fontSize: 14,
-    color: '#A77BFF',
-  },
-  feedbackLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  feedbackLoadingText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  feedbackItem: {
-    backgroundColor: '#1A1A3A',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  feedbackStars: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  feedbackDate: {
-    color: '#666',
-    fontSize: 12,
-    marginLeft: 8,
-  },
-  feedbackComment: {
-    color: '#ccc',
-    fontSize: 14,
-    fontStyle: 'italic',
-  },
-  feedbackNoComment: {
-    color: '#666',
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  feedbackEmpty: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  feedbackEmptyText: {
-    color: '#666',
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  feedbackEmptySubtext: {
-    color: '#444',
-    fontSize: 12,
-    marginTop: 4,
-    textAlign: 'center',
   },
 });

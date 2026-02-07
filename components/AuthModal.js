@@ -12,7 +12,8 @@ import {
     ActivityIndicator,
     TextInput as RNTextInput,
     Linking,
-    Animated
+    Animated,
+    ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -560,16 +561,24 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             )}
         >
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                enabled={false} // Disabled because BaseModal handles it via avoidKeyboard
-                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                enabled={true}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+                style={styles.keyboardAvoiding}
             >
-                <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-                    {step === 'initial' && renderInitialStep()}
-                    {step === 'email_check' && renderEmailCheckStep()}
-                    {step === 'password' && renderPasswordStep()}
-                    {step === 'register' && renderRegisterStep()}
-                </Animated.View>
+                <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                    contentContainerStyle={styles.scrollContent}
+                >
+                    <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+                        {step === 'initial' && renderInitialStep()}
+                        {step === 'email_check' && renderEmailCheckStep()}
+                        {step === 'password' && renderPasswordStep()}
+                        {step === 'register' && renderRegisterStep()}
+                    </Animated.View>
+                </ScrollView>
             </KeyboardAvoidingView>
         </BaseModal>
     );
@@ -594,9 +603,14 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     content: {
-        flex: 1,
         paddingHorizontal: 24,
         paddingBottom: 20,
+    },
+    keyboardAvoiding: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
     },
 
     // Buttons

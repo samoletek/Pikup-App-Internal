@@ -70,6 +70,13 @@ export const colors = {
     overlayDark: 'rgba(0, 0, 0, 0.8)',
     overlayPrimarySoft: 'rgba(167, 123, 255, 0.1)',
     transparent: 'transparent',
+
+    // Navigation surfaces
+    navigation: {
+        tabBarBackground: 'rgba(20, 20, 38, 0.78)',
+        tabBarBorder: 'rgba(255, 255, 255, 0.08)',
+        tabBarInactive: '#8E8E93',
+    },
 };
 
 // ============================================

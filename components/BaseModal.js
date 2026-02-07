@@ -7,6 +7,8 @@ import {
     PanResponder,
     Dimensions,
     Modal,
+    Keyboard,
+    Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,11 +29,13 @@ const BaseModal = forwardRef(({
     renderHeader,
     backgroundColor = '#FFFFFF', // Default to white, can be overridden
     onBackdropPress, // Optional: custom handler for backdrop tap (e.g., show confirmation)
+    avoidKeyboard = false,
 }, ref) => {
     const insets = useSafeAreaInsets();
 
     // Single animation value - backdrop interpolates from this
     const translateY = useRef(new Animated.Value(height)).current;
+    const keyboardTranslateY = useRef(new Animated.Value(0)).current;
 
     // Animate close: slide down, then call onClose
     const animateClose = useCallback(() => {
@@ -132,8 +136,50 @@ const BaseModal = forwardRef(({
             // If not visible, we generally want it off screen, but Modal handles unmounting.
             // We set it to height just to be safe for next mounting.
             translateY.setValue(height);
+            keyboardTranslateY.setValue(0);
         }
     }, [visible]); // Removed 'height' to prevent slide animation on height changes
+
+    useEffect(() => {
+        if (!visible || !avoidKeyboard) {
+            Animated.timing(keyboardTranslateY, {
+                toValue: 0,
+                duration: 150,
+                useNativeDriver: true,
+            }).start();
+            return;
+        }
+
+        const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+        const handleKeyboardShow = (event) => {
+            const keyboardHeight = event?.endCoordinates?.height || 0;
+            const shiftY = Math.max(0, keyboardHeight - insets.bottom);
+
+            Animated.timing(keyboardTranslateY, {
+                toValue: -shiftY,
+                duration: event?.duration || 220,
+                useNativeDriver: true,
+            }).start();
+        };
+
+        const handleKeyboardHide = (event) => {
+            Animated.timing(keyboardTranslateY, {
+                toValue: 0,
+                duration: event?.duration || 180,
+                useNativeDriver: true,
+            }).start();
+        };
+
+        const showSub = Keyboard.addListener(showEvent, handleKeyboardShow);
+        const hideSub = Keyboard.addListener(hideEvent, handleKeyboardHide);
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, [avoidKeyboard, visible, insets.bottom]);
 
     // Backdrop opacity interpolated from translateY
     const backdropOpacity = translateY.interpolate({
@@ -171,8 +217,7 @@ const BaseModal = forwardRef(({
                         height: height,
                         // Use top positioning - modal slides from bottom (SCREEN_HEIGHT) to its final position
                         top: SCREEN_HEIGHT - height,
-                        // Only translateY for animation, no keyboardOffset needed with top positioning
-                        transform: [{ translateY }],
+                        transform: [{ translateY: Animated.add(translateY, keyboardTranslateY) }],
                     },
                     containerStyle,
                 ]}

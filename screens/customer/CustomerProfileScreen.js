@@ -1,17 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
   Alert,
+  Image,
   Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
 export default function CustomerProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -25,9 +31,9 @@ export default function CustomerProfileScreen({ navigation }) {
 
   const loadCustomerProfile = async () => {
     try {
-      // Load user profile
       const profile = await getUserProfile?.(currentUser?.uid);
       setCustomerProfile(profile?.customerProfile || null);
+
       const name =
         profile?.name ||
         (profile?.firstName && profile?.lastName
@@ -35,10 +41,9 @@ export default function CustomerProfileScreen({ navigation }) {
           : currentUser?.email?.split("@")[0] || "User");
       setDisplayName(name);
 
-      // Load profile image
       await getProfileImage?.();
     } catch (error) {
-      console.error('Error loading customer profile:', error);
+      console.error("Error loading customer profile:", error);
     }
   };
 
@@ -59,75 +64,91 @@ export default function CustomerProfileScreen({ navigation }) {
     ]);
   };
 
-  const handleClaimsPress = () => {
-    navigation.navigate("CustomerClaimsScreen");
-  };
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((namePart) => namePart[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+
+  const ratingValue = String(customerProfile?.rating || "5.0");
+  const totalTrips = String(customerProfile?.totalTrips || "0");
+  const totalReviews = String(customerProfile?.totalReviews || "0");
+  const yearsOnApp = String(customerProfile?.yearsOnApp || "1");
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile Card - Airbnb Style */}
-        <View style={[styles.profileCard, { marginTop: insets.top + 20 }]}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={[styles.profileCard, { marginTop: insets.top + spacing.lg }]}>
           <View style={styles.profileCardContent}>
-            {/* Left Side - Avatar & Info */}
             <View style={styles.profileLeftSide}>
               <TouchableOpacity
                 style={styles.avatarContainer}
-                onPress={() => navigation.navigate('CustomerPersonalInfoScreen')}
+                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
               >
                 {profileImage ? (
                   <Image source={{ uri: profileImage }} style={styles.profileImage} />
                 ) : (
                   <View style={styles.profileInitials}>
-                    <Text style={styles.profileInitialsText}>
-                      {displayName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                    </Text>
+                    <Text style={styles.profileInitialsText}>{initials}</Text>
                   </View>
                 )}
-                {/* Verified Badge on Avatar */}
+
                 <View style={styles.verifiedBadgeOnAvatar}>
-                  <Ionicons name="checkmark" size={12} color="#fff" />
+                  <Ionicons name="checkmark" size={12} color={colors.white} />
                 </View>
               </TouchableOpacity>
 
               <Text style={styles.userName}>{displayName}</Text>
 
               <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color="#A77BFF" />
-                <Text style={styles.ratingText}>{customerProfile?.rating || '5.0'}</Text>
+                <Ionicons name="star" size={14} color={colors.primary} />
+                <Text style={styles.ratingText}>{ratingValue}</Text>
+                <Text style={styles.badgeText}>Trusted Customer</Text>
               </View>
             </View>
 
-            {/* Right Side - Stats */}
             <View style={styles.statsColumn}>
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{customerProfile?.totalTrips || '0'}</Text>
+                <Text style={styles.statNumber}>{totalTrips}</Text>
                 <Text style={styles.statLabel}>Trips</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{customerProfile?.totalReviews || '0'}</Text>
+                <Text style={styles.statNumber}>{totalReviews}</Text>
                 <Text style={styles.statLabel}>Reviews</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{customerProfile?.yearsOnApp || '1'}</Text>
+                <Text style={styles.statNumber}>{yearsOnApp}</Text>
                 <Text style={styles.statLabel}>Years on Pikup</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Quick Actions */}
+        <View style={styles.statusCard}>
+          <View style={styles.statusLeft}>
+            <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
+            <View style={styles.statusText}>
+              <Text style={styles.statusTitle}>Account in Good Standing</Text>
+              <Text style={styles.statusSubtitle}>
+                Your profile is verified and ready for new trips
+              </Text>
+            </View>
+          </View>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusBadgeText}>Active</Text>
+          </View>
+        </View>
+
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("CustomerHelpScreen")}
           >
-            <Ionicons name="help-circle-outline" size={32} color="#A77BFF" />
+            <Ionicons name="help-circle-outline" size={32} color={colors.primary} />
             <Text style={styles.actionText}>Help</Text>
           </TouchableOpacity>
           <View style={styles.actionDivider} />
@@ -135,118 +156,122 @@ export default function CustomerProfileScreen({ navigation }) {
             style={styles.actionButton}
             onPress={() => navigation.navigate("CustomerWalletScreen")}
           >
-            <Ionicons name="wallet-outline" size={32} color="#A77BFF" />
+            <Ionicons name="wallet-outline" size={32} color={colors.primary} />
             <Text style={styles.actionText}>Wallet</Text>
           </TouchableOpacity>
         </View>
 
-
-        {/* Menu Sections */}
         <View style={styles.menuSections}>
-          {/* View Profile */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="person-outline" size={20} color="#A77BFF" />
+              <Ionicons name="person-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>View Profile</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* Notifications */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="notifications-outline" size={20} color="#A77BFF" />
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={colors.primary}
+              />
               <Text style={styles.menuItemTitle}>Notifications</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* My Addresses */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("Home")}
-          >
+          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Home")}>
             <View style={styles.menuItemLeft}>
-              <Ionicons name="location-outline" size={20} color="#A77BFF" />
+              <Ionicons name="location-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>My Addresses</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* My Orders */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("Activity")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="receipt-outline" size={20} color="#A77BFF" />
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>My Orders</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* Settings */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="settings-outline" size={20} color="#A77BFF" />
+              <Ionicons name="settings-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>Settings</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* Claims */}
-          <TouchableOpacity style={styles.menuItem} onPress={handleClaimsPress}>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => navigation.navigate("CustomerClaimsScreen")}
+          >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-outline" size={20} color="#A77BFF" />
+              <Ionicons name="shield-outline" size={20} color={colors.primary} />
               <Text style={styles.menuItemTitle}>Claims</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* Terms of Service */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Linking.openURL('https://pikup-app.com/')}
+            onPress={() => Linking.openURL("https://pikup-app.com/")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="document-text-outline" size={20} color="#A77BFF" />
+              <Ionicons
+                name="document-text-outline"
+                size={20}
+                color={colors.primary}
+              />
               <Text style={styles.menuItemTitle}>Terms of Service</Text>
             </View>
-            <Ionicons name="open-outline" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* Privacy Policy */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() => Linking.openURL('https://pikup-app.com/')}
+            onPress={() => Linking.openURL("https://pikup-app.com/")}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="lock-closed-outline" size={20} color="#A77BFF" />
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color={colors.primary}
+              />
               <Text style={styles.menuItemTitle}>Privacy Policy</Text>
             </View>
-            <Ionicons name="open-outline" size={20} color="#666" />
+            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
 
-          {/* About Pikup */}
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]}>
             <View style={styles.menuItemLeft}>
-              <Ionicons name="information-circle-outline" size={20} color="#A77BFF" />
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={colors.primary}
+              />
               <Text style={styles.menuItemTitle}>About Pikup</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
+            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
@@ -260,19 +285,19 @@ export default function CustomerProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A1F",
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
   },
   profileCard: {
-    backgroundColor: "#141426",
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
-    padding: 20,
+    borderColor: colors.border.strong,
+    padding: spacing.lg,
   },
   profileCardContent: {
     flexDirection: "row",
@@ -289,20 +314,20 @@ const styles = StyleSheet.create({
   profileImage: {
     width: 100,
     height: 100,
-    borderRadius: 50,
+    borderRadius: borderRadius.circle,
   },
   profileInitials: {
     width: 100,
     height: 100,
-    borderRadius: 50,
-    backgroundColor: "#A77BFF",
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
   },
   profileInitialsText: {
-    color: "#fff",
-    fontSize: 36,
-    fontWeight: "600",
+    color: colors.white,
+    fontSize: 34,
+    fontWeight: typography.fontWeight.semibold,
   },
   verifiedBadgeOnAvatar: {
     position: "absolute",
@@ -310,122 +335,177 @@ const styles = StyleSheet.create({
     right: 4,
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: "#A77BFF",
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
-    borderColor: "#141426",
+    borderColor: colors.background.secondary,
   },
   userName: {
     fontSize: 22,
-    fontWeight: "bold",
-    color: "#fff",
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: spacing.md,
     textTransform: "capitalize",
-    marginTop: 12,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   ratingText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
-    marginLeft: 4,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginLeft: spacing.xs,
+    marginRight: spacing.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  badgeText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.medium,
   },
   statsColumn: {
     alignItems: "flex-start",
-    paddingLeft: 10,
+    paddingLeft: spacing.md,
   },
   statItem: {
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
   },
   statNumber: {
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   statLabel: {
-    fontSize: 14,
-    color: "#888",
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
   },
   statDivider: {
     width: 120,
     height: 1,
-    backgroundColor: "#2A2A3B",
+    backgroundColor: colors.border.strong,
+  },
+  statusCard: {
+    backgroundColor: colors.background.elevated,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  statusLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  statusText: {
+    marginLeft: spacing.sm,
+    flex: 1,
+  },
+  statusTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  statusSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginTop: 2,
+  },
+  statusBadge: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  statusBadgeText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   quickActions: {
     flexDirection: "row",
-    backgroundColor: "#141426",
-    paddingVertical: 24,
-    paddingHorizontal: 20,
+    backgroundColor: colors.background.secondary,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
     justifyContent: "space-around",
     alignItems: "center",
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
   },
   actionButton: {
     alignItems: "center",
     flex: 1,
   },
   actionText: {
-    fontSize: 14,
-    color: "#fff",
-    marginTop: 8,
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    marginTop: spacing.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   actionDivider: {
     width: 1,
     height: 50,
-    backgroundColor: "#2A2A3B",
+    backgroundColor: colors.border.strong,
   },
   menuSections: {
-    backgroundColor: "#141426",
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
+    backgroundColor: colors.background.secondary,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
     overflow: "hidden",
   },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
+    borderBottomColor: colors.border.strong,
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
   },
   menuItemLeft: {
     flexDirection: "row",
     alignItems: "center",
   },
   menuItemTitle: {
-    fontSize: 16,
-    color: "#fff",
-    marginLeft: 12,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
+    marginLeft: spacing.md,
   },
   logoutButton: {
-    backgroundColor: "#141426",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 16,
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
+    marginHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
     alignItems: "center",
   },
   logoutText: {
-    fontSize: 16,
-    color: "#ff4444",
-    fontWeight: "500",
+    fontSize: typography.fontSize.md,
+    color: colors.error,
+    fontWeight: typography.fontWeight.medium,
     textAlign: "center",
   },
   bottomSpacing: {

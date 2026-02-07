@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { LogBox, NativeModules } from 'react-native';
+import { LogBox, NativeModules, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
@@ -9,6 +9,8 @@ import { PaymentProvider } from './contexts/PaymentContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import Navigation from './Navigation';
 import ErrorBoundary from './components/ErrorBoundary';
+import { appNavigationTheme } from './navigation/navigationTheme';
+import { colors } from './styles/theme';
 
 // Suppress known Mapbox library warnings
 LogBox.ignoreLogs([
@@ -39,23 +41,32 @@ if (NativeModules.MapboxNavigation) {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <NavigationContainer>
-          <StripeProvider
-            publishableKey={STRIPE_PUBLISHABLE_KEY}
-            merchantId={MERCHANT_ID}
-            urlScheme={URL_SCHEME}
-          >
-            <AuthProvider>
-              <PaymentProvider>
-                <NotificationProvider>
-                  <Navigation />
-                </NotificationProvider>
-              </PaymentProvider>
-            </AuthProvider>
-          </StripeProvider>
-        </NavigationContainer>
-      </ErrorBoundary>
+      <View style={styles.appRoot}>
+        <ErrorBoundary>
+          <NavigationContainer theme={appNavigationTheme}>
+            <StripeProvider
+              publishableKey={STRIPE_PUBLISHABLE_KEY}
+              merchantId={MERCHANT_ID}
+              urlScheme={URL_SCHEME}
+            >
+              <AuthProvider>
+                <PaymentProvider>
+                  <NotificationProvider>
+                    <Navigation />
+                  </NotificationProvider>
+                </PaymentProvider>
+              </AuthProvider>
+            </StripeProvider>
+          </NavigationContainer>
+        </ErrorBoundary>
+      </View>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  appRoot: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+});

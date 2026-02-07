@@ -323,7 +323,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
             onBackdropPress={handleClose}
             height={SCREEN_HEIGHT * 0.9}
             backgroundColor="#141426"
-            avoidKeyboard={true}
+            avoidKeyboard={false}
             renderHeader={(animateClose) => (
                 <View style={styles.header}>
                     {currentStep > 1 ? (
