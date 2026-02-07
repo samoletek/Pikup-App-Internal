@@ -21,6 +21,8 @@ import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import Mapbox from '@rnmapbox/maps';
+import { ACTIVE_TRIP_STATUSES } from '../../constants/tripStatus';
+import { colors, spacing, typography } from '../../styles/theme';
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -34,9 +36,14 @@ export default function CustomerHomeScreen({ navigation }) {
 
   // Modal states
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+  const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
+  const [priceModalVisible, setPriceModalVisible] = useState(false);
   // Legacy modal states removed - using CustomerOrderModal + OrderSummaryScreen flow
   const [selectedLocations, setSelectedLocations] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [summaryData, setSummaryData] = useState(null);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   // New states for enhanced ride details
   const [calculatedDistance, setCalculatedDistance] = useState(null);
@@ -146,7 +153,7 @@ export default function CustomerHomeScreen({ navigation }) {
       try {
         const requests = await getUserPickupRequests();
         const activeRequest = requests.find(req =>
-          ['accepted', 'inProgress', 'arrivedAtPickup', 'pickedUp', 'enRouteToDropoff', 'arrivedAtDropoff'].includes(req.status)
+          ACTIVE_TRIP_STATUSES.includes(req.status)
         );
 
         if (activeRequest) {
@@ -587,7 +594,7 @@ export default function CustomerHomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: colors.background.primary,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -598,8 +605,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
 
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm + 2,
     flexDirection: "row",
     justifyContent: "center", // Horizontal center
     alignItems: "center",
@@ -622,8 +629,8 @@ const styles = StyleSheet.create({
   searchBarContainer: {
     position: "absolute",
 
-    left: 20,
-    right: 20,
+    left: spacing.lg,
+    right: spacing.lg,
     zIndex: 100,
     elevation: 100,
   },
@@ -633,7 +640,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -645,8 +652,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   searchPlaceholder: {
-    color: "#999",
-    fontSize: 16,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.md,
     flex: 1,
   },
   bottomSection: {
@@ -654,24 +661,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
   requestButton: {
-    backgroundColor: "#A77BFF",
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.base,
     borderRadius: 25,
     alignItems: "center",
-    shadowColor: "#A77BFF",
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   requestButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
   },
 
   markerContainer: {
@@ -682,9 +689,9 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   floatingTriggerContainer: {
     position: 'absolute',
@@ -692,17 +699,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     zIndex: 20, // Above map
   },
   floatingTrigger: {
-    backgroundColor: '#1E1E2E',
+    backgroundColor: colors.background.tertiary,
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
     height: 56,
     borderRadius: 28,
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.base,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -718,29 +725,29 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12
+    marginRight: spacing.md
   },
   floatingTriggerText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     flex: 1
   },
   triggerTimeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2A2A3C',
+    backgroundColor: colors.background.secondary,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16
   },
   triggerTimeText: {
-    color: '#CCC',
-    fontSize: 12,
-    fontWeight: '600'
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold
   }
 });
 

@@ -2,6 +2,8 @@
 // Extracted from AuthContext.js - Driver profile, stats, and online/offline management
 
 import { supabase } from '../config/supabase';
+import { TRIP_STATUS } from '../constants/tripStatus';
+import { mapTripFromDb } from './tripMapper';
 
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
@@ -36,17 +38,18 @@ export const getDriverTrips = async (driverId) => {
             .from('trips')
             .select('*')
             .eq('driver_id', driverId)
-            .eq('status', 'completed')
+            .eq('status', TRIP_STATUS.COMPLETED)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         console.log(`Found ${data.length} completed trips for driver`);
 
-        return data.map(trip => {
+        return data.map((trip) => {
+            const mappedTrip = mapTripFromDb(trip);
             const price = parseFloat(trip.price || 0);
             const driverEarnings = calculateDriverEarnings(price);
-            return { ...trip, driverEarnings, pricing: { total: price } };
+            return { ...mappedTrip, driverEarnings, pricing: { total: price } };
         });
 
     } catch (error) {

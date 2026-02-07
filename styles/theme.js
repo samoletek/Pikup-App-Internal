@@ -35,6 +35,11 @@ export const colors = {
         primary: '#0A0A1F',     // Darkest - main app background
         secondary: '#141426',   // Modal backgrounds
         tertiary: '#1E1E2E',    // Cards, elevated surfaces
+        panel: '#1E1E38',       // Alternative panel/card surface
+        elevated: '#1A1A3A',    // Elevated cards/chips
+        successSubtle: '#1A3A2E', // Success tinted background
+        warningSubtle: '#3A2A1A', // Warning tinted background
+        brandTint: '#2A1F3D',   // Primary-tinted dark surface
         input: '#222233',       // Input fields
     },
 
@@ -42,6 +47,7 @@ export const colors = {
     border: {
         default: '#333',        // Default border
         light: '#444',          // Lighter border
+        strong: '#2A2A3B',      // Strong contrast border on dark surfaces
         focus: '#A77BFF',       // Focused state
     },
 
@@ -50,6 +56,8 @@ export const colors = {
         primary: '#FFFFFF',     // Main text
         secondary: '#CCCCCC',   // Secondary text
         muted: '#888888',       // Muted/disabled text
+        tertiary: '#999999',    // Tertiary labels
+        subtle: '#666666',      // Subtle text for empty states
         placeholder: '#666666', // Input placeholders
         link: '#A77BFF',        // Links and actionable text
     },
@@ -57,6 +65,10 @@ export const colors = {
     // Misc
     white: '#FFFFFF',
     black: '#000000',
+    info: '#4A90E2',
+    gold: '#FFD700',
+    overlayDark: 'rgba(0, 0, 0, 0.8)',
+    overlayPrimarySoft: 'rgba(167, 123, 255, 0.1)',
     transparent: 'transparent',
 };
 

@@ -11,6 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { usePayment } from "../../contexts/PaymentContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
+import { colors } from '../../styles/theme';
 
 const transactionHistory = [
   {
@@ -19,7 +21,7 @@ const transactionHistory = [
     title: "Trip to Downtown",
     date: "Today, 2:30 PM",
     amount: -24.50,
-    status: "completed",
+    status: TRIP_STATUS.COMPLETED,
   },
   {
     id: "2",
@@ -27,7 +29,7 @@ const transactionHistory = [
     title: "Added funds",
     date: "Yesterday, 10:15 AM",
     amount: 50.00,
-    status: "completed",
+    status: TRIP_STATUS.COMPLETED,
   },
   {
     id: "3",
@@ -35,7 +37,7 @@ const transactionHistory = [
     title: "Promo credit",
     date: "Jun 12, 9:22 AM",
     amount: 15.00,
-    status: "completed",
+    status: TRIP_STATUS.COMPLETED,
   },
   {
     id: "4",
@@ -43,7 +45,7 @@ const transactionHistory = [
     title: "Trip to Airport",
     date: "Jun 10, 5:45 PM",
     amount: -35.75,
-    status: "completed",
+    status: TRIP_STATUS.COMPLETED,
   },
   {
     id: "5",
@@ -51,14 +53,14 @@ const transactionHistory = [
     title: "Refund - Trip canceled",
     date: "Jun 8, 3:20 PM",
     amount: 18.25,
-    status: "completed",
+    status: TRIP_STATUS.COMPLETED,
   },
 ];
 
 export default function CustomerWalletScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { paymentMethods, defaultPaymentMethod } = usePayment();
-  const { currentUser, getUserPickupRequests } = useAuth();
+  const { getUserPickupRequests } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,19 +72,23 @@ export default function CustomerWalletScreen({ navigation }) {
     try {
       const userRequests = await getUserPickupRequests();
       const completedTrips = userRequests
-        .filter(request => request.status === 'completed')
-        .map(request => ({
-          id: request.id,
-          type: 'trip_payment',
-          title: `Trip - ${request.dropoffAddress?.split(',')[0] || 'Delivery'}`,
-          date: formatDate(request.completedAt || request.createdAt),
-          amount: -(request.pricing?.total || 0),
-          status: 'completed',
-        }))
-        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .filter((request) => normalizeTripStatus(request.status) === TRIP_STATUS.COMPLETED)
+        .map((request) => {
+          const timestamp = request.completedAt || request.createdAt;
+          return {
+            id: request.id,
+            type: 'trip_payment',
+            title: `Trip - ${request.dropoffAddress?.split(',')[0] || 'Delivery'}`,
+            timestamp,
+            date: formatDate(timestamp),
+            amount: -(request.pricing?.total || 0),
+            status: TRIP_STATUS.COMPLETED,
+          };
+        })
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
         .slice(0, 10); // Show last 10 transactions
       
-      setTransactions(completedTrips);
+      setTransactions(completedTrips.map(({ timestamp, ...transaction }) => transaction));
     } catch (error) {
       console.error('Error loading transaction history:', error);
       // Fallback to mock data if error
@@ -114,7 +120,7 @@ export default function CustomerWalletScreen({ navigation }) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payment & Activity</Text>
         <View style={styles.backButton} />
@@ -127,7 +133,7 @@ export default function CustomerWalletScreen({ navigation }) {
           <RefreshControl
             refreshing={loading}
             onRefresh={loadTransactionHistory}
-            tintColor="#A77BFF"
+            tintColor={colors.primary}
           />
         }
       >
@@ -147,7 +153,7 @@ export default function CustomerWalletScreen({ navigation }) {
             {paymentMethods.map((method) => (
               <TouchableOpacity key={method.id} style={styles.paymentMethod}>
                 <View style={styles.paymentIcon}>
-                  <Ionicons name="card-outline" size={24} color="#A77BFF" />
+                  <Ionicons name="card-outline" size={24} color={colors.primary} />
                 </View>
                 <View style={styles.paymentInfo}>
                   <Text style={styles.paymentTitle}>•••• {method.last4}</Text>
@@ -165,7 +171,7 @@ export default function CustomerWalletScreen({ navigation }) {
               style={styles.addPaymentButton}
               onPress={() => navigation.navigate("PaymentMethodsScreen")}
             >
-              <Ionicons name="add-circle-outline" size={24} color="#A77BFF" />
+              <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
               <Text style={styles.addPaymentText}>Add Payment Method</Text>
             </TouchableOpacity>
           </View>
@@ -199,7 +205,7 @@ export default function CustomerWalletScreen({ navigation }) {
                           : "gift-outline"
                       }
                       size={20}
-                      color="#A77BFF"
+                      color={colors.primary}
                     />
                   </View>
                   <View style={styles.transactionInfo}>
@@ -209,7 +215,7 @@ export default function CustomerWalletScreen({ navigation }) {
                   <Text
                     style={[
                       styles.transactionAmount,
-                      { color: transaction.amount >= 0 ? "#00D4AA" : "#FF6B6B" },
+                      { color: transaction.amount >= 0 ? colors.success : colors.error },
                     ]}
                   >
                     {transaction.amount >= 0 ? "+" : ""}${Math.abs(transaction.amount).toFixed(2)}
@@ -229,7 +235,7 @@ export default function CustomerWalletScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A1F",
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: "row",
@@ -237,14 +243,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: "#141426",
+    backgroundColor: colors.background.secondary,
     borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
+    borderBottomColor: colors.border.strong,
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: colors.white,
   },
   backButton: {
     width: 40,
@@ -257,13 +263,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     textAlign: "center",
-    color: "#999",
+    color: colors.text.tertiary,
     fontSize: 16,
     paddingVertical: 20,
   },
   emptyText: {
     textAlign: "center",
-    color: "#999",
+    color: colors.text.tertiary,
     fontSize: 16,
     paddingVertical: 20,
   },
@@ -280,18 +286,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: colors.white,
   },
   seeAllText: {
     fontSize: 14,
-    color: "#A77BFF",
+    color: colors.primary,
     fontWeight: "500",
   },
   paymentMethodsContainer: {
-    backgroundColor: "#141426",
+    backgroundColor: colors.background.secondary,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
     overflow: "hidden",
   },
   paymentMethod: {
@@ -300,13 +306,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
+    borderBottomColor: colors.border.strong,
   },
   paymentIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#2A1F3D",
+    backgroundColor: colors.background.brandTint,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -317,15 +323,15 @@ const styles = StyleSheet.create({
   paymentTitle: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#fff",
+    color: colors.white,
   },
   paymentSubtitle: {
     fontSize: 14,
-    color: "#999",
+    color: colors.text.tertiary,
     marginTop: 2,
   },
   defaultBadge: {
-    backgroundColor: "#1A3A2E",
+    backgroundColor: colors.background.successSubtle,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -333,7 +339,7 @@ const styles = StyleSheet.create({
   defaultText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#00D4AA",
+    color: colors.success,
   },
   addPaymentButton: {
     flexDirection: "row",
@@ -344,46 +350,46 @@ const styles = StyleSheet.create({
   addPaymentText: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#A77BFF",
+    color: colors.primary,
     marginLeft: 12,
   },
   pikupCashCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#141426",
+    backgroundColor: colors.background.secondary,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
   },
   pikupCashInfo: {
     flex: 1,
   },
   pikupCashTitle: {
     fontSize: 14,
-    color: "#999",
+    color: colors.text.tertiary,
     marginBottom: 4,
   },
   pikupCashAmount: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#A77BFF",
+    color: colors.primary,
   },
   pikupCashButton: {
-    backgroundColor: "#2A1F3D",
+    backgroundColor: colors.background.brandTint,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
   },
   pikupCashButtonText: {
-    color: "#A77BFF",
+    color: colors.primary,
     fontWeight: "600",
   },
   transactionsContainer: {
-    backgroundColor: "#141426",
+    backgroundColor: colors.background.secondary,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
     overflow: "hidden",
   },
   transaction: {
@@ -392,13 +398,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
+    borderBottomColor: colors.border.strong,
   },
   transactionIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#2A1F3D",
+    backgroundColor: colors.background.brandTint,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -409,11 +415,11 @@ const styles = StyleSheet.create({
   transactionTitle: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#fff",
+    color: colors.white,
   },
   transactionDate: {
     fontSize: 14,
-    color: "#999",
+    color: colors.text.tertiary,
     marginTop: 2,
   },
   transactionAmount: {

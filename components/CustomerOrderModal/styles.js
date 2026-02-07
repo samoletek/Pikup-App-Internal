@@ -1,0 +1,257 @@
+import { StyleSheet, Dimensions } from 'react-native';
+import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+export { SCREEN_WIDTH, SCREEN_HEIGHT };
+
+export const styles = StyleSheet.create({
+    container: { flex: 1 },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing.base,
+        height: 56
+    },
+    headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    headerCenter: { flex: 1, alignItems: 'center' },
+    headerTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary },
+    headerStep: { fontSize: typography.fontSize.sm, color: colors.text.muted, marginTop: 2 },
+    progressBar: { height: 3, backgroundColor: colors.border.default, marginHorizontal: spacing.lg },
+    progressFill: { height: '100%', backgroundColor: colors.primary, borderRadius: borderRadius.xs },
+    stepContainer: { flex: 1 },
+    stepContent: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+    footer: { paddingHorizontal: spacing.lg, paddingTop: spacing.base, borderTopWidth: 1, borderTopColor: colors.background.input },
+    continueBtn: {
+        backgroundColor: colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 56,
+        borderRadius: borderRadius.full
+    },
+    continueBtnText: { color: colors.white, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, marginRight: spacing.sm },
+
+    // Step 1 Styles - Address Search
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.input,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        height: 56,
+        paddingHorizontal: spacing.base
+    },
+    input: { flex: 1, color: colors.text.primary, marginLeft: spacing.md, fontSize: typography.fontSize.md, height: '100%' },
+    addressMarker: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    pickupMarker: { backgroundColor: colors.primary },
+    dropoffMarker: { backgroundColor: colors.success },
+    addressMarkerText: { color: colors.white, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.bold },
+    suggestionsContainer: {
+        position: 'absolute',
+        top: 60,
+        left: 0,
+        right: 0,
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        maxHeight: 350,
+        zIndex: 100,
+        overflow: 'hidden'
+    },
+    suggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.base
+    },
+    suggestionIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: colors.border.default,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md
+    },
+    suggestionTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginBottom: 2 },
+    suggestionAddr: { color: colors.text.secondary, fontSize: typography.fontSize.sm },
+    sectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.xs,
+        marginTop: spacing.xs
+    },
+    sectionLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: colors.border.default,
+        marginHorizontal: spacing.md
+    },
+    sectionLabelText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        paddingHorizontal: spacing.sm
+    },
+    loadingRow: {
+        paddingVertical: spacing.sm,
+        alignItems: 'center'
+    },
+    currentLocBtn: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, padding: spacing.md },
+    currentLocText: { color: colors.text.link, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.md, fontSize: typography.fontSize.md },
+
+    // Schedule Styles
+    scheduleSection: { marginTop: spacing.xl },
+    sectionLabel: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md },
+    scheduleToggle: { flexDirection: 'row', backgroundColor: colors.background.input, borderRadius: borderRadius.full, padding: spacing.xs },
+    scheduleOption: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.xl
+    },
+    scheduleOptionActive: { backgroundColor: colors.primary },
+    scheduleOptionText: { color: colors.text.muted, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
+    scheduleOptionTextActive: { color: colors.white },
+    dateTimeSection: { marginTop: spacing.md },
+    datePickerBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.input,
+        borderRadius: borderRadius.lg,
+        padding: spacing.base,
+        marginTop: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.border.default
+    },
+    datePickerText: { color: colors.text.primary, marginLeft: spacing.md, fontSize: typography.fontSize.md, flex: 1 },
+    datePickerDoneBtn: {
+        alignSelf: 'center',
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.lg,
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.md,
+        marginTop: spacing.md
+    },
+    datePickerDoneText: { color: colors.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    datePickerModal: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)'
+    },
+    datePickerModalContent: {
+        backgroundColor: colors.background.secondary,
+        borderRadius: borderRadius.xl,
+        width: '85%',
+        maxWidth: 340,
+        overflow: 'hidden'
+    },
+    datePickerModalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border
+    },
+    datePickerModalTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.lg,
+        fontWeight: typography.fontWeight.semibold
+    },
+    datePickerSpinner: {
+        height: 200,
+        backgroundColor: colors.background.secondary
+    },
+
+    // Step 2 Styles - Items
+    aiPhotoBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        padding: spacing.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginBottom: spacing.md
+    },
+    aiPhotoIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.md
+    },
+    aiPhotoTextContainer: { flex: 1 },
+    aiPhotoTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    aiPhotoSubtitle: { color: colors.text.secondary, fontSize: typography.fontSize.xs, marginTop: 2 },
+    divider: { height: 1, backgroundColor: colors.border.default, marginBottom: spacing.md },
+    emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+    emptyStateText: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.base },
+    emptyStateSubtext: { color: colors.text.placeholder, fontSize: typography.fontSize.base, marginTop: spacing.sm },
+    addItemBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        borderWidth: 2,
+        borderColor: colors.primary,
+        borderStyle: 'dashed',
+        padding: spacing.lg,
+        marginTop: spacing.sm
+    },
+    addItemBtnText: { color: colors.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
+
+    // Step 5 Styles - Vehicle Selection
+    vehicleHint: { color: colors.text.muted, fontSize: typography.fontSize.base, marginBottom: spacing.base, textAlign: 'center' },
+    whatFitsSection: { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, padding: spacing.base, marginTop: spacing.base },
+    whatFitsTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md },
+    whatFitsItem: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+    whatFitsText: { color: colors.text.secondary, fontSize: typography.fontSize.base, marginLeft: spacing.sm },
+
+    // Step 6 Styles - Review
+    summaryCard: {
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        padding: spacing.base,
+        marginBottom: spacing.base
+    },
+    summaryCardTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.bold, marginBottom: spacing.md },
+    routeRow: { flexDirection: 'row', alignItems: 'center' },
+    routeDot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.md },
+    routeLine: { width: 2, height: 20, backgroundColor: colors.border.default, marginLeft: spacing.xs, marginVertical: spacing.xs },
+    routeAddress: { color: colors.text.secondary, fontSize: typography.fontSize.base, flex: 1 },
+    itemSummaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+    itemSummaryName: { color: colors.text.primary, fontSize: typography.fontSize.base },
+    itemSummaryBadges: { flexDirection: 'row' },
+    fragileTag: { backgroundColor: colors.secondaryLight, color: colors.secondary, fontSize: typography.fontSize.xs, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.xs, marginLeft: 6 },
+    insuredTag: { backgroundColor: colors.primaryLight, color: colors.primary, fontSize: typography.fontSize.xs, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.xs, marginLeft: 6 },
+    vehicleSummary: { flexDirection: 'row', alignItems: 'center' },
+    vehicleSummaryImg: { width: 60, height: 35, resizeMode: 'contain', marginRight: spacing.md },
+    vehicleSummaryName: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
+    priceLabel: { color: colors.text.muted, fontSize: typography.fontSize.base },
+    priceValue: { color: colors.text.primary, fontSize: typography.fontSize.base },
+    priceDivider: { height: 1, backgroundColor: colors.border.default, marginVertical: spacing.md },
+    totalLabel: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold },
+    totalValue: { color: colors.primary, fontSize: typography.fontSize.xxl, fontWeight: typography.fontWeight.bold }
+});

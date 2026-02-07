@@ -14,6 +14,16 @@ import { Ionicons } from '@expo/vector-icons';
 import MapboxMap from '../../components/mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { useAuth } from '../../contexts/AuthContext';
+import { colors, spacing, borderRadius, typography } from '../../styles/theme';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
+
+const TERMINAL_TRIP_STATUSES = [TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED];
+const IN_TRANSIT_TRIP_STATUSES = [
+  TRIP_STATUS.IN_PROGRESS,
+  TRIP_STATUS.ARRIVED_AT_PICKUP,
+  TRIP_STATUS.PICKED_UP,
+  TRIP_STATUS.EN_ROUTE_TO_DROPOFF
+];
 
 export default function CustomerActivityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -27,12 +37,15 @@ export default function CustomerActivityScreen({ navigation, route }) {
   
   // Get parameters from route if available (for demo mode)
   const { requestId, status, request, driverLocation, pickupPhotos } = route.params || {};
+  const normalizedRouteStatus = normalizeTripStatus(status);
   
   // Get AuthContext
   const { getUserPickupRequests, currentUser, getUserProfile } = useAuth();
+  const currentUserId = currentUser?.id || currentUser?.uid;
   
   // If we have a requestId and status, we're in an active trip
-  const isActiveTrip = !!requestId && !!status;
+  const hasTripInRoute = !!requestId && !!status;
+  const isActiveTrip = hasTripInRoute && !TERMINAL_TRIP_STATUSES.includes(normalizedRouteStatus);
   
   // Load driver profile when we have an active trip
   useEffect(() => {
@@ -47,14 +60,14 @@ export default function CustomerActivityScreen({ navigation, route }) {
       };
       loadDriverProfile();
     }
-  }, [request]);
+  }, [request, driverProfile, getUserProfile]);
 
   // Load customer profile to get rating
   useEffect(() => {
-    if (currentUser && !customerProfile) {
+    if (currentUserId && !customerProfile) {
       const loadCustomerProfile = async () => {
         try {
-          const profile = await getUserProfile(currentUser.uid);
+          const profile = await getUserProfile(currentUserId);
           setCustomerProfile(profile);
         } catch (error) {
           console.error('Error loading customer profile:', error);
@@ -62,7 +75,13 @@ export default function CustomerActivityScreen({ navigation, route }) {
       };
       loadCustomerProfile();
     }
-  }, [currentUser]);
+  }, [currentUserId, customerProfile, getUserProfile]);
+
+  useEffect(() => {
+    if (!customerProfile) return;
+    const nextRating = Number(customerProfile?.customerProfile?.rating || customerProfile?.rating || 5.0);
+    setStats((prev) => ({ ...prev, avgRating: nextRating }));
+  }, [customerProfile]);
   
   // Fetch user's trip history
   const fetchTrips = async () => {
@@ -75,43 +94,45 @@ export default function CustomerActivityScreen({ navigation, route }) {
       setLoading(true);
       const userTrips = await getUserPickupRequests();
       
-      // Transform Firebase data to match UI format
-      const transformedTrips = userTrips.map(trip => {
-        const completedAt = trip.completedAt || trip.createdAt;
-        const date = new Date(completedAt);
-        
+      // Transform trip data into stable UI shape
+      const transformedTrips = userTrips.map((trip) => {
+        const completedAt = trip.completedAt || trip.completed_at || null;
+        const createdAt = trip.createdAt || trip.created_at || completedAt;
+        const timestamp = completedAt || createdAt || new Date().toISOString();
+        const date = new Date(timestamp);
+        const amountValue = Number(trip.pricing?.total ?? trip.price ?? 0) || 0;
+        const normalizedStatus = normalizeTripStatus(trip.status);
+
         return {
           id: trip.id,
           date: formatDate(date),
-          pickup: trip.pickup?.address || 'Unknown pickup',
-          dropoff: trip.dropoff?.address || 'Unknown dropoff',
+          pickup: trip.pickup?.address || trip.pickupAddress || 'Unknown pickup',
+          dropoff: trip.dropoff?.address || trip.dropoffAddress || 'Unknown dropoff',
           item: trip.item?.description || 'Package',
-          driver: trip.driverEmail?.split('@')[0] || 'Driver',
+          driver: (trip.assignedDriverEmail || trip.driverEmail || 'Driver').split('@')[0],
           driverRating: 5.0, // Default rating for old data
-          amount: trip.pricing?.total ? `$${trip.pricing.total.toFixed(2)}` : '$0.00',
-          status: trip.status,
-          duration: calculateDuration(trip),
-          distance: trip.vehicle?.distance || 'N/A',
-          vehicleType: trip.vehicle?.type || 'Vehicle',
-          helpProvided: trip.item?.needsHelp || false,
-          completedAt: trip.completedAt,
-          createdAt: trip.createdAt
+          amountValue,
+          amount: `$${amountValue.toFixed(2)}`,
+          status: normalizedStatus,
+          duration: calculateDuration({ createdAt, completedAt }),
+          distance: trip.vehicle?.distance || trip.distance_miles || 'N/A',
+          vehicleType: trip.vehicleType || trip.vehicle?.type || 'Vehicle',
+          helpProvided: trip.item?.needsHelp || trip.needs_help || false,
+          completedAt,
+          createdAt
         };
       });
       
       setTrips(transformedTrips);
       
       // Calculate real statistics
-      const completedTrips = transformedTrips.filter(trip => trip.status === 'completed');
-      const totalSpent = completedTrips.reduce((sum, trip) => {
-        const amount = parseFloat(trip.amount.replace('$', ''));
-        return sum + (isNaN(amount) ? 0 : amount);
-      }, 0);
+      const completedTrips = transformedTrips.filter((trip) => trip.status === TRIP_STATUS.COMPLETED);
+      const totalSpent = completedTrips.reduce((sum, trip) => sum + trip.amountValue, 0);
       
       setStats({
         totalTrips: completedTrips.length,
-        totalSpent: totalSpent,
-        avgRating: customerProfile?.customerProfile?.rating || 5.0
+        totalSpent,
+        avgRating: Number(customerProfile?.customerProfile?.rating || customerProfile?.rating || 5.0)
       });
       
     } catch (error) {
@@ -123,7 +144,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
   useEffect(() => {
     // If we're in an active trip, redirect to DeliveryTrackingScreen
-    if (isActiveTrip && requestId && !['completed', 'cancelled'].includes(status)) {
+    if (hasTripInRoute && !TERMINAL_TRIP_STATUSES.includes(normalizedRouteStatus)) {
       navigation.replace('DeliveryTrackingScreen', {
         requestId,
         requestData: request
@@ -138,7 +159,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
     
     // Fetch trips when component mounts
     fetchTrips();
-  }, [isActiveTrip, requestId, status, navigation, currentUser]);
+  }, [isActiveTrip, hasTripInRoute, normalizedRouteStatus, requestId, request, navigation, currentUser]);
 
   // Helper function to format date
   const formatDate = (date) => {
@@ -185,7 +206,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
   // Filter trips based on selected tab
   const getFilteredTrips = () => {
     if (selectedTab === 'active') {
-      return trips.filter(trip => !['completed', 'cancelled'].includes(trip.status));
+      return trips.filter((trip) => !TERMINAL_TRIP_STATUSES.includes(normalizeTripStatus(trip.status)));
     } else if (selectedTab === 'recent') {
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -200,44 +221,47 @@ export default function CustomerActivityScreen({ navigation, route }) {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#FFA500';
-      case 'accepted': return '#4A90E2';
-      case 'completed': return '#00D4AA';
-      case 'cancelled': return '#ff4444';
-      case 'inProgress': return '#A77BFF';
-      case 'arrivedAtPickup': return '#A77BFF';
-      case 'pickedUp': return '#A77BFF';
-      case 'enRouteToDropoff': return '#A77BFF';
-      case 'arrivedAtDropoff': return '#00D4AA';
-      default: return '#999';
-    }
+    const normalizedStatus = normalizeTripStatus(status);
+    if (normalizedStatus === TRIP_STATUS.PENDING) return colors.warning;
+    if (normalizedStatus === TRIP_STATUS.ACCEPTED) return colors.primary;
+    if (normalizedStatus === TRIP_STATUS.COMPLETED) return colors.success;
+    if (normalizedStatus === TRIP_STATUS.CANCELLED) return colors.error;
+    if (IN_TRANSIT_TRIP_STATUSES.includes(normalizedStatus)) return colors.primary;
+    if (normalizedStatus === TRIP_STATUS.ARRIVED_AT_DROPOFF) return colors.success;
+    return colors.text.muted;
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending': return 'hourglass-outline';
-      case 'accepted': return 'person-add';
-      case 'completed': return 'checkmark-circle';
-      case 'cancelled': return 'close-circle';
-      case 'inProgress': return 'time';
-      case 'arrivedAtPickup': return 'location';
-      case 'pickedUp': return 'bag-check';
-      case 'enRouteToDropoff': return 'car-sport';
-      case 'arrivedAtDropoff': return 'home';
+    const normalizedStatus = normalizeTripStatus(status);
+    switch (normalizedStatus) {
+      case TRIP_STATUS.PENDING: return 'hourglass-outline';
+      case TRIP_STATUS.ACCEPTED: return 'person-add';
+      case TRIP_STATUS.COMPLETED: return 'checkmark-circle';
+      case TRIP_STATUS.CANCELLED: return 'close-circle';
+      case TRIP_STATUS.IN_PROGRESS: return 'time';
+      case TRIP_STATUS.ARRIVED_AT_PICKUP: return 'location';
+      case TRIP_STATUS.PICKED_UP: return 'bag-check';
+      case TRIP_STATUS.EN_ROUTE_TO_DROPOFF: return 'car-sport';
+      case TRIP_STATUS.ARRIVED_AT_DROPOFF: return 'home';
       default: return 'help-circle';
     }
   };
   
   const getStatusText = (status) => {
-    switch (status) {
-      case 'pending': return 'Finding driver';
-      case 'accepted': return 'Driver assigned';
-      case 'arrivedAtPickup': return 'Driver arrived for pickup';
-      case 'pickedUp': return 'Items picked up';
-      case 'enRouteToDropoff': return 'On the way to delivery';
-      case 'arrivedAtDropoff': return 'Driver arrived at delivery';
-      default: return status.charAt(0).toUpperCase() + status.slice(1);
+    const normalizedStatus = normalizeTripStatus(status);
+    switch (normalizedStatus) {
+      case TRIP_STATUS.PENDING: return 'Finding driver';
+      case TRIP_STATUS.ACCEPTED: return 'Driver assigned';
+      case TRIP_STATUS.ARRIVED_AT_PICKUP: return 'Driver arrived for pickup';
+      case TRIP_STATUS.PICKED_UP: return 'Items picked up';
+      case TRIP_STATUS.EN_ROUTE_TO_DROPOFF: return 'On the way to delivery';
+      case TRIP_STATUS.ARRIVED_AT_DROPOFF: return 'Driver arrived at delivery';
+      case TRIP_STATUS.COMPLETED: return 'Completed';
+      case TRIP_STATUS.CANCELLED: return 'Cancelled';
+      default:
+        return typeof normalizedStatus === 'string' && normalizedStatus.length > 0
+          ? normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)
+          : 'Unknown';
     }
   };
 
@@ -280,11 +304,11 @@ export default function CustomerActivityScreen({ navigation, route }) {
       </View>
 
       <View style={styles.itemContainer}>
-        <Ionicons name="cube-outline" size={16} color="#A77BFF" />
+        <Ionicons name="cube-outline" size={16} color={colors.primary} />
         <Text style={styles.itemText}>{trip.item}</Text>
         {trip.helpProvided && (
           <View style={styles.helpBadge}>
-            <Ionicons name="hand-left" size={12} color="#00D4AA" />
+            <Ionicons name="hand-left" size={12} color={colors.success} />
             <Text style={styles.helpText}>Help Provided</Text>
           </View>
         )}
@@ -292,23 +316,23 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
       <View style={styles.tripDetails}>
         <View style={styles.detailItem}>
-          <Ionicons name="person" size={14} color="#999" />
+          <Ionicons name="person" size={14} color={colors.text.muted} />
           <Text style={styles.detailText}>{trip.driver}</Text>
-          <Ionicons name="star" size={12} color="#FFD700" style={{ marginLeft: 4 }} />
+          <Ionicons name="star" size={12} color={colors.warning} style={{ marginLeft: spacing.xs }} />
           <Text style={styles.ratingText}>{trip.driverRating}</Text>
         </View>
         
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="time-outline" size={14} color="#999" />
+            <Ionicons name="time-outline" size={14} color={colors.text.muted} />
             <Text style={styles.detailText}>{trip.duration}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="location-outline" size={14} color="#999" />
+            <Ionicons name="location-outline" size={14} color={colors.text.muted} />
             <Text style={styles.detailText}>{trip.distance}</Text>
           </View>
           <View style={styles.detailItem}>
-            <Ionicons name="car-outline" size={14} color="#999" />
+            <Ionicons name="car-outline" size={14} color={colors.text.muted} />
             <Text style={styles.detailText}>{trip.vehicleType}</Text>
           </View>
         </View>
@@ -316,15 +340,15 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
       <View style={styles.tripActions}>
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="chatbubble-outline" size={16} color="#A77BFF" />
+          <Ionicons name="chatbubble-outline" size={16} color={colors.primary} />
           <Text style={styles.actionText}>Message Driver</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="star-outline" size={16} color="#A77BFF" />
+          <Ionicons name="star-outline" size={16} color={colors.primary} />
           <Text style={styles.actionText}>Rate Trip</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="refresh-outline" size={16} color="#A77BFF" />
+          <Ionicons name="refresh-outline" size={16} color={colors.primary} />
           <Text style={styles.actionText}>Book Again</Text>
         </TouchableOpacity>
       </View>
@@ -334,48 +358,45 @@ export default function CustomerActivityScreen({ navigation, route }) {
   const renderActiveTrip = () => {
     if (!isActiveTrip) return null;
     
-    const isPickupStage = status === 'arrivedAtPickup';
-    const isDeliveryStage = status === 'arrivedAtDropoff';
-    const isEnRoute = status === 'enRouteToDropoff';
+    const isPickupStage = normalizedRouteStatus === TRIP_STATUS.ARRIVED_AT_PICKUP;
+    const isDeliveryStage = normalizedRouteStatus === TRIP_STATUS.ARRIVED_AT_DROPOFF;
+    const isEnRoute = normalizedRouteStatus === TRIP_STATUS.EN_ROUTE_TO_DROPOFF;
+    const driverLatitude = Number(driverLocation?.latitude);
+    const driverLongitude = Number(driverLocation?.longitude);
+    const hasDriverLocation = Number.isFinite(driverLatitude) && Number.isFinite(driverLongitude);
     
     return (
       <View style={styles.activeTripContainer}>
         <View style={styles.activeTripHeader}>
           <View style={styles.tripStatusContainer}>
             <Ionicons 
-              name={getStatusIcon(status)} 
+              name={getStatusIcon(normalizedRouteStatus)} 
               size={20} 
-              color={getStatusColor(status)} 
+              color={getStatusColor(normalizedRouteStatus)} 
             />
-            <Text style={[styles.activeTripStatus, { color: getStatusColor(status) }]}>
-              {getStatusText(status)}
+            <Text style={[styles.activeTripStatus, { color: getStatusColor(normalizedRouteStatus) }]}>
+              {getStatusText(normalizedRouteStatus)}
             </Text>
           </View>
         </View>
         
-        {isEnRoute && driverLocation && (
+        {isEnRoute && hasDriverLocation && (
           <View style={styles.mapContainer}>
-            <MapView
+            <MapboxMap
               style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              initialRegion={{
-                latitude: driverLocation.latitude,
-                longitude: driverLocation.longitude,
-                latitudeDelta: 0.05,
-                longitudeDelta: 0.05,
-              }}
+              centerCoordinate={[driverLongitude, driverLatitude]}
+              zoomLevel={14}
+              customMapStyle={Mapbox.StyleURL.Dark}
             >
-              {driverLocation && (
-                <Marker
-                  coordinate={driverLocation}
-                  title="Driver Location"
-                >
+              <Mapbox.PointAnnotation
+                id="activity-driver-location"
+                coordinate={[driverLongitude, driverLatitude]}
+              >
                   <View style={styles.driverMarker}>
-                    <Ionicons name="car-sport" size={16} color="#fff" />
+                    <Ionicons name="car-sport" size={16} color={colors.white} />
                   </View>
-                </Marker>
-              )}
-            </MapView>
+              </Mapbox.PointAnnotation>
+            </MapboxMap>
           </View>
         )}
         
@@ -385,7 +406,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
               <View style={styles.pickupDot} />
               <View style={styles.addressContainer}>
                 <Text style={styles.addressLabel}>Pickup</Text>
-                <Text style={styles.addressText}>{request?.pickup?.address || '123 Main Street'}</Text>
+                <Text style={styles.addressText}>{request?.pickup?.address || request?.pickupAddress || '123 Main Street'}</Text>
               </View>
             </View>
             
@@ -395,27 +416,27 @@ export default function CustomerActivityScreen({ navigation, route }) {
               <View style={[styles.dropoffDot, isDeliveryStage ? styles.activeDropoffDot : {}]} />
               <View style={styles.addressContainer}>
                 <Text style={styles.addressLabel}>Drop-off</Text>
-                <Text style={styles.addressText}>{request?.dropoff?.address || '456 Oak Avenue'}</Text>
+                <Text style={styles.addressText}>{request?.dropoff?.address || request?.dropoffAddress || '456 Oak Avenue'}</Text>
               </View>
             </View>
           </View>
           
           <View style={styles.driverInfoContainer}>
             <View style={styles.driverAvatarContainer}>
-              <Ionicons name="person" size={24} color="#fff" />
+              <Ionicons name="person" size={24} color={colors.white} />
             </View>
             <View style={styles.driverInfo}>
               <Text style={styles.driverName}>{request?.driver?.name || 'Your Driver'}</Text>
               <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={14} color="#FFD700" />
+                <Ionicons name="star" size={14} color={colors.warning} />
                 <Text style={styles.driverRatingText}>{driverProfile?.driverProfile?.rating || '5.0'}</Text>
               </View>
             </View>
             <TouchableOpacity style={styles.contactButton}>
-              <Ionicons name="call" size={20} color="#A77BFF" />
+              <Ionicons name="call" size={20} color={colors.primary} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.contactButton}>
-              <Ionicons name="chatbubble" size={20} color="#A77BFF" />
+              <Ionicons name="chatbubble" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
           
@@ -451,17 +472,17 @@ export default function CustomerActivityScreen({ navigation, route }) {
       {!isActiveTrip && (
         <View style={[styles.summaryContainer, { paddingTop: insets.top + 10 }]}>
           <View style={styles.statCard}>
-            <Ionicons name="trending-up" size={16} color="#00D4AA" />
+            <Ionicons name="trending-up" size={16} color={colors.success} />
             <Text style={styles.statNumber}>{stats.totalTrips}</Text>
             <Text style={styles.statLabel}>Trips</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="wallet" size={16} color="#A77BFF" />
+            <Ionicons name="wallet" size={16} color={colors.primary} />
             <Text style={styles.statNumber}>${stats.totalSpent.toFixed(0)}</Text>
             <Text style={styles.statLabel}>Spent</Text>
           </View>
           <View style={styles.statCard}>
-            <Ionicons name="star" size={16} color="#FFD700" />
+            <Ionicons name="star" size={16} color={colors.gold} />
             <Text style={styles.statNumber}>{stats.avgRating.toFixed(1)}</Text>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
@@ -474,7 +495,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
           renderActiveTrip()
         ) : loading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#A77BFF" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading your trips...</Text>
           </View>
         ) : getFilteredTrips().length > 0 ? (
@@ -484,7 +505,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
           </ScrollView>
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="cube-outline" size={60} color="#666" />
+            <Ionicons name="cube-outline" size={60} color={colors.text.subtle} />
             <Text style={styles.emptyTitle}>No trips found</Text>
             <Text style={styles.emptyText}>
               {selectedTab === 'recent' ? 'No recent trips to show' :
@@ -540,81 +561,81 @@ export default function CustomerActivityScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   summaryContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    gap: 12,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.md,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#141426',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   statNumber: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
   },
   statLabel: {
-    color: '#999',
-    fontSize: 11,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
   },
   bottomControlsContainer: {
-    backgroundColor: '#0A0A1F',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#141426',
-    marginTop: 12,
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: colors.background.secondary,
+    marginTop: spacing.md,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
   },
   tabText: {
-    color: '#999',
-    fontSize: 14,
-    fontWeight: '500',
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   activeTabText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: colors.white,
+    fontWeight: typography.fontWeight.semibold,
   },
   listContainer: {
     flex: 1,
   },
   scrollView: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   tripCard: {
-    backgroundColor: '#141426',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tripHeader: {
     flexDirection: 'row',
@@ -627,17 +648,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tripStatus: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm - 2,
   },
   tripAmount: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: colors.white,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
   tripDate: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 13,
     marginBottom: 16,
   },
@@ -653,7 +674,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     marginTop: 6,
     marginRight: 12,
   },
@@ -661,7 +682,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     marginTop: 6,
     marginRight: 12,
   },
@@ -675,53 +696,53 @@ const styles = StyleSheet.create({
   routeLine: {
     width: 2,
     height: 20,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     marginLeft: 3,
     marginVertical: 2,
   },
   activeRouteLine: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
   },
   addressContainer: {
     flex: 1,
   },
   addressLabel: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginBottom: 2,
   },
   addressText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   itemText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.sm,
     flex: 1,
   },
   helpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A3A2E',
+    backgroundColor: colors.background.successSubtle,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   helpText: {
-    color: '#00D4AA',
-    fontSize: 10,
-    fontWeight: '600',
+    color: colors.success,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
     marginLeft: 4,
   },
   tripDetails: {
@@ -737,12 +758,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailText: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginLeft: 4,
   },
   ratingText: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginLeft: 2,
   },
@@ -750,21 +771,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.strong,
     paddingTop: 16,
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
   },
   actionText: {
-    color: '#A77BFF',
-    fontSize: 12,
-    fontWeight: '500',
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
     marginLeft: 6,
   },
   bottomSpacing: {
@@ -774,56 +795,56 @@ const styles = StyleSheet.create({
   // Active trip styles
   activeTripContainer: {
     flex: 1,
-    padding: 20,
+    padding: spacing.lg,
   },
   activeTripHeader: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   activeTripStatus: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 8,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    marginLeft: spacing.sm,
   },
   mapContainer: {
     height: 200,
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   map: {
     width: '100%',
     height: '100%',
   },
   driverMarker: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     width: 36,
     height: 36,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   activeTripDetails: {
-    backgroundColor: '#141426',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   driverInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1A3A',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    backgroundColor: colors.background.elevated,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginBottom: spacing.lg,
   },
   driverAvatarContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -832,9 +853,9 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   driverName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -842,28 +863,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   driverRatingText: {
-    color: '#FFD700',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.gold,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
     marginLeft: 4,
   },
   contactButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
+    backgroundColor: colors.overlayPrimarySoft,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
   },
   photosContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   photosTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
   },
   photosScroll: {
     flexDirection: 'row',
@@ -881,15 +902,15 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   feedbackButton: {
-    backgroundColor: '#A77BFF',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.base,
     alignItems: 'center',
   },
   feedbackButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   
   // Loading and empty states
@@ -900,9 +921,9 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   loadingText: {
-    color: '#999',
-    fontSize: 16,
-    marginTop: 16,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.base,
   },
   emptyContainer: {
     flex: 1,
@@ -911,28 +932,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 8,
+    color: colors.white,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   emptyText: {
-    color: '#999',
-    fontSize: 16,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.md,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: typography.fontSize.md * typography.lineHeight.normal,
     marginBottom: 30,
   },
   emptyButton: {
-    backgroundColor: '#A77BFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
   },
   emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
 });

@@ -83,7 +83,7 @@
 - [x] #28 Insurance logic: New = auto-insured, Used = disclaimer
 - [x] #30 Enlarge Description field
 
-### Customer Flow - Step 4: Summary
+### Milestone 2 Deliverables
 - [x] #36 Tap on summary item jumps to that step
 - [x] #37 Fix button container overflow
 - [x] #38 Handle unavailable insurance state

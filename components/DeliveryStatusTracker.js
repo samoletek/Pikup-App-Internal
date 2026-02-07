@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import DeliveryPhotosModal from './DeliveryPhotosModal';
+import { TRIP_STATUS } from '../constants/tripStatus';
 
 const { width } = Dimensions.get('window');
 
@@ -32,13 +33,13 @@ export default function DeliveryStatusTracker({
 
   // Status steps in order with modern labels
   const statusSteps = [
-    { key: 'accepted', label: 'Driver Confirmed', icon: 'checkmark-circle', description: 'Driver is preparing for your pickup' },
-    { key: 'inProgress', label: 'On the way to you', icon: 'car-sport', description: 'Driver is heading to your location' },
-    { key: 'arrivedAtPickup', label: 'Driver arrived', icon: 'location', description: 'Driver has arrived at pickup location' },
-    { key: 'pickedUp', label: 'Package collected', icon: 'cube', description: 'Your items are secured for transport' },
-    { key: 'enRouteToDropoff', label: 'On the way to destination', icon: 'navigate', description: 'Your package is in transit' },
-    { key: 'arrivedAtDropoff', label: 'Arrived at destination', icon: 'home', description: 'Driver has arrived at delivery location' },
-    { key: 'completed', label: 'Delivered', icon: 'checkmark-circle', description: 'Your delivery is complete' },
+    { key: TRIP_STATUS.ACCEPTED, label: 'Driver Confirmed', icon: 'checkmark-circle', description: 'Driver is preparing for your pickup' },
+    { key: TRIP_STATUS.IN_PROGRESS, label: 'On the way to you', icon: 'car-sport', description: 'Driver is heading to your location' },
+    { key: TRIP_STATUS.ARRIVED_AT_PICKUP, label: 'Driver arrived', icon: 'location', description: 'Driver has arrived at pickup location' },
+    { key: TRIP_STATUS.PICKED_UP, label: 'Package collected', icon: 'cube', description: 'Your items are secured for transport' },
+    { key: TRIP_STATUS.EN_ROUTE_TO_DROPOFF, label: 'On the way to destination', icon: 'navigate', description: 'Your package is in transit' },
+    { key: TRIP_STATUS.ARRIVED_AT_DROPOFF, label: 'Arrived at destination', icon: 'home', description: 'Driver has arrived at delivery location' },
+    { key: TRIP_STATUS.COMPLETED, label: 'Delivered', icon: 'checkmark-circle', description: 'Your delivery is complete' },
   ];
 
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function DeliveryStatusTracker({
 
   // When delivery is completed, notify parent component
   useEffect(() => {
-    if (requestData && requestData.status === 'completed' && onDeliveryComplete) {
+    if (requestData && requestData.status === TRIP_STATUS.COMPLETED && onDeliveryComplete) {
       onDeliveryComplete(requestData);
 
       // Stop polling when delivery is complete

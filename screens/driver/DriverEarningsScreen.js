@@ -11,12 +11,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
+import { TRIP_STATUS } from '../../constants/tripStatus';
+import { colors } from '../../styles/theme';
 
 const { width } = Dimensions.get('window');
 
 export default function DriverEarningsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { currentUser, getDriverTrips, getDriverStats, processInstantPayout, getDriverProfile } = useAuth();
+  const currentUserId = currentUser?.id || currentUser?.uid;
   
   const [selectedPeriod, setSelectedPeriod] = useState('week');
   const [weeklyData, setWeeklyData] = useState([]);
@@ -32,17 +35,21 @@ export default function DriverEarningsScreen({ navigation }) {
   const [driverProfile, setDriverProfile] = useState(null);
 
   useEffect(() => {
-    loadDriverData();
-  }, []);
+    if (currentUserId) {
+      loadDriverData();
+    } else {
+      setLoading(false);
+    }
+  }, [currentUserId]);
 
   const loadDriverData = async () => {
     try {
       setLoading(true);
       
       // Get driver's completed trips
-      const trips = await getDriverTrips?.(currentUser?.uid) || [];
-      const stats = await getDriverStats?.(currentUser?.uid) || {};
-      const profile = await getDriverProfile?.(currentUser?.uid) || {};
+      const trips = await getDriverTrips?.(currentUserId) || [];
+      const stats = await getDriverStats?.(currentUserId) || {};
+      const profile = await getDriverProfile?.(currentUserId) || {};
       
       setDriverTrips(trips);
       setDriverProfile(profile);
@@ -117,7 +124,7 @@ export default function DriverEarningsScreen({ navigation }) {
   const getRecentTrips = () => {
     // Get last 4 completed trips
     return driverTrips
-      .filter(trip => trip.status === 'completed')
+      .filter((trip) => trip.status === TRIP_STATUS.COMPLETED)
       .sort((a, b) => new Date(b.completedAt || b.timestamp) - new Date(a.completedAt || a.timestamp))
       .slice(0, 4)
       .map(trip => ({
@@ -202,7 +209,7 @@ export default function DriverEarningsScreen({ navigation }) {
           onPress: async () => {
             setPayoutLoading(true);
             try {
-              const result = await processInstantPayout?.(currentUser?.uid, driverStats.availableBalance);
+              const result = await processInstantPayout?.(currentUserId, driverStats.availableBalance);
               if (result?.success) {
                 Alert.alert('Success', 'Your payout has been processed successfully!');
                 // Refresh driver data to show updated balance
@@ -248,11 +255,11 @@ export default function DriverEarningsScreen({ navigation }) {
                     styles.bar, 
                     { 
                       height: Math.max((day.trips / maxTrips) * 60, 4),
-                      backgroundColor: day.trips > 0 ? '#00D4AA' : '#2A2A3B'
+                      backgroundColor: day.trips > 0 ? colors.success : colors.border.strong
                     }
                   ]} 
                 />
-                <Text style={[styles.barValue, { color: day.trips > 0 ? '#fff' : '#666' }]}>
+                <Text style={[styles.barValue, { color: day.trips > 0 ? colors.white : colors.text.subtle }]}>
                   {day.trips}
                 </Text>
               </View>
@@ -262,7 +269,7 @@ export default function DriverEarningsScreen({ navigation }) {
         </View>
         <View style={styles.chartLegend}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: '#00D4AA' }]} />
+            <View style={[styles.legendColor, { backgroundColor: colors.success }]} />
             <Text style={styles.legendText}>Daily Trips</Text>
           </View>
         </View>
@@ -279,11 +286,11 @@ export default function DriverEarningsScreen({ navigation }) {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Earnings</Text>
           <TouchableOpacity style={styles.statsButton}>
-            <Ionicons name="stats-chart" size={24} color="#00D4AA" />
+            <Ionicons name="stats-chart" size={24} color={colors.success} />
           </TouchableOpacity>
         </View>
 
@@ -314,7 +321,7 @@ export default function DriverEarningsScreen({ navigation }) {
               ${loading ? '---' : totalWeeklyEarnings.toFixed(2)}
             </Text>
             <TouchableOpacity style={styles.earningsInfo} onPress={loadDriverData}>
-              <Ionicons name={loading ? "refresh" : "information-circle-outline"} size={20} color="#666" />
+              <Ionicons name={loading ? "refresh" : "information-circle-outline"} size={20} color={colors.text.subtle} />
             </TouchableOpacity>
           </View>
           <Text style={styles.earningsSubtitle}>
@@ -329,7 +336,7 @@ export default function DriverEarningsScreen({ navigation }) {
         <View style={styles.milestoneCard}>
           <View style={styles.milestoneHeader}>
             <View style={styles.milestoneLeft}>
-              <Ionicons name="trophy" size={24} color="#A77BFF" />
+              <Ionicons name="trophy" size={24} color={colors.primary} />
               <View style={styles.milestoneText}>
                 <Text style={styles.milestoneTitle}>Weekly Milestone</Text>
                 <Text style={styles.milestoneSubtitle}>
@@ -363,11 +370,11 @@ export default function DriverEarningsScreen({ navigation }) {
         <View style={styles.payoutCard}>
           <View style={styles.payoutHeader}>
             <View style={styles.payoutLeft}>
-              <Ionicons name="card" size={20} color="#00D4AA" />
+              <Ionicons name="card" size={20} color={colors.success} />
               <Text style={styles.payoutTitle}>PikUp Payout Account</Text>
             </View>
             <TouchableOpacity>
-              <Ionicons name="chevron-forward" size={20} color="#666" />
+              <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
             </TouchableOpacity>
           </View>
           <Text style={styles.payoutBalance}>
@@ -384,7 +391,7 @@ export default function DriverEarningsScreen({ navigation }) {
             onPress={handleInstantPayout}
             disabled={loading || payoutLoading || driverStats.availableBalance <= 0 || !driverProfile?.connectAccountId || !driverProfile?.canReceivePayments}
           >
-            <Ionicons name="flash" size={16} color="#fff" />
+            <Ionicons name="flash" size={16} color={colors.white} />
             <Text style={styles.instantPayoutText}>
               {payoutLoading 
                 ? 'Processing...' 
@@ -420,23 +427,23 @@ export default function DriverEarningsScreen({ navigation }) {
               
               <View style={styles.tripRoute}>
                 <View style={styles.routePoint}>
-                  <Ionicons name="radio-button-on" size={10} color="#00D4AA" />
+                  <Ionicons name="radio-button-on" size={10} color={colors.success} />
                   <Text style={styles.routeText}>{trip.pickup}</Text>
                 </View>
                 <View style={styles.routeLine} />
                 <View style={styles.routePoint}>
-                  <Ionicons name="location" size={10} color="#A77BFF" />
+                  <Ionicons name="location" size={10} color={colors.primary} />
                   <Text style={styles.routeText}>{trip.dropoff}</Text>
                 </View>
               </View>
 
               <View style={styles.tripStats}>
                 <View style={styles.statItem}>
-                  <Ionicons name="car" size={12} color="#666" />
+                  <Ionicons name="car" size={12} color={colors.text.subtle} />
                   <Text style={styles.statText}>{trip.distance}</Text>
                 </View>
                 <View style={styles.statItem}>
-                  <Ionicons name="time" size={12} color="#666" />
+                  <Ionicons name="time" size={12} color={colors.text.subtle} />
                   <Text style={styles.statText}>{trip.duration}</Text>
                 </View>
               </View>
@@ -453,7 +460,7 @@ export default function DriverEarningsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
@@ -464,7 +471,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 15,
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   backButton: {
     width: 40,
@@ -473,7 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -485,13 +492,13 @@ const styles = StyleSheet.create({
   },
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     marginHorizontal: 20,
     marginVertical: 15,
     borderRadius: 12,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   periodButton: {
     flex: 1,
@@ -500,25 +507,25 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   periodButtonActive: {
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
   },
   periodText: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 14,
     fontWeight: '500',
   },
   periodTextActive: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: '600',
   },
   earningsCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     marginHorizontal: 20,
     marginBottom: 15,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   earningsHeader: {
     flexDirection: 'row',
@@ -529,28 +536,28 @@ const styles = StyleSheet.create({
   earningsAmount: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
   },
   earningsInfo: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
   earningsSubtitle: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   milestoneCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     marginHorizontal: 20,
     marginBottom: 15,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   milestoneHeader: {
     flexDirection: 'row',
@@ -570,17 +577,17 @@ const styles = StyleSheet.create({
   milestoneTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 2,
   },
   milestoneSubtitle: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   milestoneCount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#A77BFF',
+    color: colors.primary,
   },
   progressContainer: {
     flexDirection: 'row',
@@ -589,30 +596,30 @@ const styles = StyleSheet.create({
   progressBar: {
     flex: 1,
     height: 8,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     borderRadius: 4,
     overflow: 'hidden',
     marginRight: 12,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderRadius: 4,
   },
   progressText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#A77BFF',
+    color: colors.primary,
     minWidth: 40,
   },
   payoutCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     marginHorizontal: 20,
     marginBottom: 15,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   payoutHeader: {
     flexDirection: 'row',
@@ -627,58 +634,58 @@ const styles = StyleSheet.create({
   payoutTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginLeft: 8,
   },
   payoutBalance: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#00D4AA',
+    color: colors.success,
     marginBottom: 4,
   },
   payoutNote: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
     marginBottom: 16,
   },
   instantPayoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
   },
   instantPayoutButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: colors.text.subtle,
     shadowOpacity: 0,
     elevation: 0,
   },
   instantPayoutText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
   },
   chartContainer: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     marginHorizontal: 20,
     marginBottom: 15,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   chartTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 20,
   },
   chartWrapper: {
@@ -700,18 +707,18 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 20,
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     borderRadius: 4,
     marginBottom: 4,
   },
   barValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   barLabel: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   chartLegend: {
     flexDirection: 'row',
@@ -730,7 +737,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   loadingChart: {
     height: 80,
@@ -739,7 +746,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   loadingText: {
-    color: '#666',
+    color: colors.text.subtle,
     fontSize: 14,
   },
   historySection: {
@@ -755,20 +762,20 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   viewAllText: {
     fontSize: 14,
-    color: '#00D4AA',
+    color: colors.success,
     fontWeight: '500',
   },
   tripCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tripHeader: {
     flexDirection: 'row',
@@ -782,17 +789,17 @@ const styles = StyleSheet.create({
   tripDate: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 2,
   },
   tripTime: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   tripAmount: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#00D4AA',
+    color: colors.success,
   },
   tripRoute: {
     marginBottom: 12,
@@ -804,13 +811,13 @@ const styles = StyleSheet.create({
   },
   routeText: {
     fontSize: 14,
-    color: '#eee',
+    color: colors.text.secondary,
     marginLeft: 8,
   },
   routeLine: {
     width: 1,
     height: 12,
-    backgroundColor: '#666',
+    backgroundColor: colors.text.subtle,
     marginLeft: 5,
     marginVertical: 2,
   },
@@ -824,7 +831,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
     marginLeft: 4,
   },
   bottomSpacing: {

@@ -25,6 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import useMapboxNavigation from '../../components/mapbox/useMapboxNavigation';
+import { TRIP_STATUS } from '../../constants/tripStatus';
 
 const { width, height } = Dimensions.get('window');
 
@@ -431,7 +432,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const updateDriverLocationInDB = async (location) => {
     try {
       if (request?.id) {
-        await updateDriverStatus(request.id, 'enRouteToDropoff', location);
+        await updateDriverStatus(request.id, TRIP_STATUS.EN_ROUTE_TO_DROPOFF, location);
       }
     } catch (error) {
       console.error('Error updating driver location:', error);

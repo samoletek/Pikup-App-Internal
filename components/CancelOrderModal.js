@@ -11,6 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import BaseModal from './BaseModal';
+import { colors } from '../styles/theme';
+import { TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -23,6 +25,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
   }
 
   const cancellationInfo = getCancellationInfo(orderData);
+  const normalizedStatus = normalizeTripStatus(orderData.status);
 
   const handleCancel = async () => {
     try {
@@ -69,7 +72,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
     <View style={styles.header}>
       <Text style={styles.title}>Cancel Order</Text>
       <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-        <Ionicons name="close" size={24} color="#fff" />
+        <Ionicons name="close" size={24} color={colors.white} />
       </TouchableOpacity>
     </View>
   );
@@ -79,10 +82,10 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
       visible={visible}
       onClose={onClose}
       height={SCREEN_HEIGHT * 0.8}
-      backgroundColor="#141426"
+      backgroundColor={colors.background.secondary}
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: '#2A2A3B' }}
+      handleStyle={{ backgroundColor: colors.border.strong }}
     >
       {() => (
         <View style={styles.content}>
@@ -94,24 +97,24 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
                   <Text style={styles.orderTitle}>Order Details</Text>
                   <View style={[
                     styles.statusBadge,
-                    { backgroundColor: orderData.status === 'completed' ? 'rgba(0, 212, 170, 0.2)' : 'rgba(167, 123, 255, 0.2)' }
+                    { backgroundColor: normalizedStatus === TRIP_STATUS.COMPLETED ? colors.successLight : colors.primaryLight }
                   ]}>
                     <Text style={[
                       styles.statusText,
-                      { color: orderData.status === 'completed' ? '#00D4AA' : '#A77BFF' }
+                      { color: normalizedStatus === TRIP_STATUS.COMPLETED ? colors.success : colors.primary }
                     ]}>{orderData.status}</Text>
                   </View>
                 </View>
 
                 <View style={styles.routeContainer}>
-                  <Ionicons name="ellipse" size={10} color="#00D4AA" style={{ marginRight: 8 }} />
+                  <Ionicons name="ellipse" size={10} color={colors.success} style={{ marginRight: 8 }} />
                   <Text style={styles.orderRoute} numberOfLines={1}>
                     {orderData.pickup?.address || "Pickup"}
                   </Text>
                 </View>
                 <View style={styles.routeLine} />
                 <View style={styles.routeContainer}>
-                  <Ionicons name="location" size={12} color="#A77BFF" style={{ marginRight: 6 }} />
+                  <Ionicons name="location" size={12} color={colors.primary} style={{ marginRight: 6 }} />
                   <Text style={styles.orderRoute} numberOfLines={1}>
                     {orderData.dropoff?.address || "Dropoff"}
                   </Text>
@@ -120,7 +123,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
 
               {/* Warning Message */}
               <View style={styles.warningContainer}>
-                <Ionicons name="warning" size={24} color="#FF9500" />
+                <Ionicons name="warning" size={24} color={colors.warning} />
                 <Text style={styles.warningText}>
                   Are you sure you want to cancel this order?
                 </Text>
@@ -133,7 +136,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
                 {cancellationInfo.fee > 0 && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Cancellation Fee</Text>
-                    <Text style={[styles.detailValue, { color: '#FF6B6B' }]}>
+                    <Text style={[styles.detailValue, { color: colors.error }]}>
                       -${cancellationInfo.fee.toFixed(2)}
                     </Text>
                   </View>
@@ -142,7 +145,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
                 {cancellationInfo.driverCompensation > 0 && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Driver Fee</Text>
-                    <Text style={[styles.detailValue, { color: '#FF6B6B' }]}>
+                    <Text style={[styles.detailValue, { color: colors.error }]}>
                       -${cancellationInfo.driverCompensation.toFixed(2)}
                     </Text>
                   </View>
@@ -178,7 +181,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
                   disabled={loading}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={colors.white} />
                   ) : (
                     <Text style={styles.cancelButtonText}>Confirm Cancel</Text>
                   )}
@@ -189,7 +192,7 @@ const CancelOrderModal = ({ visible, onClose, onCancelSuccess, orderData, orderI
             <View style={styles.centerContent}>
               {/* Cannot Cancel */}
               <View style={styles.noCancelIcon}>
-                <Ionicons name="close-circle" size={64} color="#FF6B6B" />
+                <Ionicons name="close-circle" size={64} color={colors.error} />
               </View>
               <Text style={styles.noCancelTitle}>Cancellation Unavailable</Text>
               <Text style={styles.noCancelMessage}>
@@ -219,7 +222,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -237,12 +240,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   orderInfo: {
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     padding: 16,
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   row: {
     flexDirection: 'row',
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   orderTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -272,27 +275,27 @@ const styles = StyleSheet.create({
   routeLine: {
     height: 12,
     width: 1,
-    backgroundColor: '#333',
+    backgroundColor: colors.border.default,
     marginLeft: 4.5, // Center with dot (10px -> center 5)
     marginVertical: 2,
   },
   orderRoute: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 14,
     flex: 1,
   },
   warningContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 149, 0, 0.1)',
+    backgroundColor: colors.warningLight,
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 149, 0, 0.3)',
+    borderColor: colors.warning,
   },
   warningText: {
-    color: '#FF9500',
+    color: colors.warning,
     fontSize: 15,
     fontWeight: '500',
     marginLeft: 12,
@@ -300,13 +303,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   detailsContainer: {
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     padding: 20,
     borderRadius: 16,
     marginBottom: 24,
   },
   detailsTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 16,
@@ -321,28 +324,28 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.strong,
   },
   detailLabel: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 14,
   },
   detailValue: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
   },
   totalLabel: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
   totalValue: {
-    color: '#00D4AA',
+    color: colors.success,
     fontSize: 18,
     fontWeight: 'bold',
   },
   reasonText: {
-    color: '#666',
+    color: colors.text.subtle,
     fontSize: 12,
     marginTop: 12,
     fontStyle: 'italic',
@@ -360,31 +363,31 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: colors.border.light,
   },
   keepButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#FF4444',
+    backgroundColor: colors.error,
     padding: 16,
     borderRadius: 30,
     alignItems: 'center',
-    shadowColor: "#FF4444",
+    shadowColor: colors.error,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   cancelButtonDisabled: {
-    backgroundColor: '#552222',
+    backgroundColor: colors.errorLight,
     opacity: 0.7,
   },
   cancelButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -393,20 +396,20 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   noCancelTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 12,
   },
   noCancelMessage: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 30,
   },
   okButton: {
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     paddingVertical: 16,
     paddingHorizontal: 40,
     borderRadius: 30,
@@ -414,7 +417,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   okButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },

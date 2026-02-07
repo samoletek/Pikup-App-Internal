@@ -18,6 +18,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
+import { colors } from '../../styles/theme';
 
 export default function CustomerClaimsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -103,7 +105,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 
       const tripsWithInsurance = requests
         .filter(request =>
-          request.status === 'completed' &&
+          normalizeTripStatus(request.status) === TRIP_STATUS.COMPLETED &&
           request.insurance &&
           request.insurance.included &&
           request.insurance.bookingId // Must have actual insurance booking ID
@@ -192,11 +194,11 @@ export default function CustomerClaimsScreen({ navigation }) {
 
   const getClaimStatusColor = (status) => {
     switch (status) {
-      case 'filed': return '#A77BFF';
-      case 'processing': return '#FFB347';
-      case 'review': return '#4A90E2';
-      case 'completed': return '#00D4AA';
-      default: return '#999';
+      case 'filed': return colors.primary;
+      case 'processing': return colors.warning;
+      case 'review': return colors.info;
+      case 'completed': return colors.success;
+      default: return colors.text.tertiary;
     }
   };
 
@@ -351,8 +353,9 @@ export default function CustomerClaimsScreen({ navigation }) {
   };
 
   const renderClaimItem = ({ item }) => {
-    const statusText = getClaimStatusText(item.status);
-    const statusColor = getClaimStatusColor(item.status);
+    const claimStatus = getClaimStatus(item);
+    const statusText = getClaimStatusText(claimStatus);
+    const statusColor = getClaimStatusColor(claimStatus);
 
     return (
       <View style={styles.claimCard}>
@@ -380,17 +383,17 @@ export default function CustomerClaimsScreen({ navigation }) {
           <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
         </View>
 
-        {item.status === 'completed' && (
+        {claimStatus === 'completed' && (
           <View style={styles.resolutionContainer}>
             <Text style={styles.resolutionLabel}>Resolution:</Text>
-            <Text style={styles.resolutionText}>{item.resolution}</Text>
+            <Text style={styles.resolutionText}>{getResolutionText(item)}</Text>
             <Text style={styles.completedDate}>Completed on {item.completedDate}</Text>
           </View>
         )}
 
         <TouchableOpacity style={styles.viewDetailsButton}>
           <Text style={styles.viewDetailsText}>View Details</Text>
-          <Ionicons name="chevron-forward" size={16} color="#A77BFF" />
+          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
         </TouchableOpacity>
       </View>
     );
@@ -408,19 +411,19 @@ export default function CustomerClaimsScreen({ navigation }) {
 
       <View style={styles.tripDetails}>
         <View style={styles.tripLocationContainer}>
-          <Ionicons name="location" size={16} color="#A77BFF" />
+          <Ionicons name="location" size={16} color={colors.primary} />
           <View style={styles.tripLocations}>
             <Text style={styles.tripLocation}>{item.pickup} → {item.dropoff}</Text>
           </View>
         </View>
 
         <View style={styles.tripItemContainer}>
-          <Ionicons name="cube-outline" size={16} color="#A77BFF" />
+          <Ionicons name="cube-outline" size={16} color={colors.primary} />
           <Text style={styles.tripItemText}>{item.item}</Text>
         </View>
 
         <View style={styles.insuranceContainer}>
-          <Ionicons name="shield-checkmark" size={16} color="#00D4AA" />
+          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
           <Text style={styles.insuranceText}>
             Insured up to ${item.insuranceValue?.toLocaleString()}
           </Text>
@@ -435,7 +438,7 @@ export default function CustomerClaimsScreen({ navigation }) {
         <Ionicons
           name={item.type.startsWith('image/') ? 'image' : 'document'}
           size={20}
-          color="#A77BFF"
+          color={colors.primary}
         />
         <Text style={styles.documentName}>{item.name}</Text>
       </View>
@@ -443,7 +446,7 @@ export default function CustomerClaimsScreen({ navigation }) {
         style={styles.removeDocumentButton}
         onPress={() => removeDocument(item.id)}
       >
-        <Ionicons name="close-circle" size={20} color="#FF6B6B" />
+        <Ionicons name="close-circle" size={20} color={colors.error} />
       </TouchableOpacity>
     </View>
   );
@@ -452,7 +455,7 @@ export default function CustomerClaimsScreen({ navigation }) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#A77BFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading claims...</Text>
         </View>
       </View>
@@ -467,25 +470,25 @@ export default function CustomerClaimsScreen({ navigation }) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Claims</Text>
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={loadClaimsData}
         >
-          <Ionicons name="refresh" size={24} color="#fff" />
+          <Ionicons name="refresh" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
       {/* Insurance Banner */}
       <View style={styles.insuranceBanner}>
         <View style={styles.insuranceIcon}>
-          <Ionicons name="shield-checkmark" size={24} color="#A77BFF" />
+          <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
         </View>
         <View style={styles.insuranceContent}>
           <Text style={styles.insuranceTitle}>Redkik Insurance</Text>
-          <Text style={styles.insuranceText}>
+          <Text style={styles.insuranceBannerText}>
             File claims for insured deliveries through our secure portal
           </Text>
         </View>
@@ -523,7 +526,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             onRefresh={loadClaimsData}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="document-text-outline" size={48} color="#666" />
+                <Ionicons name="document-text-outline" size={48} color={colors.text.subtle} />
                 <Text style={styles.emptyStateText}>
                   {activeTab === 'ongoing'
                     ? 'No ongoing claims'
@@ -542,7 +545,7 @@ export default function CustomerClaimsScreen({ navigation }) {
               style={styles.startClaimButton}
               onPress={handleStartClaim}
             >
-              <Ionicons name="add-circle" size={20} color="#fff" />
+              <Ionicons name="add-circle" size={20} color={colors.white} />
               <Text style={styles.startClaimText}>File New Claim</Text>
             </TouchableOpacity>
           )}
@@ -555,7 +558,7 @@ export default function CustomerClaimsScreen({ navigation }) {
               style={styles.closeButton}
               onPress={() => setShowPastTrips(false)}
             >
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
 
@@ -566,7 +569,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             contentContainerStyle={styles.tripsList}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="shield-outline" size={48} color="#666" />
+                <Ionicons name="shield-outline" size={48} color={colors.text.subtle} />
                 <Text style={styles.emptyStateText}>No insured deliveries found</Text>
                 <Text style={styles.emptyStateSubtext}>
                   Only deliveries with insurance coverage can have claims filed
@@ -592,7 +595,7 @@ export default function CustomerClaimsScreen({ navigation }) {
                 style={styles.modalCloseButton}
                 onPress={() => setModalVisible(false)}
               >
-                <Ionicons name="close" size={24} color="#666" />
+                <Ionicons name="close" size={24} color={colors.text.subtle} />
               </TouchableOpacity>
             </View>
 
@@ -602,13 +605,13 @@ export default function CustomerClaimsScreen({ navigation }) {
                 <Text style={styles.tripSummaryDate}>{selectedTrip?.date}</Text>
                 <Text style={styles.tripSummaryItem}>{selectedTrip?.item}</Text>
                 <View style={styles.tripSummaryRoute}>
-                  <Ionicons name="location-outline" size={16} color="#A77BFF" />
+                  <Ionicons name="location-outline" size={16} color={colors.primary} />
                   <Text style={styles.tripSummaryRouteText}>
                     {selectedTrip?.pickup} → {selectedTrip?.dropoff}
                   </Text>
                 </View>
                 <View style={styles.insuranceInfo}>
-                  <Ionicons name="shield-checkmark" size={16} color="#00D4AA" />
+                  <Ionicons name="shield-checkmark" size={16} color={colors.success} />
                   <Text style={styles.insuranceInfoText}>
                     Insured value: ${selectedTrip?.insuranceValue?.toLocaleString()}
                   </Text>
@@ -670,7 +673,7 @@ export default function CustomerClaimsScreen({ navigation }) {
                   multiline={true}
                   numberOfLines={4}
                   placeholder="Please provide detailed information about what happened..."
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.text.tertiary}
                   value={claimDescription}
                   onChangeText={setClaimDescription}
                 />
@@ -692,7 +695,7 @@ export default function CustomerClaimsScreen({ navigation }) {
                   style={styles.addDocumentButton}
                   onPress={handleAddDocument}
                 >
-                  <Ionicons name="add-circle" size={24} color="#A77BFF" />
+                  <Ionicons name="add-circle" size={24} color={colors.primary} />
                   <Text style={styles.addDocumentText}>Add Photo or Document</Text>
                 </TouchableOpacity>
               </View>
@@ -705,7 +708,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             >
               {submitting ? (
                 <View style={styles.submittingContainer}>
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.white} />
                   <Text style={styles.submitButtonText}>Submitting...</Text>
                 </View>
               ) : (
@@ -723,7 +726,7 @@ export default function CustomerClaimsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   header: {
     flexDirection: 'row',
@@ -731,7 +734,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   backButton: {
     width: 40,
@@ -742,7 +745,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
   },
   refreshButton: {
     width: 40,
@@ -756,24 +759,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 16,
     marginTop: 10,
   },
   insuranceBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     margin: 20,
     padding: 15,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   insuranceIcon: {
     width: 50,
     height: 50,
-    backgroundColor: '#A77BFF20',
+    backgroundColor: colors.primaryLight,
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
@@ -785,19 +788,19 @@ const styles = StyleSheet.create({
   insuranceTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 4,
   },
-  insuranceText: {
+  insuranceBannerText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
     lineHeight: 20,
   },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: 20,
     marginBottom: 20,
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 8,
     padding: 4,
   },
@@ -809,27 +812,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#999',
+    color: colors.text.tertiary,
   },
   activeTabText: {
-    color: '#fff',
+    color: colors.white,
   },
   claimsList: {
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
   claimCard: {
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   claimHeader: {
     flexDirection: 'row',
@@ -842,22 +845,22 @@ const styles = StyleSheet.create({
   },
   claimDate: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
     marginBottom: 4,
   },
   claimItem: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   claimAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#00D4AA',
+    color: colors.success,
   },
   claimDescription: {
     fontSize: 14,
-    color: '#CCC',
+    color: colors.text.secondary,
     lineHeight: 20,
     marginBottom: 16,
   },
@@ -866,7 +869,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     borderRadius: 2,
     marginBottom: 8,
   },
@@ -879,24 +882,24 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   resolutionContainer: {
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
     padding: 12,
     borderRadius: 8,
     marginBottom: 12,
   },
   resolutionLabel: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
     marginBottom: 4,
   },
   resolutionText: {
     fontSize: 14,
-    color: '#fff',
+    color: colors.white,
     marginBottom: 4,
   },
   completedDate: {
     fontSize: 12,
-    color: '#00D4AA',
+    color: colors.success,
   },
   viewDetailsButton: {
     flexDirection: 'row',
@@ -904,11 +907,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.strong,
   },
   viewDetailsText: {
     fontSize: 14,
-    color: '#A77BFF',
+    color: colors.primary,
     fontWeight: '500',
   },
   emptyState: {
@@ -917,13 +920,13 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: colors.text.subtle,
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: colors.text.subtle,
     textAlign: 'center',
     marginTop: 5,
   },
@@ -932,7 +935,7 @@ const styles = StyleSheet.create({
     bottom: 30,
     right: 20,
     left: 20,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -940,7 +943,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   startClaimText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -951,12 +954,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   pastTripsTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
   },
   closeButton: {
     width: 40,
@@ -969,12 +972,12 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   tripCard: {
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tripHeader: {
     flexDirection: 'row',
@@ -984,12 +987,12 @@ const styles = StyleSheet.create({
   },
   tripDate: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   tripAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#00D4AA',
+    color: colors.success,
   },
   tripDetails: {
     gap: 8,
@@ -1004,7 +1007,7 @@ const styles = StyleSheet.create({
   },
   tripLocation: {
     fontSize: 14,
-    color: '#fff',
+    color: colors.white,
     lineHeight: 20,
   },
   tripItemContainer: {
@@ -1013,7 +1016,7 @@ const styles = StyleSheet.create({
   },
   tripItemText: {
     fontSize: 14,
-    color: '#CCC',
+    color: colors.text.secondary,
     marginLeft: 8,
   },
   insuranceContainer: {
@@ -1022,17 +1025,17 @@ const styles = StyleSheet.create({
   },
   insuranceText: {
     fontSize: 14,
-    color: '#00D4AA',
+    color: colors.success,
     marginLeft: 8,
     fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: colors.overlayDark,
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '90%',
@@ -1043,12 +1046,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    borderBottomColor: colors.border.strong,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
   },
   modalCloseButton: {
     width: 40,
@@ -1060,27 +1063,27 @@ const styles = StyleSheet.create({
     maxHeight: '70%',
   },
   tripSummary: {
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     margin: 20,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tripSummaryTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 12,
   },
   tripSummaryDate: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
     marginBottom: 8,
   },
   tripSummaryItem: {
     fontSize: 16,
-    color: '#fff',
+    color: colors.white,
     marginBottom: 12,
   },
   tripSummaryRoute: {
@@ -1090,7 +1093,7 @@ const styles = StyleSheet.create({
   },
   tripSummaryRouteText: {
     fontSize: 14,
-    color: '#CCC',
+    color: colors.text.secondary,
     marginLeft: 8,
   },
   insuranceInfo: {
@@ -1099,7 +1102,7 @@ const styles = StyleSheet.create({
   },
   insuranceInfoText: {
     fontSize: 14,
-    color: '#00D4AA',
+    color: colors.success,
     marginLeft: 8,
     fontWeight: '500',
   },
@@ -1110,7 +1113,7 @@ const styles = StyleSheet.create({
   claimTypeLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 12,
   },
   claimTypeOptions: {
@@ -1121,23 +1124,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     alignItems: 'center',
   },
   claimTypeSelected: {
-    backgroundColor: '#A77BFF',
-    borderColor: '#A77BFF',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   claimTypeText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
     fontWeight: '500',
   },
   claimTypeTextSelected: {
-    color: '#fff',
+    color: colors.white,
   },
   inputContainer: {
     paddingHorizontal: 20,
@@ -1146,16 +1149,16 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     padding: 16,
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     textAlignVertical: 'top',
     minHeight: 100,
@@ -1167,7 +1170,7 @@ const styles = StyleSheet.create({
   documentsLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 12,
   },
   documentsList: {
@@ -1177,12 +1180,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   documentInfo: {
     flexDirection: 'row',
@@ -1191,7 +1194,7 @@ const styles = StyleSheet.create({
   },
   documentName: {
     fontSize: 14,
-    color: '#fff',
+    color: colors.white,
     marginLeft: 8,
     flex: 1,
   },
@@ -1202,29 +1205,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#A77BFF',
+    borderColor: colors.primary,
     borderStyle: 'dashed',
     paddingVertical: 15,
     paddingHorizontal: 20,
   },
   addDocumentText: {
     fontSize: 14,
-    color: '#A77BFF',
+    color: colors.primary,
     marginLeft: 8,
     fontWeight: '500',
   },
   submitButton: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     margin: 20,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: colors.text.subtle,
   },
   submittingContainer: {
     flexDirection: 'row',
@@ -1232,7 +1235,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,

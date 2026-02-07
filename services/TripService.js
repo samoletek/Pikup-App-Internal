@@ -4,9 +4,21 @@
 import { supabase } from '../config/supabase';
 import { uploadToSupabase } from './StorageService';
 import { createConversation } from './MessagingService';
+import { TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
+import { mapTripFromDb } from './tripMapper';
 
 // Payment service URL
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
+
+const STATUS_TIMESTAMP_FIELDS = Object.freeze({
+    [TRIP_STATUS.IN_PROGRESS]: 'in_progress_at',
+    [TRIP_STATUS.ARRIVED_AT_PICKUP]: 'arrived_at_pickup_at',
+    [TRIP_STATUS.PICKED_UP]: 'picked_up_at',
+    [TRIP_STATUS.EN_ROUTE_TO_DROPOFF]: 'en_route_to_dropoff_at',
+    [TRIP_STATUS.ARRIVED_AT_DROPOFF]: 'arrived_at_dropoff_at',
+    [TRIP_STATUS.COMPLETED]: 'completed_at',
+    [TRIP_STATUS.CANCELLED]: 'cancelled_at'
+});
 
 /**
  * Create a new pickup request
@@ -29,7 +41,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
             distance_miles: parseFloat(requestData.pricing?.distance || 0),
             items: requestData.items || [],
             scheduled_time: requestData.scheduledTime || null,
-            status: 'pending',
+            status: TRIP_STATUS.PENDING,
             created_at: new Date().toISOString(),
         };
 
@@ -42,11 +54,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
         if (error) throw error;
         console.log('Trip created successfully:', data.id);
 
-        return {
-            id: data.id,
-            ...requestData,
-            status: 'pending'
-        };
+        return mapTripFromDb(data);
 
     } catch (error) {
         console.error('Error creating pickup request:', error);
@@ -71,17 +79,7 @@ export const getUserPickupRequests = async (currentUser) => {
 
         if (error) throw error;
 
-        return data.map(trip => ({
-            id: trip.id,
-            status: trip.status,
-            createdAt: trip.created_at,
-            pickup: trip.pickup_location,
-            dropoff: trip.dropoff_location,
-            pricing: { total: trip.price, distance: trip.distance_miles },
-            items: trip.items,
-            vehicle: { type: trip.vehicle_type },
-            scheduledTime: trip.scheduled_time
-        }));
+        return data.map(mapTripFromDb);
 
     } catch (error) {
         console.error('Error fetching pickup requests:', error);
@@ -101,27 +99,29 @@ export const getAvailableRequests = async (currentUser) => {
         const { data, error } = await supabase
             .from('trips')
             .select('*')
-            .eq('status', 'pending');
+            .eq('status', TRIP_STATUS.PENDING);
 
         if (error) throw error;
 
-        return data.map(trip => ({
-            id: trip.id,
-            price: `$${trip.price}`,
-            type: 'Moves',
-            vehicle: { type: trip.vehicle_type },
-            pickup: {
-                address: trip.pickup_location?.address || 'Unknown',
-                coordinates: trip.pickup_location?.coordinates
-            },
-            dropoff: {
-                address: trip.dropoff_location?.address || '',
-                coordinates: trip.dropoff_location?.coordinates
-            },
-            photos: trip.pickup_photos || [],
-            originalData: trip
-        }))
-            .sort((a, b) => new Date(b.originalData.created_at) - new Date(a.originalData.created_at));
+        return data
+            .map(mapTripFromDb)
+            .map((trip) => ({
+                id: trip.id,
+                price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
+                type: 'Moves',
+                vehicle: { type: trip.vehicleType || 'Standard' },
+                pickup: {
+                    address: trip.pickupAddress || 'Unknown',
+                    coordinates: trip.pickup?.coordinates || null
+                },
+                dropoff: {
+                    address: trip.dropoffAddress || '',
+                    coordinates: trip.dropoff?.coordinates || null
+                },
+                photos: trip.pickupPhotos || [],
+                originalData: trip
+            }))
+            .sort((a, b) => new Date(b.originalData.createdAt || 0) - new Date(a.originalData.createdAt || 0));
 
     } catch (error) {
         console.error('Error fetching available requests:', error);
@@ -142,7 +142,7 @@ export const acceptRequest = async (requestId, currentUser) => {
         const { data: result, error } = await supabase
             .from('trips')
             .update({
-                status: 'accepted',
+                status: TRIP_STATUS.ACCEPTED,
                 driver_id: currentUser.uid || currentUser.id,
                 updated_at: new Date().toISOString()
             })
@@ -179,7 +179,7 @@ export const acceptRequest = async (requestId, currentUser) => {
             console.error('Error creating conversation:', convError);
         }
 
-        return result;
+        return mapTripFromDb(result);
 
     } catch (error) {
         console.error('Error accepting request:', error);
@@ -196,8 +196,9 @@ export const acceptRequest = async (requestId, currentUser) => {
  */
 export const updateRequestStatus = async (requestId, newStatus, additionalData = {}) => {
     try {
+        const normalizedStatus = normalizeTripStatus(newStatus);
         const updates = {
-            status: newStatus,
+            status: normalizedStatus,
             updated_at: new Date().toISOString(),
             ...additionalData
         };
@@ -210,7 +211,7 @@ export const updateRequestStatus = async (requestId, newStatus, additionalData =
             .single();
 
         if (error) throw error;
-        return data;
+        return mapTripFromDb(data);
     } catch (error) {
         console.error('Error updating request status:', error);
         throw error;
@@ -227,12 +228,17 @@ export const updateRequestStatus = async (requestId, newStatus, additionalData =
  */
 export const updateDriverStatus = async (requestId, status, location = null, additionalData = {}) => {
     try {
+        const normalizedStatus = normalizeTripStatus(status);
+        const statusTimestampField = STATUS_TIMESTAMP_FIELDS[normalizedStatus] || `${normalizedStatus}_at`;
         const updates = {
-            status,
-            [`${status}_at`]: new Date().toISOString(),
+            status: normalizedStatus,
+            [statusTimestampField]: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             ...additionalData
         };
+        if (location) {
+            updates.driver_location = location;
+        }
 
         const { data, error } = await supabase
             .from('trips')
@@ -242,7 +248,7 @@ export const updateDriverStatus = async (requestId, status, location = null, add
             .single();
 
         if (error) throw error;
-        return data;
+        return mapTripFromDb(data);
     } catch (error) {
         console.error('Error updating driver status:', error);
         throw error;
@@ -338,15 +344,7 @@ export const getRequestById = async (requestId) => {
 
         if (error) throw error;
 
-        return {
-            id: data.id,
-            ...data,
-            pricing: { total: data.price, distance: data.distance_miles },
-            pickup: data.pickup_location,
-            dropoff: data.dropoff_location,
-            customerId: data.customer_id,
-            driverId: data.driver_id,
-        };
+        return mapTripFromDb(data);
     } catch (error) {
         console.error('Error fetching request:', error);
         throw error;
@@ -360,7 +358,7 @@ export const getRequestById = async (requestId) => {
  * @returns {Promise<Object>} Updated request
  */
 export const completeDelivery = async (requestId, completionData = {}) => {
-    return updateDriverStatus(requestId, 'completed', null, completionData);
+    return updateDriverStatus(requestId, TRIP_STATUS.COMPLETED, null, completionData);
 };
 
 /**
@@ -394,21 +392,21 @@ export const finishDelivery = async (requestId, photos = [], driverLocation = nu
 
 // Driver status transition helpers
 export const startDriving = (requestId, driverLocation) =>
-    updateDriverStatus(requestId, 'in_progress', driverLocation);
+    updateDriverStatus(requestId, TRIP_STATUS.IN_PROGRESS, driverLocation);
 
 export const arriveAtPickup = (requestId, driverLocation) =>
-    updateDriverStatus(requestId, 'arrived_at_pickup', driverLocation);
+    updateDriverStatus(requestId, TRIP_STATUS.ARRIVED_AT_PICKUP, driverLocation);
 
 export const confirmPickup = async (requestId, photos = [], driverLocation = null) => {
     if (photos.length > 0) await uploadRequestPhotos(requestId, photos, 'pickup');
-    return updateDriverStatus(requestId, 'picked_up', driverLocation);
+    return updateDriverStatus(requestId, TRIP_STATUS.PICKED_UP, driverLocation);
 };
 
 export const startDelivery = (requestId, driverLocation) =>
-    updateDriverStatus(requestId, 'en_route_to_dropoff', driverLocation);
+    updateDriverStatus(requestId, TRIP_STATUS.EN_ROUTE_TO_DROPOFF, driverLocation);
 
 export const arriveAtDropoff = (requestId, driverLocation) =>
-    updateDriverStatus(requestId, 'arrived_at_dropoff', driverLocation);
+    updateDriverStatus(requestId, TRIP_STATUS.ARRIVED_AT_DROPOFF, driverLocation);
 
 // Timer and request management
 export const checkExpiredRequests = async () => {
@@ -418,7 +416,7 @@ export const checkExpiredRequests = async () => {
         const { data: expiredRequests, error } = await supabase
             .from('trips')
             .select('*')
-            .eq('status', 'pending')
+            .eq('status', TRIP_STATUS.PENDING)
             .lt('expires_at', now);
 
         if (error) throw error;
@@ -440,7 +438,7 @@ export const resetExpiredRequest = async (requestId) => {
         const { error } = await supabase
             .from('trips')
             .update({
-                status: 'pending',
+                status: TRIP_STATUS.PENDING,
                 updated_at: new Date().toISOString()
             })
             .eq('id', requestId);
@@ -497,7 +495,10 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
         const orderData = await getRequestById(orderId);
 
         if (!orderData) throw new Error('Order not found');
-        if (orderData.status === 'completed' || orderData.status === 'cancelled') throw new Error('Order already finalized');
+        const normalizedOrderStatus = normalizeTripStatus(orderData.status);
+        if (normalizedOrderStatus === TRIP_STATUS.COMPLETED || normalizedOrderStatus === TRIP_STATUS.CANCELLED) {
+            throw new Error('Order already finalized');
+        }
 
         const payload = {
             orderId,
@@ -519,7 +520,7 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
         const { error } = await supabase
             .from('trips')
             .update({
-                status: 'cancelled',
+                status: TRIP_STATUS.CANCELLED,
                 cancelled_at: new Date().toISOString(),
                 cancelled_by: currentUser.uid || currentUser.id,
                 cancellation_reason: reason,
@@ -538,11 +539,11 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
 };
 
 export const getCancellationInfo = (orderData) => {
-    const status = orderData.status;
+    const status = normalizeTripStatus(orderData.status);
     const orderTotal = orderData.pricing?.total || 0;
 
     switch (status) {
-        case 'pending':
+        case TRIP_STATUS.PENDING:
             return {
                 canCancel: true,
                 fee: 0,
@@ -551,8 +552,8 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'accepted':
-        case 'inProgress':
+        case TRIP_STATUS.ACCEPTED:
+        case TRIP_STATUS.IN_PROGRESS:
             return {
                 canCancel: true,
                 fee: 0,
@@ -561,7 +562,7 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'arrivedAtPickup':
+        case TRIP_STATUS.ARRIVED_AT_PICKUP:
             return {
                 canCancel: false,
                 fee: 0,
@@ -570,7 +571,7 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'pickedUp':
+        case TRIP_STATUS.PICKED_UP:
             return {
                 canCancel: false,
                 fee: 0,
@@ -579,7 +580,7 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'enRouteToDropoff':
+        case TRIP_STATUS.EN_ROUTE_TO_DROPOFF:
             return {
                 canCancel: false,
                 fee: 0,
@@ -588,7 +589,7 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'completed':
+        case TRIP_STATUS.COMPLETED:
             return {
                 canCancel: false,
                 fee: 0,
@@ -597,7 +598,7 @@ export const getCancellationInfo = (orderData) => {
                 driverCompensation: 0
             };
 
-        case 'cancelled':
+        case TRIP_STATUS.CANCELLED:
             return {
                 canCancel: false,
                 fee: 0,

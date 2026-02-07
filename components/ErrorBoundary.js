@@ -71,7 +71,7 @@ class ErrorBoundary extends React.Component {
                 onPress={() => {
                   // In production, this could open support chat or email
                   console.log('Contact support requested');
-                  alert('Support: support@pikup.com\nPhone: 1-800-PIKUP');
+                  alert('Support: ');
                 }}
               >
                 <Text style={styles.secondaryButtonText}>Contact Support</Text>

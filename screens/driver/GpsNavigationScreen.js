@@ -25,6 +25,7 @@ import { BlurView } from 'expo-blur';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import useMapboxNavigation from '../../components/mapbox/useMapboxNavigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PICKUP_PHASE_STATUSES, DROPOFF_PHASE_STATUSES, TRIP_STATUS } from '../../constants/tripStatus';
 
 const { width, height } = Dimensions.get('window');
 
@@ -297,11 +298,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     if (!requestData) return null;
     
     // If status is before pickedUp, show pickup location
-    if (
-      requestData.status === 'accepted' || 
-      requestData.status === 'inProgress' || 
-      requestData.status === 'arrivedAtPickup'
-    ) {
+    if (PICKUP_PHASE_STATUSES.includes(requestData.status)) {
       return requestData.pickup?.coordinates || null;
     } 
     // Otherwise show dropoff location
@@ -532,7 +529,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const updateDriverLocationInDB = async (location) => {
     try {
       if (request?.id) {
-        await updateDriverStatus(request.id, 'inProgress', location);
+        await updateDriverStatus(request.id, TRIP_STATUS.IN_PROGRESS, location);
       }
     } catch (error) {
       console.error('Error updating driver location:', error);
@@ -567,7 +564,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     // Try to get from request data first
     if (requestData) {
       // If we're en route to pickup, use pickup location
-      if (requestData.status === 'accepted' || requestData.status === 'inProgress' || requestData.status === 'arrivedAtPickup') {
+      if (PICKUP_PHASE_STATUSES.includes(requestData.status)) {
         const coords = parseCoordinates(requestData.pickup?.coordinates);
         if (coords) {
           console.log('Using pickup coordinates from requestData:', coords);
@@ -578,7 +575,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
         }
       } 
       // If we're en route to dropoff, use dropoff location
-      else if (requestData.status === 'pickedUp' || requestData.status === 'enRouteToDropoff') {
+      else if (DROPOFF_PHASE_STATUSES.includes(requestData.status)) {
         const coords = parseCoordinates(requestData.dropoff?.coordinates);
         if (coords) {
           console.log('Using dropoff coordinates from requestData:', coords);
@@ -592,8 +589,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
 
     // Also check the request from route params as fallback
     if (request) {
-      const status = request.status || requestData?.status || 'accepted';
-      if (status === 'accepted' || status === 'inProgress' || status === 'arrivedAtPickup') {
+      const status = request.status || requestData?.status || TRIP_STATUS.ACCEPTED;
+      if (PICKUP_PHASE_STATUSES.includes(status)) {
         const coords = parseCoordinates(request.pickup?.coordinates);
         if (coords) {
           console.log('Using pickup coordinates from route params:', coords);
@@ -602,7 +599,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
             longitude: coords.longitude,
           };
         }
-      } else if (status === 'pickedUp' || status === 'enRouteToDropoff') {
+      } else if (DROPOFF_PHASE_STATUSES.includes(status)) {
         const coords = parseCoordinates(request.dropoff?.coordinates);
         if (coords) {
           console.log('Using dropoff coordinates from route params:', coords);

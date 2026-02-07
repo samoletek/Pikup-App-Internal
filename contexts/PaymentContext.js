@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../config/supabase';
 
 const PaymentContext = createContext();
+const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://pikup-server.onrender.com';
 
 export const usePayment = () => {
   const context = useContext(PaymentContext);
@@ -34,7 +35,7 @@ export const PaymentProvider = ({ children }) => {
 
   // Fetch saved payment methods from Stripe when user logs in
   useEffect(() => {
-    if (currentUser?.uid) {
+    if (currentUser?.uid || currentUser?.id) {
       fetchStripePaymentMethods();
     }
   }, [currentUser]);
@@ -57,11 +58,12 @@ export const PaymentProvider = ({ children }) => {
 
   // Fetch saved payment methods from Stripe
   const fetchStripePaymentMethods = async () => {
-    if (!currentUser?.uid) return;
+    const userId = currentUser?.uid || currentUser?.id;
+    if (!userId) return;
 
     try {
       setLoading(true);
-      console.log('Fetching payment methods for:', currentUser.uid);
+      console.log('Fetching payment methods for:', userId);
 
       console.log('Invoking get-payment-methods Edge Function...');
       const { data, error } = await supabase.functions.invoke('get-payment-methods');
@@ -120,7 +122,11 @@ export const PaymentProvider = ({ children }) => {
       if (defaultPaymentMethod?.id === methodId) {
         const newDefault = updatedMethods.length > 0 ? updatedMethods[0] : null;
         setDefaultPaymentMethod(newDefault);
-        await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(newDefault));
+        if (newDefault) {
+          await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(newDefault));
+        } else {
+          await AsyncStorage.removeItem('defaultPaymentMethod');
+        }
       }
 
       await AsyncStorage.setItem('paymentMethods', JSON.stringify(updatedMethods));
@@ -154,7 +160,7 @@ export const PaymentProvider = ({ children }) => {
           amount,
           currency,
           userEmail: currentUser?.email,
-          userId: currentUser?.uid,
+          userId: currentUser?.uid || currentUser?.id,
           paymentMethodId: defaultPaymentMethod?.stripePaymentMethodId,
           rideDetails,
         }
@@ -274,8 +280,15 @@ export const PaymentProvider = ({ children }) => {
   // Optional: Get real-time price estimate from your service
   const getPriceEstimate = async (rideDetails) => {
     try {
-      const result = await response.json();
-      return result;
+      const { data, error } = await supabase.functions.invoke('calculate-trip-price', {
+        body: { rideDetails }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      return data || { success: false, error: 'No estimate returned', errorCode: null };
     } catch (error) {
       console.error('Error getting price estimate:', error);
       // Return structured error instead of null

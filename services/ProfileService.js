@@ -48,7 +48,8 @@ export const uploadProfileImage = async (imageUri, currentUser, userType) => {
     try {
         console.log('Uploading profile image to Supabase Storage...');
 
-        const filename = `${currentUser.id}/${Date.now()}.jpg`;
+        const userId = currentUser.id || currentUser.uid;
+        const filename = `${userId}/${Date.now()}.jpg`;
         const publicUrl = await uploadToSupabase(imageUri, 'avatars', filename);
 
         // Update user profile in Supabase with new photo URL
@@ -73,10 +74,11 @@ export const getProfileImage = async (currentUser, userType) => {
     if (!currentUser) return null;
 
     try {
+        const userId = currentUser.id || currentUser.uid;
         const { data, error } = await supabase
             .from(userType === 'driver' ? 'drivers' : 'customers')
             .select('profile_image_url')
-            .eq('id', currentUser.id)
+            .eq('id', userId)
             .single();
 
         if (data?.profile_image_url) {
@@ -105,23 +107,27 @@ export const deleteProfileImage = async (currentUser, userType) => {
 
 /**
  * Get full user profile from database
- * @param {Object} currentUser - Current user object
+ * @param {Object|string} currentUser - User object or explicit user ID
  * @returns {Promise<Object>} User profile data
  */
 export const getUserProfile = async (currentUser) => {
-    if (!currentUser?.id && !currentUser?.uid) {
+    const userInput = currentUser ?? null;
+    const userId = typeof userInput === 'string'
+        ? userInput
+        : (userInput?.id || userInput?.uid);
+    const fallbackEmail = typeof userInput === 'object' ? userInput?.email : null;
+
+    if (!userId) {
         throw new Error('User not authenticated');
     }
 
-    const userId = currentUser.id || currentUser.uid;
-
     try {
         // Try to get from customers table first
-        let { data: profile, error } = await supabase
+        let { data: profile } = await supabase
             .from('customers')
             .select('*')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
 
         if (!profile) {
             // If not found, try drivers table
@@ -129,7 +135,7 @@ export const getUserProfile = async (currentUser) => {
                 .from('drivers')
                 .select('*')
                 .eq('id', userId)
-                .single();
+                .maybeSingle();
 
             profile = driverProfile;
         }
@@ -137,8 +143,8 @@ export const getUserProfile = async (currentUser) => {
         if (profile) {
             return {
                 uid: userId,
-                email: currentUser.email,
-                profileImageUrl: profile.avatar_url || null,
+                email: profile.email || fallbackEmail || null,
+                profileImageUrl: profile.avatar_url || profile.profile_image_url || null,
                 ...profile
             };
         }
@@ -146,7 +152,7 @@ export const getUserProfile = async (currentUser) => {
         // Fallback if no profile found
         return {
             uid: userId,
-            email: currentUser.email,
+            email: fallbackEmail || null,
             profileImageUrl: null
         };
 

@@ -15,12 +15,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePayment } from '../../contexts/PaymentContext';
 import { supabase } from '../../config/supabase';
 import DeliveryPhotosModal from '../../components/DeliveryPhotosModal';
+import { colors, spacing, borderRadius, typography } from '../../styles/theme';
+import { TRIP_STATUS } from '../../constants/tripStatus';
 
 export default function DeliveryFeedbackScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { requestId, requestData: initialRequestData, returnToHome } = route.params || {};
-  const { getRequestById, updateRequestStatus, getUserProfile, currentUser } = useAuth();
-  const { confirmPayment, defaultPaymentMethod } = usePayment();
+  const { getRequestById, updateRequestStatus, getDriverProfile, currentUser } = useAuth();
+  const { confirmPayment, defaultPaymentMethod, createPaymentIntent } = usePayment();
 
   const [delivered, setDelivered] = useState(true);
   const [tip, setTip] = useState(null);
@@ -33,6 +35,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
   const [driverRating, setDriverRating] = useState(5.0);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const tripTotal = Number(requestData?.pricing?.total || 0);
 
 
 
@@ -68,10 +71,11 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
     }
 
     // Load driver profile for rating
-    if (data.assignedDriverId) {
+    const driverId = data.assignedDriverId || data.driverId || data.driver_id;
+    if (driverId) {
       try {
-        const driverProfile = await getUserProfile(data.assignedDriverId);
-        setDriverRating(driverProfile?.driverProfile?.rating || 5.0);
+        const driverProfile = await getDriverProfile(driverId);
+        setDriverRating(driverProfile?.rating || driverProfile?.driverProfile?.rating || 5.0);
       } catch (error) {
         console.error('Error loading driver rating:', error);
         setDriverRating(5.0);
@@ -98,18 +102,48 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 
     try {
       setSubmitting(true);
-      if (requestId) {
-        // Calculate chosen tip amount
-        const chosenTip = customTip ? Number(customTip) : (typeof tip === 'number' ? tip : 0);
+      const effectiveRequestId = requestId || requestData?.id || initialRequestData?.id;
+      if (!effectiveRequestId) {
+        throw new Error('Missing request ID for feedback submission');
+      }
 
-        // 1) If tipping, create & confirm tip PaymentIntent
-        if (chosenTip > 0) {
-          throw new Error(data?.error || 'Could not start tip payment');
+      const chosenTip = customTip ? Number(customTip) : (typeof tip === 'number' ? tip : 0);
+      if (!Number.isFinite(chosenTip) || chosenTip < 0) {
+        Alert.alert('Invalid tip amount', 'Please enter a valid tip amount.');
+        return;
+      }
+
+      const activeRequestData = requestData || initialRequestData || {};
+      const driverId =
+        activeRequestData.assignedDriverId ||
+        activeRequestData.driverId ||
+        activeRequestData.driver_id ||
+        null;
+
+      let tipPaymentIntentId = null;
+
+      // 1) If tipping, create & confirm tip PaymentIntent
+      if (chosenTip > 0) {
+        if (!defaultPaymentMethod?.stripePaymentMethodId) {
+          Alert.alert('Payment method required', 'Please add a payment method before sending a tip.');
+          return;
         }
 
-        // Use existing confirmPayment function
+        const tipAmountInCents = Math.round(chosenTip * 100);
+        const createTipIntentResult = await createPaymentIntent(tipAmountInCents, 'usd', {
+          type: 'tip',
+          requestId: effectiveRequestId,
+          driverId,
+          customerId: currentUser?.uid || currentUser?.id
+        });
+
+        if (!createTipIntentResult.success || !createTipIntentResult.paymentIntent?.client_secret) {
+          Alert.alert('Tip Payment Failed', createTipIntentResult.error || 'Unable to start tip payment');
+          return;
+        }
+
         const paymentResult = await confirmPayment(
-          data.clientSecret,
+          createTipIntentResult.paymentIntent.client_secret,
           defaultPaymentMethod?.stripePaymentMethodId
         );
 
@@ -117,15 +151,17 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
           Alert.alert('Tip Payment Failed', paymentResult.error || 'Unable to process tip payment');
           return;
         }
+
+        tipPaymentIntentId = paymentResult.paymentIntent?.id || createTipIntentResult.paymentIntent.id || null;
       }
 
       // 2) Submit feedback via Edge Function
       const { error: fbError } = await supabase.functions.invoke('submit-feedback', {
         body: {
-          requestId,
+          requestId: effectiveRequestId,
           rating,
           tip: chosenTip,
-          driverId: data.assignedDriverId || data.driverId
+          driverId
         }
       });
 
@@ -136,9 +172,10 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
       }
 
       // 3) Update the request status (AuthContext/DB)
-      await updateRequestStatus(requestId, 'completed', {
+      await updateRequestStatus(effectiveRequestId, TRIP_STATUS.COMPLETED, {
         customerRating: rating,
         customerTip: chosenTip || 0,
+        tipPaymentIntentId,
         feedbackSubmitted: true,
         updatedAt: new Date().toISOString()
       });
@@ -204,7 +241,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
               style={styles.viewPhotosButton}
               onPress={handleViewPhotos}
             >
-              <Ionicons name="images-outline" size={18} color="#A77BFF" />
+              <Ionicons name="images-outline" size={18} color={colors.primary} />
               <Text style={styles.viewPhotosText}>View Delivery Photos</Text>
             </TouchableOpacity>
           )}
@@ -213,7 +250,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         <View style={styles.card}>
           <Text style={styles.label}>Add a tip for {driverName}</Text>
           <Text style={styles.subLabel}>
-            Your Trip was ${requestData?.pricing?.total?.toFixed(2) || '0.00'}
+            Your Trip was ${tripTotal.toFixed(2)}
           </Text>
 
           <View style={styles.tipRow}>
@@ -233,7 +270,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 
           <TextInput
             placeholder="Enter Custom Amount"
-            placeholderTextColor="#888"
+            placeholderTextColor={colors.text.muted}
             value={customTip}
             onChangeText={(val) => {
               setCustomTip(val);
@@ -263,7 +300,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
                 <Ionicons
                   name="star"
                   size={32}
-                  color={i <= rating ? '#a77bff' : '#444'}
+                  color={i <= rating ? colors.primary : colors.border.light}
                 />
               </TouchableOpacity>
             ))}
@@ -275,7 +312,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
             style={styles.startClaimButton}
             onPress={handleStartClaim}
           >
-            <Ionicons name="shield-outline" size={20} color="#fff" />
+            <Ionicons name="shield-outline" size={20} color={colors.white} />
             <Text style={styles.startClaimText}>Start a Claim</Text>
           </TouchableOpacity>
         )}
@@ -318,46 +355,46 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F'
+    backgroundColor: colors.background.primary
   },
   scroll: {
-    padding: 16,
+    padding: spacing.base,
     paddingBottom: 140
   },
   title: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
     textAlign: 'center',
-    marginVertical: 20,
+    marginVertical: spacing.lg,
   },
   toggleRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 20,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   toggleBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
     borderRadius: 24,
-    backgroundColor: '#1F1F2F',
+    backgroundColor: colors.background.tertiary,
   },
   toggleText: {
-    color: '#ccc',
-    fontWeight: '600',
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
   },
   activeBtn: {
-    backgroundColor: '#a77bff',
+    backgroundColor: colors.primary,
   },
   activeText: {
-    color: '#fff',
+    color: colors.text.primary,
   },
   card: {
-    backgroundColor: '#141427',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   driverRow: {
     flexDirection: 'row',
@@ -365,17 +402,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   driverName: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md
   },
   vehicle: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 13
   },
   stars: {
-    color: '#a77bff',
-    marginTop: 4
+    color: colors.primary,
+    marginTop: spacing.xs
   },
   vehicleImg: {
     width: 80,
@@ -386,106 +423,106 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.default,
   },
   viewPhotosText: {
-    color: '#A77BFF',
-    marginLeft: 6,
+    color: colors.primary,
+    marginLeft: spacing.sm,
     fontSize: 14,
   },
   label: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
   },
   subLabel: {
-    color: '#888',
+    color: colors.text.muted,
     fontSize: 13,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   tipRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   tipBtn: {
-    backgroundColor: '#1F1F2F',
+    backgroundColor: colors.background.tertiary,
     borderRadius: 20,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
   tipSelected: {
-    backgroundColor: '#a77bff',
+    backgroundColor: colors.primary,
   },
   tipText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
   tipInput: {
-    backgroundColor: '#1F1F2F',
+    backgroundColor: colors.background.tertiary,
     borderRadius: 10,
-    padding: 10,
-    color: '#fff',
+    padding: spacing.sm + 2,
+    color: colors.text.primary,
   },
   starRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
-    left: 16,
-    right: 16,
-    gap: 10,
+    left: spacing.base,
+    right: spacing.base,
+    gap: spacing.md - 2,
   },
   submitBtn: {
-    backgroundColor: '#a77bff',
+    backgroundColor: colors.primary,
     borderRadius: 30,
-    paddingVertical: 16,
+    paddingVertical: spacing.base,
     alignItems: 'center',
   },
   submitText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
   },
   disabledBtn: {
-    backgroundColor: '#666',
+    backgroundColor: colors.text.placeholder,
     opacity: 0.6,
   },
   claimBtn: {
     backgroundColor: 'transparent',
     borderRadius: 30,
-    paddingVertical: 16,
+    paddingVertical: spacing.base,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#a77bff',
+    borderColor: colors.primary,
   },
   claimText: {
-    color: '#a77bff',
-    fontWeight: '600',
-    fontSize: 16,
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
   },
   startClaimButton: {
-    backgroundColor: '#1E1E38',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.base,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.default,
   },
   startClaimText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-    marginLeft: 8,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.md,
+    marginLeft: spacing.sm,
   },
 });

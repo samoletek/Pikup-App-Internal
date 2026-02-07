@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, ScrollView, Platform, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
@@ -8,7 +8,6 @@ import * as Location from 'expo-location';
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN);
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
-import OfflineModal from '../../components/OfflineModal';
 import OfflineDashboard from '../../components/OfflineDashboard';
 import DrivingProgressModal from '../../components/DrivingProgressModal';
 import NavigationModal from '../../components/NavigationModal';
@@ -409,7 +408,14 @@ export default function DriverHomeScreen({ navigation, route }) {
   const handleGoOffline = () => {
     if (!isOnline) return;
 
-    showModal('offline');
+    Alert.alert(
+      'Go Offline?',
+      'You will stop receiving new pickup requests.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Go Offline', style: 'destructive', onPress: confirmGoOffline }
+      ]
+    );
   };
 
   const confirmGoOffline = async () => {
@@ -555,13 +561,6 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const renderModal = () => {
     switch (currentModal) {
-      case 'offline':
-        return (
-          <OfflineModal
-            onConfirm={confirmGoOffline}
-            onCancel={hideModal}
-          />
-        );
       case 'driving':
         return (
           <DrivingProgressModal
