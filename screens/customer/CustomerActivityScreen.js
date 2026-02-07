@@ -80,36 +80,48 @@ export default function CustomerActivityScreen({ navigation, route }) {
 
     try {
       setLoading(true);
-      const userTrips = await getUserPickupRequests();
 
-      // Transform Firebase data to match UI format
-      const transformedTrips = userTrips.map(trip => {
-        const completedAt = trip.completedAt || trip.createdAt;
-        const date = new Date(completedAt);
+      // Mock trips for testing scroll
+      const mockTrips = Array.from({ length: 20 }, (_, i) => {
+        const now = new Date();
+        const tripDate = new Date(now - (i * 86400000)); // Each trip 1 day apart
 
         return {
-          id: trip.id,
-          date: formatDate(date),
-          pickup: trip.pickup?.address || 'Unknown pickup',
-          dropoff: trip.dropoff?.address || 'Unknown dropoff',
-          item: trip.item?.description || 'Package',
-          driver: trip.driverEmail?.split('@')[0] || 'Driver',
-          driverRating: 5.0, // Default rating for old data
-          amount: trip.pricing?.total ? `$${trip.pricing.total.toFixed(2)}` : '$0.00',
-          status: trip.status,
-          duration: calculateDuration(trip),
-          distance: trip.vehicle?.distance || 'N/A',
-          vehicleType: trip.vehicle?.type || 'Vehicle',
-          helpProvided: trip.item?.needsHelp || false,
-          completedAt: trip.completedAt,
-          createdAt: trip.createdAt
+          id: `trip-${i}`,
+          date: formatDate(tripDate),
+          pickup: i % 4 === 0 ? '123 Main Street, Downtown' :
+            i % 4 === 1 ? '456 Oak Avenue, Midtown' :
+              i % 4 === 2 ? '789 Pine Road, Uptown' :
+                '321 Elm Street, Suburbs',
+          dropoff: i % 4 === 0 ? '987 Market Street, Shopping District' :
+            i % 4 === 1 ? '654 River Road, Waterfront' :
+              i % 4 === 2 ? '147 Park Lane, City Center' :
+                '258 Beach Boulevard, Coastal Area',
+          item: i % 3 === 0 ? 'Electronics Package' :
+            i % 3 === 1 ? 'Documents' :
+              'Groceries',
+          driver: `Driver ${String.fromCharCode(65 + (i % 26))}`,
+          driverRating: (4.5 + (i % 6) * 0.1).toFixed(1),
+          amount: `$${(15 + i * 2.5).toFixed(2)}`,
+          status: i % 5 === 0 ? 'pending' :
+            i % 5 === 1 ? 'accepted' :
+              i % 5 === 2 ? 'inProgress' :
+                'completed',
+          duration: `${15 + i * 2} min`,
+          distance: `${(2 + i * 0.5).toFixed(1)} km`,
+          vehicleType: i % 3 === 0 ? 'Sedan' :
+            i % 3 === 1 ? 'SUV' :
+              'Van',
+          helpProvided: i % 5 === 0,
+          completedAt: tripDate.toISOString(),
+          createdAt: new Date(tripDate - 1800000).toISOString() // 30 min before completion
         };
       });
 
-      setTrips(transformedTrips);
+      setTrips(mockTrips);
 
-      // Calculate real statistics
-      const completedTrips = transformedTrips.filter(trip => trip.status === 'completed');
+      // Calculate statistics from mock data
+      const completedTrips = mockTrips.filter(trip => trip.status === 'completed');
       const totalSpent = completedTrips.reduce((sum, trip) => {
         const amount = parseFloat(trip.amount.replace('$', ''));
         return sum + (isNaN(amount) ? 0 : amount);
@@ -118,7 +130,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
       setStats({
         totalTrips: completedTrips.length,
         totalSpent: totalSpent,
-        avgRating: customerProfile?.customerProfile?.rating || 5.0
+        avgRating: 4.8
       });
 
     } catch (error) {
@@ -467,7 +479,7 @@ export default function CustomerActivityScreen({ navigation, route }) {
     const headerHeight = interpolate(
       scrollY.value,
       [0, 100],
-      [50, 10], // Reducing paddingBottom
+      [15, 0], // Reduced paddingBottom
       Extrapolation.CLAMP
     );
 
@@ -475,27 +487,54 @@ export default function CustomerActivityScreen({ navigation, route }) {
       paddingBottom: headerHeight,
       borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
       borderBottomColor: '#2A2A3B',
+      overflow: 'hidden',
     };
   });
 
   const smallTitleStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [40, 60], // Fade in start/end scroll Y
-      [0, 1],
-      Extrapolation.CLAMP
-    );
+    // Small title appears when large title hides
+    const opacity = scrollY.value > 35 ? 1 : 0;
     return { opacity };
   });
 
   const largeTitleStyle = useAnimatedStyle(() => {
+    // Sync animations for "Trim from Top" effect
+    const scrollRange = [0, 50];
+
+    const translateY = interpolate(
+      scrollY.value,
+      scrollRange,
+      [0, -45], // Move up fully
+      Extrapolation.CLAMP
+    );
+
     const opacity = interpolate(
       scrollY.value,
-      [0, 40], // Fade out start/end scroll Y
+      scrollRange,
       [1, 0],
       Extrapolation.CLAMP
     );
-    return { opacity };
+
+    const height = interpolate(
+      scrollY.value,
+      scrollRange,
+      [41, 0], // Collapse to 0
+      Extrapolation.CLAMP
+    );
+
+    const marginTop = interpolate(
+      scrollY.value,
+      scrollRange,
+      [5, 0],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ translateY }],
+      opacity,
+      height,
+      marginTop
+    };
   });
 
   const headerContainerAnimatedStyle = useAnimatedStyle(() => {
@@ -508,28 +547,46 @@ export default function CustomerActivityScreen({ navigation, route }) {
       backgroundColor: '#0A0A1F',
       zIndex: 100,
       justifyContent: 'center', // Center vertically
-      minHeight: 60 + insets.top // Ensure minimum height for touch targets
+      minHeight: 10 + insets.top // Ensure minimum height for touch targets
     };
   });
 
   return (
     <View style={styles.container}>
-      {/* Animated Header */}
+      {/* Fixed Small Title - Always at top, appears on scroll */}
+      {!isActiveTrip && (
+        <Animated.View style={[{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          paddingTop: insets.top - 5,
+          paddingBottom: 12,
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          backgroundColor: '#0A0A1F',
+          zIndex: 101,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 5,
+        }, smallTitleStyle]}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+            Activity
+          </Text>
+        </Animated.View>
+      )}
+
+      {/* Collapsible Header with Large Title */}
       {!isActiveTrip && (
         <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
-          {/* Small Title - Centered & Absolute */}
-          <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
-            <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
-              Activity
-            </Text>
-          </Animated.View>
-
-          {/* Large Title - Standard Flow */}
+          {/* Large Title - Slides Up and Fades */}
           <Animated.Text style={[{
             fontWeight: 'bold',
             color: '#fff',
             fontSize: 34,
-            marginTop: 10 // Give it some space from top
+            marginTop: 5
           }, largeTitleStyle]}>
             Activity
           </Animated.Text>

@@ -39,7 +39,7 @@ export default function CustomerProfileScreen({ navigation }) {
     const headerHeight = interpolate(
       scrollY.value,
       [0, 100],
-      [50, 10],
+      [15, 0], // Reduced paddingBottom
       Extrapolation.CLAMP
     );
 
@@ -47,27 +47,54 @@ export default function CustomerProfileScreen({ navigation }) {
       paddingBottom: headerHeight,
       borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
       borderBottomColor: '#2A2A3B',
+      overflow: 'hidden',
     };
   });
 
   const smallTitleStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [40, 60],
-      [0, 1],
-      Extrapolation.CLAMP
-    );
+    // Small title appears when large title hides
+    const opacity = scrollY.value > 35 ? 1 : 0;
     return { opacity };
   });
 
   const largeTitleStyle = useAnimatedStyle(() => {
+    // Sync animations for "Trim from Top" effect
+    const scrollRange = [0, 50];
+
+    const translateY = interpolate(
+      scrollY.value,
+      scrollRange,
+      [0, -45], // Move up fully
+      Extrapolation.CLAMP
+    );
+
     const opacity = interpolate(
       scrollY.value,
-      [0, 40],
+      scrollRange,
       [1, 0],
       Extrapolation.CLAMP
     );
-    return { opacity };
+
+    const height = interpolate(
+      scrollY.value,
+      scrollRange,
+      [41, 0], // Collapse to 0
+      Extrapolation.CLAMP
+    );
+
+    const marginTop = interpolate(
+      scrollY.value,
+      scrollRange,
+      [5, 0],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ translateY }],
+      opacity,
+      height,
+      marginTop
+    };
   });
 
   const headerContainerAnimatedStyle = useAnimatedStyle(() => {
@@ -76,8 +103,7 @@ export default function CustomerProfileScreen({ navigation }) {
       paddingHorizontal: 20,
       backgroundColor: '#0A0A1F',
       zIndex: 100,
-      justifyContent: 'center',
-      minHeight: 60 + insets.top
+      minHeight: 10 + insets.top
     };
   });
 
@@ -127,21 +153,37 @@ export default function CustomerProfileScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Animated Header */}
-      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
-        {/* Small Title - Centered & Absolute */}
-        <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
-            Account
-          </Text>
-        </Animated.View>
+      {/* Fixed Small Title - Always at top, appears on scroll */}
+      <Animated.View style={[{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        paddingTop: insets.top - 5,
+        paddingBottom: 12,
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        backgroundColor: '#0A0A1F',
+        zIndex: 101,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+      }, smallTitleStyle]}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+          Account
+        </Text>
+      </Animated.View>
 
-        {/* Large Title - Standard Flow */}
+      {/* Collapsible Header with Large Title */}
+      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
+        {/* Large Title - Slides Up and Fades */}
         <Animated.Text style={[{
           fontWeight: 'bold',
           color: '#fff',
           fontSize: 34,
-          marginTop: 10
+          marginTop: 5
         }, largeTitleStyle]}>
           Account
         </Animated.Text>

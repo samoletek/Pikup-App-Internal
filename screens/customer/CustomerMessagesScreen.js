@@ -38,39 +38,92 @@ export default function CustomerMessagesScreen({ navigation }) {
     },
   });
 
+  // Search bar collapses FIRST (scroll 0-40)
+  const searchBarStyle = useAnimatedStyle(() => {
+    const height = interpolate(
+      scrollY.value,
+      [0, 40],
+      [40, 0],
+      Extrapolation.CLAMP
+    );
+    // Text fades when search bar shrinks 33%
+    const opacity = interpolate(
+      scrollY.value,
+      [0, 14],
+      [1, 0],
+      Extrapolation.CLAMP
+    );
+    return {
+      height,
+      opacity,
+      overflow: 'hidden',
+    };
+  });
+
   const headerStyle = useAnimatedStyle(() => {
+    // Header only starts collapsing AFTER search bar is collapsed (scroll > 40)
     const headerHeight = interpolate(
       scrollY.value,
-      [0, 100],
-      [50, 10],
+      [40, 140],
+      [15, 0], // Reduced from 25 to 15
       Extrapolation.CLAMP
     );
 
     return {
       paddingBottom: headerHeight,
-      borderBottomWidth: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolation.CLAMP),
+      borderBottomWidth: interpolate(scrollY.value, [40, 90], [0, 1], Extrapolation.CLAMP),
       borderBottomColor: '#2A2A3B',
+      overflow: 'hidden',
     };
   });
 
   const smallTitleStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(
-      scrollY.value,
-      [40, 60],
-      [0, 1],
-      Extrapolation.CLAMP
-    );
+    // Small title appears when large title hides
+    const opacity = scrollY.value > 65 ? 1 : 0;
     return { opacity };
   });
 
   const largeTitleStyle = useAnimatedStyle(() => {
+    // Sync animations for "Trim from Top" effect (Reverse of bottom trim)
+    // Text moves UP (-45) as Height shrinks (41->0)
+    // This keeps the bottom of the text visible as long as possible (Top disappears first)
+
+    const scrollRange = [40, 75]; // Faster animation
+
+    const translateY = interpolate(
+      scrollY.value,
+      scrollRange,
+      [0, -45], // Move up fully (height of text)
+      Extrapolation.CLAMP
+    );
+
     const opacity = interpolate(
       scrollY.value,
-      [0, 40],
+      scrollRange,
       [1, 0],
       Extrapolation.CLAMP
     );
-    return { opacity };
+
+    const height = interpolate(
+      scrollY.value,
+      scrollRange,
+      [41, 0],
+      Extrapolation.CLAMP
+    );
+
+    const marginTop = interpolate(
+      scrollY.value,
+      scrollRange,
+      [5, 0],
+      Extrapolation.CLAMP
+    );
+
+    return {
+      transform: [{ translateY }],
+      opacity,
+      height,
+      marginTop
+    };
   });
 
   const headerContainerAnimatedStyle = useAnimatedStyle(() => {
@@ -80,7 +133,7 @@ export default function CustomerMessagesScreen({ navigation }) {
       backgroundColor: '#0A0A1F',
       zIndex: 100,
       justifyContent: 'center',
-      minHeight: 60 + insets.top
+      minHeight: 10 + insets.top // Reduced from 20
     };
   });
 
@@ -93,17 +146,23 @@ export default function CustomerMessagesScreen({ navigation }) {
 
     try {
       setLoading(true);
-      const userConversations = await getConversations(currentUser.uid, 'customer');
 
-      // Filter out invalid conversations
-      const validConversations = userConversations.filter(conv =>
-        conv.customerId && conv.driverId && conv.requestId
-      );
+      // Mock conversations for testing scroll
+      const mockConversations = Array.from({ length: 15 }, (_, i) => ({
+        id: `conv-${i}`,
+        customerId: currentUser.uid,
+        driverId: `driver-${i}`,
+        requestId: `request-${i}`,
+        lastMessage: i % 3 === 0 ? 'I have arrived at the pickup location' :
+          i % 3 === 1 ? 'Thank you for choosing Pikup!' :
+            'On my way to you now',
+        lastMessageAt: Date.now() - (i * 3600000), // Each 1 hour apart
+        unreadByCustomer: i % 4 === 0 ? 1 : 0 // Every 4th message is unread
+      }));
 
-      setConversations(validConversations);
+      setConversations(mockConversations);
     } catch (error) {
       console.error('Error loading conversations:', error);
-      // Show user-friendly error
       Alert.alert(
         'Unable to Load Messages',
         'Please try again later.',
@@ -220,28 +279,44 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Animated Header */}
-      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
-        {/* Small Title - Centered & Absolute */}
-        <Animated.View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center', paddingTop: insets.top }, smallTitleStyle]}>
-          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
-            Messages
-          </Text>
-        </Animated.View>
+      {/* Fixed Small Title - Always at top, appears on scroll */}
+      <Animated.View style={[{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        paddingTop: insets.top - 5, // Push text down slightly
+        paddingBottom: 12, // Match visual top padding
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+        backgroundColor: '#0A0A1F',
+        zIndex: 101,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 }, // Reduced shadow
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+      }, smallTitleStyle]}>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#fff' }}>
+          Messages
+        </Text>
+      </Animated.View>
 
-        {/* Large Title - Standard Flow */}
+      {/* Collapsible Header with Large Title */}
+      <Animated.View style={[headerContainerAnimatedStyle, headerStyle]}>
+        {/* Large Title - Slides Up and Fades */}
         <Animated.Text style={[{
           fontWeight: 'bold',
           color: '#fff',
           fontSize: 34,
-          marginTop: 10
+          marginTop: 5 // Reduced from 10
         }, largeTitleStyle]}>
           Messages
         </Animated.Text>
       </Animated.View>
 
-      {/* Search Bar - Top */}
-      <View style={styles.searchContainer}>
+      {/* Search Bar - Collapses first */}
+      <Animated.View style={[styles.searchContainer, searchBarStyle]}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={20} color="#999" />
           <TextInput
@@ -252,7 +327,7 @@ export default function CustomerMessagesScreen({ navigation }) {
             onChangeText={setSearchText}
           />
         </View>
-      </View>
+      </Animated.View>
 
       {/* Messages List - Main content area */}
       {loading ? (
@@ -265,7 +340,7 @@ export default function CustomerMessagesScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
           scrollEventThrottle={16}
-          contentContainerStyle={{ paddingTop: 10 }}
+          contentContainerStyle={{ paddingTop: 5 }}
         >
           {filteredConversations.map(renderConversationItem)}
           <View style={styles.bottomSpacing} />
@@ -308,15 +383,6 @@ export default function CustomerMessagesScreen({ navigation }) {
               </Text>
             </View>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterTab, selectedFilter === 'support' && styles.activeFilter]}
-            onPress={() => setSelectedFilter('support')}
-          >
-            <Text style={[styles.filterText, selectedFilter === 'support' && styles.activeFilterText]}>
-              Support
-            </Text>
-          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -330,7 +396,6 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 15,
   },
   bottomControlsContainer: {
     backgroundColor: '#0A0A1F',
@@ -340,12 +405,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141426',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
+    backgroundColor: 'transparent',
   },
   searchInput: {
     flex: 1,
