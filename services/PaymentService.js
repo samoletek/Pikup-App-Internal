@@ -44,12 +44,26 @@ export const updateDriverPaymentProfile = async (driverId, updates) => {
 
         // Merge updates
         const newMeta = { ...currentMeta, ...updates, updatedAt: new Date().toISOString() };
+        const columnUpdates = {
+            metadata: newMeta,
+            updated_at: new Date().toISOString(),
+        };
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'onboardingComplete')) {
+            columnUpdates.onboarding_complete = Boolean(updates.onboardingComplete);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'canReceivePayments')) {
+            columnUpdates.can_receive_payments = Boolean(updates.canReceivePayments);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updates, 'connectAccountId')) {
+            columnUpdates.stripe_account_id = updates.connectAccountId || null;
+        }
 
         const { data, error } = await supabase
             .from('drivers')
-            .update({
-                metadata: newMeta
-            })
+            .update(columnUpdates)
             .eq('id', driverId)
             .select()
             .single();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
+import { colors } from '../styles/theme';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,7 +34,7 @@ export default function DeliveryPhotosModal({
   const renderNoPhotosMessage = () => (
     <View style={styles.emptyState}>
       <View style={styles.emptyIconContainer}>
-        <Ionicons name="images-outline" size={40} color="#666" />
+        <Ionicons name="images-outline" size={40} color={colors.text.placeholder} />
       </View>
       <Text style={styles.emptyStateText}>
         {activeTab === 'pickup'
@@ -78,7 +79,7 @@ export default function DeliveryPhotosModal({
     <View style={styles.header}>
       <Text style={styles.title}>Delivery Photos</Text>
       <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-        <Ionicons name="close" size={24} color="#fff" />
+        <Ionicons name="close" size={24} color={colors.text.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -88,17 +89,17 @@ export default function DeliveryPhotosModal({
       visible={visible}
       onClose={onClose}
       height={SCREEN_HEIGHT * 0.85}
-      backgroundColor="#141426"
+      backgroundColor={colors.background.secondary}
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: '#2A2A3B' }}
+      handleStyle={{ backgroundColor: colors.border.strong }}
     >
       {() => (
         <View style={styles.content}>
           {requestDetails && (
             <View style={styles.requestInfo}>
               <View style={styles.requestIcon}>
-                <Ionicons name="cube-outline" size={20} color="#A77BFF" />
+                <Ionicons name="cube-outline" size={20} color={colors.primary} />
               </View>
               <View style={styles.requestTexts}>
                 <Text style={styles.requestTitle}>{requestDetails.item?.description || 'Package details'}</Text>
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -163,13 +164,13 @@ const styles = StyleSheet.create({
   requestInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     marginHorizontal: 20,
     borderRadius: 16,
     padding: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   requestIcon: {
     width: 36,
@@ -186,22 +187,22 @@ const styles = StyleSheet.create({
   requestTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text.primary,
     marginBottom: 2,
   },
   requestDate: {
     fontSize: 12,
-    color: '#888',
+    color: colors.text.muted,
   },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: 20,
     marginBottom: 20,
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     borderRadius: 30,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   tab: {
     flex: 1,
@@ -210,20 +211,20 @@ const styles = StyleSheet.create({
     borderRadius: 26,
   },
   activeTab: {
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
   },
   tabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#666',
+    color: colors.text.placeholder,
   },
   activeTabText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontWeight: '600',
   },
   mainContainer: {
     flex: 1,
-    backgroundColor: '#000', // Black background for photos
+    backgroundColor: colors.black, // Black background for photos
   },
   photosWrapper: {
     flex: 1,
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   photoIndex: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   emptyIconContainer: {
     width: 80,
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyStateText: {
-    color: '#888',
+    color: colors.text.muted,
     fontSize: 16,
   },
 });

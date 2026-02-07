@@ -11,6 +11,7 @@ import {
     Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../styles/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -27,7 +28,7 @@ const BaseModal = forwardRef(({
     handleStyle,
     containerStyle,
     renderHeader,
-    backgroundColor = '#FFFFFF', // Default to white, can be overridden
+    backgroundColor = colors.background.surface,
     onBackdropPress, // Optional: custom handler for backdrop tap (e.g., show confirmation)
     avoidKeyboard = false,
 }, ref) => {
@@ -250,7 +251,7 @@ export default BaseModal;
 const styles = StyleSheet.create({
     backdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#000',
+        backgroundColor: colors.black,
         zIndex: 998,
     },
     container: {
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
         zIndex: 999,
         overflow: 'hidden',
         // Shadow for elevation look
-        shadowColor: "#000",
+        shadowColor: colors.black,
         shadowOffset: {
             width: 0,
             height: -2,
@@ -283,6 +284,6 @@ const styles = StyleSheet.create({
         width: 40,
         height: 4,
         borderRadius: 2,
-        backgroundColor: '#E0E0E0',
+        backgroundColor: colors.border.inverse,
     },
 });

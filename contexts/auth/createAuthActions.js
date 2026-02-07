@@ -82,6 +82,9 @@ export const createAuthActions = ({
     }
   };
 
+  const changePassword = (currentPassword, newPassword) =>
+    AuthService.changePassword(currentUser, currentPassword, newPassword);
+
   const updateUserProfile = (updates) =>
     ProfileService.updateUserProfile(updates, currentUser, userType).then((data) => {
       setCurrentUser((prev) => ({ ...prev, ...data }));
@@ -239,6 +242,7 @@ export const createAuthActions = ({
     signInWithApple,
     signInWithGoogle,
     deleteAccount,
+    changePassword,
     createPickupRequest,
     getUserPickupRequests,
     getAvailableRequests,

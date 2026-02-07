@@ -7,7 +7,9 @@ import {
   TextInput,
   Image,
   ScrollView,
-  Alert
+  Alert,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,11 +17,13 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePayment } from '../../contexts/PaymentContext';
 import { supabase } from '../../config/supabase';
 import DeliveryPhotosModal from '../../components/DeliveryPhotosModal';
-import { colors, spacing, borderRadius, typography } from '../../styles/theme';
+import ScreenHeader from '../../components/ScreenHeader';
+import { colors, spacing, borderRadius, typography, layout } from '../../styles/theme';
 import { TRIP_STATUS } from '../../constants/tripStatus';
 
 export default function DeliveryFeedbackScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { requestId, requestData: initialRequestData, returnToHome } = route.params || {};
   const { getRequestById, updateRequestStatus, getDriverProfile, currentUser } = useAuth();
   const { confirmPayment, defaultPaymentMethod, createPaymentIntent } = usePayment();
@@ -36,6 +40,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const tripTotal = Number(requestData?.pricing?.total || 0);
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
 
 
@@ -206,25 +211,50 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
     setShowPhotosModal(true);
   };
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader
+          title="Delivery Feedback"
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          showBack
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading delivery details...</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.title}>Was Your Item Delivered Safely?</Text>
+      <ScreenHeader
+        title="Delivery Feedback"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack
+      />
 
-        <View style={styles.toggleRow}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, delivered && styles.activeBtn]}
-            onPress={() => setDelivered(true)}
-          >
-            <Text style={[styles.toggleText, delivered && styles.activeText]}>Yes</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, !delivered && styles.activeBtn]}
-            onPress={() => setDelivered(false)}
-          >
-            <Text style={[styles.toggleText, !delivered && styles.activeText]}>No</Text>
-          </TouchableOpacity>
-        </View>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          <Text style={styles.title}>Was Your Item Delivered Safely?</Text>
+
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, delivered && styles.activeBtn]}
+              onPress={() => setDelivered(true)}
+            >
+              <Text style={[styles.toggleText, delivered && styles.activeText]}>Yes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, !delivered && styles.activeBtn]}
+              onPress={() => setDelivered(false)}
+            >
+              <Text style={[styles.toggleText, !delivered && styles.activeText]}>No</Text>
+            </TouchableOpacity>
+          </View>
 
         <View style={styles.card}>
           <View style={styles.driverRow}>
@@ -307,18 +337,24 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
           </View>
         </View>
 
-        {!delivered && (
-          <TouchableOpacity
-            style={styles.startClaimButton}
-            onPress={handleStartClaim}
-          >
-            <Ionicons name="shield-outline" size={20} color={colors.white} />
-            <Text style={styles.startClaimText}>Start a Claim</Text>
-          </TouchableOpacity>
-        )}
+          {!delivered && (
+            <TouchableOpacity
+              style={styles.startClaimButton}
+              onPress={handleStartClaim}
+            >
+              <Ionicons name="shield-outline" size={20} color={colors.white} />
+              <Text style={styles.startClaimText}>Start a Claim</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
 
-      <View style={[styles.buttonContainer, { paddingBottom: insets.bottom + 16 }]}>
+      <View
+        style={[
+          styles.buttonContainer,
+          { paddingBottom: insets.bottom + spacing.base, width: contentMaxWidth },
+        ]}
+      >
         <TouchableOpacity
           style={[styles.submitBtn, submitting && styles.disabledBtn]}
           onPress={handleSubmit}
@@ -357,9 +393,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  loadingText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
   scroll: {
     padding: spacing.base,
     paddingBottom: 140
+  },
+  contentColumn: {
+    width: '100%',
+    alignSelf: 'center',
   },
   title: {
     color: colors.text.primary,
@@ -395,6 +447,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     padding: spacing.base,
     marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
   driverRow: {
     flexDirection: 'row',
@@ -408,7 +462,7 @@ const styles = StyleSheet.create({
   },
   vehicle: {
     color: colors.text.secondary,
-    fontSize: 13
+    fontSize: typography.fontSize.base
   },
   stars: {
     color: colors.primary,
@@ -431,17 +485,17 @@ const styles = StyleSheet.create({
   viewPhotosText: {
     color: colors.primary,
     marginLeft: spacing.sm,
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
   },
   label: {
     color: colors.text.primary,
-    fontSize: 15,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.xs,
   },
   subLabel: {
     color: colors.text.muted,
-    fontSize: 13,
+    fontSize: typography.fontSize.base,
     marginBottom: spacing.md,
   },
   tipRow: {
@@ -464,9 +518,11 @@ const styles = StyleSheet.create({
   },
   tipInput: {
     backgroundColor: colors.background.tertiary,
-    borderRadius: 10,
+    borderRadius: borderRadius.sm,
     padding: spacing.sm + 2,
     color: colors.text.primary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
   starRow: {
     flexDirection: 'row',
@@ -476,8 +532,9 @@ const styles = StyleSheet.create({
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
-    left: spacing.base,
-    right: spacing.base,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.base,
+    backgroundColor: colors.background.primary,
     gap: spacing.md - 2,
   },
   submitBtn: {

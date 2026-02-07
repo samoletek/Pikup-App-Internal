@@ -10,27 +10,30 @@ import {
   Platform,
   Linking,
   Animated,
-  Dimensions,
-  StatusBar,
-  NativeModules
+  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import MapboxMap from '../../components/mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import useMapboxNavigation from '../../components/mapbox/useMapboxNavigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PICKUP_PHASE_STATUSES, DROPOFF_PHASE_STATUSES, TRIP_STATUS } from '../../constants/tripStatus';
-
-const { width, height } = Dimensions.get('window');
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { 
     startDriving, 
@@ -52,7 +55,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const [navigationStarted, setNavigationStarted] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(null);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
-  const [currentSpeed, setCurrentSpeed] = useState(0); // Speed in m/s
   const [currentHeading, setCurrentHeading] = useState(0); // Direction in degrees
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   
@@ -62,21 +64,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const [nextInstruction, setNextInstruction] = useState(null);
   const [distanceToTurn, setDistanceToTurn] = useState(null);
   const [currentStreet, setCurrentStreet] = useState('');
-  
-  // Apple Maps style zoom calculation functions
-  const calculateZoomFromSpeed = (speedKmh) => {
-    if (speedKmh < 20) return 19;      // Very slow/stopped
-    if (speedKmh < 50) return 18.5;    // City driving
-    if (speedKmh < 80) return 17.5;    // Fast city/slow highway
-    return 16.5;                       // Highway speeds
-  };
-  
-  const calculateZoomFromTurnDistance = (meters) => {
-    if (meters < 50) return 19.5;     // Very close to turn
-    if (meters < 150) return 19;      // Approaching turn
-    if (meters < 300) return 18.5;    // Near turn
-    return 18;                        // Normal navigation
-  };
+  const cardMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const cardGradientColors = [colors.background.primary, colors.background.secondary];
   
   // Update navigation camera with Apple Maps style
   const updateNavigationCamera = (location, speed, distanceToNextTurn) => {
@@ -209,18 +198,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
 
   // Start Mapbox Navigation when coordinates are ready
   useEffect(() => {
-    console.log('=== NAVIGATION USEEFFECT DEBUG ===');
-    console.log('Navigation check:', {
-      platform: Platform.OS,
-      isSupported,
-      isCustomerView,
-      hasDriverLocation: !!driverLocation,
-      hasCustomerLocation: !!customerLocation,
-      isNavigating,
-      navigationAttempted
-    });
-    console.log('===================================');
-    
     if (Platform.OS === 'ios' && 
         isSupported && 
         !isCustomerView && 
@@ -229,24 +206,12 @@ export default function GpsNavigationScreen({ route, navigation }) {
         !isNavigating && 
         !navigationAttempted) {
       
-      console.log('✅ All conditions met, starting navigation');
       setNavigationAttempted(true);
-      console.log('=== MAPBOX NAVIGATION DEBUG ===');
-      console.log('Platform.OS:', Platform.OS);
-      console.log('isSupported:', isSupported);
-      console.log('driverLocation:', driverLocation);
-      console.log('customerLocation:', customerLocation);
-      console.log('All Native Modules:', Object.keys(NativeModules));
-      console.log('MapboxNavigation module:', NativeModules.MapboxNavigation);
-      console.log('MapboxNavigationModule:', NativeModules.MapboxNavigationModule);
-      console.log('================================');
       
       startNavigation().catch((error) => {
         console.log('Mapbox navigation not available, using fallback map:', error);
         // Keep navigationAttempted true to prevent retries
       });
-    } else {
-      console.log('❌ Navigation conditions not met');
     }
   }, [driverLocation, customerLocation, isSupported, isCustomerView, isNavigating, navigationAttempted]);
 
@@ -477,9 +442,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
           setDriverLocation(newLocation);
           
           // Update speed and heading
-          if (locationData.coords.speed !== null) {
-            setCurrentSpeed(locationData.coords.speed);
-          }
           if (locationData.coords.heading !== null) {
             setCurrentHeading(locationData.coords.heading);
           }
@@ -797,7 +759,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     return (
       <View style={styles.navigationContainer}>
         {/* Purple header section with instruction */}
-        <View style={[styles.navigationHeader, { paddingTop: insets.top + 20 }]}>
+        <View style={[styles.navigationHeader, { paddingTop: insets.top + spacing.lg }]}>
           <View style={styles.navigationHeaderContent}>
             <Text style={styles.distanceText}>
               {distanceToTurn || 'Calculating...'}
@@ -806,14 +768,14 @@ export default function GpsNavigationScreen({ route, navigation }) {
               {nextInstruction}
             </Text>
             <View style={styles.directionArrows}>
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
               <Ionicons 
                 name={getManeuverIcon(maneuverType)} 
                 size={20} 
-                color="#FFFFFF" 
-                style={{ marginLeft: 5 }}
+                color={colors.white}
+                style={{ marginLeft: spacing.xs + 1 }}
               />
             </View>
           </View>
@@ -884,8 +846,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
 
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        
         {/* Map View */}
         <MapboxMap
           ref={mapRef}
@@ -905,7 +865,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               title="Driver"
             >
               <View style={styles.driverMarker}>
-                <Ionicons name="car" size={18} color="#fff" />
+                <Ionicons name="car" size={18} color={colors.white} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -917,7 +877,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               title={locationTitle}
             >
               <View style={styles.destinationMarker}>
-                <Ionicons name="location" size={24} color="#A77BFF" />
+                <Ionicons name="location" size={24} color={colors.primary} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -933,7 +893,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               <Mapbox.LineLayer
                 id="routeLine"
                 style={{
-                  lineColor: '#007AFF', // Apple blue
+                  lineColor: colors.primary,
                   lineWidth: 6,
                   lineCap: 'round',
                   lineJoin: 'round',
@@ -942,8 +902,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
                     'interpolate',
                     ['linear'],
                     ['line-progress'],
-                    0, '#007AFF',
-                    1, '#0051D5'
+                    0, colors.primary,
+                    1, colors.primaryDark
                   ]
                 }}
               />
@@ -953,21 +913,24 @@ export default function GpsNavigationScreen({ route, navigation }) {
         
         {/* Back Button */}
         <TouchableOpacity
-          style={[styles.backButton, { top: insets.top + 10 }]}
+          style={[styles.backButton, { top: insets.top + spacing.sm }]}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
         
         {/* Info Card */}
         <Animated.View 
           style={[
             styles.customerInfoCard, 
-            { transform: [{ translateY: cardTranslateY }] }
+            {
+              transform: [{ translateY: cardTranslateY }],
+              maxWidth: cardMaxWidth,
+            }
           ]}
         >
           <LinearGradient
-            colors={['rgba(10, 10, 31, 0.95)', 'rgba(20, 20, 38, 0.98)']}
+            colors={cardGradientColors}
             style={styles.cardGradient}
           >
             <View style={styles.etaContainer}>
@@ -999,19 +962,19 @@ export default function GpsNavigationScreen({ route, navigation }) {
                 onPress={openChat}
                 disabled={isCreatingChat}
               >
-                <Ionicons name="chatbubble-ellipses" size={22} color="#A77BFF" />
+                <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
               </TouchableOpacity>
             </View>
             
             <View style={styles.statusContainer}>
               <View style={styles.statusItem}>
-                <Ionicons name="location" size={18} color="#A77BFF" />
+                <Ionicons name="location" size={18} color={colors.primary} />
                 <Text style={styles.statusText}>
                   {isPickupStage ? "Picking up your items" : "Delivering your items"}
                 </Text>
               </View>
               <View style={styles.statusItem}>
-                <Ionicons name="navigate" size={18} color="#A77BFF" />
+                <Ionicons name="navigate" size={18} color={colors.primary} />
                 <Text style={styles.statusText}>
                   Distance: {remainingDistance}
                 </Text>
@@ -1033,27 +996,28 @@ export default function GpsNavigationScreen({ route, navigation }) {
     if (isNavigating) {
       return (
         <View style={styles.container}>
-          <StatusBar barStyle="light-content" />
-          
           {/* Mapbox Navigation SDK runs full-screen here automatically */}
           
           {/* Close Navigation Button */}
-          <TouchableOpacity
-            style={[styles.closeNavButton, { top: insets.top + 10 }]}
-            onPress={() => stopNavigation()}
-          >
-            <Ionicons name="close" size={24} color="#fff" />
+              <TouchableOpacity
+                style={[styles.closeNavButton, { top: insets.top + spacing.sm }]}
+                onPress={() => stopNavigation()}
+              >
+            <Ionicons name="close" size={24} color={colors.white} />
           </TouchableOpacity>
           
           {/* Floating Bottom Card */}
           <Animated.View 
             style={[
               styles.floatingBottomCard, 
-              { transform: [{ translateY: cardTranslateY }] }
+              {
+                transform: [{ translateY: cardTranslateY }],
+                maxWidth: cardMaxWidth,
+              }
             ]}
           >
             <LinearGradient
-              colors={['rgba(10, 10, 31, 0.95)', 'rgba(20, 20, 38, 0.98)']}
+              colors={cardGradientColors}
               style={styles.cardGradient}
             >
               <View style={styles.destinationHeader}>
@@ -1091,7 +1055,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
                   onPress={openChat}
                   disabled={isCreatingChat}
                 >
-                  <Ionicons name="chatbubble-ellipses" size={22} color="#A77BFF" />
+                  <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               
@@ -1112,8 +1076,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
     // Otherwise show regular map view
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        
         {/* Map View */}
         <MapboxMap
           ref={mapRef}
@@ -1133,7 +1095,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               title="Your Location"
             >
               <View style={styles.driverMarker}>
-                <Ionicons name="car" size={18} color="#fff" />
+                <Ionicons name="car" size={18} color={colors.white} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -1145,7 +1107,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               title="Pickup Location"
             >
               <View style={styles.destinationMarker}>
-                <Ionicons name="location" size={24} color="#A77BFF" />
+                <Ionicons name="location" size={24} color={colors.primary} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -1161,7 +1123,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
               <Mapbox.LineLayer
                 id="driverRouteLine"
                 style={{
-                  lineColor: '#A77BFF',
+                  lineColor: colors.primary,
                   lineWidth: 4,
                   lineCap: 'round',
                   lineJoin: 'round'
@@ -1173,7 +1135,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
         
         {/* Back Button */}
         <TouchableOpacity
-          style={[styles.backButton, { top: insets.top + 10 }]}
+          style={[styles.backButton, { top: insets.top + spacing.sm }]}
           onPress={() => {
             if (isNavigating) {
               stopNavigation();
@@ -1181,16 +1143,16 @@ export default function GpsNavigationScreen({ route, navigation }) {
             navigation.goBack();
           }}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
 
         {/* Start Navigation Button (only show if navigation is supported) */}
         {isSupported && !isNavigating && driverLocation && customerLocation && (
           <TouchableOpacity
-            style={[styles.startNavButton, { top: insets.top + 10 }]}
+            style={[styles.startNavButton, { top: insets.top + spacing.sm }]}
             onPress={startNavigation}
           >
-            <Ionicons name="navigate" size={20} color="#fff" />
+            <Ionicons name="navigate" size={20} color={colors.white} />
             <Text style={styles.startNavText}>Start Navigation</Text>
           </TouchableOpacity>
         )}
@@ -1202,11 +1164,14 @@ export default function GpsNavigationScreen({ route, navigation }) {
         <Animated.View 
           style={[
             styles.driverInfoCard, 
-            { transform: [{ translateY: cardTranslateY }] }
+            {
+              transform: [{ translateY: cardTranslateY }],
+              maxWidth: cardMaxWidth,
+            }
           ]}
         >
           <LinearGradient
-            colors={['rgba(10, 10, 31, 0.95)', 'rgba(20, 20, 38, 0.98)']}
+            colors={cardGradientColors}
             style={styles.cardGradient}
           >
             <View style={styles.destinationHeader}>
@@ -1246,7 +1211,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
                 onPress={openChat}
                 disabled={isCreatingChat}
               >
-                <Ionicons name="chatbubble-ellipses" size={22} color="#A77BFF" />
+                <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
               </TouchableOpacity>
             </View>
             
@@ -1267,7 +1232,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A77BFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading navigation...</Text>
       </View>
     );
@@ -1276,7 +1241,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   if (locationError) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="warning" size={48} color="#ff6b6b" />
+        <Ionicons name="warning" size={48} color={colors.error} />
         <Text style={styles.errorText}>{locationError}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
@@ -1299,189 +1264,10 @@ export default function GpsNavigationScreen({ route, navigation }) {
   return isCustomerView ? renderCustomerView() : renderDriverView();
 }
 
-const mapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#9e9e9e"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#bdbdbd"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#181818"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#1b1b1b"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.fill",
-    "stylers": [
-      {
-        "color": "#2c2c2c"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8a8a8a"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#373737"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#3c3c3c"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway.controlled_access",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#4e4e4e"
-      }
-    ]
-  },
-  {
-    "featureType": "road.local",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#000000"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#3d3d3d"
-      }
-    ]
-  }
-];
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   map: {
     width: '100%',
@@ -1491,60 +1277,60 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#fff',
+    marginTop: spacing.sm + 2,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A1F',
-    padding: 20,
+    backgroundColor: colors.background.primary,
+    padding: spacing.lg,
   },
   errorText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: '#fff',
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
     textAlign: 'center',
   },
   retryButton: {
-    marginTop: 20,
-    backgroundColor: '#A77BFF',
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
   },
   retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   backButton: {
     position: 'absolute',
-    left: 20,
-    backgroundColor: 'rgba(10, 10, 31, 0.8)',
+    left: spacing.lg,
+    backgroundColor: colors.overlayDark,
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borderRadius.circle,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   driverMarker: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     width: 36,
     height: 36,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   destinationMarker: {
     alignItems: 'center',
@@ -1553,51 +1339,51 @@ const styles = StyleSheet.create({
   customerInfoCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    width: '100%',
+    alignSelf: 'center',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 10,
   },
   cardGradient: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    padding: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xxl + spacing.sm : spacing.lg,
   },
   etaContainer: {
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   etaLabel: {
-    fontSize: 14,
-    color: '#aaa',
-    marginBottom: 5,
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
+    marginBottom: spacing.xs + 1,
   },
   etaValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: typography.fontSize.xxl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 15,
+    backgroundColor: colors.navigation.tabBarBorder,
+    marginVertical: spacing.base - 1,
   },
   driverInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   driverImageContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
     overflow: 'hidden',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   driverImage: {
     width: '100%',
@@ -1606,23 +1392,23 @@ const styles = StyleSheet.create({
   },
   driverDetails: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: spacing.base - 1,
   },
   driverName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   vehicleInfo: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
   },
   callButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1635,20 +1421,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#aaa',
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
   },
   // Driver View Styles
   driverInfoCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    width: '100%',
+    alignSelf: 'center',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
@@ -1658,42 +1444,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   destinationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   destinationAddress: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
-    maxWidth: width - 120,
+    maxWidth: '75%',
   },
   etaBox: {
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
+    backgroundColor: colors.primaryLight,
     borderRadius: 10,
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   etaTime: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#A77BFF',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary,
   },
   customerInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   customerImageContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
     overflow: 'hidden',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   customerImage: {
     width: '100%',
@@ -1702,33 +1488,33 @@ const styles = StyleSheet.create({
   },
   customerDetails: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: spacing.base - 1,
   },
   customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   itemInfo: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
   },
   actionContainer: {
     alignItems: 'center',
   },
   arriveButton: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     width: '100%',
     alignItems: 'center',
   },
   arriveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   // Navigation instruction styles
   navigationContainer: {
@@ -1741,9 +1527,9 @@ const styles = StyleSheet.create({
   },
   
   navigationHeader: {
-    backgroundColor: '#8B5FBF',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   
   navigationHeaderContent: {
@@ -1751,15 +1537,15 @@ const styles = StyleSheet.create({
   },
   
   distanceText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: typography.fontSize.xxxl - spacing.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.white,
     marginBottom: 8,
   },
   
   instructionText: {
-    fontSize: 18,
-    color: '#FFFFFF',
+    fontSize: typography.fontSize.lg,
+    color: colors.white,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 12,
@@ -1780,15 +1566,15 @@ const styles = StyleSheet.create({
     bottom: 40,
     left: 20,
     right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: colors.overlayDark,
     borderRadius: 12,
     padding: 16,
   },
   
   progressText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -1814,9 +1600,9 @@ const styles = StyleSheet.create({
   },
   
   driverNameSmall: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     marginRight: 12,
   },
   
@@ -1824,35 +1610,35 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   
   arriveButtonNav: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   
   arriveButtonNavText: {
-    color: '#FFFFFF',
+    color: colors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
   },
   
   // Floating overlay styles for navigation mode
   floatingBottomCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
+    alignSelf: 'center',
     zIndex: 9999,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -1861,8 +1647,8 @@ const styles = StyleSheet.create({
   
   closeNavButton: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    right: spacing.lg,
+    backgroundColor: colors.overlayDark,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -1870,20 +1656,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10000,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   
   startNavButton: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: '#A77BFF',
+    right: spacing.lg,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     zIndex: 10,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1891,9 +1677,9 @@ const styles = StyleSheet.create({
   },
   
   startNavText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm - 2,
   },
 });

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import DeliveryPhotosModal from './DeliveryPhotosModal';
 import { TRIP_STATUS } from '../constants/tripStatus';
+import { colors } from '../styles/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -136,7 +137,7 @@ export default function DeliveryStatusTracker({
       <TouchableOpacity style={styles.compactContainer} onPress={onViewFullTracker || toggleExpanded}>
         <View style={styles.compactContent}>
           <View style={styles.compactIconContainer}>
-            <Ionicons name={currentStep.icon} size={16} color="#fff" />
+            <Ionicons name={currentStep.icon} size={16} color={colors.white} />
           </View>
           <View style={styles.compactTextContainer}>
             <Text style={styles.compactStatus}>{currentStep.label}</Text>
@@ -146,7 +147,7 @@ export default function DeliveryStatusTracker({
           </View>
         </View>
         <View style={styles.tapIndicator}>
-          <Ionicons name="chevron-forward" size={16} color="#999" />
+          <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
         </View>
       </TouchableOpacity>
     );
@@ -168,7 +169,7 @@ export default function DeliveryStatusTracker({
             <Ionicons
               name={step.icon}
               size={16}
-              color={isActive ? '#fff' : '#666'}
+              color={isActive ? colors.white : colors.text.subtle}
             />
           </View>
 
@@ -213,7 +214,7 @@ export default function DeliveryStatusTracker({
             style={styles.photoButton}
             onPress={() => handleViewPhotos('pickup')}
           >
-            <Ionicons name="camera" size={16} color="#A77BFF" />
+            <Ionicons name="camera" size={16} color={colors.primary} />
             <Text style={styles.photoButtonText}>Pickup Photos</Text>
           </TouchableOpacity>
         )}
@@ -223,7 +224,7 @@ export default function DeliveryStatusTracker({
             style={styles.photoButton}
             onPress={() => handleViewPhotos('delivery')}
           >
-            <Ionicons name="images" size={16} color="#A77BFF" />
+            <Ionicons name="images" size={16} color={colors.primary} />
             <Text style={styles.photoButtonText}>Delivery Photos</Text>
           </TouchableOpacity>
         )}
@@ -242,7 +243,7 @@ export default function DeliveryStatusTracker({
       <View style={styles.driverInfoContainer}>
         <View style={styles.driverInfo}>
           <View style={styles.driverAvatar}>
-            <Ionicons name="person" size={18} color="#fff" />
+            <Ionicons name="person" size={18} color={colors.white} />
           </View>
           <View style={styles.driverTextInfo}>
             <Text style={styles.driverName}>{driverName}</Text>
@@ -251,7 +252,7 @@ export default function DeliveryStatusTracker({
             </Text>
           </View>
           <View style={styles.driverRating}>
-            <Ionicons name="star" size={14} color="#FFD700" />
+            <Ionicons name="star" size={14} color={colors.gold} />
             <Text style={styles.ratingText}>4.9</Text>
           </View>
         </View>
@@ -262,7 +263,7 @@ export default function DeliveryStatusTracker({
   if (loading && !requestData) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="small" color="#A77BFF" />
+        <ActivityIndicator size="small" color={colors.primary} />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -271,7 +272,7 @@ export default function DeliveryStatusTracker({
   if (error) {
     return (
       <TouchableOpacity style={styles.errorContainer} onPress={handleRefresh}>
-        <Ionicons name="alert-circle" size={16} color="#ff4444" />
+        <Ionicons name="alert-circle" size={16} color={colors.error} />
         <Text style={styles.errorText}>Tap to retry</Text>
       </TouchableOpacity>
     );
@@ -287,10 +288,10 @@ export default function DeliveryStatusTracker({
         <Text style={styles.title}>Delivery Status</Text>
         <View style={styles.headerButtons}>
           <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
-            <Ionicons name="refresh" size={18} color="#A77BFF" />
+            <Ionicons name="refresh" size={18} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.collapseButton} onPress={toggleExpanded}>
-            <Ionicons name="chevron-up" size={18} color="#A77BFF" />
+            <Ionicons name="chevron-up" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -320,30 +321,30 @@ export default function DeliveryStatusTracker({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 12,
     padding: 16,
     marginVertical: 10,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
-    shadowColor: "#000",
+    borderColor: colors.border.strong,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
   compactContainer: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 25,
     padding: 10,
     marginVertical: 10,
     marginHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.22,
     shadowRadius: 2.22,
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -367,12 +368,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   compactStatus: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: 'bold',
     fontSize: 14,
   },
   compactInfo: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
   },
   header: {
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
   },
   refreshButton: {
     width: 32,
@@ -407,7 +408,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   driverInfoContainer: {
-    backgroundColor: '#1E1E38',
+    backgroundColor: colors.background.panel,
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
@@ -420,7 +421,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -431,11 +432,11 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   vehicleInfo: {
     fontSize: 12,
-    color: '#ccc',
+    color: colors.text.secondary,
   },
   driverRating: {
     flexDirection: 'row',
@@ -446,7 +447,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   ratingText: {
-    color: '#FFD700',
+    color: colors.gold,
     fontSize: 12,
     fontWeight: 'bold',
     marginLeft: 4,
@@ -476,14 +477,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   activeDot: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
   },
   inactiveDot: {
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
   },
   currentDot: {
     borderWidth: 2,
-    borderColor: '#A77BFF',
+    borderColor: colors.primary,
   },
   statusTextContainer: {
     flex: 1,
@@ -493,16 +494,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   activeLabel: {
-    color: '#fff',
+    color: colors.white,
   },
   inactiveLabel: {
-    color: '#666',
+    color: colors.text.subtle,
   },
   currentLabel: {
     fontWeight: 'bold',
   },
   statusDescription: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginTop: 2,
   },
@@ -511,22 +512,22 @@ const styles = StyleSheet.create({
     height: 24,
   },
   activeLine: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
   },
   inactiveLine: {
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
   },
   liveTrackingButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     borderRadius: 25,
     marginBottom: 16,
   },
   liveTrackingText: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: 'bold',
     fontSize: 14,
     marginLeft: 8,
@@ -544,7 +545,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   photoButtonText: {
-    color: '#A77BFF',
+    color: colors.primary,
     marginLeft: 6,
     fontSize: 14,
   },
@@ -552,16 +553,16 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     flexDirection: 'row',
     marginHorizontal: 10,
     marginVertical: 10,
   },
   loadingText: {
-    color: '#ccc',
+    color: colors.text.secondary,
     marginLeft: 10,
     fontSize: 14,
   },
@@ -569,16 +570,16 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     flexDirection: 'row',
     marginHorizontal: 10,
     marginVertical: 10,
   },
   errorText: {
-    color: '#ff4444',
+    color: colors.error,
     marginLeft: 10,
     fontSize: 14,
   },

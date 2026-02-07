@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { styles, SCREEN_HEIGHT } from './styles';
+import { colors } from '../../styles/theme';
 
 const COLLAPSED_HEIGHT = 200;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
@@ -21,7 +22,6 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
         weeklyMilestone: 15
     });
     const [recommendations, setRecommendations] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [isExpanded, setIsExpanded] = useState(false);
     const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
     const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -66,10 +66,10 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
     // PanResponder for swipe gesture
     const panResponder = useRef(
         PanResponder.create({
-            onMoveShouldSetPanResponder: (evt, gestureState) => {
+            onMoveShouldSetPanResponder: (_, gestureState) => {
                 return Math.abs(gestureState.dy) > 10;
             },
-            onPanResponderMove: (evt, gestureState) => {
+            onPanResponderMove: (_, gestureState) => {
                 if (!isExpandedRef.current && gestureState.dy < 0) {
                     // Swiping up from collapsed
                     const newHeight = Math.min(EXPANDED_HEIGHT, COLLAPSED_HEIGHT - gestureState.dy);
@@ -82,7 +82,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                     backdropOpacity.setValue(Math.max(0, 0.5 - (gestureState.dy / (EXPANDED_HEIGHT - COLLAPSED_HEIGHT)) * 0.5));
                 }
             },
-            onPanResponderRelease: (evt, gestureState) => {
+            onPanResponderRelease: (_, gestureState) => {
                 if (!isExpandedRef.current && gestureState.dy < -50) {
                     // Expand
                     setIsExpanded(true);
@@ -171,8 +171,6 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
             }
         } catch (error) {
             console.error('Error loading session data:', error);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -185,7 +183,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                 icon: 'time-outline',
                 title: 'Peak Hours Active',
                 description: 'High demand expected for next 2 hours',
-                color: '#00D4AA'
+                color: colors.success
             });
         }
 
@@ -197,14 +195,14 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                 icon: 'trending-up-outline',
                 title: `$${remaining.toFixed(2)} to Daily Goal`,
                 description: `You're ${progress}% there`,
-                color: '#00BFA6'
+                color: colors.success
             });
         } else {
             recs.push({
                 icon: 'checkmark-circle-outline',
                 title: 'Daily Goal Achieved!',
                 description: 'Great job! Keep earning more?',
-                color: '#00D4AA'
+                color: colors.success
             });
         }
 
@@ -214,7 +212,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
             icon: 'location-outline',
             title: `High Demand: ${randomArea}`,
             description: 'More requests expected in this area',
-            color: '#17A2A2'
+            color: colors.success
         });
 
         setRecommendations(recs);
@@ -248,7 +246,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
 
             {/* Dashboard */}
             <Animated.View style={[styles.container, { height: animatedHeight }]}>
-                <LinearGradient colors={['#0A0A1F', '#141426']} style={styles.gradient}>
+                <LinearGradient colors={[colors.background.primary, colors.background.secondary]} style={styles.gradient}>
 
                     {/* Swipeable Handle Area */}
                     <View {...panResponder.panHandlers} style={styles.handleArea}>
@@ -266,7 +264,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                             <View style={styles.peekContent}>
                                 <View style={styles.peekHeader}>
                                     <View style={styles.peekLeft}>
-                                        <Ionicons name="trophy" size={18} color="#A77BFF" />
+                                        <Ionicons name="trophy" size={18} color={colors.primary} />
                                         <Text style={styles.peekTitle}>Weekly Milestone</Text>
                                     </View>
                                     <Text style={styles.peekProgress}>{driverStats.currentWeekTrips}/{driverStats.weeklyMilestone}</Text>
@@ -284,7 +282,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                         }
                                     </Text>
                                     <View style={styles.expandHint}>
-                                        <Ionicons name="chevron-up" size={14} color="#888" />
+                                        <Ionicons name="chevron-up" size={14} color={colors.text.muted} />
                                         <Text style={styles.expandHintText}>Tap for more</Text>
                                     </View>
                                 </View>
@@ -298,7 +296,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                             {/* Header with Close */}
                             <View style={styles.expandedHeader}>
                                 <TouchableOpacity onPress={collapse} style={styles.closeBtn}>
-                                    <Ionicons name="chevron-down" size={24} color="#fff" />
+                                    <Ionicons name="chevron-down" size={24} color={colors.text.primary} />
                                 </TouchableOpacity>
                                 <Text style={styles.expandedTitle}>Driver Dashboard</Text>
                                 <View style={{ width: 40 }} />
@@ -311,7 +309,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                 <View style={styles.sectionCard}>
                                     <View style={styles.milestoneHeader}>
                                         <View style={styles.milestoneLeft}>
-                                            <Ionicons name="trophy" size={22} color="#00D4AA" />
+                                            <Ionicons name="trophy" size={22} color={colors.success} />
                                             <View style={styles.milestoneTextWrap}>
                                                 <Text style={styles.milestoneTitle}>Weekly Milestone</Text>
                                                 <Text style={styles.milestoneSubtitle}>
@@ -332,7 +330,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                 {/* Today's Session */}
                                 <View style={styles.sectionCard}>
                                     <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="calendar-outline" size={18} color="#00D4AA" />
+                                        <Ionicons name="calendar-outline" size={18} color={colors.success} />
                                         <Text style={styles.sectionTitle}>Today's Session</Text>
                                     </View>
                                     <View style={styles.statsGrid}>
@@ -358,13 +356,13 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                 {/* Recommendations */}
                                 <View style={styles.sectionCard}>
                                     <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="bulb-outline" size={18} color="#00D4AA" />
+                                        <Ionicons name="bulb-outline" size={18} color={colors.success} />
                                         <Text style={styles.sectionTitle}>Recommendations</Text>
                                     </View>
                                     {recommendations.map((rec, index) => (
                                         <View key={index} style={styles.recommendationItem}>
                                             <View style={[styles.recIcon, { backgroundColor: rec.color }]}>
-                                                <Ionicons name={rec.icon} size={18} color="#fff" />
+                                                <Ionicons name={rec.icon} size={18} color={colors.text.primary} />
                                             </View>
                                             <View style={styles.recContent}>
                                                 <Text style={styles.recTitle}>{rec.title}</Text>
@@ -377,24 +375,24 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                 {/* Quick Actions */}
                                 <View style={styles.sectionCard}>
                                     <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="flash-outline" size={18} color="#00D4AA" />
+                                        <Ionicons name="flash-outline" size={18} color={colors.success} />
                                         <Text style={styles.sectionTitle}>Quick Actions</Text>
                                     </View>
                                     <View style={styles.actionsGrid}>
                                         <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverEarningsScreen')}>
-                                            <Ionicons name="stats-chart-outline" size={22} color="#00D4AA" />
+                                            <Ionicons name="stats-chart-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Earnings</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('CustomerPersonalInfoScreen')}>
-                                            <Ionicons name="person-outline" size={22} color="#00D4AA" />
+                                            <Ionicons name="person-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Profile</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverPreferencesScreen')}>
-                                            <Ionicons name="settings-outline" size={22} color="#00D4AA" />
+                                            <Ionicons name="settings-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Settings</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('CustomerHelpScreen')}>
-                                            <Ionicons name="help-circle-outline" size={22} color="#00D4AA" />
+                                            <Ionicons name="help-circle-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Help</Text>
                                         </TouchableOpacity>
                                     </View>
@@ -409,7 +407,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                     <View style={styles.buttonContainer}>
                         <TouchableOpacity onPress={onGoOnline} activeOpacity={0.8}>
                             <View style={styles.goOnlineBtn}>
-                                <Ionicons name="radio-button-off" size={18} color="#fff" style={{ marginRight: 8 }} />
+                                <Ionicons name="radio-button-off" size={18} color={colors.text.primary} style={{ marginRight: 8 }} />
                                 <Text style={styles.goOnlineText}>Go Online</Text>
                             </View>
                         </TouchableOpacity>

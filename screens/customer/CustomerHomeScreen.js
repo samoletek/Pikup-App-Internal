@@ -1,533 +1,175 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Image,
-  Alert,
-  Switch,
-  Platform,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "../../contexts/AuthContext";
-import { usePayment } from "../../contexts/PaymentContext";
+import Mapbox from "@rnmapbox/maps";
 
+import { useAuth } from "../../contexts/AuthContext";
+import { ACTIVE_TRIP_STATUSES } from "../../constants/tripStatus";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
-// Legacy modals removed - CustomerOrderModal handles full 6-step flow
 import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
-import Mapbox from '@rnmapbox/maps';
-import { ACTIVE_TRIP_STATUSES } from '../../constants/tripStatus';
-import { colors, spacing, typography } from '../../styles/theme';
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { userType, createPickupRequest, getUserPickupRequests, getRequestById, uploadMultiplePhotos } = useAuth();
-  const { defaultPaymentMethod, paymentMethods } = usePayment();
+  const { width } = useWindowDimensions();
+  const { getUserPickupRequests } = useAuth();
 
-
-  const [region, setRegion] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [activeDelivery, setActiveDelivery] = useState(null);
-
-  // Modal states
   const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [summaryModalVisible, setSummaryModalVisible] = useState(false);
-  const [vehicleModalVisible, setVehicleModalVisible] = useState(false);
-  const [priceModalVisible, setPriceModalVisible] = useState(false);
-  // Legacy modal states removed - using CustomerOrderModal + OrderSummaryScreen flow
-  const [selectedLocations, setSelectedLocations] = useState(null);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [summaryData, setSummaryData] = useState(null);
-  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
-  // New states for enhanced ride details
-  const [calculatedDistance, setCalculatedDistance] = useState(null);
-  const [estimatedDuration, setEstimatedDuration] = useState(null);
-  const [rideId, setRideId] = useState(null);
+  const floatingWidth = useMemo(
+    () => Math.min(Math.max(width - spacing.lg * 2, 280), 560),
+    [width]
+  );
 
-  const searchModalRef = useRef(null);
+  const logoWidth = useMemo(
+    () => Math.min(Math.max(width * 0.24, 90), 132),
+    [width]
+  );
 
-  // Generate ride ID when component mounts
-  useEffect(() => {
-    setRideId(`ride_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const loadCurrentLocation = useCallback(async () => {
+    try {
+      const savedLocation = await MapboxLocationService.getLastKnownLocation();
+      if (savedLocation?.latitude && savedLocation?.longitude) {
+        setUserLocation({
+          latitude: savedLocation.latitude,
+          longitude: savedLocation.longitude,
+        });
+      }
+
+      const location = await MapboxLocationService.getCurrentLocation();
+      if (location?.latitude && location?.longitude) {
+        setUserLocation({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+      }
+    } catch (error) {
+      console.error("Location error:", error);
+    }
   }, []);
 
-  // Calculate distance and duration when locations change
-  useEffect(() => {
-    if (selectedLocations?.pickup && selectedLocations?.dropoff) {
-      calculateRouteDetails();
-    }
-  }, [selectedLocations]);
-
-
-  // useFocusEffect removed - no longer needed after modal cleanup
-
-  const calculateRouteDetails = async () => {
-    if (!selectedLocations?.pickup || !selectedLocations?.dropoff) {
-      return;
-    }
-
+  const checkActiveDeliveries = useCallback(async () => {
     try {
-      // Get coordinates - they should already be available from the search modal
-      let pickupCoords = selectedLocations.pickup.coordinates;
-      let dropoffCoords = selectedLocations.dropoff.coordinates;
-
-      // Only geocode if we don't have coordinates
-      if (!pickupCoords && selectedLocations.pickup.address) {
-        try {
-          pickupCoords = await MapboxLocationService.geocodeAddress(selectedLocations.pickup.address);
-        } catch (error) {
-          console.log('Could not geocode pickup address:', error.message);
-        }
-      }
-
-      if (!dropoffCoords && selectedLocations.dropoff.address) {
-        try {
-          dropoffCoords = await MapboxLocationService.geocodeAddress(selectedLocations.dropoff.address);
-        } catch (error) {
-          console.log('Could not geocode dropoff address:', error.message);
-        }
-      }
-
-      // If we still don't have coordinates, use fallback
-      if (!pickupCoords || !dropoffCoords) {
-        console.log('Missing coordinates, using fallback estimates');
-        const estimatedDistance = Math.random() * 5 + 10; // 10-15 miles
-        const estimatedTime = Math.random() * 10 + 20; // 20-30 minutes
-
-        setCalculatedDistance(parseFloat(estimatedDistance.toFixed(1)));
-        setEstimatedDuration(Math.round(estimatedTime));
+      const requests = await getUserPickupRequests?.();
+      if (!Array.isArray(requests)) {
+        setActiveDelivery(null);
         return;
       }
 
-      // Get the actual route with traffic data
-      const routeData = await MapboxLocationService.getRoute(
-        {
-          latitude: pickupCoords.latitude,
-          longitude: pickupCoords.longitude
-        },
-        {
-          latitude: dropoffCoords.latitude,
-          longitude: dropoffCoords.longitude
-        }
+      const activeRequest = requests.find((req) =>
+        ACTIVE_TRIP_STATUSES.includes(req.status)
       );
 
-      // Convert distance from meters to miles and duration from seconds to minutes
-      const distanceInMiles = (routeData.distance.value * 0.000621371).toFixed(1);
-      const durationInMinutes = Math.round(
-        routeData.duration_in_traffic ?
-          routeData.duration_in_traffic.value / 60 :
-          routeData.duration.value / 60
-      );
-
-      setCalculatedDistance(parseFloat(distanceInMiles));
-      setEstimatedDuration(durationInMinutes);
-
-      console.log(`Real route calculated: ${distanceInMiles} miles, ${durationInMinutes} minutes (with traffic)`);
+      setActiveDelivery(activeRequest || null);
     } catch (error) {
-      console.error('Error calculating real route details:', error);
-
-      // Fallback to estimated values based on typical city distances
-      const estimatedDistance = Math.random() * 5 + 10; // 10-15 miles
-      const estimatedTime = Math.random() * 10 + 20; // 20-30 minutes
-
-      setCalculatedDistance(parseFloat(estimatedDistance.toFixed(1)));
-      setEstimatedDuration(Math.round(estimatedTime));
-
-      console.log(`Using fallback estimates: ${estimatedDistance.toFixed(1)} miles, ${Math.round(estimatedTime)} minutes`);
+      console.error("Error checking active deliveries:", error);
+      setActiveDelivery(null);
     }
-  };
-
-
+  }, [getUserPickupRequests]);
 
   useEffect(() => {
-    getCurrentLocation();
-
-    // Check for active deliveries
-    const checkActiveDeliveries = async () => {
-      try {
-        const requests = await getUserPickupRequests();
-        const activeRequest = requests.find(req =>
-          ACTIVE_TRIP_STATUSES.includes(req.status)
-        );
-
-        if (activeRequest) {
-          setActiveDelivery(activeRequest);
-        } else {
-          setActiveDelivery(null);
-        }
-      } catch (error) {
-        console.error('Error checking for active deliveries:', error);
-      }
-    };
-
+    loadCurrentLocation();
     checkActiveDeliveries();
 
-    // Set up a timer to check periodically
     const intervalCheck = setInterval(checkActiveDeliveries, 30000);
 
     return () => {
       clearInterval(intervalCheck);
     };
-  }, []);
+  }, [loadCurrentLocation, checkActiveDeliveries]);
 
-  const getCurrentLocation = async () => {
-    try {
-      // 1. Try to load saved location first for immediate display
-      const savedLocation = await MapboxLocationService.getLastKnownLocation();
-      if (savedLocation) {
-        console.log('Using saved location for immediate display');
-        const savedRegion = {
-          latitude: savedLocation.latitude,
-          longitude: savedLocation.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-        setRegion(savedRegion);
-        setUserLocation(savedLocation);
-      }
-
-      // Get fresh location
-      const location = await MapboxLocationService.getCurrentLocation();
-
-      const newRegion = {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-
-      setRegion(newRegion);
-      setUserLocation({
-        latitude: location.latitude,
-        longitude: location.longitude,
+  const handleDeliveryComplete = useCallback(
+    (deliveryData) => {
+      setActiveDelivery(null);
+      navigation.navigate("DeliveryFeedbackScreen", {
+        requestId: deliveryData?.id,
       });
-    } catch (error) {
-      console.error("Location error:", error);
-    }
-  };
+    },
+    [navigation]
+  );
 
-  // Add these new handler functions for DeliveryStatusTracker
-  const handleDeliveryComplete = (deliveryData) => {
-    setActiveDelivery(null);
-    // Navigate to feedback screen
-    navigation.navigate("DeliveryFeedbackScreen", {
-      requestId: deliveryData.id
-    });
-  };
+  const handleViewFullTracker = useCallback(
+    (requestId) => {
+      navigation.navigate("DeliveryTrackingScreen", {
+        requestId: requestId || activeDelivery?.id,
+        requestData: activeDelivery,
+      });
+    },
+    [navigation, activeDelivery]
+  );
 
-  const handleViewFullTracker = (requestId) => {
-    navigation.navigate('DeliveryTrackingScreen', {
-      requestId: requestId || (activeDelivery && activeDelivery.id),
-      requestData: activeDelivery
-    });
-  };
+  const handleOrderConfirm = useCallback(
+    (orderData) => {
+      setSearchModalVisible(false);
 
-  // Modal handlers - Updated to handle demo mode
-  const handleSearchConfirm = (locationData) => {
-    console.log(
-      "Search confirmed with location data:",
-      JSON.stringify(locationData, null, 2)
-    );
-
-    // Make sure we have all the required data
-    if (!locationData.pickup || !locationData.dropoff) {
-      Alert.alert(
-        "Missing Information",
-        "Please provide both pickup and dropoff locations."
-      );
-      return;
-    }
-
-    // The location data from CustomerSearchModal already has the correct structure
-    // Just use it directly without transformation
-    console.log("🔍 Setting selectedLocations to:", locationData);
-    setSelectedLocations(locationData);
-
-
-
-    // Close current modal and open next one
-    setSearchModalVisible(false);
-    setTimeout(() => {
-      setSummaryModalVisible(true);
-    }, 300); // Small delay to allow animation to complete
-  };
-
-  const handleSummaryNext = async (summaryInfo) => {
-    console.log("Summary next with data:", summaryInfo);
-    console.log("🔍 selectedLocations at handleSummaryNext start:", selectedLocations);
-
-    try {
-      // If there are photos, upload them to Firebase Storage first
-      if (summaryInfo.photos && summaryInfo.photos.length > 0) {
-        setIsUploadingPhotos(true);
-        console.log(`Uploading ${summaryInfo.photos.length} customer photos...`);
-
-        // Create a temporary request ID for photo storage
-        const tempRequestId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        // Upload photos to Firebase Storage using new path structure
-        const uploadedPhotos = await uploadMultiplePhotos(
-          summaryInfo.photos,
-          `photos/${tempRequestId}/pickup`
-        );
-
-        console.log('Customer photos uploaded successfully:', uploadedPhotos);
-
-        // Add uploaded photo URLs to summary data
-        summaryInfo.uploadedPhotos = uploadedPhotos;
-        summaryInfo.tempRequestId = tempRequestId; // Store temp ID for later cleanup if needed
-      }
-
-      setSummaryData(summaryInfo);
-      setIsUploadingPhotos(false);
-
-
-
-      // Close current modal and open next one
-      console.log("🔍 selectedLocations before opening vehicle modal:", selectedLocations);
-      setSummaryModalVisible(false);
-      setVehicleModalVisible(true);
-
-    } catch (error) {
-      setIsUploadingPhotos(false);
-      console.error('Error uploading customer photos:', error);
-      Alert.alert(
-        'Upload Error',
-        'Failed to upload photos. Please try again.',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
-  const handleSearchClose = () => {
-    setSearchModalVisible(false);
-    // Don't clear selectedLocations here - only clear if user actually cancels
-    // selectedLocations should persist when transitioning between modals
-  };
-
-  const handleSummaryClose = () => {
-    setSummaryModalVisible(false);
-  };
-
-  const handleVehicleSelection = (vehicle) => {
-    setSelectedVehicle(vehicle);
-
-    setVehicleModalVisible(false);
-
-    // Navigate to OrderSummaryScreen instead of showing modal
-    navigation.navigate('OrderSummaryScreen', {
-      selectedVehicle: vehicle,
-      selectedLocations,
-      total: null,
-      isDemo: false,
-      distance: calculatedDistance,
-      duration: estimatedDuration,
-      rideId,
-      summaryData,
-    });
-  };
-
-  // Helper function to calculate total
-  const calculateTotal = () => {
-    const basePrice = parseFloat(
-      selectedVehicle?.price?.replace("$", "") || "40.00"
-    );
-    const serviceFee = 2.99;
-    const tax = basePrice * 0.08;
-    return (basePrice + serviceFee + tax).toFixed(2);
-  };
-
-  // Handle navigation to payment methods screen with return capability
-  const handleNavigateToPaymentMethods = () => {
-    // Close the price modal first
-    setPriceModalVisible(false);
-
-    // Navigate to payment methods screen
-    navigation.navigate("PaymentMethodsScreen", {
-      // Pass return path so PaymentMethodsScreen knows where to return
-      returnTo: 'PriceSummary',
-      // Preserve all current booking data
-      bookingContext: {
-        selectedLocations,
-        selectedVehicle,
-        summaryData,
-        calculatedDistance,
-        estimatedDuration,
-        rideId
-      }
-    });
-  };
-
-  const handleSchedulePickup = async (bookingData = null) => {
-    console.log("Schedule pickup initiated with booking data:", bookingData);
-
-    try {
-      // Now selectedLocations already has the proper structure with nested address and coordinates
-      const pickupRequestData = {
-        // Use the properly structured location data
-        pickup: selectedLocations?.pickup || {
-          address: "",
-          coordinates: null
+      navigation.navigate("OrderSummaryScreen", {
+        selectedVehicle: orderData?.selectedVehicle,
+        selectedLocations: {
+          pickup: orderData?.pickup,
+          dropoff: orderData?.dropoff,
         },
-        dropoff: selectedLocations?.dropoff || {
-          address: "",
-          coordinates: null
+        total: null,
+        isDemo: false,
+        distance: orderData?.distance,
+        duration: orderData?.duration,
+        rideId: `ride_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+        summaryData: {
+          items: orderData?.items,
+          pickupDetails: orderData?.pickupDetails,
+          dropoffDetails: orderData?.dropoffDetails,
+          itemValue:
+            orderData?.items?.reduce(
+              (sum, item) => sum + (Number(item?.value) || 0),
+              0
+            ) || 500,
         },
-        item: {
-          description: summaryData?.itemDescription || "",
-          needsHelp: summaryData?.needsHelp || false,
-          type: summaryData?.itemType || "Package"
-        },
-        // Customer photos uploaded to Firebase Storage
-        customerPhotos: summaryData?.uploadedPhotos || [],
-        vehicle: {
-          type: selectedVehicle?.type || "",
-          required: selectedVehicle?.required || false
-        },
-        pricing: selectedVehicle?.pricing || {
-          base: parseFloat(selectedVehicle?.price?.replace("$", "") || "0"),
-          distance: 0,
-          weight: 0,
-          helper: summaryData?.needsHelp ? 10 : 0,
-          serviceFee: 2.99,
-          tax: parseFloat(selectedVehicle?.price?.replace("$", "") || "0") * 0.08,
-          total: parseFloat(calculateTotal())
-        },
-        payment: {
-          paymentIntentId: bookingData?.paymentIntent?.id || null,
-          paymentMethodId: bookingData?.paymentMethod?.id || null,
-          total: parseFloat(calculateTotal()),
-          status: "completed",
-        },
-        // Include scheduling information
-        isScheduled: selectedLocations?.isScheduled || false,
-        scheduledTime:
-          selectedLocations?.isScheduled && selectedLocations?.scheduledDateTime
-            ? selectedLocations.scheduledDateTime.dateTime.toISOString()
-            : null,
-        scheduledDateTime: selectedLocations?.scheduledDateTime || null,
-        specialInstructions: summaryData?.specialInstructions || "",
-        // Add enhanced ride details
-        estimatedDistance: calculatedDistance ? `${calculatedDistance} mi` : null,
-        estimatedTime: estimatedDuration ? `${estimatedDuration} min` : null,
-        distance: calculatedDistance ? `${calculatedDistance} mi` : null,
-        duration: estimatedDuration ? `${estimatedDuration} min` : null,
-        rideId: rideId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-
-
-      console.log("Creating pickup request with data:", JSON.stringify(pickupRequestData, null, 2));
-
-      // Save to Firebase
-      const newRequest = await createPickupRequest(pickupRequestData);
-      console.log("Pickup request created successfully:", newRequest);
-
-      // Close the modal
-      setPriceModalVisible(false);
-
-      // Navigate to the next screen with the request data
-      setTimeout(() => {
-        try {
-          console.log("Navigating directly to DeliveryTrackingScreen");
-          navigation.navigate("DeliveryTrackingScreen", {
-            requestId: newRequest.id,
-            requestData: newRequest,
-          });
-        } catch (error) {
-          console.error("Navigation error to DeliveryTrackingScreen:", error);
-          // Fallback to RouteConfirmationScreen
-          navigation.navigate("RouteConfirmationScreen", {
-            selectedLocations,
-            selectedVehicle,
-            summaryData,
-            requestId: newRequest.id,
-            requestData: newRequest,
-            paymentData: bookingData,
-          });
-        }
-      }, 300);
-    } catch (error) {
-      console.error("Error creating pickup request:", error);
-
-      // Show user-friendly error message
-      Alert.alert(
-        "Booking Error",
-        "Sorry, we couldn't create your pickup request. Please try again.",
-        [{ text: "OK" }]
-      );
-    }
-  };
-
-
-
-  const checkPaymentMethodBeforeBooking = () => {
-    // Allow booking to proceed - payment method check will happen at payment screen
-    return true;
-  };
-
-  const handleRequestPickup = () => {
-    console.log("Request pickup pressed - checking payment method");
-
-    if (!checkPaymentMethodBeforeBooking()) {
-      return;
-    }
-
-    console.log("Payment method available - opening modal");
-    setSearchModalVisible(true);
-    setTimeout(() => {
-      searchModalRef.current?.openExpanded();
-    }, 100);
-  };
-
-  const handleSearchBarPress = () => {
-    if (!checkPaymentMethodBeforeBooking()) {
-      return;
-    }
-
-    setSearchModalVisible(true);
-    setTimeout(() => {
-      searchModalRef.current?.openExpanded();
-    }, 100);
-  };
-
-
-
-  // Removed blocking splash screen to avoid overlay issues. check active active active
-  // if (!region) { ... }
+      });
+    },
+    [navigation]
+  );
 
   return (
     <View style={styles.container}>
       <MapboxMap
         style={styles.map}
-        centerCoordinate={userLocation ? [userLocation.longitude, userLocation.latitude] : [-84.388, 33.749]}
+        centerCoordinate={
+          userLocation
+            ? [userLocation.longitude, userLocation.latitude]
+            : [-84.388, 33.749]
+        }
         zoomLevel={14}
       >
-        <Mapbox.UserLocation visible={true} />
+        <Mapbox.UserLocation visible />
       </MapboxMap>
 
-
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top - 15, 20) }]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top - 14, 20) }]}>
         <Image
           source={require("../../assets/pikup-logo.png")}
-          style={styles.headerLogo}
+          style={[styles.headerLogo, { width: logoWidth }]}
           accessible
           accessibilityLabel="PikUp"
         />
       </View>
 
-      {/* Delivery Status Tracker - Only show when there's an active delivery */}
       {activeDelivery && (
-        <View style={[styles.trackerContainer, { top: Math.max(insets.top + 35, 60) }]}>
+        <View style={[styles.trackerContainer, { top: Math.max(insets.top + 34, 60) }]}>
           <DeliveryStatusTracker
             requestId={activeDelivery.id}
             onDeliveryComplete={handleDeliveryComplete}
@@ -536,55 +178,45 @@ export default function CustomerHomeScreen({ navigation }) {
         </View>
       )}
 
-
-      {/* Floating "Where to?" Trigger Button */}
-      <View style={[styles.floatingTriggerContainer, { paddingBottom: insets.bottom + 20 }]}>
+      <View
+        style={[
+          styles.floatingTriggerContainer,
+          { paddingBottom: insets.bottom + spacing.lg, width: floatingWidth },
+        ]}
+      >
         <TouchableOpacity
           style={styles.floatingTrigger}
           onPress={() => setSearchModalVisible(true)}
           activeOpacity={0.9}
         >
           <View style={styles.triggerIconCircle}>
-            <Ionicons name="search" size={20} color="#FFF" />
+            <Ionicons name="search" size={20} color={colors.text.primary} />
           </View>
+
           <Text style={styles.floatingTriggerText}>Where to?</Text>
+
           <View style={styles.triggerTimeBadge}>
-            <Ionicons name="time" size={12} color="#AAA" style={{ marginRight: 4 }} />
+            <Ionicons
+              name="time"
+              size={12}
+              color={colors.text.secondary}
+              style={styles.timeIconLeft}
+            />
             <Text style={styles.triggerTimeText}>Now</Text>
-            <Ionicons name="chevron-down" size={12} color="#AAA" style={{ marginLeft: 4 }} />
+            <Ionicons
+              name="chevron-down"
+              size={12}
+              color={colors.text.secondary}
+              style={styles.timeIconRight}
+            />
           </View>
         </TouchableOpacity>
       </View>
 
-      {/* CustomerOrderModal - Full 6-step ordering flow */}
       <CustomerOrderModal
         visible={searchModalVisible}
-        onClose={handleSearchClose}
-        onConfirm={(orderData) => {
-          console.log('Order confirmed, navigating to summary:', orderData);
-          handleSearchClose();
-
-          // Navigate to OrderSummaryScreen with order data
-          // Map orderData structure to OrderSummaryScreen expected props
-          navigation.navigate('OrderSummaryScreen', {
-            selectedVehicle: orderData.selectedVehicle,
-            selectedLocations: {
-              pickup: orderData.pickup,
-              dropoff: orderData.dropoff,
-            },
-            total: null,
-            isDemo: false,
-            distance: orderData.distance,
-            duration: orderData.duration,
-            rideId: `ride_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            summaryData: {
-              items: orderData.items,
-              pickupDetails: orderData.pickupDetails,
-              dropoffDetails: orderData.dropoffDetails,
-              itemValue: orderData.items?.reduce((sum, item) => sum + (item.value || 0), 0) || 500,
-            },
-          });
-        }}
+        onClose={() => setSearchModalVisible(false)}
+        onConfirm={handleOrderConfirm}
         userLocation={userLocation}
       />
     </View>
@@ -604,384 +236,82 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm + 2,
+    paddingBottom: spacing.sm,
     flexDirection: "row",
-    justifyContent: "center", // Horizontal center
+    justifyContent: "center",
     alignItems: "center",
     zIndex: 10,
   },
+  headerLogo: {
+    height: 24,
+    resizeMode: "contain",
+    marginTop: spacing.sm,
+  },
   trackerContainer: {
     position: "absolute",
-
     left: 0,
     right: 0,
     zIndex: 15,
   },
-  headerLogo: {
-    width: '22%',
-    height: 20.4,
-    resizeMode: "contain",
-    marginTop: 10,
-  },
-
-  searchBarContainer: {
-    position: "absolute",
-
-    left: spacing.lg,
-    right: spacing.lg,
-    zIndex: 100,
-    elevation: 100,
-  },
-  searchButton: {
-    height: 50,
-    backgroundColor: "rgba(30, 30, 50, 0.95)",
-    borderRadius: 25,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-
-  searchIcon: {
-    marginRight: 12,
-  },
-  searchPlaceholder: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.md,
-    flex: 1,
-  },
-  bottomSection: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
-  requestButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.base,
-    borderRadius: 25,
-    alignItems: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  requestButtonText: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-  },
-
-  markerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  markerDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    borderWidth: 3,
-    borderColor: colors.white,
-  },
   floatingTriggerContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
+    alignSelf: "center",
     paddingHorizontal: spacing.lg,
-    zIndex: 20, // Above map
+    zIndex: 20,
   },
   floatingTrigger: {
     backgroundColor: colors.background.tertiary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
     height: 56,
-    borderRadius: 28,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing.base,
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)'
+    borderColor: colors.navigation.tabBarBorder,
   },
   triggerIconCircle: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.circle,
     backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
   },
   floatingTriggerText: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
-    flex: 1
+    flex: 1,
   },
   triggerTimeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.background.secondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm - 2,
+    borderRadius: borderRadius.full,
   },
   triggerTimeText: {
     color: colors.text.secondary,
     fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold
-  }
+    fontWeight: typography.fontWeight.semibold,
+  },
+  timeIconLeft: {
+    marginRight: 4,
+  },
+  timeIconRight: {
+    marginLeft: 4,
+  },
 });
-
-// Improved dark map style to match your preview
-const improvedDarkMapStyle = [
-  {
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#1d2c4d",
-      },
-    ],
-  },
-  {
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#8ec3b9",
-      },
-    ],
-  },
-  {
-    elementType: "labels.text.stroke",
-    stylers: [
-      {
-        color: "#1a3646",
-      },
-    ],
-  },
-  {
-    featureType: "administrative.country",
-    elementType: "geometry.stroke",
-    stylers: [
-      {
-        color: "#4b6878",
-      },
-    ],
-  },
-  {
-    featureType: "administrative.land_parcel",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#64779f",
-      },
-    ],
-  },
-  {
-    featureType: "administrative.province",
-    elementType: "geometry.stroke",
-    stylers: [
-      {
-        color: "#4b6878",
-      },
-    ],
-  },
-  {
-    featureType: "landscape.man_made",
-    elementType: "geometry.stroke",
-    stylers: [
-      {
-        color: "#334e87",
-      },
-    ],
-  },
-  {
-    featureType: "landscape.natural",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#023e58",
-      },
-    ],
-  },
-  {
-    featureType: "poi",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#283d6a",
-      },
-    ],
-  },
-  {
-    featureType: "poi",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#6f9ba5",
-      },
-    ],
-  },
-  {
-    featureType: "poi",
-    elementType: "labels.text.stroke",
-    stylers: [
-      {
-        color: "#1d2c4d",
-      },
-    ],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "geometry.fill",
-    stylers: [
-      {
-        color: "#023e58",
-      },
-    ],
-  },
-  {
-    featureType: "poi.park",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#3C7680",
-      },
-    ],
-  },
-  {
-    featureType: "road",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#304a7d",
-      },
-    ],
-  },
-  {
-    featureType: "road",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#98a5be",
-      },
-    ],
-  },
-  {
-    featureType: "road",
-    elementType: "labels.text.stroke",
-    stylers: [
-      {
-        color: "#1d2c4d",
-      },
-    ],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#2c5aa0",
-      },
-    ],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "geometry.stroke",
-    stylers: [
-      {
-        color: "#255763",
-      },
-    ],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#b0d5ce",
-      },
-    ],
-  },
-  {
-    featureType: "road.highway",
-    elementType: "labels.text.stroke",
-    stylers: [
-      {
-        color: "#023e58",
-      },
-    ],
-  },
-  {
-    featureType: "transit",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#98a5be",
-      },
-    ],
-  },
-  {
-    featureType: "transit",
-    elementType: "labels.text.stroke",
-    stylers: [
-      {
-        color: "#1d2c4d",
-      },
-    ],
-  },
-  {
-    featureType: "transit.line",
-    elementType: "geometry.fill",
-    stylers: [
-      {
-        color: "#283d6a",
-      },
-    ],
-  },
-  {
-    featureType: "transit.station",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#3a4762",
-      },
-    ],
-  },
-  {
-    featureType: "water",
-    elementType: "geometry",
-    stylers: [
-      {
-        color: "#0e1626",
-      },
-    ],
-  },
-  {
-    featureType: "water",
-    elementType: "labels.text.fill",
-    stylers: [
-      {
-        color: "#4e6d70",
-      },
-    ],
-  },
-];

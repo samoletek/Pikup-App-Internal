@@ -9,6 +9,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../styles/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -73,32 +74,32 @@ export default function ToastNotification({
     switch (type) {
       case 'success':
         return {
-          backgroundColor: '#00D4AA',
-          borderColor: '#00B894',
+          backgroundColor: colors.success,
+          borderColor: colors.success,
           icon: 'checkmark-circle',
-          iconColor: '#fff',
+          iconColor: colors.text.primary,
         };
       case 'error':
         return {
-          backgroundColor: '#ff4444',
-          borderColor: '#e74c3c',
+          backgroundColor: colors.error,
+          borderColor: colors.error,
           icon: 'close-circle',
-          iconColor: '#fff',
+          iconColor: colors.text.primary,
         };
       case 'warning':
         return {
-          backgroundColor: '#FFA500',
-          borderColor: '#e67e22',
+          backgroundColor: colors.warning,
+          borderColor: colors.warning,
           icon: 'warning',
-          iconColor: '#fff',
+          iconColor: colors.text.primary,
         };
       case 'info':
       default:
         return {
-          backgroundColor: '#A77BFF',
-          borderColor: '#8B5CF6',
+          backgroundColor: colors.primary,
+          borderColor: colors.primaryDark,
           icon: 'information-circle',
-          iconColor: '#fff',
+          iconColor: colors.text.primary,
         };
     }
   };
@@ -133,7 +134,7 @@ export default function ToastNotification({
           />
           <Text style={styles.message}>{message}</Text>
           <TouchableOpacity onPress={hideToast} style={styles.closeButton}>
-            <Ionicons name="close" size={16} color="#fff" />
+            <Ionicons name="close" size={16} color={colors.text.primary} />
           </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   },
   message: {
     flex: 1,
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '500',
     lineHeight: 18,

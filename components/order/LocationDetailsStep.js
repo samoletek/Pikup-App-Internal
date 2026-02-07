@@ -28,7 +28,7 @@ const LocationDetailsStep = ({
                     <Ionicons
                         name={isPickup ? "location" : "navigate"}
                         size={20}
-                        color="#FFF"
+                        color={colors.text.primary}
                     />
                 </View>
                 <View style={styles.addressInfo}>
@@ -44,7 +44,7 @@ const LocationDetailsStep = ({
                     <TextInput
                         style={styles.textInput}
                         placeholder="e.g. Business"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={colors.text.placeholder}
                         value={details.buildingName}
                         onChangeText={(text) => onUpdate({ ...details, buildingName: text })}
                     />
@@ -54,7 +54,7 @@ const LocationDetailsStep = ({
                     <TextInput
                         style={styles.textInput}
                         placeholder="Apt/Flr"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={colors.text.placeholder}
                         value={details.unitNumber}
                         onChangeText={(text) => onUpdate({ ...details, unitNumber: text })}
                     />
@@ -68,7 +68,7 @@ const LocationDetailsStep = ({
                     <TextInput
                         style={styles.textInput}
                         placeholder="E.g. AB123"
-                        placeholderTextColor="#666"
+                        placeholderTextColor={colors.text.placeholder}
                         value={details.orderNumber}
                         onChangeText={(text) => onUpdate({ ...details, orderNumber: text })}
                     />
@@ -87,7 +87,7 @@ const LocationDetailsStep = ({
                         <Ionicons
                             name="checkmark-circle"
                             size={20}
-                            color={details.hasElevator ? '#FFF' : '#888'}
+                            color={details.hasElevator ? colors.text.primary : colors.text.muted}
                         />
                         <Text style={[styles.toggleText, details.hasElevator && styles.toggleTextActive]}>
                             Yes
@@ -101,7 +101,7 @@ const LocationDetailsStep = ({
                         <Ionicons
                             name="close-circle"
                             size={20}
-                            color={!details.hasElevator ? '#FFF' : '#888'}
+                            color={!details.hasElevator ? colors.text.primary : colors.text.muted}
                         />
                         <Text style={[styles.toggleText, !details.hasElevator && styles.toggleTextActive]}>
                             No
@@ -121,7 +121,7 @@ const LocationDetailsStep = ({
                         <Ionicons
                             name="people"
                             size={20}
-                            color={details[helpKey] ? '#FFF' : '#888'}
+                            color={details[helpKey] ? colors.text.primary : colors.text.muted}
                         />
                         <Text style={[styles.toggleText, details[helpKey] && styles.toggleTextActive]}>
                             Yes, please help
@@ -135,7 +135,7 @@ const LocationDetailsStep = ({
                         <Ionicons
                             name="person"
                             size={20}
-                            color={!details[helpKey] ? '#FFF' : '#888'}
+                            color={!details[helpKey] ? colors.text.primary : colors.text.muted}
                         />
                         <Text style={[styles.toggleText, !details[helpKey] && styles.toggleTextActive]}>
                             I'll handle it
@@ -144,7 +144,7 @@ const LocationDetailsStep = ({
                 </View>
                 {details[helpKey] && (
                     <View style={styles.helpNote}>
-                        <Ionicons name="information-circle" size={16} color="#A77BFF" />
+                        <Ionicons name="information-circle" size={16} color={colors.primary} />
                         <Text style={styles.helpNoteText}>
                             Additional fee may apply for loading/unloading assistance
                         </Text>
@@ -158,7 +158,7 @@ const LocationDetailsStep = ({
                 <TextInput
                     style={[styles.textInput, styles.textArea]}
                     placeholder="Any special instructions for the driver..."
-                    placeholderTextColor="#666"
+                    placeholderTextColor={colors.text.placeholder}
                     value={details.notes}
                     onChangeText={(text) => onUpdate({ ...details, notes: text })}
                     multiline

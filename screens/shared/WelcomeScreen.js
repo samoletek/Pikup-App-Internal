@@ -5,17 +5,24 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AuthModal from '../../components/AuthModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { colors, layout, spacing, typography } from '../../styles/theme';
 
 export default function WelcomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRole, setSelectedRole] = useState("customer");
-  const { currentUser, userType, checkTermsAcceptance, getDriverProfile } = useAuth();
+  const { currentUser, userType, getDriverProfile } = useAuth();
+
+  const isCompact = width < 370;
+  const logoWidth = Math.min(Math.max(width * 0.58, 180), 280);
+  const contentMaxWidth = Math.min(layout.authMaxWidth, width - spacing.xl * 2);
 
   const handleRoleSelection = (role) => {
     setSelectedRole(role);
@@ -28,38 +35,22 @@ export default function WelcomeScreen({ navigation }) {
 
   // Navigate after successful login
   useEffect(() => {
-    console.log('🔍 WelcomeScreen useEffect - currentUser:', !!currentUser, 'userType:', userType, 'currentUser.uid:', currentUser?.uid);
-
     // Don't navigate if modal is open (AuthModal will handle navigation)
     if (modalVisible) {
-      console.log('⏸️ Modal is open, skipping navigation');
       return;
     }
 
     if (currentUser && userType) {
-      console.log('✅ WelcomeScreen - User logged in, navigating...', { userType, uid: currentUser.uid });
-
       const navigateAfterLogin = async () => {
         try {
-          // Check for terms acceptance first
-          const termsStatus = await checkTermsAcceptance(currentUser.uid);
-          console.log('Terms status:', termsStatus);
-
-          // ConsentGateScreen removed - terms handled elsewhere
-          // Skip terms check, go directly to appropriate screen
-
           if (userType === "driver") {
-            console.log('User is driver, checking profile...');
             const driverProfile = await getDriverProfile(currentUser.uid);
             if (driverProfile?.onboardingComplete) {
-              console.log('Navigating to DriverTabs');
               navigation.replace("DriverTabs");
             } else {
-              console.log('Navigating to DriverOnboarding');
               navigation.replace("DriverOnboarding");
             }
           } else {
-            console.log('Navigating to CustomerTabs');
             navigation.replace("CustomerTabs");
           }
         } catch (error) {
@@ -71,26 +62,34 @@ export default function WelcomeScreen({ navigation }) {
       };
 
       navigateAfterLogin();
-    } else {
-      console.log('⏳ WelcomeScreen - Waiting for auth state...', { hasUser: !!currentUser, userType });
     }
   }, [currentUser, userType, navigation, modalVisible]);
 
   return (
     <LinearGradient
-      colors={['#0A0A1F', '#141426']}
+      colors={[colors.background.primary, colors.background.secondary]}
       style={styles.container}
     >
-      <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.safeArea,
+          {
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            maxWidth: contentMaxWidth,
+            alignSelf: "center",
+          },
+        ]}
+      >
         <View style={styles.logoWrapper}>
           <View style={styles.logoContainer}>
             <Image
               source={require("../../assets/pikup-logo.png")}
-              style={styles.logo}
+              style={[styles.logo, { width: logoWidth }]}
               accessible
               accessibilityLabel="PikUp"
             />
-            <Text style={styles.tagline}>Moving made simple.</Text>
+            <Text style={[styles.tagline, isCompact && styles.taglineCompact]}>Moving made simple.</Text>
           </View>
         </View>
 
@@ -103,16 +102,16 @@ export default function WelcomeScreen({ navigation }) {
         />
 
         {/* Buttons */}
-        <View style={styles.buttonContainer}>
+        <View style={[styles.buttonContainer, isCompact && styles.buttonContainerCompact]}>
           <TouchableOpacity
-            style={styles.button}
+            style={[styles.button, isCompact && styles.buttonCompact]}
             onPress={() => handleRoleSelection("customer")}
           >
             <Text style={styles.buttonText}>Customer</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.driverButton]}
+            style={[styles.button, styles.driverButton, isCompact && styles.buttonCompact]}
             onPress={() => handleRoleSelection("driver")}
           >
             <Text style={styles.buttonText}>Driver</Text>
@@ -129,8 +128,9 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    width: "100%",
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.xl,
     justifyContent: 'flex-end',
   },
   logoWrapper: {
@@ -143,19 +143,18 @@ const styles = StyleSheet.create({
   logoContainer: {
     width: "100%",
     alignItems: "center",
-    shadowColor: "rgba(167,123,255,0.6)",
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 10,
   },
   logo: {
-    width: '60%',
     height: 170,
     resizeMode: "contain",
   },
   tagline: {
-    color: '#CCC',
+    color: colors.text.secondary,
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.5,
@@ -164,30 +163,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.8, // Slightly more subtle
   },
+  taglineCompact: {
+    fontSize: typography.fontSize.xs + 1,
+    letterSpacing: 1.1,
+  },
   buttonContainer: {
     width: "100%",
     flexDirection: 'row',
-    justifyContent: 'space-evenly',
+    justifyContent: 'space-between',
     alignItems: "center",
-    marginBottom: 50,
+    marginBottom: spacing.xxl + spacing.sm,
+    gap: spacing.sm,
+  },
+  buttonContainerCompact: {
+    flexDirection: "column",
+    gap: spacing.md,
+    marginBottom: spacing.xl + spacing.sm,
   },
   button: {
-    backgroundColor: "#A77BFF",
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.base,
     borderRadius: 30,
-    width: "40%",
+    flex: 1,
     alignItems: "center",
-    shadowColor: "#A77BFF",
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
+  buttonCompact: {
+    width: "100%",
+    flex: 0,
+  },
   driverButton: {
-    backgroundColor: "#7A45FF",
+    backgroundColor: colors.primaryDark,
   },
   buttonText: {
-    color: "#fff",
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: "600",
   },

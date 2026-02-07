@@ -365,6 +365,48 @@ export const signInWithGoogle = async (userRole = 'customer') => {
 };
 
 /**
+ * Change current user password
+ * @param {Object} currentUser - Current user object
+ * @param {string} currentPassword - Current password
+ * @param {string} newPassword - New password
+ * @returns {Promise<boolean>} Success status
+ */
+export const changePassword = async (currentUser, currentPassword, newPassword) => {
+    const userEmail = currentUser?.email;
+
+    if (!currentUser?.id && !currentUser?.uid) {
+        throw new Error('User not authenticated');
+    }
+
+    if (!userEmail) {
+        throw new Error('Cannot change password for this account.');
+    }
+
+    if (!currentPassword || !newPassword) {
+        throw new Error('Current and new password are required.');
+    }
+
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: currentPassword
+    });
+
+    if (reauthError) {
+        throw new Error('Current password is incorrect.');
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword
+    });
+
+    if (updateError) {
+        throw updateError;
+    }
+
+    return true;
+};
+
+/**
  * Delete user account
  * @param {Object} currentUser - Current user object
  * @returns {Promise<boolean>} Success status

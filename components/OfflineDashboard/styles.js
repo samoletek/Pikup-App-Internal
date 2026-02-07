@@ -1,4 +1,5 @@
 import { StyleSheet, Dimensions } from 'react-native';
+import { colors } from '../../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -8,7 +9,7 @@ export const styles = StyleSheet.create({
     // Backdrop
     backdrop: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#000',
+        backgroundColor: colors.black,
         zIndex: 999,
     },
 
@@ -64,12 +65,12 @@ export const styles = StyleSheet.create({
     peekTitle: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
     peekProgress: {
         fontSize: 16,
         fontWeight: '700',
-        color: '#A77BFF',
+        color: colors.primary,
     },
     progressBarSmall: {
         height: 8,
@@ -80,7 +81,7 @@ export const styles = StyleSheet.create({
     },
     progressFillSmall: {
         height: '100%',
-        backgroundColor: '#A77BFF',
+        backgroundColor: colors.primary,
         borderRadius: 4,
     },
     peekFooter: {
@@ -90,7 +91,7 @@ export const styles = StyleSheet.create({
     },
     peekSubtitle: {
         fontSize: 13,
-        color: '#9DA3AF',
+        color: colors.text.tertiary,
         flex: 1,
     },
     expandHint: {
@@ -100,7 +101,7 @@ export const styles = StyleSheet.create({
     },
     expandHintText: {
         fontSize: 12,
-        color: '#666',
+        color: colors.text.placeholder,
     },
 
     // ============================================
@@ -113,7 +114,7 @@ export const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: '#1F1F33',
+        borderBottomColor: colors.border.strong,
     },
     closeBtn: {
         width: 36,
@@ -126,7 +127,7 @@ export const styles = StyleSheet.create({
     expandedTitle: {
         fontSize: 17,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
     scrollContent: {
         flex: 1,
@@ -149,17 +150,17 @@ export const styles = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: '#FF6B6B',
+        backgroundColor: colors.error,
         marginRight: 8,
     },
     statusText: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
     statusSubtext: {
         fontSize: 13,
-        color: '#9DA3AF',
+        color: colors.text.tertiary,
     },
 
     // Section Cards
@@ -169,7 +170,7 @@ export const styles = StyleSheet.create({
         padding: 14,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#2A2A3B',
+        borderColor: colors.border.strong,
     },
     sectionHeaderRow: {
         flexDirection: 'row',
@@ -180,7 +181,7 @@ export const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
 
     // Milestone Card
@@ -202,17 +203,17 @@ export const styles = StyleSheet.create({
     milestoneTitle: {
         fontSize: 15,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
         marginBottom: 2,
     },
     milestoneSubtitle: {
         fontSize: 12,
-        color: '#9DA3AF',
+        color: colors.text.tertiary,
     },
     milestoneCount: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#00D4AA',
+        color: colors.success,
     },
     progressRow: {
         flexDirection: 'row',
@@ -221,20 +222,20 @@ export const styles = StyleSheet.create({
     progressBar: {
         flex: 1,
         height: 6,
-        backgroundColor: '#2A2A3B',
+        backgroundColor: colors.border.strong,
         borderRadius: 3,
         overflow: 'hidden',
         marginRight: 10,
     },
     progressFill: {
         height: '100%',
-        backgroundColor: '#00D4AA',
+        backgroundColor: colors.success,
         borderRadius: 3,
     },
     progressPct: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#00D4AA',
+        color: colors.success,
         minWidth: 32,
         textAlign: 'right',
     },
@@ -251,11 +252,11 @@ export const styles = StyleSheet.create({
     statValue: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#00D4AA',
+        color: colors.success,
     },
     statLabel: {
         fontSize: 11,
-        color: '#9DA3AF',
+        color: colors.text.tertiary,
         marginTop: 3,
     },
 
@@ -279,11 +280,11 @@ export const styles = StyleSheet.create({
     recTitle: {
         fontSize: 13,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
     recDescription: {
         fontSize: 11,
-        color: '#9DA3AF',
+        color: colors.text.tertiary,
         marginTop: 1,
     },
 
@@ -301,11 +302,11 @@ export const styles = StyleSheet.create({
         borderRadius: 10,
         backgroundColor: 'rgba(255, 255, 255, 0.04)',
         borderWidth: 1,
-        borderColor: '#2A2A3B',
+        borderColor: colors.border.strong,
     },
     actionText: {
         fontSize: 11,
-        color: '#00D4AA',
+        color: colors.success,
         marginTop: 5,
         fontWeight: '600',
     },
@@ -328,9 +329,9 @@ export const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingVertical: 16,
         borderRadius: 25,
-        backgroundColor: '#A77BFF', // Solid color matching Customer Request button
+        backgroundColor: colors.primary, // Solid color matching Customer Request button
         // Shadow properties
-        shadowColor: "#A77BFF",
+        shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -339,6 +340,6 @@ export const styles = StyleSheet.create({
     goOnlineText: {
         fontSize: 18,
         fontWeight: '600',
-        color: '#fff',
+        color: colors.text.primary,
     },
 });

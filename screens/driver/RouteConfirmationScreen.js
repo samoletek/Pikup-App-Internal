@@ -1,198 +1,356 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  View,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  StyleSheet,
   TouchableOpacity,
-  Modal,
-  Image,
-  ScrollView,
-  Platform,
-  KeyboardAvoidingView,
   TouchableWithoutFeedback,
-  Keyboard,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-// HelpOptionsModal removed
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ScreenHeader from "../../components/ScreenHeader";
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
 export default function RouteConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { pickup, dropoff } = route.params || {};
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState('Furniture');
-  const [helpNeeded, setHelpNeeded] = useState('yes');
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Furniture");
+  const [helpNeeded, setHelpNeeded] = useState("yes");
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
-
-  const categories = ['Furniture', 'Appliance', 'Electronic', 'Fragile'];
+  const categories = ["Furniture", "Appliance", "Electronic", "Fragile"];
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: '#0A0A1F' }}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]} keyboardShouldPersistTaps="handled">
-          <Image
-            source={{ uri: 'https://via.placeholder.com/400x140.png?text=Route+Map' }}
-            style={styles.mapImage}
-          />
+    <View style={styles.screen}>
+      <ScreenHeader
+        title="Route Confirmation"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack
+      />
 
-          <Text style={styles.sectionHeader}>Summary Details</Text>
-          <View style={styles.card}>
-            <Text style={styles.label}>Pickup From</Text>
-            <Text style={styles.address}>{pickup}</Text>
-            <Text style={styles.label}>Drop At</Text>
-            <Text style={styles.address}>{dropoff}</Text>
-            <View style={styles.rowBetween}>
-              <Text style={styles.meta}>Estimated Arrival: <Text style={styles.bold}>15 mins</Text></Text>
-              <Text style={styles.meta}>Available Helpers: <Text style={styles.bold}>5</Text></Text>
-            </View>
-          </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.flex}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.container,
+              { paddingBottom: insets.bottom + spacing.lg },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+              <View style={styles.mapPlaceholder}>
+                <Ionicons name="map-outline" size={26} color={colors.primary} />
+                <Text style={styles.mapPlaceholderText}>Route preview</Text>
+              </View>
 
-          <View style={styles.card}>
-            <Text style={styles.label}>Category</Text>
-            <View style={styles.categoryRow}>
-              {categories.map((item) => (
+              <Text style={styles.sectionHeader}>Trip Summary</Text>
+              <View style={styles.card}>
+                <Text style={styles.label}>Pickup From</Text>
+                <Text style={styles.address}>{pickup}</Text>
+                <Text style={styles.label}>Drop At</Text>
+                <Text style={styles.address}>{dropoff}</Text>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.meta}>
+                    Estimated arrival: <Text style={styles.bold}>15 min</Text>
+                  </Text>
+                  <Text style={styles.meta}>
+                    Available helpers: <Text style={styles.bold}>5</Text>
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.label}>Category</Text>
+                <View style={styles.categoryRow}>
+                  {categories.map((item) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={[styles.pill, category === item && styles.activePill]}
+                      onPress={() => setCategory(item)}
+                    >
+                      <Text style={[styles.pillText, category === item && styles.activePillText]}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Describe your items</Text>
+                <TextInput
+                  multiline
+                  textAlignVertical="top"
+                  placeholder="Add details here..."
+                  placeholderTextColor={colors.text.tertiary}
+                  style={styles.textArea}
+                  value={description}
+                  onChangeText={setDescription}
+                  maxLength={200}
+                />
+                <Text style={styles.charCount}>{description.length} / 200 characters</Text>
+
+                <Text style={[styles.label, styles.helpLabel]}>
+                  Do you need help with loading/unloading?
+                </Text>
+                <View style={styles.toggleRow}>
+                  <TouchableOpacity
+                    style={[styles.toggleBtn, helpNeeded === "yes" && styles.activeToggle]}
+                    onPress={() => setHelpNeeded("yes")}
+                  >
+                    <Text style={helpNeeded === "yes" ? styles.activeToggleText : styles.toggleText}>
+                      Yes
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.toggleBtn, helpNeeded === "no" && styles.activeToggle]}
+                    onPress={() => setHelpNeeded("no")}
+                  >
+                    <Text style={helpNeeded === "no" ? styles.activeToggleText : styles.toggleText}>
+                      No
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.checkboxRow}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={20}
+                    color={colors.primary}
+                    style={styles.checkboxIcon}
+                  />
+                  <Text style={styles.checkboxText}>Driver assistance requested</Text>
+                </View>
+
+                <Text style={styles.label}>Add Photos</Text>
+                <View style={styles.uploadBox}>
+                  <Ionicons name="camera-outline" size={32} color={colors.text.muted} />
+                  <Text style={styles.uploadText}>Add photos of your items</Text>
+                </View>
                 <TouchableOpacity
-                  key={item}
-                  style={[styles.pill, category === item && styles.activePill]}
-                  onPress={() => setCategory(item)}
+                  style={styles.uploadBtn}
+                  onPress={() => {}}
+                  accessibilityRole="button"
                 >
-                  <Text style={[styles.pillText, category === item && styles.activePillText]}>{item}</Text>
+                  <Ionicons name="cloud-upload-outline" size={18} color={colors.white} />
+                  <Text style={styles.uploadBtnText}>Upload Photos</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <Text style={styles.label}>Describe your items</Text>
-            <TextInput
-              multiline
-              textAlignVertical="top"
-              placeholder="Add details here..."
-              placeholderTextColor="#aaa"
-              style={styles.textArea}
-              value={description}
-              onChangeText={setDescription}
-              maxLength={200}
-            />
-            <Text style={styles.charCount}>{description.length} / 200 char.</Text>
-
-            <Text style={[styles.label, { marginTop: 20 }]}>Do you need help with loading/unloading?</Text>
-            <View style={styles.toggleRow}>
+              </View>
               <TouchableOpacity
-                style={[styles.toggleBtn, helpNeeded === 'yes' && styles.activeToggle]}
-                onPress={() => {
-                  setHelpNeeded('yes');
-                }}
+                style={styles.nextBtn}
+                onPress={() => navigation.navigate("VehicleSelectionScreen")}
               >
-                <Text style={helpNeeded === 'yes' ? styles.activeToggleText : styles.toggleText}>Yes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.toggleBtn, helpNeeded === 'no' && styles.activeToggle]}
-                onPress={() => setHelpNeeded('no')}
-              >
-                <Text style={helpNeeded === 'no' ? styles.activeToggleText : styles.toggleText}>No</Text>
+                <Text style={styles.nextBtnText}>Next</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={styles.checkboxRow}>
-              <Ionicons name="checkmark-circle" size={20} color="#A77BFF" style={{ marginRight: 8 }} />
-              <Text style={{ color: '#fff' }}>Driver Assistance Requested</Text>
-            </View>
-
-            <Text style={styles.label}>Add Photos</Text>
-            <View style={styles.uploadBox}>
-              <Ionicons name="camera-outline" size={32} color="#bbb" />
-              <Text style={styles.uploadText}>Add photos of your items</Text>
-            </View>
-            <TouchableOpacity style={styles.uploadBtn}>
-              <Ionicons name="cloud-upload-outline" size={18} color="#fff" />
-              <Text style={styles.uploadBtnText}>Upload Photos</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.nextBtn} onPress={() => navigation.navigate('VehicleSelectionScreen')}>
-            <Text style={styles.nextBtnText}>Next</Text>
-          </TouchableOpacity>
-
-
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#0A0A1F', padding: 20 },
-  mapImage: { width: '100%', height: 140, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
-  sectionHeader: { color: '#fff', fontSize: 18, fontWeight: '600', marginVertical: 12 },
-  card: {
-    backgroundColor: '#141426',
-    padding: 16,
-    borderRadius: 12,
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  flex: {
+    flex: 1,
+  },
+  container: {
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.sm,
+  },
+  contentColumn: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  mapPlaceholder: {
+    width: "100%",
+    height: 140,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
-    marginBottom: 20,
+    borderColor: colors.border.strong,
+    backgroundColor: colors.background.secondary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.base,
   },
-  label: { color: '#ccc', marginBottom: 6 },
-  address: { color: '#fff', marginBottom: 10 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
-  meta: { color: '#bbb', fontSize: 13 },
-  bold: { fontWeight: 'bold', color: '#fff' },
-  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  mapPlaceholderText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.xs,
+  },
+  sectionHeader: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
+    marginLeft: spacing.xs,
+    letterSpacing: 0.4,
+  },
+  card: {
+    backgroundColor: colors.background.secondary,
+    padding: spacing.base,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    marginBottom: spacing.lg,
+  },
+  label: {
+    color: colors.text.secondary,
+    marginBottom: spacing.xs + 2,
+    fontSize: typography.fontSize.base,
+  },
+  address: {
+    color: colors.text.primary,
+    marginBottom: spacing.sm + 2,
+    fontSize: typography.fontSize.base,
+  },
+  rowBetween: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: spacing.base,
+  },
+  meta: {
+    flex: 1,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+  },
+  bold: {
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  categoryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm + 2,
+    marginBottom: spacing.base,
+  },
   pill: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    backgroundColor: '#2A2A3B',
-    borderRadius: 20,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.md + 2,
+    backgroundColor: colors.background.elevated,
+    borderRadius: borderRadius.full,
   },
-  activePill: { backgroundColor: '#A77BFF' },
-  pillText: { color: '#ccc', fontSize: 13 },
-  activePillText: { color: '#fff' },
+  activePill: {
+    backgroundColor: colors.primary,
+  },
+  pillText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  activePillText: {
+    color: colors.white,
+  },
   textArea: {
-    backgroundColor: '#1E1E2D',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 10,
+    backgroundColor: colors.background.tertiary,
+    color: colors.text.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.sm + 2,
     height: 100,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
-  charCount: { color: '#888', fontSize: 12, textAlign: 'right', marginTop: 4 },
-  toggleRow: { flexDirection: 'row', marginVertical: 10, gap: 10 },
+  charCount: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs + 1,
+    textAlign: "right",
+    marginTop: spacing.xs,
+  },
+  helpLabel: {
+    marginTop: spacing.lg,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    marginVertical: spacing.sm + 2,
+    gap: spacing.sm + 2,
+  },
   toggleBtn: {
     flex: 1,
-    backgroundColor: '#1F1F2F',
-    borderRadius: 20,
-    alignItems: 'center',
-    paddingVertical: 10,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.full,
+    alignItems: "center",
+    paddingVertical: spacing.sm + 2,
   },
-  activeToggle: { backgroundColor: '#7A45FF' },
-  toggleText: { color: '#ccc' },
-  activeToggleText: { color: '#fff', fontWeight: '600' },
-  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 10 },
+  activeToggle: {
+    backgroundColor: colors.primaryDark,
+  },
+  toggleText: {
+    color: colors.text.secondary,
+  },
+  activeToggleText: {
+    color: colors.white,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.sm + 2,
+  },
+  checkboxIcon: {
+    marginRight: spacing.sm,
+  },
+  checkboxText: {
+    color: colors.text.primary,
+  },
   uploadBox: {
     borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#444',
-    borderRadius: 10,
+    borderStyle: "dashed",
+    borderColor: colors.border.light,
+    borderRadius: borderRadius.sm + 2,
     height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.sm + 2,
+    backgroundColor: colors.background.tertiary,
   },
-  uploadText: { color: '#bbb', fontSize: 13, marginTop: 6 },
+  uploadText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs + 2,
+  },
   uploadBtn: {
-    backgroundColor: '#7A45FF',
-    paddingVertical: 10,
-    borderRadius: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
+    backgroundColor: colors.primaryDark,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.full,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
-  uploadBtnText: { color: '#fff', fontWeight: '600' },
+  uploadBtnText: {
+    color: colors.white,
+    fontWeight: typography.fontWeight.semibold,
+  },
   nextBtn: {
-    backgroundColor: '#7A45FF',
-    borderRadius: 30,
-    paddingVertical: 16,
-    marginTop: 10,
-    alignItems: 'center',
+    backgroundColor: colors.primaryDark,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.base,
+    marginTop: spacing.sm,
+    alignItems: "center",
+    marginBottom: spacing.sm,
   },
-  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  nextBtnText: {
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
 });

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import OrderItemCard from '../../order/OrderItemCard';
 import { styles } from '../styles';
+import { colors } from '../../../styles/theme';
 
 const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -47,7 +48,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
         <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
             {orderData.items.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Ionicons name="cube-outline" size={64} color="#444" />
+                    <Ionicons name="cube-outline" size={64} color={colors.border.light} />
                     <Text style={styles.emptyStateText}>No items added yet</Text>
                     <Text style={styles.emptyStateSubtext}>Tap below to add your first item</Text>
                 </View>
@@ -65,7 +66,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
             )}
 
             <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
-                <Ionicons name="add-circle" size={24} color="#A77BFF" />
+                <Ionicons name="add-circle" size={24} color={colors.primary} />
                 <Text style={styles.addItemBtnText}>Add Item</Text>
             </TouchableOpacity>
 

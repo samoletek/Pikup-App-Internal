@@ -13,15 +13,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { CardField, useStripe } from "@stripe/stripe-react-native";
 import { usePayment } from "../contexts/PaymentContext";
 import BaseModal from "./BaseModal";
+import { colors } from "../styles/theme";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // Use consistent button style from AuthModal
 const Button = ({ title, onPress, variant = 'primary', disabled, loading, style, icon }) => {
   const isPrimary = variant === 'primary';
-  const backgroundColor = isPrimary ? '#00D4AA' : 'transparent';
-  const textColor = isPrimary ? '#FFFFFF' : '#00D4AA';
-  const borderColor = isPrimary ? 'transparent' : '#00D4AA';
+  const backgroundColor = isPrimary ? colors.success : 'transparent';
+  const textColor = isPrimary ? colors.text.primary : colors.success;
+  const borderColor = isPrimary ? 'transparent' : colors.success;
 
   return (
     <TouchableOpacity
@@ -127,7 +128,7 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
     <View style={styles.header}>
       <Text style={styles.title}>Add Payment Method</Text>
       <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-        <Ionicons name="close" size={24} color="#fff" />
+        <Ionicons name="close" size={24} color={colors.text.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -137,16 +138,16 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
       visible={visible}
       onClose={onClose}
       height={SCREEN_HEIGHT * 0.75}
-      backgroundColor="#141426" // Match AuthModal background
+      backgroundColor={colors.background.secondary} // Match AuthModal background
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: '#2A2A3B' }} // Match dark theme handle
+      handleStyle={{ backgroundColor: colors.border.strong }} // Match dark theme handle
     >
       {() => (
         <View style={styles.content}>
           {/* Security Notice */}
           <View style={styles.securityNotice}>
-            <Ionicons name="shield-checkmark" size={20} color="#00D4AA" />
+            <Ionicons name="shield-checkmark" size={20} color={colors.success} />
             <Text style={styles.securityText}>
               Encrypted & Secure
             </Text>
@@ -193,11 +194,11 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
           {/* Features */}
           <View style={styles.featuresList}>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#444" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
               <Text style={styles.featureText}>Instant verification</Text>
             </View>
             <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color="#444" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
               <Text style={styles.featureText}>Secure storage</Text>
             </View>
           </View>
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
+    color: colors.text.primary,
   },
   closeButton: {
     padding: 4,
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0, 212, 170, 0.2)",
   },
   securityText: {
-    color: "#00D4AA",
+    color: colors.success,
     fontSize: 14,
     fontWeight: "600",
     marginLeft: 8,
@@ -259,16 +260,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionLabel: {
-    color: "#ccc",
+    color: colors.text.secondary,
     fontSize: 14,
     marginBottom: 10,
     marginLeft: 4,
   },
   cardFieldContainer: {
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: '#444',
+    borderColor: colors.border.light,
     paddingVertical: 4,
   },
   cardFieldWrapper: {
@@ -276,13 +277,13 @@ const styles = StyleSheet.create({
     marginVertical: 5,
   },
   cardField: {
-    backgroundColor: '#222233',
-    textColor: '#FFFFFF',
-    placeholderColor: '#666666',
+    backgroundColor: colors.background.input,
+    textColor: colors.text.primary,
+    placeholderColor: colors.text.placeholder,
     borderRadius: 30,
     fontSize: 16,
-    cursorColor: '#00D4AA',
-    textErrorColor: '#FF4444',
+    cursorColor: colors.success,
+    textErrorColor: colors.error,
   },
   brandsContainer: {
     flexDirection: 'row',
@@ -290,15 +291,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brandBadge: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border.default,
   },
   brandText: {
-    color: '#666',
+    color: colors.text.placeholder,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -313,7 +314,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   featureText: {
-    color: '#666',
+    color: colors.text.placeholder,
     fontSize: 12,
     marginLeft: 4,
   },
@@ -327,7 +328,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: "#00D4AA",
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,

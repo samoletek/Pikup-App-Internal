@@ -3,6 +3,7 @@ import { View, Text, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import VehicleCard, { VEHICLES } from '../../order/VehicleCard';
 import { styles } from '../styles';
+import { colors } from '../../../styles/theme';
 
 const VehicleStep = ({ orderData, setOrderData }) => {
     return (
@@ -24,7 +25,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                     <Text style={styles.whatFitsTitle}>What fits in a {orderData.selectedVehicle.type}:</Text>
                     {orderData.selectedVehicle.items.map((item, index) => (
                         <View key={index} style={styles.whatFitsItem}>
-                            <Ionicons name="checkmark-circle" size={16} color="#00D4AA" />
+                            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
                             <Text style={styles.whatFitsText}>{item}</Text>
                         </View>
                     ))}

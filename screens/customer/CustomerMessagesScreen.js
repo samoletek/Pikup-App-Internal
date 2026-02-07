@@ -1,238 +1,492 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  TextInput,
-  Image,
   Alert,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
+  Animated,
+  Image,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../contexts/AuthContext";
+import CollapsibleMessagesHeader, {
+  MESSAGES_TOP_BAR_HEIGHT,
+} from "../../components/messages/CollapsibleMessagesHeader";
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from "../../styles/theme";
+
+const FILTERS = ["all", "active", "archive"];
+const HEADER_ROW_HEIGHT = 56;
+const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TOTAL_COLLAPSE_DISTANCE =
+  SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
+const ARCHIVE_STATUSES = new Set([
+  "completed",
+  "cancelled",
+  "delivered",
+  "archived",
+]);
 
 export default function CustomerMessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, getConversations } = useAuth();
-  const [searchText, setSearchText] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all');
+  const { height: windowHeight } = useWindowDimensions();
+  const { currentUser, getConversations, getUserProfile } = useAuth();
+  const scrollRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const isSnappingRef = useRef(false);
+  const [searchText, setSearchText] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState("all");
   const [conversations, setConversations] = useState([]);
+  const [peerProfiles, setPeerProfiles] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadConversations();
   }, [currentUser]);
 
+  useEffect(() => {
+    loadPeerProfiles();
+  }, [conversations]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: SEARCH_COLLAPSE_DISTANCE,
+        animated: false,
+      });
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   const loadConversations = async () => {
-    if (!currentUser) return;
-    
+    setLoading(true);
+
+    if (!currentUser) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      setLoading(true);
-      const userConversations = await getConversations(currentUser.uid, 'customer');
-      
-      // Filter out invalid conversations
-      const validConversations = userConversations.filter(conv => 
-        conv.customerId && conv.driverId && conv.requestId
+      const userConversations = await getConversations(currentUser.uid, "customer");
+      const validConversations = userConversations.filter(
+        (conversation) =>
+          conversation.customerId &&
+          conversation.driverId &&
+          conversation.requestId &&
+          conversation.driverId !== "support"
       );
-      
-      setConversations(validConversations);
+
+      if (validConversations.length > 0) {
+        setConversations(validConversations);
+        return;
+      }
+
+      setConversations([]);
     } catch (error) {
-      console.error('Error loading conversations:', error);
-      // Show user-friendly error
-      Alert.alert(
-        'Unable to Load Messages',
-        'Please try again later.',
-        [{ text: 'OK' }]
-      );
+      console.error("Error loading conversations:", error);
+      Alert.alert("Unable to Load Messages", "Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
+  const loadPeerProfiles = async () => {
+    const peerIds = Array.from(
+      new Set(
+        conversations
+          .map((conversation) => conversation.driverId)
+          .filter((driverId) => Boolean(driverId) && driverId !== "support")
+      )
+    );
+    const missingIds = peerIds.filter((id) => !peerProfiles[id]);
+    if (missingIds.length === 0) {
+      return;
+    }
+
+    const profileEntries = await Promise.all(
+      missingIds.map(async (id) => {
+        try {
+          const profile = await getUserProfile(id);
+          return [id, profile];
+        } catch (error) {
+          console.error("Error loading peer profile:", id, error);
+          return [id, null];
+        }
+      })
+    );
+
+    setPeerProfiles((prev) => {
+      const next = { ...prev };
+      profileEntries.forEach(([id, profile]) => {
+        next[id] = profile || { id };
+      });
+      return next;
+    });
+  };
+
   const formatTimestamp = (timestamp) => {
+    if (!timestamp) {
+      return "";
+    }
     const date = new Date(timestamp);
     const now = new Date();
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hr ago`;
-    if (diffInMinutes < 10080) return `${Math.floor(diffInMinutes / 1440)} day${Math.floor(diffInMinutes / 1440) > 1 ? 's' : ''} ago`;
-    return `${Math.floor(diffInMinutes / 10080)} week${Math.floor(diffInMinutes / 10080) > 1 ? 's' : ''} ago`;
-  };
 
-  const getAvatarUrl = (driverName) => {
-    const initials = driverName.split(' ').map(n => n[0]).join('').substring(0, 2);
-    const colors = ['4A90E2', 'A77BFF', '00D4AA', 'FF6B6B', 'FFD93D'];
-    const colorIndex = driverName.length % colors.length;
-    return `https://via.placeholder.com/50x50/${colors[colorIndex]}/FFFFFF?text=${initials}`;
-  };
-
-  const filteredConversations = conversations.filter(conversation => {
-    if (selectedFilter === 'all') return true;
-    if (selectedFilter === 'active') return conversation.requestId && conversation.lastMessageAt;
-    if (selectedFilter === 'support') return conversation.driverId === 'support';
-    return true;
-  });
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return '#00D4AA';
-      case 'completed': return '#999';
-      case 'support': return '#A77BFF';
-      default: return '#999';
+    if (diffInMinutes < 1) {
+      return "Just now";
     }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'active': return 'radio-button-on';
-      case 'completed': return 'checkmark-circle';
-      case 'support': return 'help-circle';
-      default: return 'ellipse';
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes} min ago`;
     }
+    if (diffInMinutes < 1440) {
+      return `${Math.floor(diffInMinutes / 60)} hr ago`;
+    }
+    if (diffInMinutes < 10080) {
+      const days = Math.floor(diffInMinutes / 1440);
+      return `${days} day${days > 1 ? "s" : ""} ago`;
+    }
+    const weeks = Math.floor(diffInMinutes / 10080);
+    return `${weeks} week${weeks > 1 ? "s" : ""} ago`;
   };
 
-  const renderConversationItem = (conversation) => {
-    const driverName = conversation.driverId === 'support' ? 'Support Team' : `Driver ${conversation.driverId.substring(0, 8)}`;
-    const isUnread = conversation.unreadByCustomer > 0;
-    const status = conversation.driverId === 'support' ? 'support' : 'active';
-    
+  const getDisplayNameFromProfile = (profile, fallbackName) => {
+    const firstName = profile?.first_name || profile?.firstName || "";
+    const lastName = profile?.last_name || profile?.lastName || "";
+    const fullName = `${firstName} ${lastName}`.trim();
+
     return (
-      <TouchableOpacity 
-        key={conversation.id} 
-        style={[styles.messageItem, isUnread && styles.unreadMessage]}
-        onPress={() => {
-          navigation.navigate('MessageScreen', { 
-            conversationId: conversation.id,
-            driverId: conversation.driverId,
-            driverName: driverName,
-            requestId: conversation.requestId 
-          });
-        }}
+      fullName ||
+      profile?.name ||
+      profile?.email?.split("@")?.[0] ||
+      fallbackName
+    );
+  };
+
+  const getAvatarUrlFromProfile = (profile) =>
+    profile?.profileImageUrl ||
+    profile?.profile_image_url ||
+    profile?.avatar_url ||
+    null;
+
+  const getAvatarInitial = (displayName) =>
+    String(displayName || "?").trim().charAt(0).toUpperCase() || "?";
+
+  const getConversationStatus = (conversation) =>
+    String(
+      conversation.requestStatus ||
+      conversation.tripStatus ||
+      conversation.status ||
+      ""
+    ).toLowerCase();
+
+  const isArchivedConversation = (conversation) => {
+    const status = getConversationStatus(conversation);
+    return (
+      ARCHIVE_STATUSES.has(status) ||
+      Boolean(conversation.archivedAt) ||
+      Boolean(conversation.completedAt)
+    );
+  };
+
+  const isActiveConversation = (conversation) =>
+    Boolean(conversation.requestId) && !isArchivedConversation(conversation);
+
+  const filteredConversations = useMemo(() => {
+    const query = searchText.trim().toLowerCase();
+
+    return conversations.filter((conversation) => {
+      if (selectedFilter === "active" && !isActiveConversation(conversation)) {
+        return false;
+      }
+      if (selectedFilter === "archive" && !isArchivedConversation(conversation)) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const profile = peerProfiles[conversation.driverId];
+      const fallbackName =
+        conversation.driverName ||
+        `Driver ${conversation.driverId?.substring(0, 8) || ""}`;
+      const peerName = getDisplayNameFromProfile(profile, fallbackName).toLowerCase();
+      const requestId = conversation.requestId?.substring(0, 8)?.toLowerCase() || "";
+      const message = conversation.lastMessage?.toLowerCase() || "";
+
+      return (
+        peerName.includes(query) || message.includes(query) || requestId.includes(query)
+      );
+    });
+  }, [conversations, searchText, selectedFilter, peerProfiles]);
+
+  const activeCount = conversations.filter(
+    (conversation) => isActiveConversation(conversation)
+  ).length;
+  const archiveCount = conversations.filter(
+    (conversation) => isArchivedConversation(conversation)
+  ).length;
+
+  const renderFilter = (filterKey) => {
+    const isActive = selectedFilter === filterKey;
+    const label =
+      filterKey === "all"
+        ? "All"
+        : filterKey === "active"
+          ? "Active"
+          : "Archive";
+    const count =
+      filterKey === "all"
+        ? conversations.length
+        : filterKey === "active"
+          ? activeCount
+          : archiveCount;
+
+    return (
+      <TouchableOpacity
+        key={filterKey}
+        style={[styles.filterTab, isActive && styles.filterTabActive]}
+        onPress={() => setSelectedFilter(filterKey)}
       >
-        <View style={styles.avatarContainer}>
-          <Image source={{ uri: getAvatarUrl(driverName) }} style={styles.avatar} />
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor(status) }]} />
+        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{label}</Text>
+        <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+          <Text style={styles.filterBadgeText}>{count}</Text>
         </View>
-
-        <View style={styles.messageContent}>
-          <View style={styles.messageHeader}>
-            <Text style={[styles.driverName, isUnread && styles.unreadText]}>
-              {driverName}
-            </Text>
-            <View style={styles.messageInfo}>
-              {conversation.lastMessageAt && (
-                <Text style={styles.timestamp}>
-                  {formatTimestamp(conversation.lastMessageAt)}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          {conversation.requestId && (
-            <View style={styles.tripInfo}>
-              <Ionicons name="car-outline" size={12} color="#A77BFF" />
-              <Text style={styles.tripId}>Request #{conversation.requestId.substring(0, 8)}</Text>
-              <Ionicons 
-                name={getStatusIcon(status)} 
-                size={12} 
-                color={getStatusColor(status)} 
-                style={{ marginLeft: 8 }}
-              />
-            </View>
-          )}
-
-          <Text style={[styles.lastMessage, isUnread && styles.unreadMessage]} numberOfLines={2}>
-            {conversation.lastMessage || 'No messages yet'}
-          </Text>
-        </View>
-
-        {isUnread && <View style={styles.unreadDot} />}
       </TouchableOpacity>
     );
   };
 
-  return (
-    <View style={styles.container}>
-      {/* Search Bar - Top */}
-      <View style={[styles.searchContainer, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search messages..."
-            placeholderTextColor="#999"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-        </View>
-      </View>
+  const renderConversationItem = (conversation) => {
+    const profile = peerProfiles[conversation.driverId];
+    const fallbackName =
+      conversation.driverName ||
+      `Driver ${conversation.driverId?.substring(0, 8) || ""}`;
+    const driverName = getDisplayNameFromProfile(profile, fallbackName);
+    const avatarUrl = getAvatarUrlFromProfile(profile);
+    const avatarInitial = getAvatarInitial(driverName);
+    const isUnread = (conversation.unreadByCustomer || 0) > 0;
+    const isArchived = isArchivedConversation(conversation);
+    const metaIconName = isArchived ? "archive-outline" : "car-outline";
+    const metaColor = isArchived ? colors.text.tertiary : colors.primary;
+    const metaLabel = `Request #${conversation.requestId.substring(0, 8)}`;
 
-      {/* Messages List - Main content area */}
-      {loading ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>Loading conversations...</Text>
+    return (
+      <TouchableOpacity
+        key={conversation.id}
+        style={styles.messageItem}
+        onPress={() =>
+          navigation.navigate("MessageScreen", {
+            conversationId: conversation.id,
+            driverId: conversation.driverId,
+            driverName,
+            requestId: conversation.requestId,
+          })
+        }
+      >
+        <View style={styles.avatarContainer}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarFallbackText}>{avatarInitial}</Text>
+            </View>
+          )}
         </View>
-      ) : filteredConversations.length > 0 ? (
-        <ScrollView
-          style={styles.messagesList}
-          showsVerticalScrollIndicator={false}
-        >
-          {filteredConversations.map(renderConversationItem)}
-          <View style={styles.bottomSpacing} />
-        </ScrollView>
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="chatbubbles-outline" size={64} color="#2A2A3B" />
-          <Text style={styles.emptyStateTitle}>No messages yet</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            Messages with your drivers will appear here
+
+        <View style={styles.messageContent}>
+          <View style={styles.messageHeader}>
+            <Text style={[styles.peerName, isUnread && styles.peerNameUnread]} numberOfLines={1}>
+              {driverName}
+            </Text>
+            <Text style={styles.timestamp}>{formatTimestamp(conversation.lastMessageAt)}</Text>
+          </View>
+
+          <View style={styles.metaRow}>
+            <Ionicons name={metaIconName} size={12} color={metaColor} />
+            <Text style={[styles.metaText, { color: metaColor }]} numberOfLines={1}>
+              {metaLabel}
+            </Text>
+          </View>
+
+          <Text
+            style={[styles.lastMessage, isUnread && styles.lastMessageUnread]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {conversation.lastMessage || "No messages yet"}
           </Text>
         </View>
-      )}
 
-      {/* Bottom Controls - Filter Tabs */}
-      <View style={[styles.bottomControlsContainer, { paddingBottom: insets.bottom + 12 }]}>
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
-            style={[styles.filterTab, selectedFilter === 'all' && styles.activeFilter]}
-            onPress={() => setSelectedFilter('all')}
-          >
-            <Text style={[styles.filterText, selectedFilter === 'all' && styles.activeFilterText]}>
-              All
-            </Text>
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{conversations.length}</Text>
+        {isUnread ? <View style={styles.unreadDot} /> : null}
+      </TouchableOpacity>
+    );
+  };
+
+  const showBack = false;
+  const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
+  const emptyStateMinHeight = Math.max(
+    280,
+    windowHeight - headerHeight - HEADER_ROW_HEIGHT * 3 - insets.bottom - 120
+  );
+  const titleLockCompensation = scrollY.interpolate({
+    inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    extrapolate: "clamp",
+  });
+
+  const getSnapOffset = (offsetY) => {
+    if (offsetY < 0 || offsetY > TOTAL_COLLAPSE_DISTANCE) {
+      return null;
+    }
+
+    if (offsetY < SEARCH_COLLAPSE_DISTANCE) {
+      return offsetY < SEARCH_COLLAPSE_DISTANCE / 2
+        ? 0
+        : SEARCH_COLLAPSE_DISTANCE;
+    }
+
+    const titleProgress = offsetY - SEARCH_COLLAPSE_DISTANCE;
+    return titleProgress < TITLE_COLLAPSE_DISTANCE / 2
+      ? SEARCH_COLLAPSE_DISTANCE
+      : TOTAL_COLLAPSE_DISTANCE;
+  };
+
+  const snapToNearestOffset = (offsetY) => {
+    const targetOffset = getSnapOffset(offsetY);
+    if (targetOffset === null || Math.abs(targetOffset - offsetY) < 1) {
+      return;
+    }
+
+    if (!scrollRef.current) {
+      return;
+    }
+
+    isSnappingRef.current = true;
+    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
+    setTimeout(() => {
+      isSnappingRef.current = false;
+    }, 220);
+  };
+
+  const handleScrollEndDrag = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(velocityY) < 0.15) {
+      snapToNearestOffset(event.nativeEvent.contentOffset.y);
+    }
+  };
+
+  const handleMomentumScrollEnd = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+    snapToNearestOffset(event.nativeEvent.contentOffset.y);
+  };
+
+  return (
+    <View style={styles.container}>
+      <CollapsibleMessagesHeader
+        title="Messages"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack={showBack}
+        scrollY={scrollY}
+        searchCollapseDistance={SEARCH_COLLAPSE_DISTANCE}
+        titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
+      />
+
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={styles.messagesList}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingTop: headerHeight,
+            paddingBottom: insets.bottom + 90,
+          },
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={loadConversations}
+            tintColor={colors.primary}
+          />
+        }
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.largeTitleSection,
+            { transform: [{ translateY: titleLockCompensation }] },
+          ]}
+        >
+          <Text style={styles.largeTitle}>Messages</Text>
+        </Animated.View>
+
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search messages"
+              placeholderTextColor={colors.text.placeholder}
+              value={searchText}
+              onChangeText={setSearchText}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        </View>
+
+        <View style={styles.filterSection}>
+          <View style={styles.filterRow}>{FILTERS.map(renderFilter)}</View>
+        </View>
+
+        <View style={styles.messagesSection}>
+          {loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateTitle}>Loading conversations...</Text>
             </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterTab, selectedFilter === 'active' && styles.activeFilter]}
-            onPress={() => setSelectedFilter('active')}
-          >
-            <Text style={[styles.filterText, selectedFilter === 'active' && styles.activeFilterText]}>
-              Active
-            </Text>
-            <View style={[styles.filterBadge, { backgroundColor: '#00D4AA' }]}>
-              <Text style={styles.filterBadgeText}>
-                {conversations.filter(c => c.requestId && c.lastMessageAt).length}
+          ) : filteredConversations.length > 0 ? (
+            filteredConversations.map(renderConversationItem)
+          ) : (
+            <View style={[styles.emptyState, { minHeight: emptyStateMinHeight }]}>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={56}
+                color={colors.border.strong}
+              />
+              <Text style={styles.emptyStateTitle}>No messages yet</Text>
+              <Text style={styles.emptyStateSubtitle}>
+                Messages with your drivers will appear here
               </Text>
             </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterTab, selectedFilter === 'support' && styles.activeFilter]}
-            onPress={() => setSelectedFilter('support')}
-          >
-            <Text style={[styles.filterText, selectedFilter === 'support' && styles.activeFilterText]}>
-              Support
-            </Text>
-          </TouchableOpacity>
+          )}
         </View>
-      </View>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -240,211 +494,202 @@ export default function CustomerMessagesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
-  searchContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 15,
+  filterSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
   },
-  bottomControlsContainer: {
-    backgroundColor: '#0A0A1F',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+  messagesSection: {
+    paddingTop: spacing.sm,
   },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141426',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  searchInput: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 12,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingTop: 12,
-    gap: 8,
-    justifyContent: 'center',
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141426',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginRight: spacing.sm,
   },
-  activeFilter: {
-    backgroundColor: '#A77BFF',
-    borderColor: '#A77BFF',
+  filterTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterText: {
-    color: '#999',
-    fontSize: 14,
-    fontWeight: '500',
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
-  activeFilterText: {
-    color: '#fff',
+  filterTextActive: {
+    color: colors.text.primary,
   },
   filterBadge: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 10,
+    marginLeft: spacing.sm,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: 8,
-    minWidth: 18,
-    alignItems: 'center',
+    backgroundColor: colors.background.elevated,
+  },
+  filterBadgeActive: {
+    backgroundColor: colors.overlayPrimarySoft,
   },
   filterBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  quickActions: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 20,
-    gap: 12,
-  },
-  quickActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#141426',
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  quickActionText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 6,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
   messagesList: {
     flex: 1,
   },
-  messageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141426',
-    marginHorizontal: 20,
-    marginBottom: 8,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
+  listContent: {
+    paddingHorizontal: spacing.base,
   },
-  unreadMessage: {
-    borderColor: '#A77BFF',
-    backgroundColor: '#1A1A3A',
+  largeTitleSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background.primary,
+    zIndex: 2,
+  },
+  largeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  searchSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    zIndex: 1,
+  },
+  searchBar: {
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    marginLeft: spacing.sm,
+  },
+  messageItem: {
+    height: 100,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.sm,
   },
   avatarContainer: {
-    position: 'relative',
-    marginRight: 12,
+    position: "relative",
+    marginRight: spacing.md,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.circle,
   },
-  statusDot: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#141426',
+  avatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarFallbackText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
   messageContent: {
     flex: 1,
+    justifyContent: "center",
   },
   messageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
   },
-  driverName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  peerName: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginRight: spacing.sm,
   },
-  unreadText: {
-    color: '#A77BFF',
-  },
-  messageInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  ratingText: {
-    color: '#999',
-    fontSize: 12,
-    marginLeft: 2,
+  peerNameUnread: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.bold,
   },
   timestamp: {
-    color: '#999',
-    fontSize: 12,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
   },
-  tripInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xs,
   },
-  tripId: {
-    color: '#A77BFF',
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 4,
+  metaText: {
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.xs,
+    fontWeight: typography.fontWeight.medium,
+    flex: 1,
   },
   lastMessage: {
-    color: '#999',
-    fontSize: 14,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
     lineHeight: 18,
+  },
+  lastMessageUnread: {
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
   unreadDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#A77BFF',
-    marginLeft: 8,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
+    marginLeft: spacing.sm,
   },
   emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xxxl,
   },
   emptyStateTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
   },
   emptyStateSubtitle: {
-    color: '#999',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  bottomSpacing: {
-    height: 20,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    textAlign: "center",
+    paddingHorizontal: spacing.xl,
   },
 });

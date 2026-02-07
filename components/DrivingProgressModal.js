@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { colors } from '../styles/theme';
 
 export const DrivingProgressModal = ({ request, onArrive, driverLocation }) => {
   return (
@@ -27,7 +28,7 @@ export const DrivingProgressModal = ({ request, onArrive, driverLocation }) => {
 
 const styles = StyleSheet.create({
   modalContent: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background.tertiary,
     padding: 20,
     paddingBottom: 40,
     borderTopLeftRadius: 20,
@@ -38,12 +39,12 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   drivingTitle: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 18,
     fontWeight: '600',
   },
   driverCard: {
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.background.elevated,
     padding: 20,
     borderRadius: 12,
     alignItems: 'center',
@@ -56,7 +57,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   driverName: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
@@ -67,7 +68,7 @@ const styles = StyleSheet.create({
   callBtn: {
     width: 44,
     height: 44,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
@@ -76,13 +77,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   arriveBtn: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
   arriveBtnText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },

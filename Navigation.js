@@ -89,6 +89,10 @@ const DriverStack = () => (
     <Stack.Screen name="DriverPreferencesScreen" component={DriverPreferencesScreen} />
     <Stack.Screen name="DriverEarningsScreen" component={DriverEarningsScreen} />
     <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
+    <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />
+    <Stack.Screen name="CustomerPersonalInfoScreen" component={CustomerPersonalInfoScreen} />
+    <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
+    <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
 
     {/* Trip Execution Flow */}
     <Stack.Screen name="RouteConfirmationScreen" component={RouteConfirmationScreen} />

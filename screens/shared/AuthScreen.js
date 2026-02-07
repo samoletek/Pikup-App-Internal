@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Ionicons } from '@expo/vector-icons';
 import {
     View,
@@ -8,19 +8,20 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
-    ScrollView,
     Alert,
     Image,
-    Dimensions
+    useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useAuth } from "../../contexts/AuthContext";
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { colors, layout, spacing, typography } from "../../styles/theme";
 
 export default function AuthScreen({ navigation, route }) {
     const insets = useSafeAreaInsets();
+    const { width } = useWindowDimensions();
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -39,50 +40,21 @@ export default function AuthScreen({ navigation, route }) {
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-    const { signup, login, loading, currentUser, userType, checkTermsAcceptance, getDriverProfile, signInWithApple, signInWithGoogle } = useAuth();
+    const { signup, login, loading, userType, signInWithApple, signInWithGoogle } = useAuth();
 
     // Get the user role from navigation params or context
     const userRole = userType || route?.params?.userRole || "customer";
 
-    // Debug: Log on every render
-    console.log('🔍 AuthScreen render - currentUser:', !!currentUser, 'userType:', userType, 'userRole:', userRole);
+    const isCompact = width < 370;
+    const contentMaxWidth = Math.min(layout.authMaxWidth, width - spacing.xl);
+    const iconSize = isCompact ? 88 : 100;
+    const logoSize = isCompact ? 52 : 60;
 
     // Validate email format
     const validateEmail = (email) => {
         const re = /\S+@\S+\.\S+/;
         return re.test(email);
     };
-
-    useEffect(() => {
-        console.log('AuthScreen useEffect triggered. currentUser:', !!currentUser, 'userType:', userType);
-        // If user is logged in, navigate based on role
-        if (currentUser && userType) {
-            console.log('Attempting to navigate for userType:', userType);
-            const checkAndNavigate = async () => {
-                try {
-                    console.log('⚡️ AuthScreen Auto-Navigate: UserType =', userType);
-
-                    // We rely on Navigation.js to handle the root stack switching based on userType/currentUser.
-                    // However, if we are here, we might want to ensure we don't flash WelcomeScreen.
-                    // Actually, with strict navigation, this component (AuthScreen) will UNMOUNT as soon as currentUser/userType is set.
-                    // So we probably don't even need to manually navigate replace!
-                    // But to be safe and explicit:
-
-                    /* 
-                       Logic moved to Navigation.js
-                       If userType is set, Navigation.js will automatically swap the stack
-                       from AuthStack to CustomerStack/DriverStack.
-                    */
-
-                } catch (error) {
-                    console.error("Navigation check error:", error);
-                }
-            };
-
-            checkAndNavigate();
-        }
-    }, [currentUser, userType, navigation]);
-
 
     const handleAppleSignIn = async () => {
         try {
@@ -157,7 +129,7 @@ export default function AuthScreen({ navigation, route }) {
 
     return (
         <LinearGradient
-            colors={['#FFFFFF', '#F7F7F7']}
+            colors={[colors.background.surface, colors.background.light]}
             style={styles.container}
         >
             <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -169,26 +141,40 @@ export default function AuthScreen({ navigation, route }) {
                         contentContainerStyle={styles.scrollContainer}
                         enableOnAndroid={true}
                         extraScrollHeight={20}
+                        keyboardShouldPersistTaps="handled"
                     >
-                        <View style={styles.logoContainer}>
-                            <View style={styles.iconContainer}>
-                                <Image
-                                    source={require('../../assets/splash-icon.png')}
-                                    style={styles.logoImage}
-                                    resizeMode="contain"
-                                />
+                        <View style={[styles.contentWrapper, { maxWidth: contentMaxWidth }]}>
+                            <View style={styles.logoContainer}>
+                                <View
+                                    style={[
+                                        styles.iconContainer,
+                                        {
+                                            width: iconSize,
+                                            height: iconSize,
+                                            borderRadius: iconSize * 0.2,
+                                        },
+                                    ]}
+                                >
+                                    <Image
+                                        source={require('../../assets/splash-icon.png')}
+                                        style={[
+                                            styles.logoImage,
+                                            { width: logoSize, height: logoSize },
+                                        ]}
+                                        resizeMode="contain"
+                                    />
+                                </View>
                             </View>
-                        </View>
 
-                        <View style={styles.formContainer}>
-                            <Text style={styles.title}>
-                                {isLogin ? "Welcome Back" : "Create Account"}
-                            </Text>
+                            <View style={styles.formContainer}>
+                                <Text style={[styles.title, isCompact && styles.titleCompact]}>
+                                    {isLogin ? "Welcome Back" : "Create Account"}
+                                </Text>
 
                             {!isLogin && (
                                 <View style={styles.nameRow}>
                                     <View style={[styles.inputContainer, styles.halfInput]}>
-                                        <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+                                        <Ionicons name="person-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
                                         <TextInput
                                             style={[styles.input, nameError ? styles.inputError : null]}
                                             placeholder="First Name"
@@ -211,7 +197,7 @@ export default function AuthScreen({ navigation, route }) {
                             {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
 
                             <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
-                                <Ionicons name="mail-outline" size={20} color="#666" style={styles.inputIcon} />
+                                <Ionicons name="mail-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Email"
@@ -224,7 +210,7 @@ export default function AuthScreen({ navigation, route }) {
                             {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
                             <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
-                                <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+                                <Ionicons name="lock-closed-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Password"
@@ -239,7 +225,7 @@ export default function AuthScreen({ navigation, route }) {
                                     <Ionicons
                                         name={showPassword ? "eye-off-outline" : "eye-outline"}
                                         size={20}
-                                        color="#666"
+                                        color={colors.text.placeholder}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -247,7 +233,7 @@ export default function AuthScreen({ navigation, route }) {
 
                             {!isLogin && (
                                 <View style={[styles.inputContainer, confirmPasswordError ? styles.inputError : null]}>
-                                    <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
+                                    <Ionicons name="lock-closed-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Confirm Password"
@@ -262,7 +248,7 @@ export default function AuthScreen({ navigation, route }) {
                                         <Ionicons
                                             name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
                                             size={20}
-                                            color="#666"
+                                            color={colors.text.placeholder}
                                         />
                                     </TouchableOpacity>
                                 </View>
@@ -271,7 +257,7 @@ export default function AuthScreen({ navigation, route }) {
                                 <Text style={styles.errorText}>{confirmPasswordError}</Text>
                             ) : null}
 
-                            <View style={styles.buttonContainer}>
+                                <View style={[styles.buttonContainer, isCompact && styles.buttonContainerCompact]}>
                                 {!isLogin && (
                                     <View>
                                         <TouchableOpacity
@@ -281,7 +267,7 @@ export default function AuthScreen({ navigation, route }) {
                                             <Ionicons
                                                 name={termsAccepted ? "checkbox" : "square-outline"}
                                                 size={24}
-                                                color={termsAccepted ? "#A77BFF" : "#666"}
+                                                color={termsAccepted ? colors.primary : colors.text.placeholder}
                                             />
                                             <View style={styles.termsTextContainer}>
                                                 <Text style={styles.termsText}>I accept the </Text>
@@ -321,22 +307,23 @@ export default function AuthScreen({ navigation, route }) {
                                     onPress={handleGoogleSignIn}
                                     disabled={loading}
                                 >
-                                    <Ionicons name="logo-google" size={20} color="#333" />
+                                    <Ionicons name="logo-google" size={20} color={colors.text.inverse} />
                                     <Text style={styles.googleButtonText}>Sign in with Google</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <View style={styles.toggleContainer}>
-                                <Text style={styles.toggleText}>
-                                    {isLogin
-                                        ? "Don't have an account? "
-                                        : "Already have an account? "}
-                                </Text>
-                                <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-                                    <Text style={styles.toggleLink}>
-                                        {isLogin ? "Sign Up" : "Sign In"}
+                                <View style={styles.toggleContainer}>
+                                    <Text style={styles.toggleText}>
+                                        {isLogin
+                                            ? "Don't have an account? "
+                                            : "Already have an account? "}
                                     </Text>
-                                </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+                                        <Text style={styles.toggleLink}>
+                                            {isLogin ? "Sign Up" : "Sign In"}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         </View>
                     </KeyboardAwareScrollView>
@@ -351,7 +338,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     errorText: {
-        color: "red",
+        color: colors.error,
         fontSize: 12,
         marginBottom: 10,
         marginLeft: 20,
@@ -363,32 +350,33 @@ const styles = StyleSheet.create({
         paddingVertical: 16,
     },
     termsAcceptedErrorText: {
-        color: "red",
+        color: colors.error,
         fontSize: 12,
         marginBottom: 30,
         marginLeft: 20,
     },
     inputError: {
-        borderColor: "red",
+        borderColor: colors.error,
     },
     scrollContainer: {
         flexGrow: 1,
-        paddingHorizontal: 20,
+        paddingHorizontal: spacing.base,
         justifyContent: "center",
+    },
+    contentWrapper: {
+        width: "100%",
+        alignSelf: "center",
     },
     logoContainer: {
         alignItems: "center",
-        marginBottom: 30,
-        marginTop: 20,
+        marginBottom: spacing.lg + spacing.xs,
+        marginTop: spacing.md,
     },
     iconContainer: {
-        width: 100,
-        height: 100,
-        backgroundColor: 'white',
-        borderRadius: 20,
+        backgroundColor: colors.background.surface,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: "#000",
+        shadowColor: colors.black,
         shadowOffset: {
             width: 0,
             height: 4,
@@ -405,11 +393,15 @@ const styles = StyleSheet.create({
         width: "100%",
     },
     title: {
-        fontSize: 28,
-        fontWeight: "bold",
-        color: "#333",
-        marginBottom: 30,
+        fontSize: typography.fontSize.xxl + 4,
+        fontWeight: typography.fontWeight.bold,
+        color: colors.text.inverse,
+        marginBottom: spacing.lg + spacing.xs,
         textAlign: "center",
+    },
+    titleCompact: {
+        fontSize: typography.fontSize.xxl,
+        marginBottom: spacing.lg,
     },
     nameRow: {
         flexDirection: "row",
@@ -419,7 +411,7 @@ const styles = StyleSheet.create({
         width: "48%",
     },
     inputContainer: {
-        marginBottom: 15,
+        marginBottom: spacing.md + 3,
         flexDirection: 'row',
         alignItems: 'center',
     },
@@ -429,25 +421,28 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     input: {
-        backgroundColor: "#F0F0F0",
+        backgroundColor: colors.background.inputLight,
         borderRadius: 30,
-        paddingHorizontal: 20,
-        paddingVertical: 15,
+        paddingHorizontal: spacing.base + spacing.xs,
+        paddingVertical: spacing.base - 1,
         paddingLeft: 45,
-        fontSize: 16,
-        color: "#333",
+        fontSize: typography.fontSize.md,
+        color: colors.text.inverse,
         width: "100%",
     },
     buttonContainer: {
-        marginTop: 20,
+        marginTop: spacing.base + spacing.xs,
         width: "100%",
     },
+    buttonContainerCompact: {
+        marginTop: spacing.base,
+    },
     button: {
-        backgroundColor: "#A77BFF",
+        backgroundColor: colors.primary,
         borderRadius: 30,
-        paddingVertical: 16,
+        paddingVertical: spacing.base,
         alignItems: "center",
-        shadowColor: "#A77BFF",
+        shadowColor: colors.primary,
         shadowOffset: {
             width: 0,
             height: 4,
@@ -455,25 +450,25 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 8,
-        marginBottom: 20,
+        marginBottom: spacing.base + spacing.xs,
     },
     buttonText: {
-        color: "#FFFFFF",
+        color: colors.text.primary,
         fontSize: 18,
         fontWeight: "bold",
     },
     toggleContainer: {
         flexDirection: "row",
         justifyContent: "center",
-        marginTop: 10,
-        marginBottom: 30,
+        marginTop: spacing.sm + 2,
+        marginBottom: spacing.lg + spacing.xs,
     },
     toggleText: {
-        color: "#666",
+        color: colors.text.placeholder,
         fontSize: 16,
     },
     toggleLink: {
-        color: "#A77BFF",
+        color: colors.text.link,
         fontSize: 16,
         fontWeight: "bold",
     },
@@ -490,11 +485,11 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     termsText: {
-        color: '#666',
+        color: colors.text.placeholder,
         fontSize: 14,
     },
     termsLink: {
-        color: '#A77BFF',
+        color: colors.text.link,
         fontSize: 14,
         fontWeight: '600',
         textDecorationLine: 'underline',
@@ -505,14 +500,14 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     googleButton: {
-        backgroundColor: '#FFFFFF',
+        backgroundColor: colors.background.surface,
         borderRadius: 30,
         paddingVertical: 12,
         height: 50,
         alignItems: 'center',
         justifyContent: 'center',
         flexDirection: 'row',
-        shadowColor: "#000",
+        shadowColor: colors.black,
         shadowOffset: {
             width: 0,
             height: 2,
@@ -522,10 +517,10 @@ const styles = StyleSheet.create({
         elevation: 3,
         marginBottom: 20,
         borderWidth: 1,
-        borderColor: '#E0E0E0'
+        borderColor: colors.border.inverse
     },
     googleButtonText: {
-        color: '#333',
+        color: colors.text.inverse,
         fontSize: 17,
         fontWeight: '600',
         marginLeft: 10

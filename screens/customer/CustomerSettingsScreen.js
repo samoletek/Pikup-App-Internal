@@ -1,23 +1,62 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  StyleSheet,
   Switch,
-  Alert,
-  ActivityIndicator,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from "react-native";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import ScreenHeader from "../../components/ScreenHeader";
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from "../../styles/theme";
+
+const notificationItems = [
+  {
+    key: "pushNotifications",
+    title: "Push Notifications",
+    description: "Receive notifications on your device",
+  },
+  {
+    key: "emailNotifications",
+    title: "Email Notifications",
+    description: "Receive updates by email",
+  },
+  {
+    key: "smsNotifications",
+    title: "SMS Notifications",
+    description: "Receive updates by text message",
+  },
+  {
+    key: "promotions",
+    title: "Promotions and Offers",
+    description: "Get promotional messages and special offers",
+  },
+  {
+    key: "tripUpdates",
+    title: "Trip Updates",
+    description: "Receive notifications about your trips",
+  },
+  {
+    key: "accountActivity",
+    title: "Account Activity",
+    description: "Get alerts about account changes",
+  },
+];
 
 export default function CustomerSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, deleteAccount } = useAuth();
-  const [loading, setLoading] = useState(false);
-
+  const { width } = useWindowDimensions();
+  const { userType } = useAuth();
   const [settings, setSettings] = useState({
     notifications: {
       pushNotifications: true,
@@ -30,264 +69,160 @@ export default function CustomerSettingsScreen({ navigation }) {
     language: "English",
     currency: "USD",
   });
+  const isDriver = userType === "driver";
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
-  const toggleSetting = (category, setting) => {
-    setSettings({
-      ...settings,
-      [category]: {
-        ...settings[category],
-        [setting]: !settings[category][setting],
+  const toggleSetting = (settingKey) => {
+    setSettings((prev) => ({
+      ...prev,
+      notifications: {
+        ...prev.notifications,
+        [settingKey]: !prev.notifications[settingKey],
       },
-    });
+    }));
   };
 
-  const handleClearData = () => {
-    Alert.alert(
-      "Clear App Data",
-      "This will clear all cached data and reset preferences. This action cannot be undone. Do you want to continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear Data",
-          style: "destructive",
-          onPress: () => {
-            // In a real app, this would clear cached data
-            Alert.alert("Success", "App data has been cleared.");
-          },
-        },
-      ]
-    );
-  };
+  const renderRow = ({
+    icon,
+    label,
+    onPress,
+    value,
+    isLast = false,
+    isExternal = false,
+  }) => (
+    <TouchableOpacity
+      style={[styles.row, isLast && styles.rowLast]}
+      onPress={onPress}
+      accessibilityRole="button"
+    >
+      <View style={styles.rowLeft}>
+        {icon ? <Ionicons name={icon} size={20} color={colors.primary} /> : null}
+        <Text style={styles.rowTitle}>{label}</Text>
+      </View>
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.",
-      [
-        { text: "Cancel", style: "cancel" },
+      <View style={styles.rowRight}>
+        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+        <Ionicons
+          name={isExternal ? "open-outline" : "chevron-forward"}
+          size={18}
+          color={colors.text.tertiary}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+
+  const accountRows = isDriver
+    ? [
         {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            if (loading) return;
-            setLoading(true);
-            try {
-              await deleteAccount();
-              Alert.alert("Account Deleted", "Your account has been permanently deleted.");
-            } catch (error) {
-              Alert.alert("Error", error.message || "Failed to delete account. Please try again.");
-              setLoading(false);
-            }
-          },
+          icon: "person-outline",
+          label: "Personal Information",
+          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
+        },
+        {
+          icon: "options-outline",
+          label: "Driver Preferences",
+          onPress: () => navigation.navigate("DriverPreferencesScreen"),
+        },
+        {
+          icon: "card-outline",
+          label: "Payment Settings",
+          onPress: () => navigation.navigate("DriverPaymentSettingsScreen"),
+        },
+        {
+          icon: "globe-outline",
+          label: "Language",
+          value: settings.language,
+          onPress: () => {},
+        },
+        {
+          icon: "cash-outline",
+          label: "Currency",
+          value: settings.currency,
+          onPress: () => {},
         },
       ]
-    );
-  };
+    : [
+        {
+          icon: "person-outline",
+          label: "Personal Information",
+          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
+        },
+        {
+          icon: "globe-outline",
+          label: "Language",
+          value: settings.language,
+          onPress: () => {},
+        },
+        {
+          icon: "cash-outline",
+          label: "Currency",
+          value: settings.currency,
+          onPress: () => {},
+        },
+      ];
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeader
+        title="Settings"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+      />
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="person-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Personal Information</Text>
+        <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionLabel}>ACCOUNT</Text>
+            <View style={styles.card}>
+              {accountRows.map((row, index) =>
+                renderRow({
+                  ...row,
+                  isLast: index === accountRows.length - 1,
+                })
+              )}
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="globe-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Language</Text>
-            </View>
-            <View style={styles.menuItemRight}>
-              <Text style={styles.menuItemValue}>{settings.language}</Text>
-              <Ionicons name="chevron-forward" size={20} color="#666" />
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="cash-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Currency</Text>
-            </View>
-            <View style={styles.menuItemRight}>
-              <Text style={styles.menuItemValue}>{settings.currency}</Text>
-              <Ionicons name="chevron-forward" size={20} color="#666" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Notifications Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Push Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications on your device
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.pushNotifications ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "pushNotifications")}
-              value={settings.notifications.pushNotifications}
-            />
           </View>
 
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Email Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications via email
-              </Text>
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+            <View style={styles.card}>
+              {notificationItems.map((item, index) => (
+                <View
+                  key={item.key}
+                  style={[
+                    styles.switchRow,
+                    index === notificationItems.length - 1 && styles.rowLast,
+                  ]}
+                >
+                  <View style={styles.switchInfo}>
+                    <Text style={styles.rowTitle}>{item.title}</Text>
+                    <Text style={styles.switchDescription}>{item.description}</Text>
+                  </View>
+                  <Switch
+                    trackColor={{
+                      false: colors.border.strong,
+                      true: colors.background.brandTint,
+                    }}
+                    thumbColor={
+                      settings.notifications[item.key] ? colors.primary : colors.white
+                    }
+                    ios_backgroundColor={colors.border.strong}
+                    onValueChange={() => toggleSetting(item.key)}
+                    value={settings.notifications[item.key]}
+                  />
+                </View>
+              ))}
             </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.emailNotifications ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "emailNotifications")}
-              value={settings.notifications.emailNotifications}
-            />
           </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>SMS Notifications</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications via text message
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.smsNotifications ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "smsNotifications")}
-              value={settings.notifications.smsNotifications}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Promotions and Offers</Text>
-              <Text style={styles.settingDescription}>
-                Receive promotional messages and special offers
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.promotions ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "promotions")}
-              value={settings.notifications.promotions}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Trip Updates</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications about your trips
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.tripUpdates ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "tripUpdates")}
-              value={settings.notifications.tripUpdates}
-            />
-          </View>
-
-          <View style={styles.settingItem}>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Account Activity</Text>
-              <Text style={styles.settingDescription}>
-                Receive notifications about account changes
-              </Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#2A2A3B", true: "#2A1F3D" }}
-              thumbColor={settings.notifications.accountActivity ? "#A77BFF" : "#f4f3f4"}
-              ios_backgroundColor="#2A2A3B"
-              onValueChange={() => toggleSetting("notifications", "accountActivity")}
-              value={settings.notifications.accountActivity}
-            />
-          </View>
-        </View>
-
-
-        {/* Data & Storage */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & Storage</Text>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="analytics-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Data Usage</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="download-outline" size={20} color="#A77BFF" />
-              <Text style={styles.menuItemTitle}>Download My Data</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#666" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.clearDataButton}
-            onPress={handleClearData}
-          >
-            <Text style={styles.clearDataText}>Clear App Data</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.clearDataButton, { borderTopWidth: 1, borderTopColor: '#2A2A3B' }]}
-            onPress={handleDeleteAccount}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ff4444" />
-            ) : (
-              <Text style={styles.clearDataText}>Delete Account</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* App Version */}
-        <View style={styles.versionContainer}>
           <Text style={styles.versionText}>PikUp App v1.0.0</Text>
         </View>
-
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
     </View>
   );
@@ -296,119 +231,90 @@ export default function CustomerSettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A1F",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    backgroundColor: "#141426",
-    borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#fff",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
   },
-  section: {
-    backgroundColor: "#141426",
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 12,
-    overflow: "hidden",
+  scrollContent: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+  },
+  contentColumn: {
+    width: "100%",
+    alignSelf: "center",
+  },
+  sectionBlock: {
+    marginBottom: spacing.base,
+  },
+  sectionLabel: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  card: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: "#2A2A3B",
+    borderColor: colors.border.strong,
+    overflow: "hidden",
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
-  },
-  menuItem: {
+  row: {
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
   },
-  menuItemLeft: {
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+  rowLeft: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  menuItemTitle: {
-    fontSize: 16,
-    color: "#fff",
-    marginLeft: 12,
-  },
-  menuItemRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  menuItemValue: {
-    fontSize: 14,
-    color: "#999",
-    marginRight: 8,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#2A2A3B",
-  },
-  settingInfo: {
     flex: 1,
-    paddingRight: 16,
   },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 14,
-    color: "#999",
-  },
-  clearDataButton: {
+  rowRight: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 16,
   },
-  clearDataText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#ff4444",
+  rowTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    marginLeft: spacing.md,
   },
-  versionContainer: {
+  rowValue: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginRight: spacing.xs,
+  },
+  switchRow: {
+    minHeight: 68,
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 24,
-    marginBottom: 16,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
+  },
+  switchInfo: {
+    flex: 1,
+    paddingRight: spacing.base,
+  },
+  switchDescription: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginTop: 2,
   },
   versionText: {
-    fontSize: 14,
-    color: "#666",
+    textAlign: "center",
+    color: colors.text.muted,
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.sm,
   },
-  bottomSpacing: {
-    height: 40,
-  },
-}); 
+});

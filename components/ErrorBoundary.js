@@ -8,6 +8,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../styles/theme';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -49,7 +50,7 @@ class ErrorBoundary extends React.Component {
         <SafeAreaView style={styles.container}>
           <View style={styles.content}>
             <View style={styles.iconContainer}>
-              <Ionicons name="warning-outline" size={80} color="#FF6B6B" />
+              <Ionicons name="warning-outline" size={80} color={colors.error} />
             </View>
             
             <Text style={styles.title}>Oops! Something went wrong</Text>
@@ -103,7 +104,7 @@ class ErrorBoundary extends React.Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background.tertiary,
   },
   content: {
     flex: 1,
@@ -117,13 +118,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: colors.text.primary,
     marginBottom: 15,
     textAlign: 'center',
   },
   message: {
     fontSize: 16,
-    color: '#cccccc',
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: 40,
     lineHeight: 24,
@@ -133,27 +134,27 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   primaryButton: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 25,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#A77BFF',
+    borderColor: colors.primary,
     paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 25,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -165,13 +166,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorDetailsTitle: {
-    color: '#FF6B6B',
+    color: colors.error,
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 5,
   },
   errorDetailsText: {
-    color: '#FF6B6B',
+    color: colors.error,
     fontSize: 12,
     fontFamily: 'monospace',
   },

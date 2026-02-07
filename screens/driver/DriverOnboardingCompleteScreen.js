@@ -8,15 +8,26 @@ import {
   Animated,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
+import ScreenHeader from '../../components/ScreenHeader';
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from '../../styles/theme';
+
+const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
 
 export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { updateDriverPaymentProfile, checkDriverOnboardingStatus } = useAuth();
+  const { currentUser, updateDriverPaymentProfile } = useAuth();
   const { connectAccountId } = route.params || {};
+  const userId = currentUser?.uid || currentUser?.id;
   
   const [isLoading, setIsLoading] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState('processing');
@@ -107,13 +118,21 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     try {
       console.log('Updating driver profile with completion status...');
       console.log('Connect Account ID:', connectAccountId);
+
+      if (!userId) {
+        throw new Error('User not found');
+      }
       
-      // Update driver profile with completion status
-      await updateDriverPaymentProfile?.({
+      await updateDriverPaymentProfile?.(userId, {
         onboardingComplete: true,
         connectAccountId,
         completedAt: new Date().toISOString(),
+        onboardingStep: null,
+        onboardingDraft: null,
+        onboardingLastSavedAt: null,
       });
+
+      await AsyncStorage.removeItem(`${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`);
       
       console.log('Profile updated successfully, navigating to driver tabs...');
       
@@ -156,7 +175,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       ]}
     >
       <LinearGradient
-        colors={['#00D4AA', '#00A67C']}
+        colors={[colors.success, colors.success]}
         style={styles.successIconGradient}
       >
         <Animated.View
@@ -167,7 +186,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
             },
           ]}
         >
-          <Ionicons name="checkmark" size={48} color="#fff" />
+          <Ionicons name="checkmark" size={48} color={colors.white} />
         </Animated.View>
       </LinearGradient>
       
@@ -183,7 +202,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
         <View style={styles.verificationCard}>
           <View style={styles.verificationHeader}>
             <View style={styles.processingIcon}>
-              <Ionicons name="time" size={20} color="#A77BFF" />
+              <Ionicons name="time" size={20} color={colors.primary} />
             </View>
             <Text style={styles.verificationTitle}>Verifying Your Account</Text>
           </View>
@@ -198,7 +217,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       <View style={styles.verificationCard}>
         <View style={styles.verificationHeader}>
           <View style={styles.verifiedIcon}>
-            <Ionicons name="checkmark-circle" size={20} color="#00D4AA" />
+            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
           </View>
           <Text style={styles.verificationTitle}>Account Verified</Text>
         </View>
@@ -216,7 +235,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       <View style={styles.stepsList}>
         <TouchableOpacity style={styles.stepItem} onPress={handleViewEarnings}>
           <View style={styles.stepIcon}>
-            <Ionicons name="trending-up" size={20} color="#00D4AA" />
+            <Ionicons name="trending-up" size={20} color={colors.success} />
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Track Your Earnings</Text>
@@ -224,12 +243,12 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
               Monitor your daily and weekly earnings
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#666" />
+          <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.stepItem} onPress={handleSettings}>
           <View style={styles.stepIcon}>
-            <Ionicons name="card" size={20} color="#A77BFF" />
+            <Ionicons name="card" size={20} color={colors.primary} />
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Payment Settings</Text>
@@ -237,12 +256,12 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
               Manage your bank account and instant pay
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#666" />
+          <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
         </TouchableOpacity>
 
         <View style={styles.stepItem}>
           <View style={styles.stepIcon}>
-            <Ionicons name="car" size={20} color="#FF6B6B" />
+            <Ionicons name="car" size={20} color={colors.secondary} />
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Go Online</Text>
@@ -265,21 +284,21 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       <View style={styles.featuresList}>
         <View style={styles.featureItem}>
           <View style={styles.featureIcon}>
-            <Ionicons name="flash" size={16} color="#00D4AA" />
+            <Ionicons name="flash" size={16} color={colors.success} />
           </View>
           <Text style={styles.featureText}>Instant pay available</Text>
         </View>
         
         <View style={styles.featureItem}>
           <View style={styles.featureIcon}>
-            <Ionicons name="shield-checkmark" size={16} color="#00D4AA" />
+            <Ionicons name="shield-checkmark" size={16} color={colors.success} />
           </View>
           <Text style={styles.featureText}>Insurance coverage</Text>
         </View>
         
         <View style={styles.featureItem}>
           <View style={styles.featureIcon}>
-            <Ionicons name="people" size={16} color="#00D4AA" />
+            <Ionicons name="people" size={16} color={colors.success} />
           </View>
           <Text style={styles.featureText}>24/7 support</Text>
         </View>
@@ -289,19 +308,14 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Setup Complete</Text>
-          <View style={styles.placeholder} />
-        </View>
+      <ScreenHeader
+        title="Setup Complete"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack
+      />
 
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Success Animation */}
         <View style={styles.successSection}>
           {renderSuccessIcon()}
@@ -341,8 +355,8 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
             <LinearGradient
               colors={
                 verificationStatus === 'verified' 
-                  ? ['#00D4AA', '#00A67C']
-                  : ['#333', '#333']
+                  ? [colors.success, colors.success]
+                  : [colors.text.subtle, colors.text.subtle]
               }
               style={styles.continueButtonGradient}
             >
@@ -365,53 +379,28 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#141426',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  placeholder: {
-    width: 40,
-  },
   successSection: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 32,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxl + spacing.sm,
+    paddingBottom: spacing.xxl,
   },
   successIconContainer: {
     position: 'relative',
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
   },
   successIconGradient: {
     width: 120,
     height: 120,
-    borderRadius: 60,
+    borderRadius: borderRadius.circle,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
@@ -425,9 +414,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 160,
     height: 160,
-    borderRadius: 80,
+    borderRadius: borderRadius.circle,
     borderWidth: 2,
-    borderColor: '#00D4AA40',
+    borderColor: colors.successLight,
     top: -20,
     left: -20,
   },
@@ -435,9 +424,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 200,
     height: 200,
-    borderRadius: 100,
+    borderRadius: borderRadius.circle,
     borderWidth: 1,
-    borderColor: '#00D4AA20',
+    borderColor: colors.successLight,
     top: -40,
     left: -40,
   },
@@ -446,161 +435,161 @@ const styles = StyleSheet.create({
   },
   congratsTitle: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 12,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   congratsSubtitle: {
-    fontSize: 16,
-    color: '#999',
+    fontSize: typography.fontSize.md,
+    color: colors.text.tertiary,
     textAlign: 'center',
     lineHeight: 24,
     maxWidth: 280,
   },
   verificationCard: {
-    backgroundColor: '#141426',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 20,
-    marginBottom: 24,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   verificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   processingIcon: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#A77BFF20',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   verifiedIcon: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: '#00D4AA20',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.successLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   verificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   verificationSubtitle: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
     lineHeight: 20,
   },
   nextStepsSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
   nextStepsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.base,
   },
   stepsList: {
-    backgroundColor: '#141426',
-    borderRadius: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     overflow: 'hidden',
   },
   stepItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    borderBottomColor: colors.border.strong,
   },
   stepIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#1A1A3A',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.elevated,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: spacing.base,
   },
   stepContent: {
     flex: 1,
   },
   stepTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   stepSubtitle: {
-    fontSize: 14,
-    color: '#999',
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
   },
   comingSoonBadge: {
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
   },
   comingSoonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#00D4AA',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.success,
   },
   featuresSection: {
-    marginHorizontal: 20,
-    marginBottom: 32,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xxl,
   },
   featuresTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 16,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.base,
   },
   featuresList: {
-    backgroundColor: '#141426',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   featureIcon: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: '#00D4AA20',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.successLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   featureText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
+    fontSize: typography.fontSize.base,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
   },
   buttonSection: {
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
   },
   continueButton: {
-    borderRadius: 16,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -611,16 +600,16 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   continueButtonGradient: {
-    paddingVertical: 16,
+    paddingVertical: spacing.base,
     alignItems: 'center',
   },
   continueButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   continueButtonTextDisabled: {
-    color: '#666',
+    color: colors.text.subtle,
   },
   bottomSpacing: {
     height: 40,

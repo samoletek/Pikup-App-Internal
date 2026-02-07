@@ -1,23 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Image,
   Linking,
-  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import CollapsibleMessagesHeader, {
+  MESSAGES_TOP_BAR_HEIGHT,
+} from "../../components/messages/CollapsibleMessagesHeader";
 import {
   borderRadius,
   colors,
   spacing,
   typography,
 } from "../../styles/theme";
+
+const HEADER_ROW_HEIGHT = 56;
+const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TOTAL_COLLAPSE_DISTANCE =
+  SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
 
 export default function DriverProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -31,6 +41,11 @@ export default function DriverProfileScreen({ navigation }) {
     getDriverFeedback,
   } = useAuth();
 
+  const scrollRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const isSnappingRef = useRef(false);
+
+  const [searchText, setSearchText] = useState("");
   const [driverProfile, setDriverProfile] = useState(null);
   const [displayName, setDisplayName] = useState("Driver");
   const [onboardingStatus, setOnboardingStatus] = useState({
@@ -46,17 +61,31 @@ export default function DriverProfileScreen({ navigation }) {
     loadDriverProfile();
   }, []);
 
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: SEARCH_COLLAPSE_DISTANCE,
+        animated: false,
+      });
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   const loadDriverProfile = async () => {
     try {
       const profile = await getDriverProfile?.(currentUser?.uid);
       setDriverProfile(profile);
 
       const user = await getUserProfile?.();
+      const firstName = user?.first_name || user?.firstName || "";
+      const lastName = user?.last_name || user?.lastName || "";
+      const fullName = `${firstName} ${lastName}`.trim();
       const name =
+        fullName ||
         user?.name ||
-        (user?.firstName && user?.lastName
-          ? `${user.firstName} ${user.lastName}`
-          : currentUser?.email?.split("@")[0] || "Driver");
+        currentUser?.email?.split("@")[0] ||
+        "Driver";
       setDisplayName(name);
 
       await getProfileImage?.();
@@ -101,10 +130,6 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   const handleResumeOnboarding = () => {
-    if (onboardingStatus.connectAccountCreated) {
-      navigation.navigate("DriverOnboardingResumeScreen");
-      return;
-    }
     navigation.navigate("DriverOnboardingScreen");
   };
 
@@ -140,21 +165,6 @@ export default function DriverProfileScreen({ navigation }) {
     navigation.navigate("DriverEarningsScreen");
   };
 
-  const handlePaymentSettings = () => {
-    if (!onboardingStatus.connectAccountCreated) {
-      Alert.alert(
-        "Setup Required",
-        "Please complete driver onboarding first to manage payment settings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Start Setup", onPress: handleStartOnboarding },
-        ]
-      );
-      return;
-    }
-    navigation.navigate("DriverPaymentSettingsScreen");
-  };
-
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -164,7 +174,9 @@ export default function DriverProfileScreen({ navigation }) {
     .toUpperCase();
 
   const isReadyToEarn = onboardingStatus.canReceivePayments;
-  const completedTrips = isReadyToEarn ? String(driverProfile?.totalTrips || 156) : "--";
+  const completedTrips = isReadyToEarn
+    ? String(driverProfile?.totalTrips || 156)
+    : "--";
   const acceptanceRate = isReadyToEarn
     ? `${driverProfile?.acceptanceRate || 98}%`
     : "--";
@@ -207,10 +219,204 @@ export default function DriverProfileScreen({ navigation }) {
 
   const feedbackToRender = recentFeedback.slice(0, 3);
 
+  const quickActions = [
+    {
+      id: "help",
+      title: "Help",
+      icon: "help-circle-outline",
+      keywords: "support assistance",
+      onPress: () => navigation.navigate("CustomerHelpScreen"),
+      disabled: false,
+    },
+    {
+      id: "earnings",
+      title: "Earnings",
+      icon: "wallet-outline",
+      keywords: "income payouts trips",
+      onPress: isReadyToEarn ? handleEarnings : handleResumeOnboarding,
+      disabled: !isReadyToEarn,
+    },
+  ];
+
+  const menuItems = [
+    {
+      id: "terms",
+      title: "Terms and Privacy",
+      icon: "document-text-outline",
+      keywords: "legal privacy policy",
+      onPress: () => Linking.openURL("https://pikup-app.com/"),
+      disabled: false,
+      external: true,
+    },
+    {
+      id: "safety",
+      title: "Safety",
+      icon: "shield-checkmark-outline",
+      keywords: "safe trust emergency",
+      onPress: () => navigation.navigate("CustomerSafetyScreen"),
+      disabled: false,
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      icon: "settings-outline",
+      keywords: "preferences notifications",
+      onPress: () => navigation.navigate("CustomerSettingsScreen"),
+      disabled: false,
+    },
+  ];
+
+  const query = searchText.trim().toLowerCase();
+  const filteredQuickActions = !query
+    ? quickActions
+    : quickActions.filter((action) =>
+        `${action.title} ${action.keywords}`.toLowerCase().includes(query)
+      );
+  const filteredMenuItems = !query
+    ? menuItems
+    : menuItems.filter((item) =>
+        `${item.title} ${item.keywords}`.toLowerCase().includes(query)
+      );
+
+  const titleLockCompensation = scrollY.interpolate({
+    inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    extrapolate: "clamp",
+  });
+
+  const getSnapOffset = (offsetY) => {
+    if (offsetY < 0 || offsetY > TOTAL_COLLAPSE_DISTANCE) {
+      return null;
+    }
+
+    if (offsetY < SEARCH_COLLAPSE_DISTANCE) {
+      return offsetY < SEARCH_COLLAPSE_DISTANCE / 2
+        ? 0
+        : SEARCH_COLLAPSE_DISTANCE;
+    }
+
+    const titleProgress = offsetY - SEARCH_COLLAPSE_DISTANCE;
+    return titleProgress < TITLE_COLLAPSE_DISTANCE / 2
+      ? SEARCH_COLLAPSE_DISTANCE
+      : TOTAL_COLLAPSE_DISTANCE;
+  };
+
+  const snapToNearestOffset = (offsetY) => {
+    const targetOffset = getSnapOffset(offsetY);
+    if (targetOffset === null || Math.abs(targetOffset - offsetY) < 1) {
+      return;
+    }
+
+    if (!scrollRef.current) {
+      return;
+    }
+
+    isSnappingRef.current = true;
+    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
+    setTimeout(() => {
+      isSnappingRef.current = false;
+    }, 220);
+  };
+
+  const handleScrollEndDrag = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(velocityY) < 0.15) {
+      snapToNearestOffset(event.nativeEvent.contentOffset.y);
+    }
+  };
+
+  const handleMomentumScrollEnd = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+    snapToNearestOffset(event.nativeEvent.contentOffset.y);
+  };
+
+  const renderMenuItem = (item, isLast) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.menuItem, isLast && styles.menuItemLast]}
+      onPress={item.onPress}
+      disabled={item.disabled}
+    >
+      <View style={styles.menuItemLeft}>
+        <Ionicons
+          name={item.icon}
+          size={20}
+          color={item.disabled ? colors.text.muted : colors.primary}
+        />
+        <Text style={[styles.menuItemTitle, item.disabled && styles.menuItemTitleDisabled]}>
+          {item.title}
+        </Text>
+      </View>
+      <Ionicons
+        name={item.external ? "open-outline" : "chevron-forward"}
+        size={20}
+        color={colors.text.tertiary}
+      />
+    </TouchableOpacity>
+  );
+
+  const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
+
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={[styles.profileCard, { marginTop: insets.top + spacing.lg }]}>
+      <CollapsibleMessagesHeader
+        title="Account"
+        topInset={insets.top}
+        showBack={false}
+        scrollY={scrollY}
+        searchCollapseDistance={SEARCH_COLLAPSE_DISTANCE}
+        titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
+      />
+
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
+        contentContainerStyle={{
+          paddingTop: headerHeight,
+          paddingBottom: insets.bottom + 90,
+          paddingHorizontal: spacing.base,
+        }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.largeTitleSection,
+            { transform: [{ translateY: titleLockCompensation }] },
+          ]}
+        >
+          <Text style={styles.largeTitle}>Account</Text>
+        </Animated.View>
+
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search account and settings"
+              placeholderTextColor={colors.text.placeholder}
+              value={searchText}
+              onChangeText={setSearchText}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        </View>
+
+        <View style={styles.profileCard}>
           <View style={styles.profileCardContent}>
             <View style={styles.profileLeftSide}>
               <TouchableOpacity
@@ -296,38 +502,35 @@ export default function DriverProfileScreen({ navigation }) {
           ) : null}
         </TouchableOpacity>
 
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate("CustomerHelpScreen")}
-          >
-            <Ionicons
-              name="help-circle-outline"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.actionText}>Help</Text>
-          </TouchableOpacity>
-          <View style={styles.actionDivider} />
-          <TouchableOpacity
-            style={[styles.actionButton, !isReadyToEarn && styles.actionButtonDisabled]}
-            onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
-          >
-            <Ionicons
-              name="wallet-outline"
-              size={32}
-              color={isReadyToEarn ? colors.primary : colors.text.muted}
-            />
-            <Text
-              style={[
-                styles.actionText,
-                !isReadyToEarn && styles.actionTextDisabled,
-              ]}
-            >
-              Earnings
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {filteredQuickActions.length > 0 ? (
+          <View style={styles.quickActions}>
+            {filteredQuickActions.map((action, index) => (
+              <React.Fragment key={action.id}>
+                <TouchableOpacity
+                  style={[styles.actionButton, action.disabled && styles.actionButtonDisabled]}
+                  onPress={action.onPress}
+                >
+                  <Ionicons
+                    name={action.icon}
+                    size={32}
+                    color={action.disabled ? colors.text.muted : colors.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.actionText,
+                      action.disabled && styles.actionTextDisabled,
+                    ]}
+                  >
+                    {action.title}
+                  </Text>
+                </TouchableOpacity>
+                {index < filteredQuickActions.length - 1 ? (
+                  <View style={styles.actionDivider} />
+                ) : null}
+              </React.Fragment>
+            ))}
+          </View>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.infoCard, !isReadyToEarn && styles.infoCardDisabled]}
@@ -363,9 +566,7 @@ export default function DriverProfileScreen({ navigation }) {
             <View style={styles.feedbackHeader}>
               <Text style={styles.feedbackTitle}>Recent Feedback</Text>
               {feedbackToRender.length > 0 ? (
-                <Text style={styles.feedbackCount}>
-                  {feedbackToRender.length} reviews
-                </Text>
+                <Text style={styles.feedbackCount}>{feedbackToRender.length} reviews</Text>
               ) : null}
             </View>
 
@@ -373,14 +574,21 @@ export default function DriverProfileScreen({ navigation }) {
               <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
             ) : feedbackToRender.length > 0 ? (
               feedbackToRender.map((feedback, index) => (
-                <View key={`${feedback.timestamp || "feedback"}-${index}`} style={styles.feedbackItem}>
+                <View
+                  key={`${feedback.timestamp || "feedback"}-${index}`}
+                  style={styles.feedbackItem}
+                >
                   <View style={styles.feedbackStars}>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <Ionicons
                         key={star}
                         name={star <= (feedback.rating || 5) ? "star" : "star-outline"}
                         size={14}
-                        color={star <= (feedback.rating || 5) ? colors.gold : colors.border.light}
+                        color={
+                          star <= (feedback.rating || 5)
+                            ? colors.gold
+                            : colors.border.light
+                        }
                       />
                     ))}
                     <Text style={styles.feedbackDate}>
@@ -407,101 +615,28 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         ) : null}
 
-        <TouchableOpacity
-          style={styles.infoCard}
-          onPress={() => navigation.navigate("DriverPreferencesScreen")}
-          activeOpacity={0.85}
-        >
-          <View style={styles.infoCardContent}>
-            <Text style={styles.infoCardTitle}>PikUp Preferences</Text>
-            <Text style={styles.infoCardSubtitle}>
-              Set pickup types, equipment and availability
+        {filteredMenuItems.length > 0 ? (
+          <View style={styles.menuSections}>
+            {filteredMenuItems.map((item, index) =>
+              renderMenuItem(item, index === filteredMenuItems.length - 1)
+            )}
+          </View>
+        ) : (
+          <View style={styles.searchEmptyState}>
+            <Ionicons name="search-outline" size={36} color={colors.text.tertiary} />
+            <Text style={styles.searchEmptyTitle}>No matches found</Text>
+            <Text style={styles.searchEmptySubtitle}>
+              Try another keyword for account settings
             </Text>
           </View>
-          <View style={styles.infoIconCircle}>
-            <Ionicons name="options-outline" size={22} color={colors.primary} />
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.menuSections}>
-          <TouchableOpacity style={styles.menuItem} onPress={handlePaymentSettings}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="card-outline"
-                size={20}
-                color={
-                  onboardingStatus.connectAccountCreated
-                    ? colors.primary
-                    : colors.text.muted
-                }
-              />
-              <Text
-                style={[
-                  styles.menuItemTitle,
-                  !onboardingStatus.connectAccountCreated && styles.menuItemTitleDisabled,
-                ]}
-              >
-                Payment Settings
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="person-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>Personal Information</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Linking.openURL("https://pikup-app.com/")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>Terms and Privacy</Text>
-            </View>
-            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerSafetyScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.menuItemTitle}>Safety</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.menuItem, styles.menuItemLast]}
-            onPress={() => navigation.navigate("CustomerSettingsScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="settings-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>Settings</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        )}
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
 
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
+        <View style={styles.bottomSpacing} />
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -514,9 +649,41 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  largeTitleSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background.primary,
+    zIndex: 2,
+  },
+  largeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  searchSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    zIndex: 1,
+    marginBottom: spacing.sm,
+  },
+  searchBar: {
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+  },
   profileCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -619,7 +786,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.strong,
   },
   statusCard: {
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -668,7 +834,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: "space-around",
     alignItems: "center",
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -697,7 +862,6 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -735,7 +899,6 @@ const styles = StyleSheet.create({
   },
   feedbackCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -762,39 +925,38 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
   },
   feedbackItem: {
-    backgroundColor: colors.background.elevated,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border.strong,
   },
   feedbackStars: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.xs,
   },
   feedbackDate: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm,
     marginLeft: spacing.sm,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.xs,
   },
   feedbackComment: {
+    marginTop: spacing.xs,
     color: colors.text.secondary,
     fontSize: typography.fontSize.base,
-    fontStyle: "italic",
+    lineHeight: 18,
   },
   feedbackEmpty: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md,
   },
   feedbackEmptyText: {
-    color: colors.text.secondary,
+    marginLeft: spacing.sm,
+    color: colors.text.tertiary,
     fontSize: typography.fontSize.base,
-    marginTop: spacing.xs,
   },
   menuSections: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -825,24 +987,43 @@ const styles = StyleSheet.create({
   menuItemTitleDisabled: {
     color: colors.text.muted,
   },
-  logoutButton: {
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.base,
-    marginHorizontal: spacing.base,
+  searchEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xxl,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
+    backgroundColor: colors.background.secondary,
+  },
+  searchEmptyTitle: {
+    marginTop: spacing.sm,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  searchEmptySubtitle: {
+    marginTop: spacing.xs,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    textAlign: "center",
+    paddingHorizontal: spacing.xl,
+  },
+  logoutButton: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingVertical: spacing.base,
     alignItems: "center",
   },
   logoutText: {
-    fontSize: typography.fontSize.md,
     color: colors.error,
-    fontWeight: typography.fontWeight.medium,
-    textAlign: "center",
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   bottomSpacing: {
-    height: 40,
+    height: spacing.xl,
   },
 });

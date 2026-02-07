@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { styles } from '../styles';
+import { colors } from '../../../styles/theme';
 
 const ReviewStep = ({ orderData, pricing, onNavigateToStep }) => {
     return (
@@ -9,12 +10,12 @@ const ReviewStep = ({ orderData, pricing, onNavigateToStep }) => {
             <TouchableOpacity style={styles.summaryCard} onPress={() => onNavigateToStep(1)} activeOpacity={0.7}>
                 <Text style={styles.summaryCardTitle}>Route</Text>
                 <View style={styles.routeRow}>
-                    <View style={[styles.routeDot, { backgroundColor: '#A77BFF' }]} />
+                    <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
                     <Text style={styles.routeAddress} numberOfLines={1}>{orderData.pickup.address}</Text>
                 </View>
                 <View style={styles.routeLine} />
                 <View style={styles.routeRow}>
-                    <View style={[styles.routeDot, { backgroundColor: '#00D4AA' }]} />
+                    <View style={[styles.routeDot, { backgroundColor: colors.success }]} />
                     <Text style={styles.routeAddress} numberOfLines={1}>{orderData.dropoff.address}</Text>
                 </View>
             </TouchableOpacity>

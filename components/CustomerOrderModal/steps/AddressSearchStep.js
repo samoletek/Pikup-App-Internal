@@ -139,7 +139,7 @@ const AddressSearchStep = ({
                     <TextInput
                         style={styles.input}
                         placeholder={isPickup ? "Pickup Address" : "Dropoff Address"}
-                        placeholderTextColor="#666"
+                        placeholderTextColor={colors.text.placeholder}
                         value={value}
                         onChangeText={(text) => {
                             setOrderData(prev => ({ ...prev, [type]: { address: text, coordinates: null } }));
@@ -153,7 +153,7 @@ const AddressSearchStep = ({
                             setOrderData(prev => ({ ...prev, [type]: { address: '', coordinates: null } }));
                             if (isPickup) setPickupSuggestions([]); else setDropoffSuggestions([]);
                         }}>
-                            <Ionicons name="close-circle" size={18} color="#666" />
+                            <Ionicons name="close-circle" size={18} color={colors.text.placeholder} />
                         </TouchableOpacity>
                     )}
                 </View>
@@ -163,9 +163,9 @@ const AddressSearchStep = ({
                         <TouchableOpacity style={styles.suggestionItem} onPress={() => handleUseCurrentLocation(type)}>
                             <View style={[styles.suggestionIcon, { backgroundColor: colors.primary }]}>
                                 {isLoadingCurrentLocation ? (
-                                    <ActivityIndicator color="#FFF" size="small" />
+                                    <ActivityIndicator color={colors.text.primary} size="small" />
                                 ) : (
-                                    <Ionicons name="compass" size={20} color="#FFF" />
+                                    <Ionicons name="compass" size={20} color={colors.text.primary} />
                                 )}
                             </View>
                             <Text style={styles.suggestionTitle}>Use current location</Text>
@@ -185,7 +185,7 @@ const AddressSearchStep = ({
                                         onPress={() => handlePlaceSelection(item, type)}
                                     >
                                         <View style={styles.suggestionIcon}>
-                                            <Ionicons name="time-outline" size={20} color="#FFF" />
+                                            <Ionicons name="time-outline" size={20} color={colors.text.primary} />
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
@@ -216,7 +216,7 @@ const AddressSearchStep = ({
                                         onPress={() => handlePlaceSelection(item, type)}
                                     >
                                         <View style={styles.suggestionIcon}>
-                                            <Ionicons name="location-outline" size={20} color="#FFF" />
+                                            <Ionicons name="location-outline" size={20} color={colors.text.primary} />
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={styles.suggestionTitle} numberOfLines={1}>{item.name}</Text>
@@ -274,14 +274,22 @@ const AddressSearchStep = ({
                             style={[styles.scheduleOption, orderData.scheduleType === 'asap' && styles.scheduleOptionActive]}
                             onPress={() => setOrderData(prev => ({ ...prev, scheduleType: 'asap', scheduledDateTime: null }))}
                         >
-                            <Ionicons name="flash" size={18} color={orderData.scheduleType === 'asap' ? '#FFF' : '#888'} />
+                            <Ionicons
+                                name="flash"
+                                size={18}
+                                color={orderData.scheduleType === 'asap' ? colors.text.primary : colors.text.muted}
+                            />
                             <Text style={[styles.scheduleOptionText, orderData.scheduleType === 'asap' && styles.scheduleOptionTextActive]}>ASAP</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.scheduleOption, orderData.scheduleType === 'scheduled' && styles.scheduleOptionActive]}
                             onPress={() => setOrderData(prev => ({ ...prev, scheduleType: 'scheduled' }))}
                         >
-                            <Ionicons name="calendar" size={18} color={orderData.scheduleType === 'scheduled' ? '#FFF' : '#888'} />
+                            <Ionicons
+                                name="calendar"
+                                size={18}
+                                color={orderData.scheduleType === 'scheduled' ? colors.text.primary : colors.text.muted}
+                            />
                             <Text style={[styles.scheduleOptionText, orderData.scheduleType === 'scheduled' && styles.scheduleOptionTextActive]}>Schedule</Text>
                         </TouchableOpacity>
                     </View>
@@ -298,7 +306,7 @@ const AddressSearchStep = ({
                                         ? new Date(orderData.scheduledDateTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                                         : 'Select date'}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={18} color="#888" style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={{ marginLeft: 'auto' }} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -311,7 +319,7 @@ const AddressSearchStep = ({
                                         ? new Date(orderData.scheduledDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                                         : 'Select time'}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={18} color="#888" style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={{ marginLeft: 'auto' }} />
                             </TouchableOpacity>
 
                             {Platform.OS === 'ios' ? (

@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Animated, Keyboard, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BaseModal from '../BaseModal';
 import LocationDetailsStep from '../order/LocationDetailsStep';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
+import { colors } from '../../styles/theme';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -31,6 +33,7 @@ const STEPS = [
 // MAIN COMPONENT
 // ============================================
 const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
+    const insets = useSafeAreaInsets();
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -322,13 +325,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
             onClose={onClose}
             onBackdropPress={handleClose}
             height={SCREEN_HEIGHT * 0.9}
-            backgroundColor="#141426"
+            backgroundColor={colors.background.secondary}
             avoidKeyboard={false}
             renderHeader={(animateClose) => (
                 <View style={styles.header}>
                     {currentStep > 1 ? (
                         <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
-                            <Ionicons name="arrow-back" size={24} color="#FFF" />
+                            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.headerBtn} />
@@ -340,7 +343,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                     </View>
 
                     <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
-                        <Ionicons name="close" size={24} color="#FFF" />
+                        <Ionicons name="close" size={24} color={colors.text.primary} />
                     </TouchableOpacity>
                 </View>
             )}
@@ -357,15 +360,15 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                 </Animated.View>
 
                 {/* Continue Button */}
-                <View style={[styles.footer, { paddingBottom: 16 }]}>
+                <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : 12 }]}>
                     <TouchableOpacity
-                        style={[styles.continueBtn, currentStep === 6 && { backgroundColor: '#00D4AA' }]}
+                        style={[styles.continueBtn, currentStep === 6 && { backgroundColor: colors.success }]}
                         onPress={handleContinue}
                     >
                         <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }]}>
                             {currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
                         </Text>
-                        {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color="#FFF" />}
+                        {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     </TouchableOpacity>
                 </View>
             </View>

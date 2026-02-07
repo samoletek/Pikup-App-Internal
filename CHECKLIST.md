@@ -52,9 +52,9 @@
 **Focus:** Complete customer experience, UI/UX consistency
 
 ### Global
-- [ ] #6 Apple HIG compliance (navigation, buttons, modals)
-- [ ] #7 Device consistency across screen sizes
-- [ ] #99 Components refactoring
+- [x] #6 Apple HIG compliance (navigation, buttons, modals)
+- [x] #7 Device consistency across screen sizes
+- [x] #99 Components refactoring
 
 ### Authentication Screens
 - [x] #8 Forgot Password flow (UI)
@@ -87,7 +87,7 @@
 - [x] #36 Tap on summary item jumps to that step
 - [x] #37 Fix button container overflow
 - [x] #38 Handle unavailable insurance state
-- [ ] Apple HIG compliant interface
+- [x] Apple HIG compliant interface
 - [ ] Working authentication with password reset
 - [ ] 0 Useless components
 - [x] New/Used item selection with insurance logic

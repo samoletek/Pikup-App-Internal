@@ -8,7 +8,7 @@ export const appNavigationTheme = {
     ...DarkTheme.colors,
     primary: colors.primary,
     background: colors.background.primary,
-    card: colors.background.secondary,
+    card: colors.background.primary,
     text: colors.text.primary,
     border: colors.border.strong,
     notification: colors.secondary,

@@ -4,60 +4,67 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  KeyboardAvoidingView,
   ScrollView,
   TextInput,
   Alert,
-  Linking,
   Animated,
-  Dimensions,
   Image,
   ActivityIndicator,
   Modal,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../config/supabase';
-
-const { width, height } = Dimensions.get('window');
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 const steps = [
   {
     title: 'Welcome to PikUp',
     subtitle: 'Start earning by delivering packages on your route',
     icon: 'car-sport',
-    color: '#A77BFF',
+    color: colors.primary,
   },
   {
     title: 'Identity Verification',
     subtitle: 'We need to verify your identity to ensure safety',
     icon: 'shield-checkmark',
-    color: '#00D4AA',
+    color: colors.success,
   },
   {
     title: 'Personal Info',
     subtitle: 'Tell us a bit about yourself',
     icon: 'person',
-    color: '#FFB800',
+    color: colors.warning,
   },
   {
     title: 'Address',
     subtitle: 'Where do you live?',
     icon: 'location',
-    color: '#FF6B6B',
+    color: colors.secondary,
   },
   {
     title: 'Vehicle Info',
     subtitle: 'What will you be driving?',
     icon: 'car',
-    color: '#4DA6FF',
+    color: colors.info,
   },
   {
     title: 'Payment Setup',
     subtitle: 'How you get paid',
     icon: 'card',
-    color: '#A77BFF',
+    color: colors.primary,
   },
 ];
 
@@ -145,37 +152,98 @@ const formatYear = (value) => value.replace(/[^\d]/g, '').slice(0, 4);
 
 const formatLicensePlate = (value) => value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
+const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
+const VALID_VERIFICATION_STATUSES = ['pending', 'completed', 'failed', 'canceled'];
+
+const getDraftStorageKey = (userId) => `${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`;
+
+const initialFormData = {
+  firstName: '',
+  lastName: '',
+  phoneNumber: '',
+  dateOfBirth: '',
+  ssn: '',
+  address: {
+    line1: '',
+    city: '',
+    state: '',
+    postalCode: '',
+  },
+  vehicleInfo: {
+    make: '',
+    model: '',
+    year: '',
+    licensePlate: '',
+    color: '',
+  },
+};
+
+const normalizeStep = (value) => {
+  const parsedStep = Number(value);
+  if (!Number.isFinite(parsedStep)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(steps.length - 1, Math.floor(parsedStep)));
+};
+
+const normalizeVerificationStatus = (value) => {
+  if (VALID_VERIFICATION_STATUSES.includes(value)) {
+    return value;
+  }
+  return 'pending';
+};
+
+const mergeFormDataWithDefaults = (candidate) => {
+  if (!candidate || typeof candidate !== 'object') {
+    return initialFormData;
+  }
+
+  return {
+    ...initialFormData,
+    ...candidate,
+    address: {
+      ...initialFormData.address,
+      ...(candidate.address || {}),
+    },
+    vehicleInfo: {
+      ...initialFormData.vehicleInfo,
+      ...(candidate.vehicleInfo || {}),
+    },
+  };
+};
+
+const getDraftTimestamp = (draft) => {
+  const raw = draft?.updatedAt || draft?.savedAt || draft?.updated_at;
+  const parsed = raw ? new Date(raw).getTime() : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const pickLatestDraft = (localDraft, remoteDraft) => {
+  if (!localDraft) return remoteDraft || null;
+  if (!remoteDraft) return localDraft;
+  return getDraftTimestamp(remoteDraft) > getDraftTimestamp(localDraft)
+    ? remoteDraft
+    : localDraft;
+};
+
 export default function DriverOnboardingScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, createDriverConnectAccount, getDriverOnboardingLink, updateDriverPaymentProfile } = useAuth();
+  const { width } = useWindowDimensions();
+  const { currentUser, updateDriverPaymentProfile } = useAuth();
+  const userId = currentUser?.uid || currentUser?.id;
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [verificationSessionId, setVerificationSessionId] = useState(null);
   const [verificationStatus, setVerificationStatus] = useState('pending'); // pending, completed, failed, canceled
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    phoneNumber: '',
-    dateOfBirth: '',
-    ssn: '',
-    address: {
-      line1: '',
-      city: '',
-      state: '',
-      postalCode: '',
-    },
-    vehicleInfo: {
-      make: '',
-      model: '',
-      year: '',
-      licensePlate: '',
-      color: '',
-    },
-  });
+  const [formData, setFormData] = useState(initialFormData);
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
 
-  const scrollViewRef = useRef();
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const saveTimeoutRef = useRef(null);
+  const lastSavedDraftRef = useRef(null);
+  const lastRemoteSyncSignatureRef = useRef(null);
 
   // MIGRATION: Payment Service replaced by stubs
   // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
@@ -272,6 +340,154 @@ export default function DriverOnboardingScreen({ navigation }) {
 
   const [showStatePicker, setShowStatePicker] = useState(false);
 
+  const buildDraftSnapshot = () => ({
+    currentStep: normalizeStep(currentStep),
+    verificationStatus: normalizeVerificationStatus(verificationStatus),
+    formData: {
+      ...mergeFormDataWithDefaults(formData),
+      // Do not persist SSN in local/remote onboarding drafts.
+      ssn: '',
+    },
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateOnboardingDraft = async () => {
+      if (!userId) {
+        if (isMounted) {
+          setIsDraftHydrated(true);
+        }
+        return;
+      }
+
+      try {
+        const draftStorageKey = getDraftStorageKey(userId);
+        const [storedDraftRaw, remoteDraftResult] = await Promise.all([
+          AsyncStorage.getItem(draftStorageKey),
+          supabase
+            .from('drivers')
+            .select('metadata')
+            .eq('id', userId)
+            .maybeSingle(),
+        ]);
+
+        let localDraft = null;
+        if (storedDraftRaw) {
+          try {
+            localDraft = JSON.parse(storedDraftRaw);
+          } catch (parseError) {
+            console.error('Failed to parse onboarding draft from storage:', parseError);
+          }
+        }
+
+        const remoteDraft = remoteDraftResult?.data?.metadata?.onboardingDraft || null;
+        const latestDraft = pickLatestDraft(localDraft, remoteDraft);
+
+        if (!latestDraft || !isMounted) {
+          return;
+        }
+
+        const restoredStep = normalizeStep(latestDraft.currentStep);
+        const restoredVerificationStatus = normalizeVerificationStatus(
+          latestDraft.verificationStatus
+        );
+        const restoredFormData = {
+          ...mergeFormDataWithDefaults(latestDraft.formData),
+          ssn: '',
+        };
+
+        setCurrentStep(restoredStep);
+        setVerificationStatus(restoredVerificationStatus);
+        setFormData(restoredFormData);
+        progressAnim.setValue(restoredStep / (steps.length - 1));
+
+        lastSavedDraftRef.current = JSON.stringify({
+          currentStep: restoredStep,
+          verificationStatus: restoredVerificationStatus,
+          formData: restoredFormData,
+        });
+        lastRemoteSyncSignatureRef.current = `${restoredStep}:${restoredVerificationStatus}`;
+      } catch (error) {
+        console.error('Failed to hydrate onboarding draft:', error);
+      } finally {
+        if (isMounted) {
+          setIsDraftHydrated(true);
+        }
+      }
+    };
+
+    hydrateOnboardingDraft();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, progressAnim]);
+
+  useEffect(() => {
+    if (!isDraftHydrated || !userId) {
+      return undefined;
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      const draftSnapshot = buildDraftSnapshot();
+      const draftSnapshotString = JSON.stringify(draftSnapshot);
+
+      if (draftSnapshotString === lastSavedDraftRef.current) {
+        return;
+      }
+
+      lastSavedDraftRef.current = draftSnapshotString;
+
+      const draftPayload = {
+        ...draftSnapshot,
+        version: 1,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const draftStorageKey = getDraftStorageKey(userId);
+
+      try {
+        await AsyncStorage.setItem(draftStorageKey, JSON.stringify(draftPayload));
+      } catch (error) {
+        console.error('Failed to persist onboarding draft locally:', error);
+      }
+
+      const remoteSyncSignature = `${draftSnapshot.currentStep}:${draftSnapshot.verificationStatus}`;
+      if (remoteSyncSignature === lastRemoteSyncSignatureRef.current) {
+        return;
+      }
+
+      try {
+        await updateDriverPaymentProfile?.(userId, {
+          onboardingStep: draftSnapshot.currentStep,
+          onboardingDraft: draftPayload,
+          onboardingLastSavedAt: draftPayload.updatedAt,
+        });
+        lastRemoteSyncSignatureRef.current = remoteSyncSignature;
+      } catch (error) {
+        console.error('Failed to sync onboarding draft with Supabase:', error);
+      }
+    }, 800);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [
+    currentStep,
+    verificationStatus,
+    formData,
+    isDraftHydrated,
+    userId,
+    updateDriverPaymentProfile,
+  ]);
+
   const updateFormData = (field, value) => {
     if (field.includes('.')) {
       const [parent, child] = field.split('.');
@@ -335,9 +551,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       }).start();
 
       setCurrentStep(currentStep + 1);
-
-      // Scroll to top
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
   };
 
@@ -351,8 +564,6 @@ export default function DriverOnboardingScreen({ navigation }) {
       }).start();
 
       setCurrentStep(currentStep - 1);
-      // Scroll to top
-      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     } else {
       navigation.goBack();
     }
@@ -389,15 +600,15 @@ export default function DriverOnboardingScreen({ navigation }) {
           <View style={styles.welcomeContent}>
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
-                <Ionicons name="cash-outline" size={20} color="#00D4AA" />
+                <Ionicons name="cash-outline" size={20} color={colors.success} />
                 <Text style={styles.benefitText}>Earn up to $25/hour</Text>
               </View>
               <View style={styles.benefitItem}>
-                <Ionicons name="time-outline" size={20} color="#00D4AA" />
+                <Ionicons name="time-outline" size={20} color={colors.success} />
                 <Text style={styles.benefitText}>Flexible schedule</Text>
               </View>
               <View style={styles.benefitItem}>
-                <Ionicons name="card-outline" size={20} color="#00D4AA" />
+                <Ionicons name="card-outline" size={20} color={colors.success} />
                 <Text style={styles.benefitText}>Weekly payouts</Text>
               </View>
             </View>
@@ -410,7 +621,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             <View style={styles.verificationFeatures}>
               <View style={styles.verificationItem}>
                 <View style={styles.verificationIcon}>
-                  <Ionicons name="camera-outline" size={24} color="#00D4AA" />
+                  <Ionicons name="camera-outline" size={24} color={colors.success} />
                 </View>
                 <View style={styles.verificationContent}>
                   <Text style={styles.verificationTitle}>Photo ID</Text>
@@ -422,7 +633,7 @@ export default function DriverOnboardingScreen({ navigation }) {
 
               <View style={styles.verificationItem}>
                 <View style={styles.verificationIcon}>
-                  <Ionicons name="person-circle-outline" size={24} color="#00D4AA" />
+                  <Ionicons name="person-circle-outline" size={24} color={colors.success} />
                 </View>
                 <View style={styles.verificationContent}>
                   <Text style={styles.verificationTitle}>Selfie Verification</Text>
@@ -434,7 +645,7 @@ export default function DriverOnboardingScreen({ navigation }) {
 
               <View style={styles.verificationItem}>
                 <View style={styles.verificationIcon}>
-                  <Ionicons name="lock-closed-outline" size={24} color="#00D4AA" />
+                  <Ionicons name="lock-closed-outline" size={24} color={colors.success} />
                 </View>
                 <View style={styles.verificationContent}>
                   <Text style={styles.verificationTitle}>Secure & Private</Text>
@@ -456,12 +667,12 @@ export default function DriverOnboardingScreen({ navigation }) {
             >
               {identityLoading ? (
                 <View style={styles.buttonLoadingContainer}>
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.white} />
                   <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Preparing verification...</Text>
                 </View>
               ) : verificationStatus === 'completed' ? (
                 <View style={styles.buttonLoadingContainer}>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                  <Ionicons name="checkmark-circle" size={20} color={colors.white} />
                   <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Identity verified successfully!</Text>
                 </View>
               ) : (
@@ -487,7 +698,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.firstName}
                   onChangeText={(value) => updateFormData('firstName', formatName(value))}
                   placeholder="John"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                   maxLength={30}
                 />
@@ -505,7 +716,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.lastName}
                   onChangeText={(value) => updateFormData('lastName', formatName(value))}
                   placeholder="Doe"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                   maxLength={30}
                 />
@@ -522,7 +733,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 value={formData.phoneNumber}
                 onChangeText={(value) => updateFormData('phoneNumber', formatPhoneNumber(value))}
                 placeholder="(555) 123-4567"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.text.placeholder}
                 keyboardType="phone-pad"
                 maxLength={14}
               />
@@ -535,7 +746,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 value={formData.dateOfBirth}
                 onChangeText={(value) => updateFormData('dateOfBirth', formatDateOfBirth(value))}
                 placeholder="MM/DD/YYYY"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.text.placeholder}
                 keyboardType="numeric"
                 maxLength={10}
               />
@@ -553,7 +764,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 value={formData.address.line1}
                 onChangeText={(value) => updateFormData('address.line1', value)}
                 placeholder="123 Main Street"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.text.placeholder}
                 autoCapitalize="words"
               />
             </View>
@@ -566,7 +777,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.address.city}
                   onChangeText={(value) => updateFormData('address.city', value)}
                   placeholder="Atlanta"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                 />
               </View>
@@ -579,7 +790,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   <Text style={formData.address.state ? styles.pickerButtonText : styles.pickerButtonPlaceholder}>
                     {formData.address.state || 'Select'}
                   </Text>
-                  <Ionicons name="chevron-down" size={16} color="#666" />
+                  <Ionicons name="chevron-down" size={16} color={colors.text.subtle} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -591,7 +802,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 value={formData.address.postalCode}
                 onChangeText={(value) => updateFormData('address.postalCode', formatZipCode(value))}
                 placeholder="30309"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.text.placeholder}
                 keyboardType="numeric"
                 maxLength={5}
               />
@@ -612,7 +823,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   <View style={styles.pickerHeader}>
                     <Text style={styles.pickerTitle}>Select State</Text>
                     <TouchableOpacity onPress={() => setShowStatePicker(false)}>
-                      <Ionicons name="close" size={24} color="#fff" />
+                      <Ionicons name="close" size={24} color={colors.white} />
                     </TouchableOpacity>
                   </View>
                   <ScrollView style={styles.pickerList}>
@@ -635,7 +846,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                           {state.label}
                         </Text>
                         {formData.address.state === state.value && (
-                          <Ionicons name="checkmark" size={20} color="#00D4AA" />
+                          <Ionicons name="checkmark" size={20} color={colors.success} />
                         )}
                       </TouchableOpacity>
                     ))}
@@ -657,7 +868,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.vehicleInfo.make}
                   onChangeText={(value) => updateFormData('vehicleInfo.make', value)}
                   placeholder="Toyota"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                 />
               </View>
@@ -668,7 +879,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.vehicleInfo.model}
                   onChangeText={(value) => updateFormData('vehicleInfo.model', value)}
                   placeholder="Camry"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                 />
               </View>
@@ -682,7 +893,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.vehicleInfo.year}
                   onChangeText={(value) => updateFormData('vehicleInfo.year', formatYear(value))}
                   placeholder="2020"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   keyboardType="numeric"
                   maxLength={4}
                 />
@@ -694,7 +905,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   value={formData.vehicleInfo.color}
                   onChangeText={(value) => updateFormData('vehicleInfo.color', value)}
                   placeholder="White"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.text.placeholder}
                   autoCapitalize="words"
                 />
               </View>
@@ -707,7 +918,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 value={formData.vehicleInfo.licensePlate}
                 onChangeText={(value) => updateFormData('vehicleInfo.licensePlate', formatLicensePlate(value))}
                 placeholder="ABC123"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.text.placeholder}
                 autoCapitalize="characters"
                 maxLength={8}
               />
@@ -723,15 +934,15 @@ export default function DriverOnboardingScreen({ navigation }) {
           <View style={styles.finalContent}>
             <View style={styles.securityFeatures}>
               <View style={styles.securityItem}>
-                <Ionicons name="shield-checkmark" size={20} color="#00D4AA" />
+                <Ionicons name="shield-checkmark" size={20} color={colors.success} />
                 <Text style={styles.securityText}>Bank-level security</Text>
               </View>
               <View style={styles.securityItem}>
-                <Ionicons name="flash" size={20} color="#00D4AA" />
+                <Ionicons name="flash" size={20} color={colors.success} />
                 <Text style={styles.securityText}>Fast payments</Text>
               </View>
               <View style={styles.securityItem}>
-                <Ionicons name="lock-closed" size={20} color="#00D4AA" />
+                <Ionicons name="lock-closed" size={20} color={colors.success} />
                 <Text style={styles.securityText}>Encrypted data</Text>
               </View>
             </View>
@@ -771,41 +982,43 @@ export default function DriverOnboardingScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            if (currentStep > 0) {
-              prevStep();
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{steps[currentStep].title}</Text>
-        <TouchableOpacity
-          style={styles.closeButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="close" size={24} color="#fff" />
-        </TouchableOpacity>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <View style={styles.topChrome}>
+        <View style={[styles.topChromeInner, { maxWidth: contentMaxWidth }]}>
+          {/* Header */}
+          <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                if (currentStep > 0) {
+                  prevStep();
+                } else {
+                  navigation.goBack();
+                }
+              }}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.white} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{steps[currentStep].title}</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="close" size={24} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Progress Bar */}
+          {renderProgressBar()}
+        </View>
       </View>
 
-      {/* Progress Bar */}
-      {renderProgressBar()}
-
       {/* Content */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.stepContainer}>
+      <View style={styles.contentArea}>
+        <View style={[styles.stepContainer, { maxWidth: contentMaxWidth }]}>
           <View style={[styles.stepIcon, { backgroundColor: `${steps[currentStep].color}20` }]}>
             <Ionicons
               name={steps[currentStep].icon}
@@ -819,10 +1032,20 @@ export default function DriverOnboardingScreen({ navigation }) {
 
           {renderStepContent()}
         </View>
-      </ScrollView>
+      </View>
 
       {/* Bottom Actions */}
-      <View style={styles.bottomActions}>
+      <View
+        style={[
+          styles.bottomActions,
+          {
+            paddingBottom: Math.max(insets.bottom, spacing.md),
+            maxWidth: contentMaxWidth,
+            width: '100%',
+            alignSelf: 'center',
+          },
+        ]}
+      >
         {currentStep > 0 && (
           <TouchableOpacity style={styles.backActionButton} onPress={prevStep}>
             <Text style={styles.backActionText}>Back</Text>
@@ -849,24 +1072,35 @@ export default function DriverOnboardingScreen({ navigation }) {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
+  },
+  topChrome: {
+    backgroundColor: colors.background.primary,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 5,
+  },
+  topChromeInner: {
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: '#141426',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background.primary,
   },
   backButton: {
     width: 40,
@@ -875,9 +1109,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
     flex: 1,
     textAlign: 'center',
   },
@@ -888,37 +1122,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   progressContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#141426',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background.primary,
   },
   progressBackground: {
     height: 4,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderRadius: 2,
   },
   progressText: {
-    color: '#999',
-    fontSize: 12,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
     textAlign: 'center',
   },
-  scrollView: {
+  contentArea: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 20,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.base,
+    alignItems: 'center',
   },
   stepContainer: {
-    padding: 20,
+    flex: 1,
+    width: '100%',
+    paddingTop: spacing.sm,
     alignItems: 'center',
   },
   stepIcon: {
@@ -930,16 +1164,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   stepTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontSize: typography.fontSize.xxl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   stepSubtitle: {
-    fontSize: 16,
-    color: '#999',
-    marginBottom: 32,
+    fontSize: typography.fontSize.md,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xl + spacing.sm,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -952,7 +1186,7 @@ const styles = StyleSheet.create({
   welcomeIconContainer: {
     width: 120,
     height: 120,
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
@@ -961,13 +1195,13 @@ const styles = StyleSheet.create({
   welcomeTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 16,
     textAlign: 'center',
   },
   welcomeDescription: {
     fontSize: 16,
-    color: '#999',
+    color: colors.text.tertiary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
@@ -975,22 +1209,22 @@ const styles = StyleSheet.create({
   },
   benefitsList: {
     width: '100%',
-    paddingHorizontal: 20,
-    marginTop: 20,
+    paddingHorizontal: spacing.base,
+    marginTop: spacing.lg,
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   benefitText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 12,
@@ -999,49 +1233,49 @@ const styles = StyleSheet.create({
   // Form content
   formContent: {
     width: '100%',
-    paddingTop: 20,
+    paddingTop: spacing.lg,
   },
   formDescription: {
     fontSize: 16,
-    color: '#999',
+    color: colors.text.tertiary,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 24,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   inputRow: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   inputLabel: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 8,
   },
   textInput: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    color: '#fff',
-    fontSize: 16,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.base,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
   },
 
   // Final content
   finalContent: {
     width: '100%',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: spacing.lg,
   },
   finalIconContainer: {
     width: 100,
     height: 100,
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1050,13 +1284,13 @@ const styles = StyleSheet.create({
   finalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 16,
     textAlign: 'center',
   },
   finalDescription: {
     fontSize: 16,
-    color: '#999',
+    color: colors.text.tertiary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 32,
@@ -1069,31 +1303,31 @@ const styles = StyleSheet.create({
   securityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   securityText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 12,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.md,
   },
   finalNote: {
-    backgroundColor: '#1A1A3A',
+    backgroundColor: colors.background.elevated,
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     width: '100%',
   },
   finalNoteText: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
@@ -1112,7 +1346,7 @@ const styles = StyleSheet.create({
   verificationIcon: {
     width: 48,
     height: 48,
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1122,53 +1356,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verificationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   verificationText: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
     lineHeight: 20,
   },
   verifyButton: {
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     paddingVertical: 16,
     borderRadius: 25,
     alignItems: 'center',
     marginTop: 20,
   },
   verifyButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: colors.text.subtle,
     opacity: 0.7,
   },
   verifyButtonSuccess: {
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     opacity: 1,
   },
   verifyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   verificationSuccess: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
   },
   verificationSuccessText: {
-    color: '#00D4AA',
+    color: colors.success,
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
   },
   loadingText: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 14,
     marginTop: 8,
   },
@@ -1176,32 +1410,36 @@ const styles = StyleSheet.create({
   // Bottom actions
   bottomActions: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#141426',
-    borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background.primary,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 10,
     gap: 12,
   },
   backActionButton: {
     flex: 1,
-    backgroundColor: '#2A2A3B',
-    paddingVertical: 16,
-    borderRadius: 25,
+    backgroundColor: colors.border.strong,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
   },
   backActionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   nextButton: {
     flex: 2,
-    backgroundColor: '#A77BFF',
-    paddingVertical: 16,
-    borderRadius: 25,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
-    shadowColor: '#A77BFF',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1211,14 +1449,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   nextButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: colors.text.subtle,
     shadowOpacity: 0,
     elevation: 0,
   },
   nextButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -1234,81 +1472,81 @@ const styles = StyleSheet.create({
 
   // Input validation styles
   textInputError: {
-    borderColor: '#FF6B6B',
+    borderColor: colors.secondary,
     borderWidth: 1,
   },
   inputHint: {
-    color: '#FF6B6B',
-    fontSize: 11,
-    marginTop: 4,
+    color: colors.secondary,
+    fontSize: typography.fontSize.sm - 1,
+    marginTop: spacing.xs,
   },
 
   // State Picker styles
   pickerButton: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   pickerButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.white,
+    fontSize: typography.fontSize.md,
   },
   pickerButtonPlaceholder: {
-    color: '#666',
-    fontSize: 16,
+    color: colors.text.subtle,
+    fontSize: typography.fontSize.md,
   },
   pickerModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: colors.overlayDark,
     justifyContent: 'flex-end',
   },
   pickerModal: {
-    backgroundColor: '#1E1E2E',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.background.tertiary,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     maxHeight: '60%',
   },
   pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    borderBottomColor: colors.border.strong,
   },
   pickerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
   },
   pickerList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.base,
   },
   pickerItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: spacing.md + 2,
     borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+    borderBottomColor: colors.border.strong,
   },
   pickerItemSelected: {
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
-    marginHorizontal: -16,
-    paddingHorizontal: 16,
+    backgroundColor: colors.primaryLight,
+    marginHorizontal: -spacing.base,
+    paddingHorizontal: spacing.base,
   },
   pickerItemText: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.white,
+    fontSize: typography.fontSize.md,
   },
   pickerItemTextSelected: {
-    color: '#A77BFF',
-    fontWeight: '600',
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
 });

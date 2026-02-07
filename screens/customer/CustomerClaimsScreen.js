@@ -11,6 +11,7 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,11 +20,20 @@ import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
-import { colors } from '../../styles/theme';
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
+import ScreenHeader from '../../components/ScreenHeader';
 
 export default function CustomerClaimsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { currentUser, getUserPickupRequests } = useAuth();
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const [activeTab, setActiveTab] = useState('ongoing');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -453,7 +463,23 @@ export default function CustomerClaimsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.container}>
+        <ScreenHeader
+          title="Claims"
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          showBack
+          rightContent={
+            <TouchableOpacity
+              style={styles.refreshButton}
+              onPress={loadClaimsData}
+              accessibilityRole="button"
+              accessibilityLabel="Refresh claims"
+            >
+              <Ionicons name="refresh" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          }
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading claims...</Text>
@@ -463,55 +489,57 @@ export default function CustomerClaimsScreen({ navigation }) {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Claims</Text>
-        <TouchableOpacity
-          style={styles.refreshButton}
-          onPress={loadClaimsData}
-        >
-          <Ionicons name="refresh" size={24} color={colors.white} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader
+        title="Claims"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack
+        rightContent={
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={loadClaimsData}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh claims"
+          >
+            <Ionicons name="refresh" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+        }
+      />
 
-      {/* Insurance Banner */}
-      <View style={styles.insuranceBanner}>
-        <View style={styles.insuranceIcon}>
-          <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
+      <View style={[styles.topSection, { maxWidth: contentMaxWidth }]}>
+        {/* Insurance Banner */}
+        <View style={styles.insuranceBanner}>
+          <View style={styles.insuranceIcon}>
+            <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.insuranceContent}>
+            <Text style={styles.insuranceTitle}>Redkik Insurance</Text>
+            <Text style={styles.insuranceBannerText}>
+              File claims for insured deliveries through our secure portal
+            </Text>
+          </View>
         </View>
-        <View style={styles.insuranceContent}>
-          <Text style={styles.insuranceTitle}>Redkik Insurance</Text>
-          <Text style={styles.insuranceBannerText}>
-            File claims for insured deliveries through our secure portal
-          </Text>
-        </View>
-      </View>
 
-      {/* Tab Selector */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'ongoing' && styles.activeTab]}
-          onPress={() => setActiveTab('ongoing')}
-        >
-          <Text style={[styles.tabText, activeTab === 'ongoing' && styles.activeTabText]}>
-            Ongoing ({ongoingClaims.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-          onPress={() => setActiveTab('completed')}
-        >
-          <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-            Completed ({completedClaims.length})
-          </Text>
-        </TouchableOpacity>
+        {/* Tab Selector */}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'ongoing' && styles.activeTab]}
+            onPress={() => setActiveTab('ongoing')}
+          >
+            <Text style={[styles.tabText, activeTab === 'ongoing' && styles.activeTabText]}>
+              Ongoing ({ongoingClaims.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
+            onPress={() => setActiveTab('completed')}
+          >
+            <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
+              Completed ({completedClaims.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Claims List */}
@@ -521,6 +549,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             data={activeTab === 'ongoing' ? ongoingClaims : completedClaims}
             renderItem={renderClaimItem}
             keyExtractor={(item) => item.id}
+            style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
             contentContainerStyle={styles.claimsList}
             refreshing={loading}
             onRefresh={loadClaimsData}
@@ -552,7 +581,7 @@ export default function CustomerClaimsScreen({ navigation }) {
         </>
       ) : (
         <>
-          <View style={styles.pastTripsHeader}>
+          <View style={[styles.pastTripsHeader, { maxWidth: contentMaxWidth }]}>
             <Text style={styles.pastTripsTitle}>Select Insured Delivery</Text>
             <TouchableOpacity
               style={styles.closeButton}
@@ -566,6 +595,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             data={pastTrips}
             renderItem={renderTripItem}
             keyExtractor={(item) => item.id}
+            style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
             contentContainerStyle={styles.tripsList}
             ListEmptyComponent={
               <View style={styles.emptyState}>
@@ -728,24 +758,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background.primary,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: colors.background.secondary,
+  topSection: {
+    width: '100%',
+    alignSelf: 'center',
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.white,
+  listViewport: {
+    width: '100%',
+    alignSelf: 'center',
+    flex: 1,
   },
   refreshButton: {
     width: 40,
@@ -760,16 +780,17 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: colors.primary,
-    fontSize: 16,
-    marginTop: 10,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.sm + spacing.xs,
   },
   insuranceBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background.panel,
-    margin: 20,
-    padding: 15,
-    borderRadius: 12,
+    marginHorizontal: spacing.base,
+    marginTop: spacing.base,
+    padding: spacing.md + spacing.xs,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
@@ -780,50 +801,51 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: spacing.md + spacing.xs,
   },
   insuranceContent: {
     flex: 1,
   },
   insuranceTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
     color: colors.white,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   insuranceBannerText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     color: colors.text.tertiary,
     lineHeight: 20,
   },
   tabContainer: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 20,
+    marginHorizontal: spacing.base,
+    marginTop: spacing.base,
+    marginBottom: spacing.base,
     backgroundColor: colors.background.panel,
-    borderRadius: 8,
-    padding: 4,
+    borderRadius: borderRadius.sm,
+    padding: spacing.xs,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     paddingHorizontal: 16,
-    borderRadius: 6,
+    borderRadius: borderRadius.xs + 2,
     alignItems: 'center',
   },
   activeTab: {
     backgroundColor: colors.primary,
   },
   tabText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     color: colors.text.tertiary,
   },
   activeTabText: {
     color: colors.white,
   },
   claimsList: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.base,
     paddingBottom: 100,
   },
   claimCard: {
@@ -919,46 +941,50 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: typography.fontSize.md,
     color: colors.text.subtle,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: spacing.base,
+    marginBottom: spacing.sm,
   },
   emptyStateSubtext: {
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     color: colors.text.subtle,
     textAlign: 'center',
-    marginTop: 5,
+    marginTop: spacing.xs + 1,
   },
   startClaimButton: {
     position: 'absolute',
-    bottom: 30,
-    right: 20,
-    left: 20,
+    bottom: spacing.xl + spacing.xs,
+    left: spacing.base,
+    right: spacing.base,
+    maxWidth: layout.contentMaxWidth,
+    alignSelf: 'center',
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
   },
   startClaimText: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   pastTripsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md + spacing.xs,
     backgroundColor: colors.background.secondary,
+    width: '100%',
+    alignSelf: 'center',
   },
   pastTripsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.white,
   },
   closeButton: {
@@ -968,8 +994,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tripsList: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.xl + spacing.xs,
   },
   tripCard: {
     backgroundColor: colors.background.panel,
@@ -1036,15 +1062,18 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: colors.background.secondary,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     maxHeight: '90%',
+    width: '100%',
+    maxWidth: layout.sheetMaxWidth,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.strong,
   },
@@ -1064,9 +1093,9 @@ const styles = StyleSheet.create({
   },
   tripSummary: {
     backgroundColor: colors.background.panel,
-    margin: 20,
+    margin: spacing.base,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
@@ -1107,8 +1136,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   claimTypeContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.lg,
   },
   claimTypeLabel: {
     fontSize: 16,
@@ -1143,8 +1172,8 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   inputContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.lg,
   },
   inputLabel: {
     fontSize: 16,
@@ -1164,8 +1193,8 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   documentsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.lg,
   },
   documentsLabel: {
     fontSize: 16,
@@ -1221,9 +1250,9 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     backgroundColor: colors.primary,
-    margin: 20,
+    margin: spacing.base,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     alignItems: 'center',
   },
   submitButtonDisabled: {

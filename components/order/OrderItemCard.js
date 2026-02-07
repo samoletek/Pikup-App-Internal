@@ -105,7 +105,7 @@ const OrderItemCard = ({
                         <Image source={{ uri: item.photos[0] }} style={styles.thumbnail} />
                     ) : (
                         <View style={styles.placeholderThumb}>
-                            <Ionicons name="cube-outline" size={24} color="#666" />
+                            <Ionicons name="cube-outline" size={24} color={colors.text.placeholder} />
                         </View>
                     )}
                     <View style={styles.cardHeaderInfo}>
@@ -129,7 +129,7 @@ const OrderItemCard = ({
                 <Ionicons
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     size={24}
-                    color="#888"
+                    color={colors.text.muted}
                 />
             </TouchableOpacity>
 
@@ -155,12 +155,12 @@ const OrderItemCard = ({
                             );
                         }}
                     >
-                        <Ionicons name="camera" size={24} color="#FFF" />
+                        <Ionicons name="camera" size={24} color={colors.text.primary} />
                         <View style={{ marginLeft: 12 }}>
                             <Text style={styles.addPhotoBtnTopTitle}>Add Photo (up to {MAX_PHOTOS})</Text>
                             <Text style={styles.addPhotoBtnTopSubtitle}>Take a photo or choose from gallery</Text>
                         </View>
-                        <Ionicons name="add-circle" size={24} color="#A77BFF" style={{ marginLeft: 'auto' }} />
+                        <Ionicons name="add-circle" size={24} color={colors.primary} style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
 
                     {/* Photo Preview Grid (Moved here) */}
@@ -174,7 +174,7 @@ const OrderItemCard = ({
                                         onPress={() => handleRemovePhoto(index)}
                                     >
                                         <View style={styles.removePhotoIconBg}>
-                                            <Ionicons name="close" size={14} color="#FFF" />
+                                            <Ionicons name="close" size={14} color={colors.text.primary} />
                                         </View>
                                     </TouchableOpacity>
                                 </View>
@@ -188,7 +188,7 @@ const OrderItemCard = ({
                         <TextInput
                             style={styles.textInput}
                             placeholder="e.g. Couch, TV, Moving boxes..."
-                            placeholderTextColor="#666"
+                            placeholderTextColor={colors.text.placeholder}
                             value={item.name}
                             onChangeText={(text) => onUpdate({ ...item, name: text })}
                         />
@@ -200,7 +200,7 @@ const OrderItemCard = ({
                         <TextInput
                             style={[styles.textInput, styles.textArea]}
                             placeholder="Additional details about this item..."
-                            placeholderTextColor="#666"
+                            placeholderTextColor={colors.text.placeholder}
                             value={item.description}
                             onChangeText={(text) => onUpdate({ ...item, description: text })}
                             multiline
@@ -242,7 +242,7 @@ const OrderItemCard = ({
                             <Ionicons
                                 name="warning-outline"
                                 size={20}
-                                color={item.isFragile ? '#FFF' : '#888'}
+                                color={item.isFragile ? colors.text.primary : colors.text.muted}
                             />
                             <Text style={[styles.toggleText, item.isFragile && styles.toggleTextActive]}>
                                 Fragile
@@ -268,8 +268,9 @@ const OrderItemCard = ({
                                 name={item.hasInsurance ? "shield-checkmark" : "shield-checkmark-outline"}
                                 size={20}
                                 color={
-                                    (item.condition === 'used' || !item.condition) ? '#444' :
-                                        (item.hasInsurance ? '#FFF' : '#888')
+                                    (item.condition === 'used' || !item.condition)
+                                        ? colors.border.light
+                                        : (item.hasInsurance ? colors.text.primary : colors.text.muted)
                                 }
                             />
                             <Text style={[
@@ -296,13 +297,13 @@ const OrderItemCard = ({
                                         onPress={() => onUpdate({ ...item, invoicePhoto: null })}
                                     >
                                         <View style={styles.removePhotoIconBg}>
-                                            <Ionicons name="close" size={14} color="#FFF" />
+                                            <Ionicons name="close" size={14} color={colors.text.primary} />
                                         </View>
                                     </TouchableOpacity>
                                 </View>
                             ) : (
                                 <TouchableOpacity style={styles.uploadInvoiceBtn} onPress={handleAddInvoice}>
-                                    <Ionicons name="document-attach-outline" size={24} color="#A77BFF" />
+                                    <Ionicons name="document-attach-outline" size={24} color={colors.primary} />
                                     <Text style={styles.uploadInvoiceText}>Upload Invoice</Text>
                                 </TouchableOpacity>
                             )}
@@ -311,7 +312,7 @@ const OrderItemCard = ({
 
                     {/* Delete Button */}
                     <TouchableOpacity style={styles.deleteBtn} onPress={onDelete}>
-                        <Ionicons name="trash-outline" size={18} color="#FF4444" />
+                        <Ionicons name="trash-outline" size={18} color={colors.error} />
                         <Text style={styles.deleteBtnText}>Delete Item</Text>
                     </TouchableOpacity>
                 </View>
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
         marginTop: spacing.base
     },
     fieldLabel: {
-        color: '#FFF', // Updated to white per user request
+        color: colors.text.primary,
         fontSize: typography.fontSize.sm,
         fontWeight: typography.fontWeight.semibold,
         marginBottom: spacing.sm,
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         borderRadius: 10,
-        backgroundColor: '#FF4444',
+        backgroundColor: colors.error,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1.5,
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
         // No background change, just disable interaction visual via text/icon
     },
     toggleTextDisabled: {
-        color: '#444'
+        color: colors.border.light
     },
     invoiceSection: {
         marginTop: spacing.base,

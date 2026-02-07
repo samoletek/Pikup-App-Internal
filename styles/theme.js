@@ -35,6 +35,9 @@ export const colors = {
         primary: '#0A0A1F',     // Darkest - main app background
         secondary: '#141426',   // Modal backgrounds
         tertiary: '#1E1E2E',    // Cards, elevated surfaces
+        surface: '#FFFFFF',     // Light surface for auth/system screens
+        light: '#F7F7F7',       // Soft light background
+        inputLight: '#F0F0F0',  // Light input fill
         panel: '#1E1E38',       // Alternative panel/card surface
         elevated: '#1A1A3A',    // Elevated cards/chips
         successSubtle: '#1A3A2E', // Success tinted background
@@ -47,6 +50,7 @@ export const colors = {
     border: {
         default: '#333',        // Default border
         light: '#444',          // Lighter border
+        inverse: '#E0E0E0',     // Border on light surfaces
         strong: '#2A2A3B',      // Strong contrast border on dark surfaces
         focus: '#A77BFF',       // Focused state
     },
@@ -57,6 +61,7 @@ export const colors = {
         secondary: '#CCCCCC',   // Secondary text
         muted: '#888888',       // Muted/disabled text
         tertiary: '#999999',    // Tertiary labels
+        inverse: '#333333',     // Text on light surfaces
         subtle: '#666666',      // Subtle text for empty states
         placeholder: '#666666', // Input placeholders
         link: '#A77BFF',        // Links and actionable text
@@ -130,6 +135,15 @@ export const spacing = {
     xl: 24,
     xxl: 32,
     xxxl: 48,
+};
+
+// ============================================
+// LAYOUT
+// ============================================
+export const layout = {
+    contentMaxWidth: 560,
+    authMaxWidth: 460,
+    sheetMaxWidth: 520,
 };
 
 // ============================================
@@ -268,6 +282,7 @@ export default {
     colors,
     typography,
     spacing,
+    layout,
     borderRadius,
     shadows,
     components,

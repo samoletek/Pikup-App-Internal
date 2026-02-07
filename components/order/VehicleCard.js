@@ -71,7 +71,7 @@ const VehicleCard = ({
             {/* Price */}
             <View style={styles.priceContainer}>
                 {isLoadingPrice ? (
-                    <ActivityIndicator size="small" color="#A77BFF" />
+                    <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
                     <>
                         <Text style={styles.price}>${estimatedPrice.toFixed(2)}</Text>
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     },
     cardSelected: {
         borderColor: colors.primary,
-        backgroundColor: '#252538'
+        backgroundColor: colors.background.elevated
     },
     vehicleImage: {
         width: 80,

@@ -56,7 +56,6 @@ export default function RoleTabNavigator({ tabs }) {
             {
               height: tabBarHeight,
               paddingBottom: tabBarPaddingBottom,
-              borderTopColor: colors.navigation.tabBarBorder,
               backgroundColor:
                 Platform.OS === "ios"
                   ? "transparent"
@@ -91,8 +90,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   tabBar: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 0,
     paddingTop: 6,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 14,
   },
   tabBarLabel: {
     fontSize: typography.fontSize.sm,

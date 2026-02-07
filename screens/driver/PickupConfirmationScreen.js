@@ -8,20 +8,28 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width } = Dimensions.get('window');
+import ScreenHeader from '../../components/ScreenHeader';
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function PickupConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { request, driverLocation } = route.params;
   const { confirmPickup, startDelivery } = useAuth();
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -213,142 +221,140 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pickup Confirmation</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Pickup Confirmation"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+      />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Status Header */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <View style={styles.statusIndicator}>
-              <Ionicons name="checkmark-circle" size={24} color="#00D4AA" />
-              <Text style={styles.statusText}>Arrived at Pickup</Text>
-            </View>
-            <Text style={styles.requestId}>#{request?.id?.slice(-8)}</Text>
-          </View>
-        </View>
-
-        {/* Customer Info */}
-        <View style={styles.customerCard}>
-          <View style={styles.customerHeader}>
-            <Image 
-              source={{ uri: 'https://via.placeholder.com/50x50/CCCCCC/000000?text=C' }} 
-              style={styles.customerPhoto} 
-            />
-            <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>{customerName}</Text>
-              <Text style={styles.customerEmail}>{request?.customerEmail}</Text>
-            </View>
-            <TouchableOpacity style={styles.callButton}>
-              <Ionicons name="call" size={20} color="#fff" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Pickup Details */}
-        <View style={styles.detailsCard}>
-          <Text style={styles.cardTitle}>Pickup Details</Text>
-          <View style={styles.detailRow}>
-            <Ionicons name="location" size={16} color="#A77BFF" />
-            <Text style={styles.detailText}>{request?.pickup?.address || 'Pickup location'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="cube" size={16} color="#A77BFF" />
-            <Text style={styles.detailText}>{request?.item?.description || 'Items to pickup'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="car" size={16} color="#A77BFF" />
-            <Text style={styles.detailText}>{request?.vehicle?.type || 'Vehicle type'}</Text>
-          </View>
-          {request?.item?.needsHelp && (
-            <View style={styles.detailRow}>
-              <Ionicons name="people" size={16} color="#FFA500" />
-              <Text style={[styles.detailText, { color: '#FFA500' }]}>Loading assistance required</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Photo Section */}
-        <View style={styles.photoCard}>
-          <View style={styles.photoHeader}>
-            <Text style={styles.cardTitle}>Pickup Verification Photos</Text>
-            <Text style={styles.photoCount}>{photos.length}/10</Text>
-          </View>
-          <Text style={styles.photoSubtitle}>
-            Take photos to verify the items you're picking up
-          </Text>
-
-          {/* Photo Grid */}
-          <ScrollView 
-            ref={scrollViewRef}
-            horizontal 
-            style={styles.photoScrollView}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.photoContainer}
-          >
-            {/* Add Photo Button */}
-            <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
-              <Ionicons name="camera" size={32} color="#A77BFF" />
-              <Text style={styles.addPhotoText}>Add Photo</Text>
-            </TouchableOpacity>
-
-            {/* Photo Items */}
-            {photos.map((photo, index) => (
-              <View key={photo.id} style={styles.photoItem}>
-                <Image source={{ uri: photo.uri }} style={styles.photoImage} />
-                <TouchableOpacity 
-                  style={styles.removePhotoButton}
-                  onPress={() => removePhoto(photo.id)}
-                >
-                  <Ionicons name="close-circle" size={24} color="#FF6B6B" />
-                </TouchableOpacity>
-                <View style={styles.photoIndex}>
-                  <Text style={styles.photoIndexText}>{index + 1}</Text>
-                </View>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 124 }}
+      >
+        <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          {/* Status Header */}
+          <View style={styles.statusCard}>
+            <View style={styles.statusHeader}>
+              <View style={styles.statusIndicator}>
+                <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+                <Text style={styles.statusText}>Arrived at Pickup</Text>
               </View>
-            ))}
-          </ScrollView>
-
-          {photos.length === 0 && (
-            <View style={styles.noPhotosContainer}>
-              <Ionicons name="camera-outline" size={48} color="#666" />
-              <Text style={styles.noPhotosText}>No photos yet</Text>
-              <Text style={styles.noPhotosSubtext}>Take at least 1 photo to continue</Text>
+              <Text style={styles.requestId}>#{request?.id?.slice(-8)}</Text>
             </View>
-          )}
-        </View>
+          </View>
 
-        {/* Instructions */}
-        <View style={styles.instructionsCard}>
-          <Text style={styles.cardTitle}>📋 Pickup Instructions</Text>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>1.</Text>
-            <Text style={styles.instructionText}>Verify items match the description</Text>
+          {/* Customer Info */}
+          <View style={styles.customerCard}>
+            <View style={styles.customerHeader}>
+              <Image
+                source={{ uri: 'https://via.placeholder.com/50x50/CCCCCC/000000?text=C' }}
+                style={styles.customerPhoto}
+              />
+              <View style={styles.customerDetails}>
+                <Text style={styles.customerName}>{customerName}</Text>
+                <Text style={styles.customerEmail}>{request?.customerEmail}</Text>
+              </View>
+              <TouchableOpacity style={styles.callButton}>
+                <Ionicons name="call" size={20} color={colors.white} />
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>2.</Text>
-            <Text style={styles.instructionText}>Take clear photos of all items</Text>
+
+          {/* Pickup Details */}
+          <View style={styles.detailsCard}>
+            <Text style={styles.cardTitle}>Pickup Details</Text>
+            <View style={styles.detailRow}>
+              <Ionicons name="location" size={16} color={colors.primary} />
+              <Text style={styles.detailText}>{request?.pickup?.address || 'Pickup location'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="cube" size={16} color={colors.primary} />
+              <Text style={styles.detailText}>{request?.item?.description || 'Items to pickup'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Ionicons name="car" size={16} color={colors.primary} />
+              <Text style={styles.detailText}>{request?.vehicle?.type || 'Vehicle type'}</Text>
+            </View>
+            {request?.item?.needsHelp && (
+              <View style={styles.detailRow}>
+                <Ionicons name="people" size={16} color={colors.warning} />
+                <Text style={[styles.detailText, { color: colors.warning }]}>Loading assistance required</Text>
+              </View>
+            )}
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>3.</Text>
-            <Text style={styles.instructionText}>Load items safely in your vehicle</Text>
+
+          {/* Photo Section */}
+          <View style={styles.photoCard}>
+            <View style={styles.photoHeader}>
+              <Text style={styles.cardTitle}>Pickup Verification Photos</Text>
+              <Text style={styles.photoCount}>{photos.length}/10</Text>
+            </View>
+            <Text style={styles.photoSubtitle}>
+              Take photos to verify the items you're picking up
+            </Text>
+
+            {/* Photo Grid */}
+            <ScrollView
+              ref={scrollViewRef}
+              horizontal
+              style={styles.photoScrollView}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoContainer}
+            >
+              {/* Add Photo Button */}
+              <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
+                <Ionicons name="camera" size={32} color={colors.primary} />
+                <Text style={styles.addPhotoText}>Add Photo</Text>
+              </TouchableOpacity>
+
+              {/* Photo Items */}
+              {photos.map((photo, index) => (
+                <View key={photo.id} style={styles.photoItem}>
+                  <Image source={{ uri: photo.uri }} style={styles.photoImage} />
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={() => removePhoto(photo.id)}
+                  >
+                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                  </TouchableOpacity>
+                  <View style={styles.photoIndex}>
+                    <Text style={styles.photoIndexText}>{index + 1}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            {photos.length === 0 && (
+              <View style={styles.noPhotosContainer}>
+                <Ionicons name="camera-outline" size={48} color={colors.text.muted} />
+                <Text style={styles.noPhotosText}>No photos yet</Text>
+                <Text style={styles.noPhotosSubtext}>Take at least 1 photo to continue</Text>
+              </View>
+            )}
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>4.</Text>
-            <Text style={styles.instructionText}>Confirm pickup to start delivery</Text>
+
+          {/* Instructions */}
+          <View style={styles.instructionsCard}>
+            <Text style={styles.cardTitle}>Pickup Instructions</Text>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>1.</Text>
+              <Text style={styles.instructionText}>Verify items match the description</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>2.</Text>
+              <Text style={styles.instructionText}>Take clear photos of all items</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>3.</Text>
+              <Text style={styles.instructionText}>Load items safely in your vehicle</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>4.</Text>
+              <Text style={styles.instructionText}>Confirm pickup to start delivery</Text>
+            </View>
           </View>
         </View>
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Bottom Action Button */}
@@ -362,9 +368,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           disabled={photos.length === 0 || isCompleting}
         >
           {isCompleting ? (
-            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+            <ActivityIndicator size="small" color={colors.white} style={{ marginRight: spacing.sm }} />
           ) : (
-            <Ionicons name="checkmark" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Ionicons name="checkmark" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
           )}
           <Text style={styles.confirmButtonText}>
             {isUploadingPhotos ? 'Uploading Photos...' : 
@@ -384,44 +390,24 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#1a1a2e',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2A3B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
+    backgroundColor: colors.background.primary,
   },
   content: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+  },
+  contentColumn: {
+    width: '100%',
+    alignSelf: 'center',
   },
   statusCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -433,20 +419,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statusText: {
-    color: '#00D4AA',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    color: colors.success,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   requestId: {
-    color: '#666',
-    fontSize: 12,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
   },
   customerCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   customerHeader: {
     flexDirection: 'row',
@@ -455,41 +443,43 @@ const styles = StyleSheet.create({
   customerPhoto: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    marginRight: 12,
+    borderRadius: borderRadius.circle,
+    marginRight: spacing.md,
   },
   customerDetails: {
     flex: 1,
   },
   customerName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   customerEmail: {
-    color: '#aaa',
-    fontSize: 14,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
     marginTop: 2,
   },
   callButton: {
     width: 44,
     height: 44,
-    backgroundColor: '#A77BFF',
-    borderRadius: 22,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.circle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   detailsCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   cardTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
   },
   detailRow: {
     flexDirection: 'row',
@@ -497,16 +487,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   detailText: {
-    color: '#ccc',
-    fontSize: 14,
-    marginLeft: 8,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginLeft: spacing.sm,
     flex: 1,
   },
   photoCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   photoHeader: {
     flexDirection: 'row',
@@ -515,38 +507,38 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   photoCount: {
-    color: '#A77BFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   photoSubtitle: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 16,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginBottom: spacing.base,
   },
   photoScrollView: {
-    marginHorizontal: -16,
+    marginHorizontal: -spacing.base,
   },
   photoContainer: {
-    paddingHorizontal: 16,
-    gap: 12,
+    paddingHorizontal: spacing.base,
+    gap: spacing.md,
   },
   addPhotoButton: {
     width: 120,
     height: 120,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.md,
     borderWidth: 2,
-    borderColor: '#A77BFF',
+    borderColor: colors.primary,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
   addPhotoText: {
-    color: '#A77BFF',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
+    color: colors.primary,
+    fontSize: typography.fontSize.xs + 1,
+    marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.medium,
   },
   photoItem: {
     position: 'relative',
@@ -556,14 +548,14 @@ const styles = StyleSheet.create({
   photoImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
   },
   removePhotoButton: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.md,
   },
   photoIndex: {
     position: 'absolute',
@@ -577,30 +569,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoIndexText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
   },
   noPhotosContainer: {
     alignItems: 'center',
     paddingVertical: 32,
   },
   noPhotosText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 8,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    marginTop: spacing.sm,
   },
   noPhotosSubtext: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 4,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs + 1,
+    marginTop: spacing.xs,
   },
   instructionsCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   instruction: {
     flexDirection: 'row',
@@ -608,44 +602,46 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   instructionNumber: {
-    color: '#A77BFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
     width: 20,
   },
   instructionText: {
-    color: '#ccc',
-    fontSize: 14,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
     flex: 1,
   },
   bottomContainer: {
-    padding: 20,
-    backgroundColor: '#1a1a2e',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.base,
+    backgroundColor: colors.background.primary,
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.strong,
   },
   confirmButton: {
-    backgroundColor: '#00D4AA',
-    paddingVertical: 16,
-    borderRadius: 25,
+    backgroundColor: colors.success,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   warningText: {
-    color: '#FFA500',
-    fontSize: 12,
+    color: colors.warning,
+    fontSize: typography.fontSize.xs + 1,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
 });

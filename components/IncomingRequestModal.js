@@ -7,11 +7,11 @@ import {
   Image,
   ScrollView,
   Dimensions,
-  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import BaseModal from './BaseModal';
+import { colors } from '../styles/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -104,7 +104,7 @@ export default function IncomingRequestModal({
       ? request.item.photos
       : [];
 
-  const renderHeader = (closeModal) => (
+  const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.title}>Incoming Request</Text>
     </View>
@@ -115,10 +115,10 @@ export default function IncomingRequestModal({
       visible={visible}
       onClose={handleDecline} // Identify backdrop/drag down as decline/dismiss
       height={SCREEN_HEIGHT * 0.9}
-      backgroundColor="#141426"
+      backgroundColor={colors.background.secondary}
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: '#2A2A3B' }}
+      handleStyle={{ backgroundColor: colors.border.strong }}
     >
       {() => (
         <View style={styles.content}>
@@ -130,7 +130,7 @@ export default function IncomingRequestModal({
                 <Ionicons
                   name={getItemTypeIcon(request.item?.type)}
                   size={14}
-                  color="#8B5CF6"
+                  color={colors.primary}
                   style={styles.categoryIcon}
                 />
                 <Text style={styles.categoryText}>{request.item?.type || 'Item'}</Text>
@@ -237,7 +237,7 @@ export default function IncomingRequestModal({
                 {[1, 2, 3].map((_, index) => (
                   <View key={index} style={styles.photoWrapper}>
                     <View style={styles.mockPhoto}>
-                      <Ionicons name="image-outline" size={24} color="#666" />
+                      <Ionicons name="image-outline" size={24} color={colors.text.placeholder} />
                     </View>
                   </View>
                 ))}
@@ -267,7 +267,7 @@ export default function IncomingRequestModal({
                         key={i}
                         name="star"
                         size={12}
-                        color={i < Math.floor(request.customer?.rating || 5) ? '#FFD700' : '#333'}
+                        color={i < Math.floor(request.customer?.rating || 5) ? colors.gold : colors.border.default}
                       />
                     ))}
                     <Text style={styles.ratingText}>
@@ -291,7 +291,7 @@ export default function IncomingRequestModal({
                 onPress={() => onMessage(request)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="paper-plane-outline" size={24} color="#8B5CF6" />
+                <Ionicons name="paper-plane-outline" size={24} color={colors.primary} />
               </TouchableOpacity>
 
               {/* Decline Button */}
@@ -310,7 +310,7 @@ export default function IncomingRequestModal({
                 activeOpacity={0.8}
               >
                 <LinearGradient
-                  colors={['#8B5CF6', '#7C3AED']}
+                  colors={[colors.primary, colors.primaryDark]}
                   style={styles.acceptGradient}
                 >
                   <Text style={styles.acceptText}>Accept</Text>
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.text.primary,
     letterSpacing: 0.5,
   },
   content: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   earningsAmount: {
     fontSize: 36,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.text.primary,
     letterSpacing: -1,
   },
   categoryBadge: {
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   categoryText: {
-    color: '#8B5CF6',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   timerText: {
-    color: '#aaa',
+    color: colors.text.tertiary,
     fontSize: 14,
     marginBottom: 8,
   },
@@ -385,14 +385,14 @@ const styles = StyleSheet.create({
   },
   timerProgress: {
     height: '100%',
-    backgroundColor: '#8B5CF6',
+    backgroundColor: colors.primary,
     borderRadius: 2,
   },
   locationsContainer: {
     marginBottom: 20,
   },
   locationCard: {
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: colors.primary,
     borderWidth: 2,
     borderColor: 'rgba(139, 92, 246, 0.3)',
   },
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     borderWidth: 2,
     borderColor: 'rgba(0, 212, 170, 0.3)',
   },
@@ -441,27 +441,27 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   locationTime: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   locationDot: {
-    color: '#666',
+    color: colors.text.placeholder,
     fontSize: 14,
     marginHorizontal: 8,
   },
   locationDistance: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   locationAddress: {
-    color: '#bbb',
+    color: colors.text.secondary,
     fontSize: 14,
     lineHeight: 20,
   },
   descriptionContainer: {
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   descriptionText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#222233',
+    backgroundColor: colors.background.input,
     padding: 16,
     borderRadius: 12,
     marginBottom: 20,
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   customerName: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 2,
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ratingText: {
-    color: '#aaa',
+    color: colors.text.tertiary,
     fontSize: 12,
     marginLeft: 4,
   },
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   requestCount: {
-    color: '#8B5CF6',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -574,13 +574,13 @@ const styles = StyleSheet.create({
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.background.elevated,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   declineText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   acceptText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },

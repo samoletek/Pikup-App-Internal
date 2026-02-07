@@ -1,12 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
 // Configure Mapbox with your token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN);
-import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import OfflineDashboard from '../../components/OfflineDashboard';
 import DrivingProgressModal from '../../components/DrivingProgressModal';
@@ -15,9 +14,18 @@ import RequestModal from '../../components/RequestModal';
 import IncomingRequestModal from '../../components/IncomingRequestModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const panelMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const {
     userType,
     currentUser,
@@ -47,9 +55,8 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // State for tracking available requests
   const [availableRequests, setAvailableRequests] = useState([]);
-  const [lastRefreshTime, setLastRefreshTime] = useState(null);
-  const [waitTime, setWaitTime] = useState('5 to 11 min');
-  const [progressValue, setProgressValue] = useState(0.3); // Value between 0-1 for progress bar
+  const waitTime = '5 to 11 min';
+  const progressValue = 0.3;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [acceptedRequestId, setAcceptedRequestId] = useState(null);
@@ -103,82 +110,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       loadRequests(false);
     }
   });
-
-  // Mock data for requests
-  const mockRequests = [
-    {
-      id: '1',
-      pickup: {
-        address: '123 Main St, Atlanta, GA',
-        coordinates: { latitude: 33.7490, longitude: -84.3880 }
-      },
-      dropoff: {
-        address: '456 Peachtree St, Atlanta, GA',
-        coordinates: { latitude: 33.7590, longitude: -84.3920 }
-      },
-      price: '$35.00',
-      distance: '2.3 mi',
-      time: '15 min',
-      customer: {
-        name: 'John D.',
-        rating: 4.8,
-        photo: require('../../assets/profile.png')
-      },
-      item: {
-        description: 'Medium-sized package, fragile',
-        type: 'Package',
-        needsHelp: false
-      }
-    },
-    {
-      id: '2',
-      pickup: {
-        address: '789 Piedmont Ave, Atlanta, GA',
-        coordinates: { latitude: 33.7650, longitude: -84.3700 }
-      },
-      dropoff: {
-        address: '101 Centennial Park, Atlanta, GA',
-        coordinates: { latitude: 33.7620, longitude: -84.3930 }
-      },
-      price: '$42.50',
-      distance: '3.1 mi',
-      time: '20 min',
-      customer: {
-        name: 'Sarah M.',
-        rating: 4.9,
-        photo: require('../../assets/profile.png')
-      },
-      item: {
-        description: 'Furniture - Small table and chairs',
-        type: 'Furniture',
-        needsHelp: true
-      }
-    },
-    {
-      id: '3',
-      pickup: {
-        address: '555 Northside Dr, Atlanta, GA',
-        coordinates: { latitude: 33.7690, longitude: -84.4050 }
-      },
-      dropoff: {
-        address: '222 Tech Square, Atlanta, GA',
-        coordinates: { latitude: 33.7760, longitude: -84.3890 }
-      },
-      price: '$28.75',
-      distance: '1.8 mi',
-      time: '12 min',
-      customer: {
-        name: 'Michael T.',
-        rating: 4.7,
-        photo: require('../../assets/profile.png')
-      },
-      item: {
-        description: 'Grocery delivery - 3 bags',
-        type: 'Groceries',
-        needsHelp: false
-      }
-    }
-  ];
 
   useEffect(() => {
     initializeLocation();
@@ -255,7 +186,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       const requests = await getAvailableRequests();
 
       setAvailableRequests(requests);
-      setLastRefreshTime(new Date());
       console.log(`Loaded ${requests.length} real requests from Firebase`);
     } catch (error) {
       console.error('Error loading requests:', error);
@@ -547,18 +477,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   }, [availableRequests, isOnline, showIncomingModal, incomingRequest]);
 
-  const getRefreshTimeText = () => {
-    if (!lastRefreshTime) return 'Not yet refreshed';
-
-    const now = new Date();
-    const diff = Math.floor((now - lastRefreshTime) / 1000); // seconds
-
-    if (diff < 60) return `Updated ${diff} seconds ago`;
-    if (diff < 3600) return `Updated ${Math.floor(diff / 60)} minutes ago`;
-    return `Updated ${Math.floor(diff / 3600)} hours ago`;
-  };
-
-
   const renderModal = () => {
     switch (currentModal) {
       case 'driving':
@@ -626,7 +544,12 @@ export default function DriverHomeScreen({ navigation, route }) {
                   isSelected && styles.selectedMarker
                 ]}>
                   <Text style={styles.requestMarkerPrice}>{request.price}</Text>
-                  <View style={styles.requestMarkerArrow} />
+                  <View
+                    style={[
+                      styles.requestMarkerArrow,
+                      isSelected && styles.selectedMarkerArrow,
+                    ]}
+                  />
                 </View>
               </Mapbox.PointAnnotation>
             );
@@ -648,7 +571,7 @@ export default function DriverHomeScreen({ navigation, route }) {
               <Mapbox.LineLayer
                 id="route-line"
                 style={{
-                  lineColor: '#A77BFF',
+                  lineColor: colors.primary,
                   lineWidth: 4,
                   lineCap: 'round',
                   lineJoin: 'round'
@@ -660,7 +583,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       )}
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top - 15, 20) }]}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Image
           source={require('../../assets/pikup-logo.png')}
           style={styles.logoImage}
@@ -668,7 +591,17 @@ export default function DriverHomeScreen({ navigation, route }) {
       </View>
 
       {/* Bottom Panel */}
-      <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 20 }]}>
+      <View
+        style={[
+          styles.bottomPanel,
+          {
+            paddingBottom: insets.bottom + spacing.base,
+            maxWidth: panelMaxWidth,
+            width: '100%',
+            alignSelf: 'center',
+          },
+        ]}
+      >
         {isOnline ? (
           <>
             <View style={styles.waitTimeContainer}>
@@ -700,7 +633,7 @@ export default function DriverHomeScreen({ navigation, route }) {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#7C3AED', '#6366F1']}
+              colors={[colors.primaryDark, colors.primary]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.goOnlineButton}
@@ -714,31 +647,6 @@ export default function DriverHomeScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
       </View>
-
-      {/* View All Requests Button (only when online and requests available) */}
-      {/* {isOnline && availableRequests.length > 0 && (
-        <View style={styles.viewAllButtonContainer}>
-          <TouchableOpacity 
-            style={styles.viewAllButton}
-            onPress={() => setShowAllRequests(true)}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['rgba(167, 123, 255, 0.9)', 'rgba(167, 123, 255, 0.7)']}
-              style={styles.viewAllButtonGradient}
-            >
-              <View style={styles.viewAllButtonContent}>
-                <Ionicons name="list" size={20} color="#fff" />
-                <Text style={styles.viewAllButtonText}>
-                  View All Requests ({availableRequests.length})
-                </Text>
-                <Ionicons name="chevron-forward" size={20} color="#fff" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )} */}
-
 
       {/* Current Modal */}
       {currentModal && (
@@ -804,7 +712,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   map: {
     ...StyleSheet.absoluteFillObject,
@@ -814,140 +722,82 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
   },
   logoImage: {
-    width: '22%',
-    height: 20.4,
+    width: 120,
+    height: 22,
     resizeMode: 'contain',
-    marginTop: 10,
-  },
-  appName: {
-    fontSize: 28,
-    color: "#fff",
-    fontWeight: "bold",
-    textShadowColor: "rgba(167, 123, 255, 0.8)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 4,
-    marginBottom: 4,
-  },
-  statusContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  statusText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 6,
-  },
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  onlineIndicator: {
-    backgroundColor: '#4CAF50',
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-  },
-  offlineIndicator: {
-    backgroundColor: '#F44336',
-    shadowColor: '#F44336',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  profileImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    marginTop: spacing.xs,
   },
   bottomPanel: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(10, 10, 31, 0.98)',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
+    backgroundColor: colors.navigation.tabBarBackground,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
+    borderTopColor: colors.navigation.tabBarBorder,
   },
   waitTimeContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   waitTimeText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
     marginBottom: 2,
   },
   waitTimeSubtext: {
-    color: '#aaa',
-    fontSize: 13,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm + 1,
     lineHeight: 16,
   },
   progressContainer: {
-    backgroundColor: 'rgba(30, 30, 56, 0.6)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 18,
+    backgroundColor: colors.background.panel,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md + 2,
+    marginBottom: spacing.base + 2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   progressLabel: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
   },
   progressBarContainer: {
     height: 6,
-    backgroundColor: 'rgba(42, 42, 66, 0.8)',
+    backgroundColor: colors.background.elevated,
     borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderRadius: 3,
   },
   nextLevelText: {
-    color: '#aaa',
-    fontSize: 14,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.base,
   },
   goOnlineButtonContainer: {
-    shadowColor: '#6B46C1',
+    shadowColor: colors.primaryDark,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
     elevation: 10,
-    borderRadius: 28,
+    borderRadius: borderRadius.full,
   },
   goOnlineButton: {
     flexDirection: 'row',
@@ -955,9 +805,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 28,
+    borderRadius: borderRadius.full,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.navigation.tabBarBorder,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -973,85 +823,54 @@ const styles = StyleSheet.create({
     left: -50,
     right: -50,
     height: '100%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.navigation.tabBarBorder,
     transform: [{ skewX: '-20deg' }],
     zIndex: 1,
   },
   goOfflineButton: {
-    backgroundColor: '#4B5563',
+    backgroundColor: colors.background.elevated,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 28,
-    shadowColor: '#4B5563',
+    borderRadius: borderRadius.full,
+    shadowColor: colors.background.elevated,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 10,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   onlineButtonCircle: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#fff',
-    marginRight: 8,
-    shadowColor: '#fff',
+    backgroundColor: colors.white,
+    marginRight: spacing.sm,
+    shadowColor: colors.white,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
   },
   goOnlineText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    color: colors.white,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.md,
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: colors.overlayDark,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
   goOfflineText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    color: colors.white,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.md,
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowColor: colors.overlayDark,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  viewAllButtonContainer: {
-    position: 'absolute',
-    bottom: 280,
-    left: 20,
-    right: 20,
-  },
-  viewAllButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#A77BFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  viewAllButtonGradient: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  viewAllButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  viewAllButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-    marginLeft: 12,
   },
   modalContainer: {
     position: 'absolute',
@@ -1060,29 +879,14 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 100,
   },
-  driverMarker: {
-    backgroundColor: '#A77BFF',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#A77BFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 6,
-  },
   requestMarker: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     borderWidth: 2,
-    borderColor: '#00D4AA',
-    shadowColor: '#00D4AA',
+    borderColor: colors.success,
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -1091,15 +895,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   selectedMarker: {
-    backgroundColor: '#A77BFF',
-    borderColor: '#fff',
+    backgroundColor: colors.primary,
+    borderColor: colors.white,
     transform: [{ scale: 1.1 }],
-    shadowColor: '#A77BFF',
+    shadowColor: colors.primary,
+  },
+  selectedMarkerArrow: {
+    borderTopColor: colors.primary,
   },
   requestMarkerPrice: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.base,
   },
   requestMarkerArrow: {
     position: 'absolute',
@@ -1113,8 +920,8 @@ const styles = StyleSheet.create({
     borderLeftWidth: 6,
     borderRightWidth: 6,
     borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#1a1a2e',
+    borderLeftColor: colors.transparent,
+    borderRightColor: colors.transparent,
+    borderTopColor: colors.background.secondary,
   },
 });

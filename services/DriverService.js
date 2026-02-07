@@ -194,11 +194,36 @@ export const getDriverProfile = async (driverId) => {
 
         if (error) return null;
 
+        const metadata = data?.metadata || {};
+        const onboardingComplete =
+            data?.onboarding_complete ??
+            metadata?.onboardingComplete ??
+            false;
+        const canReceivePayments =
+            data?.can_receive_payments ??
+            metadata?.canReceivePayments ??
+            false;
+        const connectAccountId =
+            data?.stripe_account_id ||
+            metadata?.connectAccountId ||
+            null;
+        const documentsVerified =
+            metadata?.documentsVerified ??
+            false;
+
         return {
             ...data,
+            metadata,
+            onboardingComplete,
+            canReceivePayments,
+            connectAccountId,
+            documentsVerified,
             driverProfile: {
-                ...data.metadata,
-                connectAccountId: data.stripe_account_id,
+                ...metadata,
+                onboardingComplete,
+                canReceivePayments,
+                connectAccountId,
+                documentsVerified,
                 email: data.email
             }
         };

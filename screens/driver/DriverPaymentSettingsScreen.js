@@ -12,6 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ScreenHeader from '../../components/ScreenHeader';
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function DriverPaymentSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -128,14 +135,14 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
   const renderEarningsCard = () => (
     <View style={styles.earningsCard}>
       <LinearGradient
-        colors={['#A77BFF', '#6B46C1']}
+        colors={[colors.primary, colors.primaryDark]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.earningsGradient}
       >
         <View style={styles.earningsHeader}>
           <Text style={styles.earningsTitle}>Weekly Earnings</Text>
-          <Ionicons name="trending-up" size={24} color="#fff" />
+          <Ionicons name="trending-up" size={24} color={colors.white} />
         </View>
         
         <Text style={styles.earningsAmount}>
@@ -167,7 +174,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
       <View style={styles.paymentMethodCard}>
         <View style={styles.paymentMethodLeft}>
           <View style={styles.bankIcon}>
-            <Ionicons name="card-outline" size={24} color="#00D4AA" />
+            <Ionicons name="card-outline" size={24} color={colors.success} />
           </View>
           <View style={styles.paymentMethodInfo}>
             <Text style={styles.paymentMethodName}>
@@ -184,13 +191,13 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             <Text style={styles.defaultBadgeText}>Default</Text>
           </View>
           <TouchableOpacity style={styles.editButton}>
-            <Ionicons name="pencil" size={16} color="#A77BFF" />
+            <Ionicons name="pencil" size={16} color={colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
 
       <TouchableOpacity style={styles.addButton} onPress={handleAddBankAccount}>
-        <Ionicons name="add" size={20} color="#A77BFF" />
+        <Ionicons name="add" size={20} color={colors.primary} />
         <Text style={styles.addButtonText}>Add Bank Account</Text>
       </TouchableOpacity>
     </View>
@@ -204,7 +211,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         <View style={styles.instantPayHeader}>
           <View style={styles.instantPayLeft}>
             <View style={styles.instantPayIcon}>
-              <Ionicons name="flash" size={20} color="#00D4AA" />
+              <Ionicons name="flash" size={20} color={colors.success} />
             </View>
             <View>
               <Text style={styles.instantPayTitle}>Cash Out Instantly</Text>
@@ -245,7 +252,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
       <View style={styles.settingsCard}>
         <View style={styles.settingRow}>
           <View style={styles.settingLeft}>
-            <Ionicons name="flash-outline" size={20} color="#A77BFF" />
+            <Ionicons name="flash-outline" size={20} color={colors.primary} />
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Instant Pay</Text>
               <Text style={styles.settingSubtitle}>
@@ -256,8 +263,8 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
           <Switch
             value={paymentData.instantPay}
             onValueChange={handleInstantPayToggle}
-            thumbColor={paymentData.instantPay ? '#00D4AA' : '#666'}
-            trackColor={{ false: '#2A2A3B', true: '#00D4AA40' }}
+            thumbColor={paymentData.instantPay ? colors.success : colors.text.subtle}
+            trackColor={{ false: colors.border.strong, true: colors.successLight }}
           />
         </View>
 
@@ -265,7 +272,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
 
         <View style={styles.settingRow}>
           <View style={styles.settingLeft}>
-            <Ionicons name="notifications-outline" size={20} color="#A77BFF" />
+            <Ionicons name="notifications-outline" size={20} color={colors.primary} />
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Payment Notifications</Text>
               <Text style={styles.settingSubtitle}>
@@ -276,8 +283,8 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
           <Switch
             value={paymentData.notificationsEnabled}
             onValueChange={handleNotificationsToggle}
-            thumbColor={paymentData.notificationsEnabled ? '#00D4AA' : '#666'}
-            trackColor={{ false: '#2A2A3B', true: '#00D4AA40' }}
+            thumbColor={paymentData.notificationsEnabled ? colors.success : colors.text.subtle}
+            trackColor={{ false: colors.border.strong, true: colors.successLight }}
           />
         </View>
 
@@ -285,7 +292,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
 
         <TouchableOpacity style={styles.settingRow} onPress={handleViewTaxDocs}>
           <View style={styles.settingLeft}>
-            <Ionicons name="document-text-outline" size={20} color="#A77BFF" />
+            <Ionicons name="document-text-outline" size={20} color={colors.primary} />
             <View style={styles.settingInfo}>
               <Text style={styles.settingTitle}>Tax Documents</Text>
               <Text style={styles.settingSubtitle}>
@@ -293,7 +300,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#666" />
+          <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
         </TouchableOpacity>
       </View>
     </View>
@@ -301,21 +308,22 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <ScreenHeader
+        title="Payment Settings"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack
+        rightContent={(
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            style={styles.helpHeaderButton}
+            onPress={handleContactSupport}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="help-circle-outline" size={20} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Payment Settings</Text>
-          <TouchableOpacity style={styles.helpButton} onPress={handleContactSupport}>
-            <Ionicons name="help-circle-outline" size={24} color="#A77BFF" />
-          </TouchableOpacity>
-        </View>
+        )}
+      />
 
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Earnings Card */}
         {renderEarningsCard()}
 
@@ -337,49 +345,28 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
+    paddingTop: spacing.base,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#141426',
+  helpHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.elevated,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  helpButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#141426',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   earningsCard: {
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#A77BFF',
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -397,13 +384,13 @@ const styles = StyleSheet.create({
   earningsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     opacity: 0.9,
   },
   earningsAmount: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 20,
   },
   earningsBreakdown: {
@@ -416,13 +403,13 @@ const styles = StyleSheet.create({
   },
   earningsLabel: {
     fontSize: 14,
-    color: '#fff',
+    color: colors.white,
     opacity: 0.8,
   },
   earningsValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
   },
   section: {
     marginHorizontal: 20,
@@ -431,15 +418,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 12,
   },
   paymentMethodCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -454,7 +441,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -465,19 +452,19 @@ const styles = StyleSheet.create({
   paymentMethodName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 4,
   },
   paymentMethodDetails: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   paymentMethodRight: {
     alignItems: 'flex-end',
     gap: 8,
   },
   defaultBadge: {
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
@@ -485,13 +472,13 @@ const styles = StyleSheet.create({
   defaultBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#00D4AA',
+    color: colors.success,
   },
   editButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#A77BFF20',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -499,25 +486,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     borderStyle: 'dashed',
   },
   addButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#A77BFF',
+    color: colors.primary,
     marginLeft: 8,
   },
   instantPayCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
   },
   instantPayHeader: {
     flexDirection: 'row',
@@ -534,7 +521,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#00D4AA20',
+    backgroundColor: colors.successLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -542,46 +529,46 @@ const styles = StyleSheet.create({
   instantPayTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 4,
   },
   instantPaySubtitle: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   instantPayButton: {
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 20,
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
     elevation: 4,
   },
   instantPayButtonDisabled: {
-    backgroundColor: '#333',
+    backgroundColor: colors.text.subtle,
     shadowOpacity: 0,
   },
   instantPayButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.white,
   },
   instantPayButtonTextDisabled: {
-    color: '#666',
+    color: colors.text.subtle,
   },
   instantPayFee: {
     fontSize: 12,
-    color: '#999',
+    color: colors.text.tertiary,
     textAlign: 'center',
   },
   settingsCard: {
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
     overflow: 'hidden',
   },
   settingRow: {
@@ -602,16 +589,16 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: colors.white,
     marginBottom: 4,
   },
   settingSubtitle: {
     fontSize: 14,
-    color: '#999',
+    color: colors.text.tertiary,
   },
   settingDivider: {
     height: 1,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     marginHorizontal: 20,
   },
   bottomSpacing: {

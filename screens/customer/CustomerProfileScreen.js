@@ -1,17 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Image,
   Linking,
-  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import CollapsibleMessagesHeader, {
+  MESSAGES_TOP_BAR_HEIGHT,
+} from "../../components/messages/CollapsibleMessagesHeader";
+import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
 import {
   borderRadius,
   colors,
@@ -19,31 +24,105 @@ import {
   typography,
 } from "../../styles/theme";
 
+const HEADER_ROW_HEIGHT = 56;
+const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const TOTAL_COLLAPSE_DISTANCE =
+  SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
+
 export default function CustomerProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, logout, getUserProfile, profileImage, getProfileImage } = useAuth();
+  const {
+    currentUser,
+    logout,
+    getUserProfile,
+    getUserPickupRequests,
+    profileImage,
+    getProfileImage,
+  } = useAuth();
+
+  const scrollRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const isSnappingRef = useRef(false);
+
+  const [searchText, setSearchText] = useState("");
   const [customerProfile, setCustomerProfile] = useState(null);
   const [displayName, setDisplayName] = useState("User");
+  const [accountStats, setAccountStats] = useState({
+    totalTrips: 0,
+    totalSpent: 0,
+    avgRating: 5,
+  });
 
   useEffect(() => {
     loadCustomerProfile();
   }, []);
 
+  useEffect(() => {
+    loadAccountStats();
+  }, [currentUser, customerProfile]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: SEARCH_COLLAPSE_DISTANCE,
+        animated: false,
+      });
+    }, 0);
+
+    return () => clearTimeout(timeoutId);
+  }, []);
+
   const loadCustomerProfile = async () => {
     try {
       const profile = await getUserProfile?.(currentUser?.uid);
-      setCustomerProfile(profile?.customerProfile || null);
+      setCustomerProfile(profile?.customerProfile || profile || null);
 
+      const firstName = profile?.first_name || profile?.firstName || "";
+      const lastName = profile?.last_name || profile?.lastName || "";
+      const fullName = `${firstName} ${lastName}`.trim();
       const name =
+        fullName ||
         profile?.name ||
-        (profile?.firstName && profile?.lastName
-          ? `${profile.firstName} ${profile.lastName}`
-          : currentUser?.email?.split("@")[0] || "User");
+        currentUser?.email?.split("@")[0] ||
+        "User";
       setDisplayName(name);
 
       await getProfileImage?.();
     } catch (error) {
       console.error("Error loading customer profile:", error);
+    }
+  };
+
+  const loadAccountStats = async () => {
+    if (!currentUser) {
+      return;
+    }
+
+    try {
+      const pickupRequests = await getUserPickupRequests?.();
+      const requests = Array.isArray(pickupRequests) ? pickupRequests : [];
+      const completedTrips = requests.filter(
+        (trip) => normalizeTripStatus(trip.status) === TRIP_STATUS.COMPLETED
+      );
+      const totalSpent = completedTrips.reduce((sum, trip) => {
+        const amount = Number(trip.pricing?.total ?? trip.price ?? 0) || 0;
+        return sum + amount;
+      }, 0);
+      const rating =
+        Number(
+          customerProfile?.rating ||
+          customerProfile?.customerProfile?.rating ||
+          5
+        ) || 5;
+
+      setAccountStats({
+        totalTrips: completedTrips.length,
+        totalSpent,
+        avgRating: rating,
+      });
+    } catch (error) {
+      console.error("Error loading account stats:", error);
     }
   };
 
@@ -72,15 +151,254 @@ export default function CustomerProfileScreen({ navigation }) {
     .substring(0, 2)
     .toUpperCase();
 
-  const ratingValue = String(customerProfile?.rating || "5.0");
-  const totalTrips = String(customerProfile?.totalTrips || "0");
-  const totalReviews = String(customerProfile?.totalReviews || "0");
-  const yearsOnApp = String(customerProfile?.yearsOnApp || "1");
+  const totalTrips = String(accountStats.totalTrips || 0);
+  const totalSpent = `$${Math.round(accountStats.totalSpent || 0)}`;
+  const ratingValue = (accountStats.avgRating || 5).toFixed(1);
+
+  const quickActions = useMemo(
+    () => [
+      {
+        id: "help",
+        title: "Help",
+        icon: "help-circle-outline",
+        keywords: "support assistance",
+        onPress: () => navigation.navigate("CustomerHelpScreen"),
+      },
+      {
+        id: "wallet",
+        title: "Wallet",
+        icon: "wallet-outline",
+        keywords: "payment cards balance",
+        onPress: () => navigation.navigate("CustomerWalletScreen"),
+      },
+    ],
+    [navigation]
+  );
+
+  const accountItems = useMemo(
+    () => [
+      {
+        id: "profile",
+        title: "View Profile",
+        icon: "person-outline",
+        keywords: "name avatar personal info",
+        onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
+      },
+      {
+        id: "notifications",
+        title: "Notifications",
+        icon: "notifications-outline",
+        keywords: "alerts push settings",
+        onPress: () => navigation.navigate("CustomerSettingsScreen"),
+      },
+      {
+        id: "addresses",
+        title: "My Addresses",
+        icon: "location-outline",
+        keywords: "home work places location",
+        onPress: () => navigation.navigate("Home"),
+      },
+      {
+        id: "orders",
+        title: "My Orders",
+        icon: "receipt-outline",
+        keywords: "activity trips history",
+        onPress: () => navigation.navigate("Activity"),
+      },
+      {
+        id: "settings",
+        title: "Settings",
+        icon: "settings-outline",
+        keywords: "preferences account",
+        onPress: () => navigation.navigate("CustomerSettingsScreen"),
+      },
+      {
+        id: "claims",
+        title: "Claims",
+        icon: "shield-outline",
+        keywords: "issues report support",
+        onPress: () => navigation.navigate("CustomerClaimsScreen"),
+      },
+      {
+        id: "terms",
+        title: "Terms of Service",
+        icon: "document-text-outline",
+        keywords: "legal documents",
+        external: true,
+        onPress: () => Linking.openURL("https://pikup-app.com/"),
+      },
+      {
+        id: "privacy",
+        title: "Privacy Policy",
+        icon: "lock-closed-outline",
+        keywords: "privacy legal policy",
+        external: true,
+        onPress: () => Linking.openURL("https://pikup-app.com/"),
+      },
+      {
+        id: "about",
+        title: "About Pikup",
+        icon: "information-circle-outline",
+        keywords: "version app info",
+        onPress: () => {},
+      },
+    ],
+    [navigation]
+  );
+
+  const query = searchText.trim().toLowerCase();
+  const filteredQuickActions = useMemo(() => {
+    if (!query) {
+      return quickActions;
+    }
+
+    return quickActions.filter((action) =>
+      `${action.title} ${action.keywords}`.toLowerCase().includes(query)
+    );
+  }, [quickActions, query]);
+
+  const filteredAccountItems = useMemo(() => {
+    if (!query) {
+      return accountItems;
+    }
+
+    return accountItems.filter((item) =>
+      `${item.title} ${item.keywords}`.toLowerCase().includes(query)
+    );
+  }, [accountItems, query]);
+
+  const titleLockCompensation = scrollY.interpolate({
+    inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    extrapolate: "clamp",
+  });
+
+  const getSnapOffset = (offsetY) => {
+    if (offsetY < 0 || offsetY > TOTAL_COLLAPSE_DISTANCE) {
+      return null;
+    }
+
+    if (offsetY < SEARCH_COLLAPSE_DISTANCE) {
+      return offsetY < SEARCH_COLLAPSE_DISTANCE / 2
+        ? 0
+        : SEARCH_COLLAPSE_DISTANCE;
+    }
+
+    const titleProgress = offsetY - SEARCH_COLLAPSE_DISTANCE;
+    return titleProgress < TITLE_COLLAPSE_DISTANCE / 2
+      ? SEARCH_COLLAPSE_DISTANCE
+      : TOTAL_COLLAPSE_DISTANCE;
+  };
+
+  const snapToNearestOffset = (offsetY) => {
+    const targetOffset = getSnapOffset(offsetY);
+    if (targetOffset === null || Math.abs(targetOffset - offsetY) < 1) {
+      return;
+    }
+
+    if (!scrollRef.current) {
+      return;
+    }
+
+    isSnappingRef.current = true;
+    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
+    setTimeout(() => {
+      isSnappingRef.current = false;
+    }, 220);
+  };
+
+  const handleScrollEndDrag = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(velocityY) < 0.15) {
+      snapToNearestOffset(event.nativeEvent.contentOffset.y);
+    }
+  };
+
+  const handleMomentumScrollEnd = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+    snapToNearestOffset(event.nativeEvent.contentOffset.y);
+  };
+
+  const renderMenuItem = (item, isLast) => (
+    <TouchableOpacity
+      key={item.id}
+      style={[styles.menuItem, isLast && styles.menuItemLast]}
+      onPress={item.onPress}
+    >
+      <View style={styles.menuItemLeft}>
+        <Ionicons name={item.icon} size={20} color={colors.primary} />
+        <Text style={styles.menuItemTitle}>{item.title}</Text>
+      </View>
+      <Ionicons
+        name={item.external ? "open-outline" : "chevron-forward"}
+        size={20}
+        color={colors.text.tertiary}
+      />
+    </TouchableOpacity>
+  );
+
+  const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={[styles.profileCard, { marginTop: insets.top + spacing.lg }]}>
+      <CollapsibleMessagesHeader
+        title="Account"
+        topInset={insets.top}
+        showBack={false}
+        scrollY={scrollY}
+        searchCollapseDistance={SEARCH_COLLAPSE_DISTANCE}
+        titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
+      />
+
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
+        contentContainerStyle={{
+          paddingTop: headerHeight,
+          paddingBottom: insets.bottom + 90,
+          paddingHorizontal: spacing.base,
+        }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.largeTitleSection,
+            { transform: [{ translateY: titleLockCompensation }] },
+          ]}
+        >
+          <Text style={styles.largeTitle}>Account</Text>
+        </Animated.View>
+
+        <View style={styles.searchSection}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={18} color={colors.text.tertiary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search account and settings"
+              placeholderTextColor={colors.text.placeholder}
+              value={searchText}
+              onChangeText={setSearchText}
+              autoCapitalize="none"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        </View>
+
+        <View style={styles.profileCard}>
           <View style={styles.profileCardContent}>
             <View style={styles.profileLeftSide}>
               <TouchableOpacity
@@ -116,13 +434,13 @@ export default function CustomerProfileScreen({ navigation }) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalReviews}</Text>
-                <Text style={styles.statLabel}>Reviews</Text>
+                <Text style={styles.statNumber}>{totalSpent}</Text>
+                <Text style={styles.statLabel}>Spent</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{yearsOnApp}</Text>
-                <Text style={styles.statLabel}>Years on Pikup</Text>
+                <Text style={styles.statNumber}>{ratingValue}</Text>
+                <Text style={styles.statLabel}>Rating</Text>
               </View>
             </View>
           </View>
@@ -143,141 +461,45 @@ export default function CustomerProfileScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate("CustomerHelpScreen")}
-          >
-            <Ionicons name="help-circle-outline" size={32} color={colors.primary} />
-            <Text style={styles.actionText}>Help</Text>
-          </TouchableOpacity>
-          <View style={styles.actionDivider} />
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => navigation.navigate("CustomerWalletScreen")}
-          >
-            <Ionicons name="wallet-outline" size={32} color={colors.primary} />
-            <Text style={styles.actionText}>Wallet</Text>
-          </TouchableOpacity>
-        </View>
+        {filteredQuickActions.length > 0 ? (
+          <View style={styles.quickActions}>
+            {filteredQuickActions.map((action, index) => (
+              <React.Fragment key={action.id}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={action.onPress}
+                >
+                  <Ionicons name={action.icon} size={32} color={colors.primary} />
+                  <Text style={styles.actionText}>{action.title}</Text>
+                </TouchableOpacity>
+                {index < filteredQuickActions.length - 1 ? (
+                  <View style={styles.actionDivider} />
+                ) : null}
+              </React.Fragment>
+            ))}
+          </View>
+        ) : null}
 
-        <View style={styles.menuSections}>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="person-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>View Profile</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerSettingsScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.menuItemTitle}>Notifications</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate("Home")}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="location-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>My Addresses</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("Activity")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>My Orders</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerSettingsScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="settings-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>Settings</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => navigation.navigate("CustomerClaimsScreen")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-outline" size={20} color={colors.primary} />
-              <Text style={styles.menuItemTitle}>Claims</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Linking.openURL("https://pikup-app.com/")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="document-text-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.menuItemTitle}>Terms of Service</Text>
-            </View>
-            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => Linking.openURL("https://pikup-app.com/")}
-          >
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.menuItemTitle}>Privacy Policy</Text>
-            </View>
-            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]}>
-            <View style={styles.menuItemLeft}>
-              <Ionicons
-                name="information-circle-outline"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.menuItemTitle}>About Pikup</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
-          </TouchableOpacity>
-        </View>
+        {filteredAccountItems.length > 0 ? (
+          <View style={styles.menuSections}>
+            {filteredAccountItems.map((item, index) =>
+              renderMenuItem(item, index === filteredAccountItems.length - 1)
+            )}
+          </View>
+        ) : (
+          <View style={styles.searchEmptyState}>
+            <Ionicons name="search-outline" size={36} color={colors.text.tertiary} />
+            <Text style={styles.searchEmptyTitle}>No matches found</Text>
+            <Text style={styles.searchEmptySubtitle}>
+              Try another keyword for account settings
+            </Text>
+          </View>
+        )}
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign out</Text>
         </TouchableOpacity>
-
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -290,9 +512,41 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  largeTitleSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background.primary,
+    zIndex: 2,
+  },
+  largeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  searchSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    zIndex: 1,
+    marginBottom: spacing.sm,
+  },
+  searchBar: {
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+  },
   profileCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -390,7 +644,6 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: colors.background.elevated,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -440,7 +693,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     justifyContent: "space-around",
     alignItems: "center",
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -463,7 +715,6 @@ const styles = StyleSheet.create({
   },
   menuSections: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
@@ -491,12 +742,31 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     marginLeft: spacing.md,
   },
+  searchEmptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xxl,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    backgroundColor: colors.background.secondary,
+  },
+  searchEmptyTitle: {
+    marginTop: spacing.sm,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  searchEmptySubtitle: {
+    marginTop: spacing.xs,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+  },
   logoutButton: {
     backgroundColor: colors.background.secondary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.base,
-    marginHorizontal: spacing.base,
-    marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
@@ -507,8 +777,5 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontWeight: typography.fontWeight.medium,
     textAlign: "center",
-  },
-  bottomSpacing: {
-    height: 40,
   },
 });

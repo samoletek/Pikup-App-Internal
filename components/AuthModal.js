@@ -21,6 +21,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import BaseModal from './BaseModal';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
+import { colors } from '../styles/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -28,9 +29,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const Button = ({ title, onPress, variant = 'primary', disabled, loading, style }) => {
     const isPrimary = variant === 'primary';
-    const backgroundColor = isPrimary ? '#A77BFF' : 'transparent';
-    const textColor = isPrimary ? '#FFFFFF' : '#A77BFF';
-    const borderColor = isPrimary ? 'transparent' : '#A77BFF';
+    const backgroundColor = isPrimary ? colors.primary : 'transparent';
+    const textColor = isPrimary ? colors.white : colors.primary;
+    const borderColor = isPrimary ? 'transparent' : colors.primary;
 
     return (
         <TouchableOpacity
@@ -60,7 +61,7 @@ const Input = ({ value, onChangeText, placeholder, secureTextEntry, error, right
                 value={value}
                 onChangeText={onChangeText}
                 placeholder={placeholder}
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.text.tertiary}
                 secureTextEntry={secureTextEntry}
                 keyboardType={keyboardType}
                 autoCapitalize={autoCapitalize}
@@ -337,8 +338,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 style={[styles.authButton, styles.emailAuthBtn]}
                 onPress={() => animateStepChange('email_check')}
             >
-                <Ionicons name="mail-outline" size={24} color="#FFF" style={{ marginRight: 10 }} />
-                <Text style={[styles.authButtonText, { color: '#FFF' }]}>Continue with Email</Text>
+                <Ionicons name="mail-outline" size={24} color={colors.white} style={{ marginRight: 10 }} />
+                <Text style={[styles.authButtonText, { color: colors.white }]}>Continue with Email</Text>
             </TouchableOpacity>
 
             {Platform.OS === 'ios' && (
@@ -346,8 +347,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                     style={[styles.authButton, styles.emailAuthBtn]}
                     onPress={handleAppleSignIn}
                 >
-                    <Ionicons name="logo-apple" size={24} color="#FFF" style={{ marginRight: 10 }} />
-                    <Text style={[styles.authButtonText, { color: '#FFF' }]}>Continue with Apple</Text>
+                    <Ionicons name="logo-apple" size={24} color={colors.white} style={{ marginRight: 10 }} />
+                    <Text style={[styles.authButtonText, { color: colors.white }]}>Continue with Apple</Text>
                 </TouchableOpacity>
             )}
 
@@ -355,8 +356,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 style={[styles.authButton, styles.emailAuthBtn]}
                 onPress={handleGoogleSignIn}
             >
-                <Ionicons name="logo-google" size={24} color="#FFF" style={{ marginRight: 10 }} />
-                <Text style={[styles.authButtonText, { color: '#FFF' }]}>Continue with Google</Text>
+                <Ionicons name="logo-google" size={24} color={colors.white} style={{ marginRight: 10 }} />
+                <Text style={[styles.authButtonText, { color: colors.white }]}>Continue with Google</Text>
             </TouchableOpacity>
         </>
     );
@@ -386,7 +387,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 value={email}
                 editable={false}
                 placeholder="Email Address"
-                rightIcon={<Ionicons name="checkmark" size={24} color="#FFF" />}
+                rightIcon={<Ionicons name="checkmark" size={24} color={colors.white} />}
             />
 
             <Input
@@ -396,7 +397,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 error={passwordError}
-                rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.text.muted} />}
                 onRightIconPress={() => setShowPassword(!showPassword)}
                 editable={!loading}
             />
@@ -437,7 +438,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 error={passwordError}
-                rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                rightIcon={<Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color={colors.text.muted} />}
                 onRightIconPress={() => setShowPassword(!showPassword)}
                 editable={!loading}
             />
@@ -449,7 +450,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
                 error={confirmPasswordError}
-                rightIcon={<Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color="#888" />}
+                rightIcon={<Ionicons name={showConfirmPassword ? "eye-off" : "eye"} size={20} color={colors.text.muted} />}
                 onRightIconPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 editable={!loading}
             />
@@ -540,21 +541,21 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             visible={visible}
             onClose={onClose}
             height={getModalHeight()}
-            backgroundColor="#141426"
+            backgroundColor={colors.background.secondary}
             avoidKeyboard={true}
             renderHeader={(animateClose) => (
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>
                         {step !== 'initial' && (
                             <TouchableOpacity onPress={handleBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Ionicons name="arrow-back" size={24} color="#FFF" />
+                                <Ionicons name="arrow-back" size={24} color={colors.white} />
                             </TouchableOpacity>
                         )}
                     </View>
                     <Text style={styles.headerTitle}>{getTitle()}</Text>
                     <View style={styles.headerRight}>
                         <TouchableOpacity onPress={animateClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="close" size={24} color="#FFF" />
+                            <Ionicons name="close" size={24} color={colors.white} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -598,7 +599,7 @@ const styles = StyleSheet.create({
     headerTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#FFF',
+        color: colors.white,
         textAlign: 'center',
         flex: 1,
     },
@@ -622,16 +623,16 @@ const styles = StyleSheet.create({
         borderRadius: 30, // Pill shape
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#444',
+        borderColor: colors.border.light,
     },
     emailAuthBtn: {
-        backgroundColor: '#222233',
-        borderColor: '#444',
+        backgroundColor: colors.background.input,
+        borderColor: colors.border.light,
     },
     authButtonText: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
+        color: colors.text.primary,
     },
 
     // Inputs
@@ -639,7 +640,7 @@ const styles = StyleSheet.create({
         marginBottom: 12,
     },
     inputLabel: {
-        color: '#888',
+        color: colors.text.muted,
         fontSize: 12,
         marginBottom: 4,
         marginLeft: 8
@@ -647,9 +648,9 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#222233',
+        backgroundColor: colors.background.input,
         borderWidth: 1,
-        borderColor: '#444',
+        borderColor: colors.border.light,
         borderRadius: 30,
         height: 52,
         paddingHorizontal: 16,
@@ -657,17 +658,17 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         fontSize: 16,
-        color: '#FFF',
+        color: colors.white,
         height: '100%',
     },
     inputError: {
-        borderColor: '#FF4444',
+        borderColor: colors.error,
     },
     rightIcon: {
         padding: 4,
     },
     errorText: {
-        color: '#FF4444',
+        color: colors.error,
         fontSize: 12,
         marginTop: 4,
         marginLeft: 4,
@@ -690,19 +691,19 @@ const styles = StyleSheet.create({
         marginTop: 20,
     },
     forgotText: {
-        color: '#A77BFF',
+        color: colors.primary,
         fontWeight: '600',
     },
     termsText: {
         textAlign: 'center',
         fontSize: 12,
-        color: '#666',
+        color: colors.text.subtle,
         marginTop: 0,
         marginBottom: 4,
         lineHeight: 18,
     },
     linkText: {
-        color: '#A77BFF',
+        color: colors.primary,
         fontWeight: '600'
     }
 });

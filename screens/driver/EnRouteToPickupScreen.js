@@ -1,220 +1,59 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Dimensions,
-  Animated
+  Animated,
+  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Mapbox from '@rnmapbox/maps';
+import MapboxMap from '../../components/mapbox/MapboxMap';
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
-const { width, height } = Dimensions.get('window');
-const CARD_HEIGHT = 200;
-const CARD_WIDTH = width * 0.8;
-
-// Dark map style similar to Uber
-const darkMapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#9e9e9e"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#bdbdbd"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#181818"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#1b1b1b"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.fill",
-    "stylers": [
-      {
-        "color": "#2c2c2c"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8a8a8a"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#373737"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#3c3c3c"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway.controlled_access",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#4e4e4e"
-      }
-    ]
-  },
-  {
-    "featureType": "road.local",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#000000"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#3d3d3d"
-      }
-    ]
-  }
-];
+const { height } = Dimensions.get('window');
 
 export default function EnRouteToPickupScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { request, isCustomerView = false, isDelivery = false, title } = route.params || {};
-  const { user } = useAuth();
   const [driverLocation, setDriverLocation] = useState(null);
   const [eta, setEta] = useState('10-15 min');
   const [distance, setDistance] = useState('2.5 mi');
   const mapRef = useRef(null);
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   
   // Animated values for card
   const slideAnim = useRef(new Animated.Value(height)).current;
 
   // Determine destination based on whether this is pickup or delivery
-  const destination = isDelivery 
-    ? (request?.dropoffCoordinates || { latitude: 33.754746, longitude: -84.386330 })
-    : (request?.pickupCoordinates || { latitude: 33.753746, longitude: -84.386330 });
+  const destination = useMemo(
+    () =>
+      isDelivery
+        ? request?.dropoffCoordinates || { latitude: 33.754746, longitude: -84.38633 }
+        : request?.pickupCoordinates || { latitude: 33.753746, longitude: -84.38633 },
+    [isDelivery, request?.dropoffCoordinates, request?.pickupCoordinates]
+  );
+
+  const destinationCoordinate = useMemo(
+    () => [destination.longitude, destination.latitude],
+    [destination.latitude, destination.longitude]
+  );
 
   useEffect(() => {
+    let locationSubscription = null;
+    let isMounted = true;
+
     // Slide up animation for card
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -231,35 +70,37 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
 
       // Get initial location
       const initialLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+        accuracy: Location.Accuracy.High,
       });
-      
+
       const initialCoords = {
         latitude: initialLocation.coords.latitude,
-        longitude: initialLocation.coords.longitude
+        longitude: initialLocation.coords.longitude,
       };
-      
+
+      if (!isMounted) return;
       setDriverLocation(initialCoords);
-      
-      // Fit map to show both driver and destination
-      if (mapRef.current && initialCoords) {
-        mapRef.current.fitToCoordinates(
-          [initialCoords, destination],
-          {
-            edgePadding: { top: 100, right: 100, bottom: 300, left: 100 },
-            animated: true,
-          }
-        );
+
+      if (mapRef.current?.setCamera) {
+        mapRef.current.setCamera({
+          centerCoordinate: [
+            (initialCoords.longitude + destination.longitude) / 2,
+            (initialCoords.latitude + destination.latitude) / 2,
+          ],
+          zoomLevel: 12.5,
+          animationDuration: 1200,
+        });
       }
 
       // Start watching position
-      await Location.watchPositionAsync(
+      locationSubscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
           timeInterval: 4000,
           distanceInterval: 5,
         },
         (location) => {
+          if (!isMounted) return;
           const { latitude, longitude } = location.coords;
           setDriverLocation({ latitude, longitude });
         }
@@ -267,7 +108,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
     };
 
     startTracking();
-  }, []);
+
+    return () => {
+      isMounted = false;
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
+  }, [destination.latitude, destination.longitude, slideAnim]);
 
   const handleBackPress = () => {
     navigation.goBack();
@@ -303,62 +151,59 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
 
   return (
     <View style={styles.container}>
-      <MapView
+      <MapboxMap
         ref={mapRef}
         style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        customMapStyle={darkMapStyle}
-        initialRegion={{
-          latitude: destination.latitude,
-          longitude: destination.longitude,
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
-        }}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        showsCompass={false}
-        rotateEnabled={true}
-        scrollEnabled={true}
-        zoomEnabled={true}
+        centerCoordinate={destinationCoordinate}
+        zoomLevel={13}
       >
         {driverLocation && (
-          <Marker
-            coordinate={driverLocation}
-            title={isCustomerView ? "Driver's location" : "Your location"}
+          <Mapbox.PointAnnotation
+            id="driverLocationMarker"
+            coordinate={[driverLocation.longitude, driverLocation.latitude]}
           >
             <View style={styles.driverMarker}>
-              <Ionicons name="car-sport" size={16} color="#fff" />
+              <Ionicons name="car-sport" size={16} color={colors.white} />
             </View>
-          </Marker>
+          </Mapbox.PointAnnotation>
         )}
-        
-        <Marker 
-          coordinate={destination} 
-          title={locationTitle}
+
+        <Mapbox.PointAnnotation
+          id="destinationMarker"
+          coordinate={destinationCoordinate}
         >
           <View style={styles.destinationMarker}>
-            <Ionicons name="location" size={16} color="#fff" />
+            <Ionicons name="location" size={16} color={colors.white} />
           </View>
-        </Marker>
+        </Mapbox.PointAnnotation>
 
         {driverLocation && (
-          <Polyline
-            coordinates={[driverLocation, destination]}
-            strokeColor="#A77BFF"
-            strokeWidth={4}
-            lineDashPattern={[0]}
-            lineCap="round"
-          />
+          <Mapbox.ShapeSource
+            id="enRouteToPickupRouteSource"
+            shape={{
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: [
+                  [driverLocation.longitude, driverLocation.latitude],
+                  destinationCoordinate,
+                ],
+              },
+            }}
+          >
+            <Mapbox.LineLayer id="enRouteToPickupRouteLine" style={styles.routeLine} />
+          </Mapbox.ShapeSource>
         )}
-      </MapView>
+      </MapboxMap>
       
       {/* Back button */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.backButton, { top: insets.top + 10 }]}
+          style={[styles.backButton, { top: insets.top + spacing.sm }]}
           onPress={handleBackPress}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
       
@@ -366,7 +211,13 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
       <Animated.View
         style={[
           styles.bottomCard,
-          { transform: [{ translateY: slideAnim }], paddingBottom: insets.bottom + 20 }
+          {
+            transform: [{ translateY: slideAnim }],
+            paddingBottom: insets.bottom + spacing.base,
+            maxWidth: contentMaxWidth,
+            width: '100%',
+            alignSelf: 'center',
+          }
         ]}
       >
         <View style={styles.handle} />
@@ -377,7 +228,7 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
         
         <View style={styles.etaContainer}>
           <View style={styles.etaBox}>
-            <Ionicons name="time-outline" size={20} color="#A77BFF" />
+            <Ionicons name="time-outline" size={20} color={colors.primary} />
             <Text style={styles.etaText}>{eta}</Text>
             <Text style={styles.etaLabel}>ETA</Text>
           </View>
@@ -385,14 +236,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
           <View style={styles.divider} />
           
           <View style={styles.etaBox}>
-            <Ionicons name="navigate-outline" size={20} color="#A77BFF" />
+            <Ionicons name="navigate-outline" size={20} color={colors.primary} />
             <Text style={styles.etaText}>{distance}</Text>
             <Text style={styles.etaLabel}>Distance</Text>
           </View>
         </View>
         
         <View style={styles.locationCard}>
-          <Ionicons name="location" size={24} color="#A77BFF" />
+          <Ionicons name="location" size={24} color={colors.primary} />
           <View style={styles.locationInfo}>
             <Text style={styles.locationTitle}>{locationTitle}</Text>
             <Text style={styles.locationAddress}>
@@ -408,14 +259,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
           <View style={styles.customerCard}>
             <View style={styles.customerInfo}>
               <View style={styles.customerAvatar}>
-                <Ionicons name="person" size={20} color="#fff" />
+                <Ionicons name="person" size={20} color={colors.white} />
               </View>
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>
                   {request?.driverName || 'Your Driver'}
                 </Text>
                 <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={14} color="#FFD700" />
+                  <Ionicons name="star" size={14} color={colors.gold} />
                   <Text style={styles.ratingText}>4.9</Text>
                 </View>
               </View>
@@ -426,14 +277,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
                 style={styles.actionButton}
                 onPress={handleMessageDriver}
               >
-                <Ionicons name="chatbubble" size={20} color="#A77BFF" />
+                <Ionicons name="chatbubble" size={20} color={colors.primary} />
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.actionButton}
                 onPress={handleCallDriver}
               >
-                <Ionicons name="call" size={20} color="#A77BFF" />
+                <Ionicons name="call" size={20} color={colors.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -442,14 +293,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
           <View style={styles.customerCard}>
             <View style={styles.customerInfo}>
               <View style={styles.customerAvatar}>
-                <Ionicons name="person" size={20} color="#fff" />
+                <Ionicons name="person" size={20} color={colors.white} />
               </View>
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>
                   {request?.customerEmail?.split('@')[0] || 'Customer'}
                 </Text>
                 <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={14} color="#FFD700" />
+                  <Ionicons name="star" size={14} color={colors.gold} />
                   <Text style={styles.ratingText}>4.8</Text>
                 </View>
               </View>
@@ -460,14 +311,14 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
                 style={styles.actionButton}
                 onPress={handleMessageCustomer}
               >
-                <Ionicons name="chatbubble" size={20} color="#A77BFF" />
+                <Ionicons name="chatbubble" size={20} color={colors.primary} />
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.actionButton}
                 onPress={handleCallCustomer}
               >
-                <Ionicons name="call" size={20} color="#A77BFF" />
+                <Ionicons name="call" size={20} color={colors.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -483,7 +334,7 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
         {/* Show tracking status for customer view */}
         {isCustomerView && (
           <View style={styles.trackingStatus}>
-            <Ionicons name="navigate" size={20} color="#A77BFF" />
+            <Ionicons name="navigate" size={20} color={colors.primary} />
             <Text style={styles.trackingText}>
               {isDelivery ? "Tracking delivery in real-time" : "Tracking driver's location in real-time"}
             </Text>
@@ -497,7 +348,7 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   map: { 
     flex: 1,
@@ -507,16 +358,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    padding: 16,
+    padding: spacing.base,
     zIndex: 1,
   },
   backButton: {
     position: 'absolute',
-    left: 16,
+    left: spacing.base,
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(20, 20, 38, 0.7)',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.overlayDark,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
@@ -524,13 +375,13 @@ const styles = StyleSheet.create({
   bottomCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#141426',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    shadowColor: "#000",
+    width: '100%',
+    alignSelf: 'center',
+    backgroundColor: colors.background.secondary,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    padding: spacing.lg,
+    shadowColor: colors.black,
     shadowOffset: {
       width: 0,
       height: -3,
@@ -542,76 +393,76 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 5,
-    backgroundColor: '#2A2A3B',
+    backgroundColor: colors.border.strong,
     borderRadius: 3,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
     textAlign: 'center',
   },
   etaContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginBottom: 24,
-    backgroundColor: '#1E1E38',
-    borderRadius: 16,
-    padding: 16,
+    marginBottom: spacing.xl,
+    backgroundColor: colors.background.panel,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
   },
   etaBox: {
     alignItems: 'center',
     flex: 1,
   },
   etaText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 8,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    marginTop: spacing.sm,
   },
   etaLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
+    fontSize: typography.fontSize.sm,
+    color: colors.text.tertiary,
+    marginTop: spacing.xs,
   },
   divider: {
     width: 1,
-    backgroundColor: '#2A2A3B',
-    marginHorizontal: 10,
+    backgroundColor: colors.border.strong,
+    marginHorizontal: spacing.sm + 2,
   },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E38',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.panel,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   locationInfo: {
-    marginLeft: 16,
+    marginLeft: spacing.base,
     flex: 1,
   },
   locationTitle: {
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 4,
+    fontSize: typography.fontSize.base,
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
   },
   locationAddress: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.medium,
   },
   customerCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1E1E38',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
+    backgroundColor: colors.background.panel,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.xl,
   },
   customerInfo: {
     flexDirection: 'row',
@@ -620,27 +471,27 @@ const styles = StyleSheet.create({
   customerAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#A77BFF',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   customerDetails: {
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 4,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   ratingText: {
-    fontSize: 14,
-    color: '#FFD700',
+    fontSize: typography.fontSize.base,
+    color: colors.gold,
     marginLeft: 4,
   },
   actionButtons: {
@@ -649,55 +500,60 @@ const styles = StyleSheet.create({
   actionButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   arrivedButton: {
-    backgroundColor: '#A77BFF',
-    borderRadius: 30,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
     paddingVertical: 16,
     alignItems: 'center',
   },
   arrivedButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
   },
   driverMarker: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#A77BFF',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
   destinationMarker: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#00D4AA',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.white,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  routeLine: {
+    lineColor: colors.primary,
+    lineWidth: 4,
+    lineCap: 'round',
   },
   trackingStatus: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
-    borderRadius: 30,
+    backgroundColor: colors.primaryLight,
+    borderRadius: borderRadius.full,
     paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   trackingText: {
-    color: '#fff',
-    fontSize: 14,
-    marginLeft: 8,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    marginLeft: spacing.sm,
   },
 });

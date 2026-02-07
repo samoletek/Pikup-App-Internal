@@ -8,20 +8,28 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Dimensions,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
-
-const { width } = Dimensions.get('window');
+import ScreenHeader from '../../components/ScreenHeader';
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { request, pickupPhotos, driverLocation } = route.params;
   const { finishDelivery } = useAuth();
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   
   const [deliveryPhotos, setDeliveryPhotos] = useState([]);
   const [customerRating, setCustomerRating] = useState(5);
@@ -156,7 +164,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
             <Ionicons
               name={star <= customerRating ? 'star' : 'star-outline'}
               size={32}
-              color={star <= customerRating ? '#FFD700' : '#666'}
+              color={star <= customerRating ? colors.gold : colors.text.muted}
             />
           </TouchableOpacity>
         ))}
@@ -242,155 +250,153 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Complete Delivery</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+      <ScreenHeader
+        title="Complete Delivery"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+      />
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Success Header */}
-        <View style={styles.successCard}>
-          <View style={styles.successIcon}>
-            <Ionicons name="checkmark-circle" size={48} color="#00D4AA" />
-          </View>
-          <Text style={styles.successTitle}>Arrived at Dropoff!</Text>
-          <Text style={styles.successSubtitle}>Complete the delivery process</Text>
-        </View>
-
-        {/* Delivery Summary */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.cardTitle}>Delivery Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Request ID:</Text>
-            <Text style={styles.summaryValue}>#{request?.id?.slice(-8)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Customer:</Text>
-            <Text style={styles.summaryValue}>{customerName}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Items:</Text>
-            <Text style={styles.summaryValue}>{request?.item?.description || 'Delivery items'}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Pickup Photos:</Text>
-            <Text style={styles.summaryValue}>{pickupPhotos?.length || 0} photos</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Amount:</Text>
-            <Text style={[styles.summaryValue, styles.priceValue]}>${request?.pricing?.total || '0.00'}</Text>
-          </View>
-        </View>
-
-        {/* Customer Rating */}
-        <View style={styles.ratingCard}>
-          <Text style={styles.cardTitle}>Rate Your Experience</Text>
-          <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
-          {renderStars()}
-          <Text style={styles.ratingText}>
-            {customerRating === 5 && '⭐ Excellent!'}
-            {customerRating === 4 && '😊 Very Good'}
-            {customerRating === 3 && '😐 Good'}
-            {customerRating === 2 && '😕 Fair'}
-            {customerRating === 1 && '😞 Poor'}
-          </Text>
-        </View>
-
-        {/* Delivery Notes */}
-        <View style={styles.notesCard}>
-          <Text style={styles.cardTitle}>Delivery Notes (Optional)</Text>
-          <TextInput
-            style={styles.notesInput}
-            placeholder="Add any notes about the delivery..."
-            placeholderTextColor="#666"
-            multiline
-            numberOfLines={3}
-            value={deliveryNotes}
-            onChangeText={setDeliveryNotes}
-            maxLength={200}
-          />
-          <Text style={styles.charCount}>{deliveryNotes.length}/200</Text>
-        </View>
-
-        {/* Photo Section */}
-        <View style={styles.photoCard}>
-          <View style={styles.photoHeader}>
-            <Text style={styles.cardTitle}>Delivery Verification Photos</Text>
-            <Text style={styles.photoCount}>{deliveryPhotos.length}/10</Text>
-          </View>
-          <Text style={styles.photoSubtitle}>
-            Take photos to confirm successful delivery
-          </Text>
-
-          {/* Photo Grid */}
-          <ScrollView 
-            ref={scrollViewRef}
-            horizontal 
-            style={styles.photoScrollView}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.photoContainer}
-          >
-            {/* Add Photo Button */}
-            <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
-              <Ionicons name="camera" size={32} color="#00D4AA" />
-              <Text style={styles.addPhotoText}>Add Photo</Text>
-            </TouchableOpacity>
-
-            {/* Photo Items */}
-            {deliveryPhotos.map((photo, index) => (
-              <View key={photo.id} style={styles.photoItem}>
-                <Image source={{ uri: photo.uri }} style={styles.photoImage} />
-                <TouchableOpacity 
-                  style={styles.removePhotoButton}
-                  onPress={() => removePhoto(photo.id)}
-                >
-                  <Ionicons name="close-circle" size={24} color="#FF6B6B" />
-                </TouchableOpacity>
-                <View style={styles.photoIndex}>
-                  <Text style={styles.photoIndexText}>{index + 1}</Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-
-          {deliveryPhotos.length === 0 && (
-            <View style={styles.noPhotosContainer}>
-              <Ionicons name="camera-outline" size={48} color="#666" />
-              <Text style={styles.noPhotosText}>No delivery photos yet</Text>
-              <Text style={styles.noPhotosSubtext}>Take at least 1 photo to complete delivery</Text>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 124 }}
+      >
+        <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          {/* Success Header */}
+          <View style={styles.successCard}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark-circle" size={48} color={colors.success} />
             </View>
-          )}
-        </View>
+            <Text style={styles.successTitle}>Arrived at Dropoff</Text>
+            <Text style={styles.successSubtitle}>Complete the delivery process</Text>
+          </View>
 
-        {/* Final Instructions */}
-        <View style={styles.instructionsCard}>
-          <Text style={styles.cardTitle}>🎯 Final Steps</Text>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>1.</Text>
-            <Text style={styles.instructionText}>Ensure all items are delivered safely</Text>
+          {/* Delivery Summary */}
+          <View style={styles.summaryCard}>
+            <Text style={styles.cardTitle}>Delivery Summary</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Request ID:</Text>
+              <Text style={styles.summaryValue}>#{request?.id?.slice(-8)}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Customer:</Text>
+              <Text style={styles.summaryValue}>{customerName}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Items:</Text>
+              <Text style={styles.summaryValue}>{request?.item?.description || 'Delivery items'}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Pickup Photos:</Text>
+              <Text style={styles.summaryValue}>{pickupPhotos?.length || 0} photos</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Amount:</Text>
+              <Text style={[styles.summaryValue, styles.priceValue]}>${request?.pricing?.total || '0.00'}</Text>
+            </View>
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>2.</Text>
-            <Text style={styles.instructionText}>Take photos showing successful delivery</Text>
+
+          {/* Customer Rating */}
+          <View style={styles.ratingCard}>
+            <Text style={styles.cardTitle}>Rate Your Experience</Text>
+            <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
+            {renderStars()}
+            <Text style={styles.ratingText}>
+              {customerRating === 5 && 'Excellent'}
+              {customerRating === 4 && 'Very Good'}
+              {customerRating === 3 && 'Good'}
+              {customerRating === 2 && 'Fair'}
+              {customerRating === 1 && 'Poor'}
+            </Text>
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>3.</Text>
-            <Text style={styles.instructionText}>Rate your customer experience</Text>
+
+          {/* Delivery Notes */}
+          <View style={styles.notesCard}>
+            <Text style={styles.cardTitle}>Delivery Notes (Optional)</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Add any notes about the delivery..."
+              placeholderTextColor={colors.text.placeholder}
+              multiline
+              numberOfLines={3}
+              value={deliveryNotes}
+              onChangeText={setDeliveryNotes}
+              maxLength={200}
+            />
+            <Text style={styles.charCount}>{deliveryNotes.length}/200</Text>
           </View>
-          <View style={styles.instruction}>
-            <Text style={styles.instructionNumber}>4.</Text>
-            <Text style={styles.instructionText}>Complete delivery to finish the request</Text>
+
+          {/* Photo Section */}
+          <View style={styles.photoCard}>
+            <View style={styles.photoHeader}>
+              <Text style={styles.cardTitle}>Delivery Verification Photos</Text>
+              <Text style={styles.photoCount}>{deliveryPhotos.length}/10</Text>
+            </View>
+            <Text style={styles.photoSubtitle}>
+              Take photos to confirm successful delivery
+            </Text>
+
+            {/* Photo Grid */}
+            <ScrollView
+              ref={scrollViewRef}
+              horizontal
+              style={styles.photoScrollView}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoContainer}
+            >
+              {/* Add Photo Button */}
+              <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
+                <Ionicons name="camera" size={32} color={colors.success} />
+                <Text style={styles.addPhotoText}>Add Photo</Text>
+              </TouchableOpacity>
+
+              {/* Photo Items */}
+              {deliveryPhotos.map((photo, index) => (
+                <View key={photo.id} style={styles.photoItem}>
+                  <Image source={{ uri: photo.uri }} style={styles.photoImage} />
+                  <TouchableOpacity
+                    style={styles.removePhotoButton}
+                    onPress={() => removePhoto(photo.id)}
+                  >
+                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                  </TouchableOpacity>
+                  <View style={styles.photoIndex}>
+                    <Text style={styles.photoIndexText}>{index + 1}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+
+            {deliveryPhotos.length === 0 && (
+              <View style={styles.noPhotosContainer}>
+                <Ionicons name="camera-outline" size={48} color={colors.text.muted} />
+                <Text style={styles.noPhotosText}>No delivery photos yet</Text>
+                <Text style={styles.noPhotosSubtext}>Take at least 1 photo to complete delivery</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Final Instructions */}
+          <View style={styles.instructionsCard}>
+            <Text style={styles.cardTitle}>Final Steps</Text>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>1.</Text>
+              <Text style={styles.instructionText}>Ensure all items are delivered safely</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>2.</Text>
+              <Text style={styles.instructionText}>Take photos showing successful delivery</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>3.</Text>
+              <Text style={styles.instructionText}>Rate your customer experience</Text>
+            </View>
+            <View style={styles.instruction}>
+              <Text style={styles.instructionNumber}>4.</Text>
+              <Text style={styles.instructionText}>Complete delivery to finish the request</Text>
+            </View>
           </View>
         </View>
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
       {/* Bottom Action Button */}
@@ -404,9 +410,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           disabled={deliveryPhotos.length === 0 || isCompleting}
         >
           {isCompleting ? (
-            <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+            <ActivityIndicator size="small" color={colors.white} style={{ marginRight: spacing.sm }} />
           ) : (
-            <Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Ionicons name="checkmark-circle" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
           )}
           <Text style={styles.completeButtonText}>
             {isUploadingPhotos ? 'Uploading Photos...' : 
@@ -426,70 +432,52 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#1a1a2e',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2A2A3B',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
+    backgroundColor: colors.background.primary,
   },
   content: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+  },
+  contentColumn: {
+    width: '100%',
+    alignSelf: 'center',
   },
   successCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 24,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.xl,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   successIcon: {
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   successTitle: {
-    color: '#00D4AA',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
+    color: colors.success,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
   },
   successSubtitle: {
-    color: '#aaa',
-    fontSize: 14,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
   },
   summaryCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   cardTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -498,74 +486,80 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryLabel: {
-    color: '#aaa',
-    fontSize: 14,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
   },
   summaryValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
     flex: 1,
     textAlign: 'right',
   },
   priceValue: {
-    color: '#00D4AA',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: colors.success,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
   },
   ratingCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   ratingSubtitle: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 16,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginBottom: spacing.base,
     textAlign: 'center',
   },
   starsContainer: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   starButton: {
-    padding: 4,
+    padding: spacing.xs,
   },
   ratingText: {
-    color: '#A77BFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   notesCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   notesInput: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 8,
-    padding: 12,
-    color: '#fff',
-    fontSize: 14,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
     textAlignVertical: 'top',
     minHeight: 80,
     borderWidth: 1,
-    borderColor: '#3A3A4B',
+    borderColor: colors.border.strong,
   },
   charCount: {
-    color: '#666',
-    fontSize: 12,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
     textAlign: 'right',
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   photoCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   photoHeader: {
     flexDirection: 'row',
@@ -574,38 +568,38 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   photoCount: {
-    color: '#00D4AA',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.success,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   photoSubtitle: {
-    color: '#aaa',
-    fontSize: 14,
-    marginBottom: 16,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    marginBottom: spacing.base,
   },
   photoScrollView: {
-    marginHorizontal: -16,
+    marginHorizontal: -spacing.base,
   },
   photoContainer: {
-    paddingHorizontal: 16,
-    gap: 12,
+    paddingHorizontal: spacing.base,
+    gap: spacing.md,
   },
   addPhotoButton: {
     width: 120,
     height: 120,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.md,
     borderWidth: 2,
-    borderColor: '#00D4AA',
+    borderColor: colors.success,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
   addPhotoText: {
-    color: '#00D4AA',
-    fontSize: 12,
-    marginTop: 4,
-    fontWeight: '500',
+    color: colors.success,
+    fontSize: typography.fontSize.xs + 1,
+    marginTop: spacing.xs,
+    fontWeight: typography.fontWeight.medium,
   },
   photoItem: {
     position: 'relative',
@@ -615,14 +609,14 @@ const styles = StyleSheet.create({
   photoImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
   },
   removePhotoButton: {
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.md,
   },
   photoIndex: {
     position: 'absolute',
@@ -636,30 +630,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoIndexText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
   },
   noPhotosContainer: {
     alignItems: 'center',
     paddingVertical: 32,
   },
   noPhotosText: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 8,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    marginTop: spacing.sm,
   },
   noPhotosSubtext: {
-    color: '#666',
-    fontSize: 12,
-    marginTop: 4,
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs + 1,
+    marginTop: spacing.xs,
   },
   instructionsCard: {
-    backgroundColor: '#2A2A3B',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    marginBottom: spacing.base,
   },
   instruction: {
     flexDirection: 'row',
@@ -667,44 +663,46 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   instructionNumber: {
-    color: '#00D4AA',
-    fontSize: 14,
-    fontWeight: '600',
+    color: colors.success,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
     width: 20,
   },
   instructionText: {
-    color: '#ccc',
-    fontSize: 14,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
     flex: 1,
   },
   bottomContainer: {
-    padding: 20,
-    backgroundColor: '#1a1a2e',
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.base,
+    backgroundColor: colors.background.primary,
     borderTopWidth: 1,
-    borderTopColor: '#2A2A3B',
+    borderTopColor: colors.border.strong,
   },
   completeButton: {
-    backgroundColor: '#00D4AA',
-    paddingVertical: 16,
-    borderRadius: 25,
+    backgroundColor: colors.success,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#00D4AA',
+    shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   completeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   warningText: {
-    color: '#FFA500',
-    fontSize: 12,
+    color: colors.warning,
+    fontSize: typography.fontSize.xs + 1,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
 });

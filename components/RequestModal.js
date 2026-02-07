@@ -18,6 +18,7 @@ import MapboxMap from './mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { colors } from '../styles/theme';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
@@ -173,13 +174,13 @@ export default function RequestModal({
               <Text style={styles.timeDistance}>{item.time} • {item.distance}</Text>
               {item.vehicle?.type && (
                 <View style={styles.vehicleTag}>
-                  <Ionicons name="car-outline" size={14} color="#FFB800" />
+                  <Ionicons name="car-outline" size={14} color={colors.warning} />
                   <Text style={styles.vehicleType}>{item.vehicle.type}</Text>
                 </View>
               )}
             </View>
             <View style={styles.timerContainer}>
-              <Ionicons name="timer-outline" size={16} color="#00D4AA" />
+              <Ionicons name="timer-outline" size={16} color={colors.success} />
               <Text style={[
                 styles.timerText,
                 timers[item.id] === 'Expired' && styles.expiredTimer
@@ -192,12 +193,12 @@ export default function RequestModal({
           {/* Item Type Badge */}
           <View style={styles.typeContainer}>
             <View style={styles.typeTag}>
-              <Ionicons name="cube-outline" size={14} color="#A77BFF" />
+              <Ionicons name="cube-outline" size={14} color={colors.primary} />
               <Text style={styles.itemType}>{item.item.type}</Text>
             </View>
             {item.item.needsHelp && (
               <View style={styles.helpBadge}>
-                <Ionicons name="hand-left-outline" size={12} color="#fff" />
+                <Ionicons name="hand-left-outline" size={12} color={colors.white} />
                 <Text style={styles.helpText}>Help Needed</Text>
               </View>
             )}
@@ -263,7 +264,7 @@ export default function RequestModal({
               <View>
                 <Text style={styles.customerName}>{item.customer.name}</Text>
                 <View style={styles.ratingContainer}>
-                  <Ionicons name="star" size={12} color="#FFD700" />
+                  <Ionicons name="star" size={12} color={colors.gold} />
                   <Text style={styles.rating}>{item.customer.rating}</Text>
                 </View>
               </View>
@@ -276,7 +277,7 @@ export default function RequestModal({
               style={styles.messageButton}
               onPress={() => onMessage && onMessage(item)}
             >
-              <Ionicons name="chatbubble-outline" size={20} color="#A77BFF" />
+              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
               <Text style={styles.messageButtonText}>Message</Text>
             </TouchableOpacity>
 
@@ -292,7 +293,7 @@ export default function RequestModal({
               onPress={() => onAccept && onAccept(item)}
             >
               <LinearGradient
-                colors={['#00D4AA', '#00B894']}
+                colors={[colors.success, colors.success]}
                 style={styles.acceptButtonGradient}
               >
                 <Text style={styles.acceptButtonText}>Accept</Text>
@@ -339,7 +340,7 @@ export default function RequestModal({
           <View style={styles.headerContent}>
             <Text style={styles.modalTitle}>Available Requests</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
           
@@ -409,7 +410,7 @@ export default function RequestModal({
               style={styles.mapToggle}
               onPress={() => setShowMap(!showMap)}
             >
-              <Ionicons name="chevron-up" size={20} color="#fff" />
+              <Ionicons name="chevron-up" size={20} color={colors.white} />
             </TouchableOpacity>
           </View>
         )}
@@ -420,7 +421,7 @@ export default function RequestModal({
             style={styles.showMapButton}
             onPress={() => setShowMap(true)}
           >
-            <Ionicons name="map" size={20} color="#A77BFF" />
+            <Ionicons name="map" size={20} color={colors.primary} />
             <Text style={styles.showMapText}>Show Map</Text>
           </TouchableOpacity>
         )}
@@ -429,12 +430,12 @@ export default function RequestModal({
         <View style={styles.cardsContainer}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#A77BFF" />
+              <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.loadingText}>Finding available requests...</Text>
             </View>
           ) : error && requests.length === 0 ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="warning-outline" size={64} color="#ff6b6b" />
+              <Ionicons name="warning-outline" size={64} color={colors.secondary} />
               <Text style={styles.errorText}>{error}</Text>
               <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
                 <Text style={styles.retryButtonText}>Retry</Text>
@@ -461,7 +462,7 @@ export default function RequestModal({
             />
           ) : (
             <View style={styles.emptyState}>
-              <Ionicons name="location-outline" size={64} color="#666" />
+              <Ionicons name="location-outline" size={64} color={colors.text.subtle} />
               <Text style={styles.emptyStateTitle}>No requests available</Text>
               <Text style={styles.emptyStateSubtitle}>
                 New requests will appear here when customers need pickups
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: height * 0.8,
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
   modalHandle: {
     width: 40,
     height: 4,
-    backgroundColor: '#333',
+    backgroundColor: colors.border.default,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -531,7 +532,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -551,7 +552,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   countText: {
-    color: '#00D4AA',
+    color: colors.success,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -586,12 +587,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   price: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 28,
     fontWeight: 'bold',
   },
   timeDistance: {
-    color: '#aaa',
+    color: colors.text.muted,
     fontSize: 14,
     marginTop: 4,
   },
@@ -606,7 +607,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   vehicleType: {
-    color: '#FFB800',
+    color: colors.warning,
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
@@ -620,13 +621,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   timerText: {
-    color: '#00D4AA',
+    color: colors.success,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
   },
   expiredTimer: {
-    color: '#ff6b6b',
+    color: colors.secondary,
   },
   typeContainer: {
     flexDirection: 'row',
@@ -643,7 +644,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   itemType: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 4,
@@ -651,13 +652,13 @@ const styles = StyleSheet.create({
   helpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
   },
   helpText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 10,
     fontWeight: '600',
     marginLeft: 3,
@@ -678,26 +679,26 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     marginRight: 12,
   },
   dropoffDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     marginRight: 12,
   },
   routePointContent: {
     flex: 1,
   },
   pointLabel: {
-    color: '#aaa',
+    color: colors.text.muted,
     fontSize: 12,
     marginBottom: 2,
   },
   pointAddress: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '500',
   },
@@ -707,7 +708,7 @@ const styles = StyleSheet.create({
     top: 18,
     bottom: 18,
     width: 1,
-    backgroundColor: '#444',
+    backgroundColor: colors.border.light,
   },
   customerSection: {
     marginBottom: 20,
@@ -725,7 +726,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   customerName: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 2,
@@ -735,7 +736,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rating: {
-    color: '#FFD700',
+    color: colors.gold,
     fontSize: 14,
     marginLeft: 4,
     fontWeight: '600',
@@ -754,7 +755,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   messageButtonText: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
@@ -766,7 +767,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   detailsButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -779,7 +780,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   acceptButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -790,14 +791,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyStateTitle: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateSubtitle: {
-    color: '#aaa',
+    color: colors.text.muted,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
@@ -816,7 +817,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   activePageIndicator: {
-    backgroundColor: '#00D4AA',
+    backgroundColor: colors.success,
     width: 20,
   },
   // Map styles
@@ -851,26 +852,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   showMapText: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 6,
   },
   // Marker styles
   markerContainer: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background.tertiary,
     borderRadius: 8,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: colors.border.default,
   },
   selectedMarker: {
-    backgroundColor: '#A77BFF',
-    borderColor: '#fff',
+    backgroundColor: colors.primary,
+    borderColor: colors.white,
     transform: [{ scale: 1.1 }],
   },
   markerPrice: {
-    color: '#fff',
+    color: colors.white,
     fontWeight: 'bold',
     fontSize: 12,
   },
@@ -888,7 +889,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 8,
     borderLeftColor: 'transparent',
     borderRightColor: 'transparent',
-    borderTopColor: '#1a1a2e',
+    borderTopColor: colors.background.tertiary,
   },
   currentLocationMarker: {
     width: 24,
@@ -902,16 +903,16 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#4285F4',
+    backgroundColor: colors.info,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   // Photos styles
   photosContainer: {
     marginBottom: 16,
   },
   photosLabel: {
-    color: '#A77BFF',
+    color: colors.primary,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,
@@ -937,7 +938,7 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   loadingText: {
-    color: '#fff',
+    color: colors.white,
     marginTop: 15,
     fontSize: 16,
   },
@@ -949,20 +950,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   errorText: {
-    color: '#fff',
+    color: colors.white,
     textAlign: 'center',
     marginTop: 20,
     marginBottom: 20,
     fontSize: 16,
   },
   retryButton: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 30,
     paddingVertical: 12,
     borderRadius: 25,
   },
   retryButtonText: {
-    color: '#fff',
+    color: colors.white,
     fontSize: 16,
     fontWeight: '600',
   },

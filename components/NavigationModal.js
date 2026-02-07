@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { colors } from '../styles/theme';
 
 export const NavigationModal = ({ request, onComplete }) => {
   return (
@@ -51,14 +52,14 @@ export const NavigationModal = ({ request, onComplete }) => {
 
 const styles = StyleSheet.create({
   modalContent: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background.tertiary,
     padding: 20,
     paddingBottom: 40,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
   navHeader: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     padding: 15,
     borderRadius: 12,
     marginBottom: 20,
@@ -71,13 +72,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   navTurn: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 24,
     fontWeight: 'bold',
     marginRight: 8,
   },
   navInstruction: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -85,12 +86,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   navDistance: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   navArrows: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: 'bold',
     marginTop: 2,
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   loadingText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
   customerCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.background.elevated,
     padding: 12,
     borderRadius: 10,
   },
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   customerNameSmall: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
   contactBtn: {
     width: 36,
     height: 36,
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
   photoBtn: {
     width: 80,
     height: 80,
-    backgroundColor: '#2a2a3e',
+    backgroundColor: colors.background.elevated,
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
@@ -152,30 +153,30 @@ const styles = StyleSheet.create({
     fontSize: 32,
   },
   photoText: {
-    color: '#ccc',
+    color: colors.text.secondary,
     fontSize: 12,
     textAlign: 'center',
     marginBottom: 15,
     paddingHorizontal: 20,
   },
   takePhotoBtn: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 20,
     marginBottom: 8,
   },
   takePhotoBtnText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   photoRequirement: {
-    color: '#999',
+    color: colors.text.tertiary,
     fontSize: 12,
   },
   nextBtn: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   nextBtnText: {
-    color: '#fff',
+    color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
   },

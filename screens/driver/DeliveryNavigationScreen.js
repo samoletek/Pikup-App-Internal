@@ -10,27 +10,30 @@ import {
   Platform,
   Linking,
   Animated,
-  Dimensions,
-  StatusBar,
-  NativeModules
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import MapboxMap from '../../components/mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import useMapboxNavigation from '../../components/mapbox/useMapboxNavigation';
 import { TRIP_STATUS } from '../../constants/tripStatus';
-
-const { width, height } = Dimensions.get('window');
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from '../../styles/theme';
 
 export default function DeliveryNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { request, pickupPhotos, driverLocation: initialDriverLocation } = route.params;
   const {
     arriveAtDropoff,
@@ -51,7 +54,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const [deliveryStarted, setDeliveryStarted] = useState(false);
   const [navigationStarted, setNavigationStarted] = useState(false);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
-  const [currentSpeed, setCurrentSpeed] = useState(0); // Speed in m/s
   const [currentHeading, setCurrentHeading] = useState(0); // Direction in degrees
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   
@@ -61,6 +63,8 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const [nextInstruction, setNextInstruction] = useState(null);
   const [distanceToTurn, setDistanceToTurn] = useState(null);
   const [currentStreet, setCurrentStreet] = useState('');
+  const cardMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const cardGradientColors = [colors.background.primary, colors.background.secondary];
   
   const mapRef = useRef(null);
   const locationSubscription = useRef(null);
@@ -83,21 +87,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       }
     }
   });
-  
-  // Apple Maps style zoom calculation functions
-  const calculateZoomFromSpeed = (speedKmh) => {
-    if (speedKmh < 20) return 19;      // Very slow/stopped
-    if (speedKmh < 50) return 18.5;    // City driving
-    if (speedKmh < 80) return 17.5;    // Fast city/slow highway
-    return 16.5;                       // Highway speeds
-  };
-  
-  const calculateZoomFromTurnDistance = (meters) => {
-    if (meters < 50) return 19.5;     // Very close to turn
-    if (meters < 150) return 19;      // Approaching turn
-    if (meters < 300) return 18.5;    // Near turn
-    return 18;                        // Normal navigation
-  };
   
   // Update navigation camera with Apple Maps style
   const updateNavigationCamera = (location, speed, distanceToNextTurn) => {
@@ -196,17 +185,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
 
   // Start Mapbox Navigation when coordinates are ready
   useEffect(() => {
-    console.log('=== DELIVERY NAVIGATION USEEFFECT DEBUG ===');
-    console.log('Navigation check:', {
-      platform: Platform.OS,
-      isSupported,
-      hasDriverLocation: !!driverLocation,
-      hasDropoffLocation: !!dropoffLocation,
-      isNavigating,
-      navigationAttempted
-    });
-    console.log('==========================================');
-    
     if (Platform.OS === 'ios' && 
         isSupported && 
         driverLocation && 
@@ -214,24 +192,12 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         !isNavigating && 
         !navigationAttempted) {
       
-      console.log('✅ All conditions met, starting delivery navigation');
       setNavigationAttempted(true);
-      console.log('=== MAPBOX DELIVERY NAVIGATION DEBUG ===');
-      console.log('Platform.OS:', Platform.OS);
-      console.log('isSupported:', isSupported);
-      console.log('driverLocation:', driverLocation);
-      console.log('dropoffLocation:', dropoffLocation);
-      console.log('All Native Modules:', Object.keys(NativeModules));
-      console.log('MapboxNavigation module:', NativeModules.MapboxNavigation);
-      console.log('MapboxNavigationModule:', NativeModules.MapboxNavigationModule);
-      console.log('=======================================');
       
       startNavigation().catch((error) => {
         console.log('Mapbox navigation not available for delivery, using fallback map:', error);
         // Keep navigationAttempted true to prevent retries
       });
-    } else {
-      console.log('❌ Delivery navigation conditions not met');
     }
   }, [driverLocation, dropoffLocation, isSupported, isNavigating, navigationAttempted]);
 
@@ -380,9 +346,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
           setDriverLocation(newLocation);
           
           // Update speed and heading
-          if (locationData.coords.speed !== null) {
-            setCurrentSpeed(locationData.coords.speed);
-          }
           if (locationData.coords.heading !== null) {
             setCurrentHeading(locationData.coords.heading);
           }
@@ -631,7 +594,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     return (
       <View style={styles.navigationContainer}>
         {/* Purple header section with instruction */}
-        <View style={[styles.navigationHeader, { paddingTop: insets.top + 10 }]}>
+        <View style={[styles.navigationHeader, { paddingTop: insets.top + spacing.sm }]}>
           <View style={styles.navigationHeaderContent}>
             <Text style={styles.distanceText}>
               {distanceToTurn || 'Calculating...'}
@@ -640,14 +603,14 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               {nextInstruction}
             </Text>
             <View style={styles.directionArrows}>
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
-              <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
+              <Ionicons name="arrow-up" size={20} color={colors.white} />
               <Ionicons 
                 name={getManeuverIcon(maneuverType)} 
                 size={20} 
-                color="#FFFFFF" 
-                style={{ marginLeft: 5 }}
+                color={colors.white}
+                style={{ marginLeft: spacing.xs + 1 }}
               />
             </View>
           </View>
@@ -749,7 +712,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#A77BFF" />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading navigation...</Text>
       </View>
     );
@@ -758,7 +721,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   if (locationError) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="warning" size={48} color="#ff6b6b" />
+        <Ionicons name="warning" size={48} color={colors.error} />
         <Text style={styles.errorText}>{locationError}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
@@ -781,30 +744,31 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     });
 
     // If Mapbox navigation is active, show floating overlay version
-    if (isNavigating) {
-      return (
-        <View style={styles.container}>
-          <StatusBar barStyle="light-content" />
-          
-          {/* Mapbox Navigation SDK runs full-screen here automatically */}
+      if (isNavigating) {
+        return (
+          <View style={styles.container}>
+            {/* Mapbox Navigation SDK runs full-screen here automatically */}
           
           {/* Close Navigation Button */}
-          <TouchableOpacity
-            style={[styles.closeNavButton, { top: insets.top + 10 }]}
-            onPress={() => stopNavigation()}
-          >
-            <Ionicons name="close" size={24} color="#fff" />
+            <TouchableOpacity
+            style={[styles.closeNavButton, { top: insets.top + spacing.sm }]}
+              onPress={() => stopNavigation()}
+            >
+            <Ionicons name="close" size={24} color={colors.white} />
           </TouchableOpacity>
           
           {/* Floating Bottom Card */}
           <Animated.View 
             style={[
               styles.floatingBottomCard, 
-              { transform: [{ translateY: cardTranslateY }] }
+              {
+                transform: [{ translateY: cardTranslateY }],
+                maxWidth: cardMaxWidth,
+              }
             ]}
           >
             <LinearGradient
-              colors={['rgba(10, 10, 31, 0.95)', 'rgba(20, 20, 38, 0.98)']}
+              colors={cardGradientColors}
               style={styles.cardGradient}
             >
               <View style={styles.destinationHeader}>
@@ -842,7 +806,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
                   onPress={openChat}
                   disabled={isCreatingChat}
                 >
-                  <Ionicons name="chatbubble-ellipses" size={22} color="#A77BFF" />
+                  <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               
@@ -851,7 +815,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
                   style={styles.photoButton}
                   onPress={showPickupPhotos}
                 >
-                  <Ionicons name="images" size={18} color="#A77BFF" />
+                  <Ionicons name="images" size={18} color={colors.primary} />
                   <Text style={styles.photoButtonText}>View Pickup Photos</Text>
                 </TouchableOpacity>
               </View>
@@ -873,8 +837,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     // Otherwise show regular map view
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" />
-        
         {/* Map View */}
         <MapboxMap
           ref={mapRef}
@@ -897,7 +859,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               title="Your Location"
             >
               <View style={styles.driverMarker}>
-                <Ionicons name="car" size={18} color="#fff" />
+                <Ionicons name="car" size={18} color={colors.white} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -909,7 +871,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               title="Dropoff Location"
             >
               <View style={styles.destinationMarker}>
-                <Ionicons name="location" size={24} color="#A77BFF" />
+                <Ionicons name="location" size={24} color={colors.primary} />
               </View>
             </Mapbox.PointAnnotation>
           )}
@@ -925,7 +887,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               <Mapbox.LineLayer
                 id="deliveryRouteLine"
                 style={{
-                  lineColor: '#A77BFF',
+                  lineColor: colors.primary,
                   lineWidth: 4,
                   lineCap: 'round',
                   lineJoin: 'round'
@@ -937,7 +899,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         
         {/* Back Button */}
         <TouchableOpacity
-          style={[styles.backButton, { top: insets.top + 10 }]}
+          style={[styles.backButton, { top: insets.top + spacing.sm }]}
           onPress={() => {
             if (isNavigating) {
               stopNavigation();
@@ -945,16 +907,16 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
             navigation.goBack();
           }}
         >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
 
         {/* Start Navigation Button (only show if navigation is supported) */}
         {isSupported && !isNavigating && driverLocation && dropoffLocation && (
           <TouchableOpacity
-            style={[styles.startNavButton, { top: insets.top + 10 }]}
+            style={[styles.startNavButton, { top: insets.top + spacing.sm }]}
             onPress={startNavigation}
           >
-            <Ionicons name="navigate" size={20} color="#fff" />
+            <Ionicons name="navigate" size={20} color={colors.white} />
             <Text style={styles.startNavText}>Start Navigation</Text>
           </TouchableOpacity>
         )}
@@ -966,11 +928,14 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         <Animated.View 
           style={[
             styles.infoCard, 
-            { transform: [{ translateY: cardTranslateY }] }
+            {
+              transform: [{ translateY: cardTranslateY }],
+              maxWidth: cardMaxWidth,
+            }
           ]}
         >
           <LinearGradient
-            colors={['rgba(10, 10, 31, 0.95)', 'rgba(20, 20, 38, 0.98)']}
+            colors={cardGradientColors}
             style={styles.cardGradient}
           >
             <View style={styles.destinationHeader}>
@@ -1010,7 +975,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
                 onPress={openChat}
                 disabled={isCreatingChat}
               >
-                <Ionicons name="chatbubble-ellipses" size={22} color="#A77BFF" />
+                <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
               </TouchableOpacity>
             </View>
             
@@ -1019,7 +984,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
                 style={styles.photoButton}
                 onPress={showPickupPhotos}
               >
-                <Ionicons name="images" size={18} color="#A77BFF" />
+                <Ionicons name="images" size={18} color={colors.primary} />
                 <Text style={styles.photoButtonText}>View Pickup Photos</Text>
               </TouchableOpacity>
             </View>
@@ -1041,189 +1006,10 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   return renderNavigationView();
 }
 
-const mapStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#212121"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#9e9e9e"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#bdbdbd"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#181818"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#1b1b1b"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.fill",
-    "stylers": [
-      {
-        "color": "#2c2c2c"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8a8a8a"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#373737"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#3c3c3c"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway.controlled_access",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#4e4e4e"
-      }
-    ]
-  },
-  {
-    "featureType": "road.local",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#000000"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#3d3d3d"
-      }
-    ]
-  }
-];
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   map: {
     width: '100%',
@@ -1233,60 +1019,60 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#fff',
+    marginTop: spacing.sm + 2,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A1F',
-    padding: 20,
+    backgroundColor: colors.background.primary,
+    padding: spacing.lg,
   },
   errorText: {
-    marginTop: 20,
-    fontSize: 16,
-    color: '#fff',
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
     textAlign: 'center',
   },
   retryButton: {
-    marginTop: 20,
-    backgroundColor: '#A77BFF',
+    marginTop: spacing.lg,
+    backgroundColor: colors.primary,
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
   },
   retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   backButton: {
     position: 'absolute',
-    left: 20,
-    backgroundColor: 'rgba(10, 10, 31, 0.8)',
+    left: spacing.lg,
+    backgroundColor: colors.overlayDark,
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borderRadius.circle,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   driverMarker: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     width: 36,
     height: 36,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   destinationMarker: {
     alignItems: 'center',
@@ -1294,70 +1080,70 @@ const styles = StyleSheet.create({
   infoCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    width: '100%',
+    alignSelf: 'center',
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 10,
   },
   cardGradient: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    padding: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xxl + spacing.sm : spacing.lg,
   },
   destinationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   destinationTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   destinationAddress: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
-    maxWidth: width - 120,
+    maxWidth: '75%',
   },
   etaBox: {
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
+    backgroundColor: colors.primaryLight,
     borderRadius: 10,
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   etaTime: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#A77BFF',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.primary,
   },
   etaLabel: {
-    fontSize: 12,
-    color: '#aaa',
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 15,
+    backgroundColor: colors.navigation.tabBarBorder,
+    marginVertical: spacing.base - 1,
   },
   customerInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   customerImageContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
     overflow: 'hidden',
-    backgroundColor: '#141426',
+    backgroundColor: colors.background.secondary,
   },
   customerImage: {
     width: '100%',
@@ -1366,58 +1152,58 @@ const styles = StyleSheet.create({
   },
   customerDetails: {
     flex: 1,
-    marginLeft: 15,
+    marginLeft: spacing.base - 1,
   },
   customerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   itemInfo: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: typography.fontSize.base,
+    color: colors.text.muted,
     marginTop: 2,
   },
   callButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoSection: {
-    marginBottom: 15,
+    marginBottom: spacing.base - 1,
   },
   photoButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
+    backgroundColor: colors.primaryLight,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md + spacing.xs,
     borderRadius: 10,
   },
   photoButtonText: {
-    marginLeft: 8,
-    color: '#A77BFF',
-    fontWeight: '600',
+    marginLeft: spacing.sm,
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
   actionContainer: {
     alignItems: 'center',
   },
   arriveButton: {
-    backgroundColor: '#A77BFF',
+    backgroundColor: colors.primary,
     paddingHorizontal: 30,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     width: '100%',
     alignItems: 'center',
   },
   arriveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   // Navigation instruction styles
   navigationContainer: {
@@ -1430,9 +1216,9 @@ const styles = StyleSheet.create({
   },
   
   navigationHeader: {
-    backgroundColor: '#8B5FBF',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
   },
   
   navigationHeaderContent: {
@@ -1440,15 +1226,15 @@ const styles = StyleSheet.create({
   },
   
   distanceText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: typography.fontSize.xxxl - spacing.xs,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.white,
     marginBottom: 8,
   },
   
   instructionText: {
-    fontSize: 18,
-    color: '#FFFFFF',
+    fontSize: typography.fontSize.lg,
+    color: colors.white,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 12,
@@ -1464,13 +1250,13 @@ const styles = StyleSheet.create({
   floatingBottomCard: {
     position: 'absolute',
     bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
+    alignSelf: 'center',
     zIndex: 9999,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -1479,8 +1265,8 @@ const styles = StyleSheet.create({
   
   closeNavButton: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    right: spacing.lg,
+    backgroundColor: colors.overlayDark,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -1488,20 +1274,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10000,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: colors.navigation.tabBarBorder,
   },
   
   startNavButton: {
     position: 'absolute',
-    right: 20,
-    backgroundColor: '#A77BFF',
+    right: spacing.lg,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: borderRadius.full,
     zIndex: 10,
-    shadowColor: '#000',
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -1509,9 +1295,9 @@ const styles = StyleSheet.create({
   },
   
   startNavText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm - 2,
   },
 });

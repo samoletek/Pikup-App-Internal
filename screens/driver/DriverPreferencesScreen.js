@@ -1,30 +1,34 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  StyleSheet,
   Switch,
-  Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "../../contexts/AuthContext";
+import ScreenHeader from "../../components/ScreenHeader";
+import {
+  borderRadius,
+  colors,
+  layout,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
-export default function DriverPreferencesScreen({ navigation }) {
-  const insets = useSafeAreaInsets();
-  // Pickup Type Preferences
-  const [pickupPreferences, setPickupPreferences] = useState({
+const DEFAULT_PREFERENCES = {
+  pickupPreferences: {
     smallItems: true,
     mediumItems: true,
     largeItems: false,
     extraLargeItems: false,
     fragileItems: true,
     outdoorItems: true,
-  });
-
-  // Equipment Available
-  const [equipment, setEquipment] = useState({
+  },
+  equipment: {
     dolly: false,
     handTruck: false,
     movingStraps: false,
@@ -33,193 +37,240 @@ export default function DriverPreferencesScreen({ navigation }) {
     toolSet: false,
     rope: true,
     tarp: false,
-  });
-
-  // Vehicle Specifications
-  const [vehicleSpecs, setVehicleSpecs] = useState({
+  },
+  vehicleSpecs: {
     truckBed: false,
     trailer: false,
     largeVan: false,
     suvSpace: true,
     roofRack: false,
-  });
-
-  // Availability Settings
-  const [availability, setAvailability] = useState({
+  },
+  availability: {
     weekends: true,
     evenings: true,
     shortNotice: false,
     longDistance: false,
-  });
+  },
+};
 
-  const handleSavePreferences = () => {
-    Alert.alert(
-      'Preferences Saved',
-      'Your PikUp preferences have been updated successfully!',
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.goBack(),
-        },
-      ]
-    );
-  };
+const mergePreferences = (candidate) => ({
+  pickupPreferences: {
+    ...DEFAULT_PREFERENCES.pickupPreferences,
+    ...(candidate?.pickupPreferences || {}),
+  },
+  equipment: {
+    ...DEFAULT_PREFERENCES.equipment,
+    ...(candidate?.equipment || {}),
+  },
+  vehicleSpecs: {
+    ...DEFAULT_PREFERENCES.vehicleSpecs,
+    ...(candidate?.vehicleSpecs || {}),
+  },
+  availability: {
+    ...DEFAULT_PREFERENCES.availability,
+    ...(candidate?.availability || {}),
+  },
+});
 
-  const ToggleSection = ({ title, subtitle, items, state, setState }) => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
-      </View>
-      {Object.entries(items).map(([key, label]) => (
-        <View key={key} style={styles.toggleItem}>
-          <View style={styles.toggleLeft}>
-            <Text style={styles.toggleLabel}>{label}</Text>
-          </View>
-          <Switch
-            value={state[key]}
-            onValueChange={(value) => setState(prev => ({ ...prev, [key]: value }))}
-            trackColor={{ false: '#2A2A3B', true: '#00D4AA' }}
-            thumbColor={state[key] ? '#fff' : '#999'}
-            ios_backgroundColor="#2A2A3B"
-          />
-        </View>
-      ))}
-    </View>
+const TIPS = [
+  "Mark only services you can handle safely.",
+  "Enabling equipment can increase matching quality.",
+  "Keep availability accurate for better request flow.",
+];
+
+export default function DriverPreferencesScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { currentUser, getDriverProfile, updateDriverPaymentProfile } = useAuth();
+  const userId = currentUser?.uid || currentUser?.id;
+  const [preferences, setPreferences] = useState(DEFAULT_PREFERENCES);
+  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydratePreferences = async () => {
+      if (!userId || !getDriverProfile) {
+        return;
+      }
+
+      try {
+        const profile = await getDriverProfile(userId);
+        const savedPreferences = profile?.metadata?.driverPreferences;
+
+        if (savedPreferences && isMounted) {
+          setPreferences(mergePreferences(savedPreferences));
+        }
+      } catch (error) {
+        console.error("Failed to load driver preferences:", error);
+      }
+    };
+
+    hydratePreferences();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, getDriverProfile]);
+
+  const persistPreferences = useCallback(
+    async (nextPreferences) => {
+      if (!userId || !updateDriverPaymentProfile) {
+        return;
+      }
+
+      try {
+        await updateDriverPaymentProfile(userId, {
+          driverPreferences: {
+            ...nextPreferences,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      } catch (error) {
+        console.error("Failed to persist driver preferences:", error);
+      }
+    },
+    [userId, updateDriverPaymentProfile]
   );
 
-  const pickupItems = {
-    smallItems: 'Small Items (under 25 lbs)',
-    mediumItems: 'Medium Items (25-75 lbs)',
-    largeItems: 'Large Items (75-150 lbs)',
-    extraLargeItems: 'Extra Large Items (150+ lbs)',
-    fragileItems: 'Fragile/Delicate Items',
-    outdoorItems: 'Outdoor/Garden Items',
-  };
+  const handleToggleChange = useCallback(
+    (sectionKey, key, value) => {
+      setPreferences((prev) => {
+        const nextPreferences = {
+          ...prev,
+          [sectionKey]: {
+            ...prev[sectionKey],
+            [key]: value,
+          },
+        };
+        void persistPreferences(nextPreferences);
+        return nextPreferences;
+      });
+    },
+    [persistPreferences]
+  );
 
-  const equipmentItems = {
-    dolly: 'Dolly/Hand Truck',
-    handTruck: 'Heavy Duty Hand Truck',
-    movingStraps: 'Moving Straps',
-    heavyDutyGloves: 'Heavy Duty Gloves',
-    furniturePads: 'Furniture Pads/Blankets',
-    toolSet: 'Basic Tool Set',
-    rope: 'Rope/Bungee Cords',
-    tarp: 'Tarp/Protective Covering',
-  };
-
-  const vehicleItems = {
-    truckBed: 'Pickup Truck Bed',
-    trailer: 'Trailer Available',
-    largeVan: 'Large Van/Box Truck',
-    suvSpace: 'SUV/Large Cargo Space',
-    roofRack: 'Roof Rack System',
-  };
-
-  const availabilityItems = {
-    weekends: 'Weekend Availability',
-    evenings: 'Evening Hours (6PM-10PM)',
-    shortNotice: 'Short Notice Pickups',
-    longDistance: 'Long Distance Hauls (50+ miles)',
-  };
+  const sections = useMemo(
+    () => [
+      {
+        sectionKey: "pickupPreferences",
+        title: "Pickup Types",
+        subtitle: "Choose items you can safely move.",
+        items: {
+          smallItems: "Small Items (under 25 lbs)",
+          mediumItems: "Medium Items (25-75 lbs)",
+          largeItems: "Large Items (75-150 lbs)",
+          extraLargeItems: "Extra Large Items (150+ lbs)",
+          fragileItems: "Fragile/Delicate Items",
+          outdoorItems: "Outdoor/Garden Items",
+        },
+      },
+      {
+        sectionKey: "equipment",
+        title: "Equipment",
+        subtitle: "Select equipment currently available in your vehicle.",
+        items: {
+          dolly: "Dolly/Hand Truck",
+          handTruck: "Heavy Duty Hand Truck",
+          movingStraps: "Moving Straps",
+          heavyDutyGloves: "Heavy Duty Gloves",
+          furniturePads: "Furniture Pads/Blankets",
+          toolSet: "Basic Tool Set",
+          rope: "Rope/Bungee Cords",
+          tarp: "Tarp/Protective Covering",
+        },
+      },
+      {
+        sectionKey: "vehicleSpecs",
+        title: "Vehicle Capabilities",
+        subtitle: "Indicate available cargo options.",
+        items: {
+          truckBed: "Pickup Truck Bed",
+          trailer: "Trailer Available",
+          largeVan: "Large Van/Box Truck",
+          suvSpace: "SUV/Large Cargo Space",
+          roofRack: "Roof Rack System",
+        },
+      },
+      {
+        sectionKey: "availability",
+        title: "Availability",
+        subtitle: "Define when you want to receive requests.",
+        items: {
+          weekends: "Weekend Availability",
+          evenings: "Evening Hours (6PM-10PM)",
+          shortNotice: "Short Notice Pickups",
+          longDistance: "Long Distance Hauls (50+ miles)",
+        },
+      },
+    ],
+    []
+  );
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>PikUp Preferences</Text>
+      <ScreenHeader
+        title="Driver Preferences"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          <View style={styles.sectionBlock}>
+            <Text style={styles.sectionLabel}>TIPS</Text>
+            <View style={styles.card}>
+              {TIPS.map((tip, index) => (
+                <View key={tip} style={[styles.tipRow, index === TIPS.length - 1 && styles.rowLast]}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color={colors.primary} />
+                  <Text style={styles.tipText}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {sections.map((section) => {
+            const state = preferences[section.sectionKey];
+            return (
+              <View key={section.sectionKey} style={styles.sectionBlock}>
+                <Text style={styles.sectionLabel}>{section.title.toUpperCase()}</Text>
+                <View style={styles.card}>
+                  <View style={styles.sectionIntro}>
+                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
+                  </View>
+                  {Object.entries(section.items).map(([key, label], index, items) => (
+                    <View
+                      key={key}
+                      style={[styles.toggleRow, index === items.length - 1 && styles.rowLast]}
+                    >
+                      <Text style={styles.toggleLabel}>{label}</Text>
+                      <Switch
+                        value={state?.[key]}
+                        onValueChange={(value) =>
+                          handleToggleChange(section.sectionKey, key, value)
+                        }
+                        trackColor={{
+                          false: colors.border.strong,
+                          true: colors.background.brandTint,
+                        }}
+                        thumbColor={state?.[key] ? colors.primary : colors.white}
+                        ios_backgroundColor={colors.border.strong}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
         </View>
-
-        {/* Introduction */}
-        <View style={styles.introSection}>
-          <View style={styles.introIcon}>
-            <Ionicons name="options" size={28} color="#A77BFF" />
-          </View>
-          <Text style={styles.introTitle}>Customize Your Driver Experience</Text>
-          <Text style={styles.introSubtitle}>
-            Set your preferences to receive pickup requests that match your capabilities and equipment
-          </Text>
-        </View>
-
-        {/* Pickup Type Preferences */}
-        <ToggleSection
-          title="Pickup Types"
-          subtitle="What types of items are you comfortable handling?"
-          items={pickupItems}
-          state={pickupPreferences}
-          setState={setPickupPreferences}
-        />
-
-        {/* Equipment Available */}
-        <ToggleSection
-          title="Equipment Available"
-          subtitle="What equipment do you have for moving items?"
-          items={equipmentItems}
-          state={equipment}
-          setState={setEquipment}
-        />
-
-        {/* Vehicle Specifications */}
-        <ToggleSection
-          title="Vehicle Capabilities"
-          subtitle="What special features does your vehicle have?"
-          items={vehicleItems}
-          state={vehicleSpecs}
-          setState={setVehicleSpecs}
-        />
-
-        {/* Availability Settings */}
-        <ToggleSection
-          title="Availability Preferences"
-          subtitle="When and how do you prefer to work?"
-          items={availabilityItems}
-          state={availability}
-          setState={setAvailability}
-        />
-
-        {/* Earnings Impact */}
-        <View style={styles.earningsInfo}>
-          <View style={styles.earningsIcon}>
-            <Ionicons name="trending-up" size={24} color="#00D4AA" />
-          </View>
-          <View style={styles.earningsContent}>
-            <Text style={styles.earningsTitle}>Maximize Your Earnings</Text>
-            <Text style={styles.earningsSubtitle}>
-              Drivers with more equipment can make more by completing more trips!
-            </Text>
-          </View>
-        </View>
-
-        {/* Tips Section */}
-        <View style={styles.tipsSection}>
-          <Text style={styles.tipsTitle}>💡 Pro Tips</Text>
-          <View style={styles.tipItem}>
-            <Text style={styles.tipText}>• Get equipment for your safety most importantly</Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Text style={styles.tipText}>• Equipment owners get priority for matching requests</Text>
-          </View>
-          <View style={styles.tipItem}>
-            <Text style={styles.tipText}>• Rush hours usually have more requests</Text>
-          </View>
-        </View>
-
-        {/* Save Button */}
-        <View style={styles.saveButtonContainer}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSavePreferences}>
-            <Text style={styles.saveButtonText}>Save Preferences</Text>
-            <Ionicons name="checkmark-circle" size={24} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
       </ScrollView>
     </View>
   );
@@ -228,182 +279,86 @@ export default function DriverPreferencesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A1F',
+    backgroundColor: colors.background.primary,
   },
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: '#141426',
+  scrollContent: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  contentColumn: {
+    width: "100%",
+    alignSelf: "center",
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
+  sectionBlock: {
+    marginBottom: spacing.base,
   },
-  introSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 25,
-    marginBottom: 15,
-    alignItems: 'center',
+  sectionLabel: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  card: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#2A2A3B',
+    borderColor: colors.border.strong,
+    overflow: "hidden",
   },
-  introIcon: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#1A1A3A',
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  introTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  introSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  section: {
-    backgroundColor: '#141426',
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  sectionHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
+  sectionIntro: {
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    lineHeight: 18,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    lineHeight: 19,
   },
-  toggleItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A3B',
-  },
-  toggleLeft: {
-    flex: 1,
+  toggleRow: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
   },
   toggleLabel: {
-    fontSize: 16,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  earningsInfo: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  earningsIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#1A3A2E',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  earningsContent: {
     flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    marginRight: spacing.base,
   },
-  earningsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#00D4AA',
-    marginBottom: 4,
-  },
-  earningsSubtitle: {
-    fontSize: 14,
-    color: '#999',
-    lineHeight: 18,
-  },
-  tipsSection: {
-    backgroundColor: '#141426',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#2A2A3B',
-  },
-  tipsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
-  },
-  tipItem: {
-    marginBottom: 8,
+  tipRow: {
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
   },
   tipText: {
-    fontSize: 14,
-    color: '#999',
-    lineHeight: 18,
+    flex: 1,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginLeft: spacing.sm,
+    lineHeight: 19,
   },
-  saveButtonContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  saveButton: {
-    backgroundColor: '#00D4AA',
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00D4AA',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  saveButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginRight: 10,
-  },
-  bottomSpacing: {
-    height: 40,
+  rowLast: {
+    borderBottomWidth: 0,
   },
 });

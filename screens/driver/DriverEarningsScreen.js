@@ -1,27 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Dimensions,
   Alert,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
-import { TRIP_STATUS } from '../../constants/tripStatus';
-import { colors } from '../../styles/theme';
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../contexts/AuthContext";
+import { TRIP_STATUS } from "../../constants/tripStatus";
+import CollapsibleMessagesHeader, {
+  MESSAGES_TOP_BAR_HEIGHT,
+} from "../../components/messages/CollapsibleMessagesHeader";
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from "../../styles/theme";
 
-const { width } = Dimensions.get('window');
+const HEADER_ROW_HEIGHT = 56;
+const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 
-export default function DriverEarningsScreen({ navigation }) {
+export default function DriverEarningsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, getDriverTrips, getDriverStats, processInstantPayout, getDriverProfile } = useAuth();
+  const {
+    currentUser,
+    getDriverTrips,
+    getDriverStats,
+    processInstantPayout,
+    getDriverProfile,
+  } = useAuth();
   const currentUserId = currentUser?.id || currentUser?.uid;
-  
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
+
+  const scrollRef = useRef(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const isSnappingRef = useRef(false);
+
+  const [selectedPeriod, setSelectedPeriod] = useState("week");
   const [weeklyData, setWeeklyData] = useState([]);
   const [driverTrips, setDriverTrips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +47,7 @@ export default function DriverEarningsScreen({ navigation }) {
     currentWeekTrips: 0,
     totalEarnings: 0,
     availableBalance: 0,
-    weeklyMilestone: 15
+    weeklyMilestone: 15,
   });
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [driverProfile, setDriverProfile] = useState(null);
@@ -45,34 +63,30 @@ export default function DriverEarningsScreen({ navigation }) {
   const loadDriverData = async () => {
     try {
       setLoading(true);
-      
-      // Get driver's completed trips
-      const trips = await getDriverTrips?.(currentUserId) || [];
-      const stats = await getDriverStats?.(currentUserId) || {};
-      const profile = await getDriverProfile?.(currentUserId) || {};
-      
+
+      const trips = (await getDriverTrips?.(currentUserId)) || [];
+      const stats = (await getDriverStats?.(currentUserId)) || {};
+      const profile = (await getDriverProfile?.(currentUserId)) || {};
+
       setDriverTrips(trips);
       setDriverProfile(profile);
       setDriverStats({
         currentWeekTrips: stats.currentWeekTrips || 0,
         totalEarnings: stats.totalEarnings || 0,
-        availableBalance: stats.availableBalance || 0.00,
-        weeklyMilestone: 15
+        availableBalance: stats.availableBalance || 0,
+        weeklyMilestone: 15,
       });
-      
-      // Process trips into weekly data
+
       const processedWeeklyData = processTripsIntoWeeklyData(trips);
       setWeeklyData(processedWeeklyData);
-      
     } catch (error) {
-      console.error('Error loading driver data:', error);
-      // Fallback to mock data if Firebase functions don't exist yet
+      console.error("Error loading driver data:", error);
       setWeeklyData(getMockWeeklyData());
       setDriverStats({
         currentWeekTrips: 12,
-        totalEarnings: 330.50,
-        availableBalance: 0.00,
-        weeklyMilestone: 15
+        totalEarnings: 330.5,
+        availableBalance: 0,
+        weeklyMilestone: 15,
       });
     } finally {
       setLoading(false);
@@ -80,31 +94,30 @@ export default function DriverEarningsScreen({ navigation }) {
   };
 
   const processTripsIntoWeeklyData = (trips) => {
-    const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const weekData = daysOfWeek.map(day => ({ day, trips: 0, earnings: 0 }));
-    
-    // Get current week's start (Monday)
+    const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const weekData = daysOfWeek.map((day) => ({ day, trips: 0, earnings: 0 }));
+
     const now = new Date();
-    const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay; // Get Monday of current week
+    const currentDay = now.getDay();
+    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
     const mondayDate = new Date(now);
     mondayDate.setDate(now.getDate() + mondayOffset);
     mondayDate.setHours(0, 0, 0, 0);
 
-    // Filter trips from this week only
-    const thisWeekTrips = trips.filter(trip => {
+    const thisWeekTrips = trips.filter((trip) => {
       const tripDate = new Date(trip.completedAt || trip.timestamp);
       return tripDate >= mondayDate;
     });
 
-    // Group trips by day
-    thisWeekTrips.forEach(trip => {
+    thisWeekTrips.forEach((trip) => {
       const tripDate = new Date(trip.completedAt || trip.timestamp);
-      const dayIndex = tripDate.getDay() === 0 ? 6 : tripDate.getDay() - 1; // Convert to Mon=0, Sun=6
-      
+      const dayIndex = tripDate.getDay() === 0 ? 6 : tripDate.getDay() - 1;
+
       if (dayIndex >= 0 && dayIndex < 7) {
         weekData[dayIndex].trips += 1;
-        weekData[dayIndex].earnings += parseFloat(trip.driverEarnings || trip.pricing?.total * 0.7 || 0);
+        weekData[dayIndex].earnings += parseFloat(
+          trip.driverEarnings || trip.pricing?.total * 0.7 || 0
+        );
       }
     });
 
@@ -112,30 +125,33 @@ export default function DriverEarningsScreen({ navigation }) {
   };
 
   const getMockWeeklyData = () => [
-    { day: 'Mon', trips: 2, earnings: 45.80 },
-    { day: 'Tue', trips: 3, earnings: 67.20 },
-    { day: 'Wed', trips: 1, earnings: 28.50 },
-    { day: 'Thu', trips: 2, earnings: 52.30 },
-    { day: 'Fri', trips: 2, earnings: 61.40 },
-    { day: 'Sat', trips: 1, earnings: 34.20 },
-    { day: 'Sun', trips: 1, earnings: 41.10 },
+    { day: "Mon", trips: 2, earnings: 45.8 },
+    { day: "Tue", trips: 3, earnings: 67.2 },
+    { day: "Wed", trips: 1, earnings: 28.5 },
+    { day: "Thu", trips: 2, earnings: 52.3 },
+    { day: "Fri", trips: 2, earnings: 61.4 },
+    { day: "Sat", trips: 1, earnings: 34.2 },
+    { day: "Sun", trips: 1, earnings: 41.1 },
   ];
 
   const getRecentTrips = () => {
-    // Get last 4 completed trips
     return driverTrips
       .filter((trip) => trip.status === TRIP_STATUS.COMPLETED)
-      .sort((a, b) => new Date(b.completedAt || b.timestamp) - new Date(a.completedAt || a.timestamp))
+      .sort(
+        (a, b) =>
+          new Date(b.completedAt || b.timestamp) -
+          new Date(a.completedAt || a.timestamp)
+      )
       .slice(0, 4)
-      .map(trip => ({
+      .map((trip) => ({
         id: trip.id,
         date: formatTripDate(trip.completedAt || trip.timestamp),
         time: formatTripTime(trip.completedAt || trip.timestamp),
-        pickup: 'Pickup Location',
-        dropoff: 'Dropoff Location',
-        amount: trip.driverEarnings || (trip.pricing?.total * 0.7) || 0,
-        distance: trip.distance || '0 mi',
-        duration: trip.duration || '0 min'
+        pickup: "Pickup Location",
+        dropoff: "Dropoff Location",
+        amount: Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0),
+        distance: trip.distance || "0 mi",
+        duration: trip.duration || "0 min",
       }));
   };
 
@@ -146,19 +162,19 @@ export default function DriverEarningsScreen({ navigation }) {
     yesterday.setDate(yesterday.getDate() - 1);
 
     if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return "Today";
     }
+    if (date.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    }
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
   const formatTripTime = (timestamp) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
+    return new Date(timestamp).toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
@@ -166,25 +182,25 @@ export default function DriverEarningsScreen({ navigation }) {
   const totalWeeklyTrips = weeklyData.reduce((sum, day) => sum + day.trips, 0);
   const averagePerTrip = totalWeeklyTrips > 0 ? totalWeeklyEarnings / totalWeeklyTrips : 0;
 
-  const milestoneProgress = (driverStats.currentWeekTrips / driverStats.weeklyMilestone) * 100;
+  const milestoneProgress =
+    (driverStats.currentWeekTrips / driverStats.weeklyMilestone) * 100;
   const tripsRemaining = driverStats.weeklyMilestone - driverStats.currentWeekTrips;
 
   const recentTrips = getRecentTrips();
 
   const handleInstantPayout = async () => {
     if (driverStats.availableBalance <= 0) {
-      Alert.alert('No Balance', 'You don\'t have any available balance to cash out.');
+      Alert.alert("No Balance", "You don't have any available balance to cash out.");
       return;
     }
 
-    // Check driver onboarding status
     if (!driverProfile?.connectAccountId) {
       Alert.alert(
-        'Setup Required', 
-        'You need to complete your payment setup before you can receive payouts. Please complete your driver onboarding first.',
+        "Setup Required",
+        "You need to complete your payment setup before you can receive payouts. Please complete your driver onboarding first.",
         [
-          { text: 'OK', style: 'default' },
-          { text: 'Setup Now', onPress: () => navigation.navigate('DriverOnboardingScreen') }
+          { text: "OK", style: "default" },
+          { text: "Setup Now", onPress: () => navigation.navigate("DriverOnboardingScreen") },
         ]
       );
       return;
@@ -192,41 +208,86 @@ export default function DriverEarningsScreen({ navigation }) {
 
     if (!driverProfile?.canReceivePayments) {
       Alert.alert(
-        'Account Under Review', 
-        'Your payment account is still being reviewed. You\'ll be able to receive payouts once verification is complete.',
-        [{ text: 'OK', style: 'default' }]
+        "Account Under Review",
+        "Your payment account is still being reviewed. You'll be able to receive payouts once verification is complete.",
+        [{ text: "OK", style: "default" }]
       );
       return;
     }
 
     Alert.alert(
-      'Instant Payout',
+      "Instant Payout",
       `Cash out $${driverStats.availableBalance.toFixed(2)}? This will be processed immediately.`,
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Cash Out', 
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cash Out",
           onPress: async () => {
             setPayoutLoading(true);
             try {
-              const result = await processInstantPayout?.(currentUserId, driverStats.availableBalance);
+              const result = await processInstantPayout?.(
+                currentUserId,
+                driverStats.availableBalance
+              );
               if (result?.success) {
-                Alert.alert('Success', 'Your payout has been processed successfully!');
-                // Refresh driver data to show updated balance
+                Alert.alert("Success", "Your payout has been processed successfully!");
                 await loadDriverData();
               } else {
-                throw new Error(result?.error || 'Payout failed');
+                throw new Error(result?.error || "Payout failed");
               }
             } catch (error) {
-              console.error('Payout error:', error);
-              Alert.alert('Error', `Failed to process payout: ${error.message}`);
+              console.error("Payout error:", error);
+              Alert.alert("Error", `Failed to process payout: ${error.message}`);
             } finally {
               setPayoutLoading(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
+  };
+
+  const getSnapOffset = (offsetY) => {
+    if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) {
+      return null;
+    }
+
+    return offsetY < TITLE_COLLAPSE_DISTANCE / 2 ? 0 : TITLE_COLLAPSE_DISTANCE;
+  };
+
+  const snapToNearestOffset = (offsetY) => {
+    const targetOffset = getSnapOffset(offsetY);
+    if (targetOffset === null || Math.abs(targetOffset - offsetY) < 1) {
+      return;
+    }
+
+    if (!scrollRef.current) {
+      return;
+    }
+
+    isSnappingRef.current = true;
+    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
+    setTimeout(() => {
+      isSnappingRef.current = false;
+    }, 220);
+  };
+
+  const handleScrollEndDrag = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+
+    const velocityY = event.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(velocityY) < 0.15) {
+      snapToNearestOffset(event.nativeEvent.contentOffset.y);
+    }
+  };
+
+  const handleMomentumScrollEnd = (event) => {
+    if (isSnappingRef.current) {
+      return;
+    }
+    snapToNearestOffset(event.nativeEvent.contentOffset.y);
   };
 
   const renderChart = () => {
@@ -241,7 +302,7 @@ export default function DriverEarningsScreen({ navigation }) {
       );
     }
 
-    const maxTrips = Math.max(...weeklyData.map(day => day.trips), 1);
+    const maxTrips = Math.max(...weeklyData.map((day) => day.trips), 1);
 
     return (
       <View style={styles.chartContainer}>
@@ -250,16 +311,22 @@ export default function DriverEarningsScreen({ navigation }) {
           {weeklyData.map((day, index) => (
             <View key={index} style={styles.barContainer}>
               <View style={styles.barWrapper}>
-                <View 
+                <View
                   style={[
-                    styles.bar, 
-                    { 
+                    styles.bar,
+                    {
                       height: Math.max((day.trips / maxTrips) * 60, 4),
-                      backgroundColor: day.trips > 0 ? colors.success : colors.border.strong
-                    }
-                  ]} 
+                      backgroundColor:
+                        day.trips > 0 ? colors.success : colors.border.strong,
+                    },
+                  ]}
                 />
-                <Text style={[styles.barValue, { color: day.trips > 0 ? colors.white : colors.text.subtle }]}>
+                <Text
+                  style={[
+                    styles.barValue,
+                    { color: day.trips > 0 ? colors.text.primary : colors.text.subtle },
+                  ]}
+                >
                   {day.trips}
                 </Text>
               </View>
@@ -277,62 +344,97 @@ export default function DriverEarningsScreen({ navigation }) {
     );
   };
 
+  const showBack = route?.name === "DriverEarningsScreen" && navigation.canGoBack();
+  const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
+
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color={colors.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Earnings</Text>
-          <TouchableOpacity style={styles.statsButton}>
-            <Ionicons name="stats-chart" size={24} color={colors.success} />
-          </TouchableOpacity>
+      <CollapsibleMessagesHeader
+        title="Earnings"
+        onBack={() => navigation.goBack()}
+        topInset={insets.top}
+        showBack={showBack}
+        scrollY={scrollY}
+        searchCollapseDistance={0}
+        titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
+      />
+
+      <Animated.ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
+        contentContainerStyle={{
+          paddingTop: headerHeight,
+          paddingHorizontal: spacing.base,
+          paddingBottom: insets.bottom + 90,
+        }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        onScrollEndDrag={handleScrollEndDrag}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.largeTitleSection}>
+          <Text style={styles.largeTitle}>Earnings</Text>
         </View>
 
-        {/* Period Selector */}
         <View style={styles.periodSelector}>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'week' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('week')}
+          <TouchableOpacity
+            style={[
+              styles.periodButton,
+              selectedPeriod === "week" && styles.periodButtonActive,
+            ]}
+            onPress={() => setSelectedPeriod("week")}
           >
-            <Text style={[styles.periodText, selectedPeriod === 'week' && styles.periodTextActive]}>
+            <Text
+              style={[
+                styles.periodText,
+                selectedPeriod === "week" && styles.periodTextActive,
+              ]}
+            >
               This Week
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.periodButton, selectedPeriod === 'month' && styles.periodButtonActive]}
-            onPress={() => setSelectedPeriod('month')}
+          <TouchableOpacity
+            style={[
+              styles.periodButton,
+              selectedPeriod === "month" && styles.periodButtonActive,
+            ]}
+            onPress={() => setSelectedPeriod("month")}
           >
-            <Text style={[styles.periodText, selectedPeriod === 'month' && styles.periodTextActive]}>
+            <Text
+              style={[
+                styles.periodText,
+                selectedPeriod === "month" && styles.periodTextActive,
+              ]}
+            >
               This Month
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Main Earnings Card */}
         <View style={styles.earningsCard}>
           <View style={styles.earningsHeader}>
             <Text style={styles.earningsAmount}>
-              ${loading ? '---' : totalWeeklyEarnings.toFixed(2)}
+              ${loading ? "---" : totalWeeklyEarnings.toFixed(2)}
             </Text>
             <TouchableOpacity style={styles.earningsInfo} onPress={loadDriverData}>
-              <Ionicons name={loading ? "refresh" : "information-circle-outline"} size={20} color={colors.text.subtle} />
+              <Ionicons
+                name={loading ? "refresh" : "information-circle-outline"}
+                size={20}
+                color={colors.text.subtle}
+              />
             </TouchableOpacity>
           </View>
           <Text style={styles.earningsSubtitle}>
-            {loading 
-              ? 'Loading trip data...' 
-              : `Active ${totalWeeklyTrips} trips • Avg $${averagePerTrip.toFixed(2)} per trip`
-            }
+            {loading
+              ? "Loading trip data..."
+              : `Active ${totalWeeklyTrips} trips • Avg $${averagePerTrip.toFixed(2)} per trip`}
           </Text>
         </View>
 
-        {/* Milestone Progress */}
         <View style={styles.milestoneCard}>
           <View style={styles.milestoneHeader}>
             <View style={styles.milestoneLeft}>
@@ -340,33 +442,35 @@ export default function DriverEarningsScreen({ navigation }) {
               <View style={styles.milestoneText}>
                 <Text style={styles.milestoneTitle}>Weekly Milestone</Text>
                 <Text style={styles.milestoneSubtitle}>
-                  {loading 
-                    ? 'Loading...'
-                    : tripsRemaining > 0 
-                      ? `${tripsRemaining} more trips for $50 bonus` 
-                      : 'Milestone achieved! $50 bonus earned'
-                  }
+                  {loading
+                    ? "Loading..."
+                    : tripsRemaining > 0
+                      ? `${tripsRemaining} more trips for $50 bonus`
+                      : "Milestone achieved! $50 bonus earned"}
                 </Text>
               </View>
             </View>
             <Text style={styles.milestoneCount}>
-              {loading ? '--/--' : `${driverStats.currentWeekTrips}/${driverStats.weeklyMilestone}`}
+              {loading
+                ? "--/--"
+                : `${driverStats.currentWeekTrips}/${driverStats.weeklyMilestone}`}
             </Text>
           </View>
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
-              <View style={[
-                styles.progressFill, 
-                { width: loading ? '0%' : `${Math.min(milestoneProgress, 100)}%` }
-              ]} />
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: loading ? "0%" : `${Math.min(milestoneProgress, 100)}%` },
+                ]}
+              />
             </View>
             <Text style={styles.progressText}>
-              {loading ? '--%' : `${Math.round(milestoneProgress)}%`}
+              {loading ? "--%" : `${Math.round(milestoneProgress)}%`}
             </Text>
           </View>
         </View>
 
-        {/* Payout Info */}
         <View style={styles.payoutCard}>
           <View style={styles.payoutHeader}>
             <View style={styles.payoutLeft}>
@@ -374,39 +478,50 @@ export default function DriverEarningsScreen({ navigation }) {
               <Text style={styles.payoutTitle}>PikUp Payout Account</Text>
             </View>
             <TouchableOpacity>
-              <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.text.subtle}
+              />
             </TouchableOpacity>
           </View>
           <Text style={styles.payoutBalance}>
-            Available Balance: ${loading ? '---' : driverStats.availableBalance.toFixed(2)}
+            Available Balance: ${loading ? "---" : driverStats.availableBalance.toFixed(2)}
           </Text>
           <Text style={styles.payoutNote}>Auto-deposit every Monday</Text>
-          
-          {/* Instant Payout Button */}
+
           <TouchableOpacity
             style={[
               styles.instantPayoutButton,
-              (loading || payoutLoading || driverStats.availableBalance <= 0 || !driverProfile?.connectAccountId || !driverProfile?.canReceivePayments) && styles.instantPayoutButtonDisabled
+              (loading ||
+                payoutLoading ||
+                driverStats.availableBalance <= 0 ||
+                !driverProfile?.connectAccountId ||
+                !driverProfile?.canReceivePayments) &&
+                styles.instantPayoutButtonDisabled,
             ]}
             onPress={handleInstantPayout}
-            disabled={loading || payoutLoading || driverStats.availableBalance <= 0 || !driverProfile?.connectAccountId || !driverProfile?.canReceivePayments}
+            disabled={
+              loading ||
+              payoutLoading ||
+              driverStats.availableBalance <= 0 ||
+              !driverProfile?.connectAccountId ||
+              !driverProfile?.canReceivePayments
+            }
           >
             <Ionicons name="flash" size={16} color={colors.white} />
             <Text style={styles.instantPayoutText}>
-              {payoutLoading 
-                ? 'Processing...' 
-                : (!driverProfile?.connectAccountId || !driverProfile?.canReceivePayments)
-                  ? 'Setup Required'
-                  : 'Instant Payout'
-              }
+              {payoutLoading
+                ? "Processing..."
+                : !driverProfile?.connectAccountId || !driverProfile?.canReceivePayments
+                  ? "Setup Required"
+                  : "Instant Payout"}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Trip Chart */}
         {renderChart()}
 
-        {/* Trip History */}
         <View style={styles.historySection}>
           <View style={styles.historyHeader}>
             <Text style={styles.historyTitle}>Recent Trips</Text>
@@ -415,44 +530,49 @@ export default function DriverEarningsScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {recentTrips.map((trip) => (
-            <View key={trip.id} style={styles.tripCard}>
-              <View style={styles.tripHeader}>
-                <View style={styles.tripLeft}>
-                  <Text style={styles.tripDate}>{trip.date}</Text>
-                  <Text style={styles.tripTime}>{trip.time}</Text>
+          {recentTrips.length > 0 ? (
+            recentTrips.map((trip) => (
+              <View key={trip.id} style={styles.tripCard}>
+                <View style={styles.tripHeader}>
+                  <View style={styles.tripLeft}>
+                    <Text style={styles.tripDate}>{trip.date}</Text>
+                    <Text style={styles.tripTime}>{trip.time}</Text>
+                  </View>
+                  <Text style={styles.tripAmount}>${trip.amount.toFixed(2)}</Text>
                 </View>
-                <Text style={styles.tripAmount}>${trip.amount}</Text>
-              </View>
-              
-              <View style={styles.tripRoute}>
-                <View style={styles.routePoint}>
-                  <Ionicons name="radio-button-on" size={10} color={colors.success} />
-                  <Text style={styles.routeText}>{trip.pickup}</Text>
-                </View>
-                <View style={styles.routeLine} />
-                <View style={styles.routePoint}>
-                  <Ionicons name="location" size={10} color={colors.primary} />
-                  <Text style={styles.routeText}>{trip.dropoff}</Text>
-                </View>
-              </View>
 
-              <View style={styles.tripStats}>
-                <View style={styles.statItem}>
-                  <Ionicons name="car" size={12} color={colors.text.subtle} />
-                  <Text style={styles.statText}>{trip.distance}</Text>
+                <View style={styles.tripRoute}>
+                  <View style={styles.routePoint}>
+                    <Ionicons name="radio-button-on" size={10} color={colors.success} />
+                    <Text style={styles.routeText}>{trip.pickup}</Text>
+                  </View>
+                  <View style={styles.routeLine} />
+                  <View style={styles.routePoint}>
+                    <Ionicons name="location" size={10} color={colors.primary} />
+                    <Text style={styles.routeText}>{trip.dropoff}</Text>
+                  </View>
                 </View>
-                <View style={styles.statItem}>
-                  <Ionicons name="time" size={12} color={colors.text.subtle} />
-                  <Text style={styles.statText}>{trip.duration}</Text>
+
+                <View style={styles.tripStats}>
+                  <View style={styles.tripStatItem}>
+                    <Ionicons name="car" size={12} color={colors.text.subtle} />
+                    <Text style={styles.tripStatText}>{trip.distance}</Text>
+                  </View>
+                  <View style={styles.tripStatItem}>
+                    <Ionicons name="time" size={12} color={colors.text.subtle} />
+                    <Text style={styles.tripStatText}>{trip.duration}</Text>
+                  </View>
                 </View>
               </View>
+            ))
+          ) : (
+            <View style={styles.emptyTripsState}>
+              <Ionicons name="file-tray-outline" size={28} color={colors.border.strong} />
+              <Text style={styles.emptyTripsTitle}>No completed trips yet</Text>
             </View>
-          ))}
+          )}
         </View>
-
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }
@@ -465,197 +585,181 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    backgroundColor: colors.background.secondary,
+  largeTitleSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background.primary,
+    zIndex: 2,
+    marginBottom: spacing.sm,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  statsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  largeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
   },
   periodSelector: {
-    flexDirection: 'row',
+    flexDirection: "row",
     backgroundColor: colors.background.secondary,
-    marginHorizontal: 20,
-    marginVertical: 15,
-    borderRadius: 12,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.md,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   periodButton: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
+    paddingVertical: spacing.sm,
+    alignItems: "center",
+    borderRadius: borderRadius.sm,
   },
   periodButtonActive: {
     backgroundColor: colors.success,
   },
   periodText: {
     color: colors.text.tertiary,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
   },
   periodTextActive: {
     color: colors.white,
-    fontWeight: '600',
+    fontWeight: typography.fontWeight.semibold,
   },
   earningsCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: 20,
-    marginBottom: 15,
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   earningsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
   },
   earningsAmount: {
     fontSize: 36,
-    fontWeight: 'bold',
-    color: colors.white,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   earningsInfo: {
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: colors.background.elevated,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   earningsSubtitle: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
   },
   milestoneCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: 20,
-    marginBottom: 15,
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   milestoneHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.base,
   },
   milestoneLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   milestoneText: {
-    marginLeft: 12,
+    marginLeft: spacing.base,
     flex: 1,
   },
   milestoneTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     marginBottom: 2,
   },
   milestoneSubtitle: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
   },
   milestoneCount: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.primary,
   },
   progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   progressBar: {
     flex: 1,
     height: 8,
     backgroundColor: colors.border.strong,
     borderRadius: 4,
-    overflow: 'hidden',
-    marginRight: 12,
+    overflow: "hidden",
+    marginRight: spacing.sm,
   },
   progressFill: {
-    height: '100%',
+    height: "100%",
     backgroundColor: colors.primary,
     borderRadius: 4,
   },
   progressText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.primary,
     minWidth: 40,
   },
   payoutCard: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: 20,
-    marginBottom: 15,
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   payoutHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
   },
   payoutLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   payoutTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    marginLeft: 8,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginLeft: spacing.sm,
   },
   payoutBalance: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.success,
     marginBottom: 4,
   },
   payoutNote: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   instantPayoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.success,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
     shadowColor: colors.success,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -669,41 +773,40 @@ const styles = StyleSheet.create({
   },
   instantPayoutText: {
     color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   chartContainer: {
     backgroundColor: colors.background.secondary,
-    marginHorizontal: 20,
-    marginBottom: 15,
-    borderRadius: 16,
-    padding: 20,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 20,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.lg,
   },
   chartWrapper: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
     height: 80,
-    marginBottom: 15,
+    marginBottom: spacing.base,
   },
   barContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     flex: 1,
   },
   barWrapper: {
-    alignItems: 'center',
+    alignItems: "center",
     height: 60,
-    justifyContent: 'flex-end',
-    marginBottom: 8,
+    justifyContent: "flex-end",
+    marginBottom: spacing.xs,
   },
   bar: {
     width: 20,
@@ -712,22 +815,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   barValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.white,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   barLabel: {
-    fontSize: 12,
+    fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
   },
   chartLegend: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.sm,
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   legendColor: {
     width: 12,
@@ -736,83 +839,82 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   legendText: {
-    fontSize: 12,
+    fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
   },
   loadingChart: {
     height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.base,
   },
   loadingText: {
     color: colors.text.subtle,
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
   },
   historySection: {
-    marginHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: spacing.base,
   },
   historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.base,
   },
   historyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.white,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   viewAllText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     color: colors.success,
-    fontWeight: '500',
+    fontWeight: typography.fontWeight.medium,
   },
   tripCard: {
     backgroundColor: colors.background.secondary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
   tripHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
   },
   tripLeft: {
     flex: 1,
   },
   tripDate: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
     marginBottom: 2,
   },
   tripTime: {
-    fontSize: 12,
+    fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
   },
   tripAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.success,
   },
   tripRoute: {
-    marginBottom: 12,
+    marginBottom: spacing.sm,
   },
   routePoint: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 4,
   },
   routeText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   routeLine: {
     width: 1,
@@ -822,19 +924,30 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   tripStats: {
-    flexDirection: 'row',
-    gap: 16,
+    flexDirection: "row",
+    gap: spacing.base,
   },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  tripStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  statText: {
-    fontSize: 12,
+  tripStatText: {
+    fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
     marginLeft: 4,
   },
-  bottomSpacing: {
-    height: 40,
+  emptyTripsState: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.background.secondary,
+    paddingVertical: spacing.xl,
+  },
+  emptyTripsTitle: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
   },
 });
