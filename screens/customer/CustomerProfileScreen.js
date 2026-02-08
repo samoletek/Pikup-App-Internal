@@ -191,20 +191,7 @@ export default function CustomerProfileScreen({ navigation }) {
         keywords: "alerts push settings",
         onPress: () => navigation.navigate("CustomerSettingsScreen"),
       },
-      {
-        id: "addresses",
-        title: "My Addresses",
-        icon: "location-outline",
-        keywords: "home work places location",
-        onPress: () => navigation.navigate("Home"),
-      },
-      {
-        id: "orders",
-        title: "My Orders",
-        icon: "receipt-outline",
-        keywords: "activity trips history",
-        onPress: () => navigation.navigate("Activity"),
-      },
+
       {
         id: "settings",
         title: "Settings",
@@ -240,7 +227,7 @@ export default function CustomerProfileScreen({ navigation }) {
         title: "About Pikup",
         icon: "information-circle-outline",
         keywords: "version app info",
-        onPress: () => {},
+        onPress: () => { },
       },
     ],
     [navigation]
