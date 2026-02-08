@@ -60,7 +60,19 @@ export const getConversations = async (userId, userType) => {
             .order('updated_at', { ascending: false });
 
         if (error) throw error;
-        return data;
+
+        return data.map(conv => ({
+            id: conv.id,
+            requestId: conv.request_id,
+            customerId: conv.customer_id,
+            driverId: conv.driver_id,
+            lastMessage: conv.last_message,
+            lastMessageAt: conv.last_message_at,
+            unreadByCustomer: conv.unread_by_customer,
+            unreadByDriver: conv.unread_by_driver,
+            createdAt: conv.created_at,
+            updatedAt: conv.updated_at
+        }));
     } catch (error) {
         console.error('Error fetching conversations:', error);
         return [];
@@ -112,7 +124,16 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
             await supabase.from('conversations').update(updates).eq('id', conversationId);
         }
 
-        return message;
+        return {
+            id: message.id,
+            conversationId: message.conversation_id,
+            senderId: message.sender_id,
+            content: message.content,
+            messageType: message.message_type,
+            isRead: message.is_read,
+            createdAt: message.created_at,
+            timestamp: message.created_at // Compatibility
+        };
     } catch (error) {
         console.error('Error sending message:', error);
         throw error;
@@ -133,7 +154,17 @@ export const getMessages = async (conversationId) => {
             .order('created_at', { ascending: true });
 
         if (error) throw error;
-        return data;
+
+        return data.map(msg => ({
+            id: msg.id,
+            conversationId: msg.conversation_id,
+            senderId: msg.sender_id,
+            content: msg.content,
+            messageType: msg.message_type,
+            isRead: msg.is_read,
+            createdAt: msg.created_at,
+            timestamp: msg.created_at // Compatibility with MessageScreen
+        }));
     } catch (error) {
         console.error('Error fetching messages:', error);
         return [];

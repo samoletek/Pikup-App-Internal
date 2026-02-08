@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Alert,
+  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -356,17 +357,21 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
         topInset={insets.top}
         rightContent={(
           <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+            style={styles.headerButton}
             onPress={handleSave}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Save changes"
           >
-            <Ionicons
-              name={saving ? "time-outline" : "checkmark"}
-              size={20}
-              color={colors.primary}
-            />
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.text.primary} />
+            ) : (
+              <Ionicons
+                name="checkmark"
+                size={24}
+                color={colors.text.primary}
+              />
+            )}
           </TouchableOpacity>
         )}
       />
@@ -404,325 +409,325 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
             <View style={styles.card}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>First Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.firstName}
-                onChangeText={(value) => updateField("firstName", value)}
-                placeholder="First Name"
-                placeholderTextColor={colors.text.placeholder}
-                textContentType="givenName"
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>First Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={personalInfo.firstName}
+                  onChangeText={(value) => updateField("firstName", value)}
+                  placeholder="First Name"
+                  placeholderTextColor={colors.text.placeholder}
+                  textContentType="givenName"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Last Name</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.lastName}
-                onChangeText={(value) => updateField("lastName", value)}
-                placeholder="Last Name"
-                placeholderTextColor={colors.text.placeholder}
-                textContentType="familyName"
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Last Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={personalInfo.lastName}
+                  onChangeText={(value) => updateField("lastName", value)}
+                  placeholder="Last Name"
+                  placeholderTextColor={colors.text.placeholder}
+                  textContentType="familyName"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={[styles.textInput, styles.textInputDisabled]}
-                value={personalInfo.email}
-                editable={false}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoCapitalize="none"
-              />
-              <Text style={styles.inputNote}>Email cannot be changed</Text>
-            </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Email</Text>
+                <TextInput
+                  style={[styles.textInput, styles.textInputDisabled]}
+                  value={personalInfo.email}
+                  editable={false}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoCapitalize="none"
+                />
+                <Text style={styles.inputNote}>Email cannot be changed</Text>
+              </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Phone Number</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.phone}
-                onChangeText={(value) => updateField("phone", value)}
-                keyboardType="phone-pad"
-                textContentType="telephoneNumber"
-                placeholder="+1 (555) 123-4567"
-                placeholderTextColor={colors.text.placeholder}
-                returnKeyType="next"
-              />
-            </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={personalInfo.phone}
+                  onChangeText={(value) => updateField("phone", value)}
+                  keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                  placeholder="+1 (555) 123-4567"
+                  placeholderTextColor={colors.text.placeholder}
+                  returnKeyType="next"
+                />
+              </View>
 
-            <View style={[styles.inputGroup, styles.inputGroupLast]}>
-              <Text style={styles.inputLabel}>Date of Birth</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.dateOfBirth}
-                onChangeText={(value) => updateField("dateOfBirth", value)}
-                placeholder="MM/DD/YYYY"
-                placeholderTextColor={colors.text.placeholder}
-              />
-            </View>
+              <View style={[styles.inputGroup, styles.inputGroupLast]}>
+                <Text style={styles.inputLabel}>Date of Birth</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={personalInfo.dateOfBirth}
+                  onChangeText={(value) => updateField("dateOfBirth", value)}
+                  placeholder="MM/DD/YYYY"
+                  placeholderTextColor={colors.text.placeholder}
+                />
+              </View>
             </View>
           </View>
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>ADDRESS</Text>
             <View style={styles.card}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Street Address</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.address}
-                onChangeText={(value) => updateField("address", value)}
-                placeholder="Street Address"
-                placeholderTextColor={colors.text.placeholder}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>City</Text>
-              <TextInput
-                style={styles.textInput}
-                value={personalInfo.city}
-                onChangeText={(value) => updateField("city", value)}
-                placeholder="City"
-                placeholderTextColor={colors.text.placeholder}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
-
-            <View style={[styles.rowInputs, styles.inputGroupLast]}>
-              <View style={styles.halfInput}>
-                <Text style={styles.inputLabel}>State</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Street Address</Text>
                 <TextInput
                   style={styles.textInput}
-                  value={personalInfo.state}
-                  onChangeText={(value) => updateField("state", value)}
-                  placeholder="State"
+                  value={personalInfo.address}
+                  onChangeText={(value) => updateField("address", value)}
+                  placeholder="Street Address"
                   placeholderTextColor={colors.text.placeholder}
-                  autoCapitalize="characters"
-                  maxLength={2}
+                  autoCapitalize="words"
+                  returnKeyType="next"
                 />
               </View>
 
-              <View style={styles.halfInput}>
-                <Text style={styles.inputLabel}>ZIP Code</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>City</Text>
                 <TextInput
                   style={styles.textInput}
-                  value={personalInfo.zipCode}
-                  onChangeText={(value) => updateField("zipCode", value)}
-                  placeholder="ZIP"
+                  value={personalInfo.city}
+                  onChangeText={(value) => updateField("city", value)}
+                  placeholder="City"
                   placeholderTextColor={colors.text.placeholder}
-                  keyboardType="number-pad"
+                  autoCapitalize="words"
+                  returnKeyType="next"
                 />
               </View>
-            </View>
+
+              <View style={[styles.rowInputs, styles.inputGroupLast]}>
+                <View style={styles.halfInput}>
+                  <Text style={styles.inputLabel}>State</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={personalInfo.state}
+                    onChangeText={(value) => updateField("state", value)}
+                    placeholder="State"
+                    placeholderTextColor={colors.text.placeholder}
+                    autoCapitalize="characters"
+                    maxLength={2}
+                  />
+                </View>
+
+                <View style={styles.halfInput}>
+                  <Text style={styles.inputLabel}>ZIP Code</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={personalInfo.zipCode}
+                    onChangeText={(value) => updateField("zipCode", value)}
+                    placeholder="ZIP"
+                    placeholderTextColor={colors.text.placeholder}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
             </View>
           </View>
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>PRIVACY SETTINGS</Text>
             <View style={styles.card}>
-            <View style={styles.switchRow}>
-              <View style={styles.switchInfo}>
-                <Text style={styles.switchTitle}>Share Location</Text>
-                <Text style={styles.switchDescription}>
-                  Allow app to access your location while using the service
-                </Text>
+              <View style={styles.switchRow}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Share Location</Text>
+                  <Text style={styles.switchDescription}>
+                    Allow app to access your location while using the service
+                  </Text>
+                </View>
+                <Switch
+                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
+                  thumbColor={privacySettings.shareLocation ? colors.primary : colors.white}
+                  ios_backgroundColor={colors.border.strong}
+                  onValueChange={() => toggleSwitch("shareLocation")}
+                  value={privacySettings.shareLocation}
+                />
               </View>
-              <Switch
-                trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                thumbColor={privacySettings.shareLocation ? colors.primary : colors.white}
-                ios_backgroundColor={colors.border.strong}
-                onValueChange={() => toggleSwitch("shareLocation")}
-                value={privacySettings.shareLocation}
-              />
-            </View>
 
-            <View style={styles.switchRow}>
-              <View style={styles.switchInfo}>
-                <Text style={styles.switchTitle}>Share Ride Information</Text>
-                <Text style={styles.switchDescription}>
-                  Allow sharing your trip status with friends and family
-                </Text>
+              <View style={styles.switchRow}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Share Ride Information</Text>
+                  <Text style={styles.switchDescription}>
+                    Allow sharing your trip status with friends and family
+                  </Text>
+                </View>
+                <Switch
+                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
+                  thumbColor={privacySettings.shareRideInfo ? colors.primary : colors.white}
+                  ios_backgroundColor={colors.border.strong}
+                  onValueChange={() => toggleSwitch("shareRideInfo")}
+                  value={privacySettings.shareRideInfo}
+                />
               </View>
-              <Switch
-                trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                thumbColor={privacySettings.shareRideInfo ? colors.primary : colors.white}
-                ios_backgroundColor={colors.border.strong}
-                onValueChange={() => toggleSwitch("shareRideInfo")}
-                value={privacySettings.shareRideInfo}
-              />
-            </View>
 
-            <View style={styles.switchRow}>
-              <View style={styles.switchInfo}>
-                <Text style={styles.switchTitle}>Marketing Emails</Text>
-                <Text style={styles.switchDescription}>
-                  Receive promotional emails and offers
-                </Text>
+              <View style={styles.switchRow}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Marketing Emails</Text>
+                  <Text style={styles.switchDescription}>
+                    Receive promotional emails and offers
+                  </Text>
+                </View>
+                <Switch
+                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
+                  thumbColor={privacySettings.marketingEmails ? colors.primary : colors.white}
+                  ios_backgroundColor={colors.border.strong}
+                  onValueChange={() => toggleSwitch("marketingEmails")}
+                  value={privacySettings.marketingEmails}
+                />
               </View>
-              <Switch
-                trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                thumbColor={privacySettings.marketingEmails ? colors.primary : colors.white}
-                ios_backgroundColor={colors.border.strong}
-                onValueChange={() => toggleSwitch("marketingEmails")}
-                value={privacySettings.marketingEmails}
-              />
-            </View>
 
-            <View style={[styles.switchRow, styles.switchRowLast]}>
-              <View style={styles.switchInfo}>
-                <Text style={styles.switchTitle}>Data Collection</Text>
-                <Text style={styles.switchDescription}>
-                  Allow collection of usage data to improve service quality
-                </Text>
+              <View style={[styles.switchRow, styles.switchRowLast]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Data Collection</Text>
+                  <Text style={styles.switchDescription}>
+                    Allow collection of usage data to improve service quality
+                  </Text>
+                </View>
+                <Switch
+                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
+                  thumbColor={privacySettings.dataCollection ? colors.primary : colors.white}
+                  ios_backgroundColor={colors.border.strong}
+                  onValueChange={() => toggleSwitch("dataCollection")}
+                  value={privacySettings.dataCollection}
+                />
               </View>
-              <Switch
-                trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                thumbColor={privacySettings.dataCollection ? colors.primary : colors.white}
-                ios_backgroundColor={colors.border.strong}
-                onValueChange={() => toggleSwitch("dataCollection")}
-                value={privacySettings.dataCollection}
-              />
-            </View>
             </View>
           </View>
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>CHANGE PASSWORD</Text>
             <View style={styles.card}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Current Password</Text>
-              <View style={styles.passwordInputRow}>
-                <TextInput
-                  style={[styles.textInput, styles.passwordTextInput]}
-                  value={passwordData.currentPassword}
-                  onChangeText={(value) => updatePasswordField("currentPassword", value)}
-                  placeholder="Enter current password"
-                  placeholderTextColor={colors.text.placeholder}
-                  textContentType="password"
-                  secureTextEntry={!passwordVisibility.currentPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                />
-                <TouchableOpacity
-                  style={styles.passwordVisibilityButton}
-                  onPress={() => togglePasswordVisibility("currentPassword")}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    passwordVisibility.currentPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  <Ionicons
-                    name={passwordVisibility.currentPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color={colors.text.tertiary}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+                <View style={styles.passwordInputRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.passwordTextInput]}
+                    value={passwordData.currentPassword}
+                    onChangeText={(value) => updatePasswordField("currentPassword", value)}
+                    placeholder="Enter current password"
+                    placeholderTextColor={colors.text.placeholder}
+                    textContentType="password"
+                    secureTextEntry={!passwordVisibility.currentPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.passwordVisibilityButton}
+                    onPress={() => togglePasswordVisibility("currentPassword")}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      passwordVisibility.currentPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    <Ionicons
+                      name={passwordVisibility.currentPassword ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordErrors.currentPassword ? (
+                  <Text style={styles.errorText}>{passwordErrors.currentPassword}</Text>
+                ) : null}
               </View>
-              {passwordErrors.currentPassword ? (
-                <Text style={styles.errorText}>{passwordErrors.currentPassword}</Text>
-              ) : null}
-            </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>New Password</Text>
-              <View style={styles.passwordInputRow}>
-                <TextInput
-                  style={[styles.textInput, styles.passwordTextInput]}
-                  value={passwordData.newPassword}
-                  onChangeText={(value) => updatePasswordField("newPassword", value)}
-                  placeholder="Enter new password"
-                  placeholderTextColor={colors.text.placeholder}
-                  textContentType="newPassword"
-                  secureTextEntry={!passwordVisibility.newPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="next"
-                />
-                <TouchableOpacity
-                  style={styles.passwordVisibilityButton}
-                  onPress={() => togglePasswordVisibility("newPassword")}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    passwordVisibility.newPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  <Ionicons
-                    name={passwordVisibility.newPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color={colors.text.tertiary}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>New Password</Text>
+                <View style={styles.passwordInputRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.passwordTextInput]}
+                    value={passwordData.newPassword}
+                    onChangeText={(value) => updatePasswordField("newPassword", value)}
+                    placeholder="Enter new password"
+                    placeholderTextColor={colors.text.placeholder}
+                    textContentType="newPassword"
+                    secureTextEntry={!passwordVisibility.newPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.passwordVisibilityButton}
+                    onPress={() => togglePasswordVisibility("newPassword")}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      passwordVisibility.newPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    <Ionicons
+                      name={passwordVisibility.newPassword ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordErrors.newPassword ? (
+                  <Text style={styles.errorText}>{passwordErrors.newPassword}</Text>
+                ) : null}
               </View>
-              {passwordErrors.newPassword ? (
-                <Text style={styles.errorText}>{passwordErrors.newPassword}</Text>
-              ) : null}
-            </View>
 
-            <View style={[styles.inputGroup, styles.inputGroupLast]}>
-              <Text style={styles.inputLabel}>Repeat New Password</Text>
-              <View style={styles.passwordInputRow}>
-                <TextInput
-                  style={[styles.textInput, styles.passwordTextInput]}
-                  value={passwordData.confirmPassword}
-                  onChangeText={(value) => updatePasswordField("confirmPassword", value)}
-                  placeholder="Repeat new password"
-                  placeholderTextColor={colors.text.placeholder}
-                  textContentType="newPassword"
-                  secureTextEntry={!passwordVisibility.confirmPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="done"
-                />
-                <TouchableOpacity
-                  style={styles.passwordVisibilityButton}
-                  onPress={() => togglePasswordVisibility("confirmPassword")}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    passwordVisibility.confirmPassword ? "Hide password" : "Show password"
-                  }
-                >
-                  <Ionicons
-                    name={passwordVisibility.confirmPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color={colors.text.tertiary}
+              <View style={[styles.inputGroup, styles.inputGroupLast]}>
+                <Text style={styles.inputLabel}>Repeat New Password</Text>
+                <View style={styles.passwordInputRow}>
+                  <TextInput
+                    style={[styles.textInput, styles.passwordTextInput]}
+                    value={passwordData.confirmPassword}
+                    onChangeText={(value) => updatePasswordField("confirmPassword", value)}
+                    placeholder="Repeat new password"
+                    placeholderTextColor={colors.text.placeholder}
+                    textContentType="newPassword"
+                    secureTextEntry={!passwordVisibility.confirmPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="done"
                   />
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.passwordVisibilityButton}
+                    onPress={() => togglePasswordVisibility("confirmPassword")}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      passwordVisibility.confirmPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    <Ionicons
+                      name={passwordVisibility.confirmPassword ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color={colors.text.tertiary}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {passwordErrors.confirmPassword ? (
+                  <Text style={styles.errorText}>{passwordErrors.confirmPassword}</Text>
+                ) : null}
               </View>
-              {passwordErrors.confirmPassword ? (
-                <Text style={styles.errorText}>{passwordErrors.confirmPassword}</Text>
+
+              {passwordErrors.general ? (
+                <Text style={styles.errorText}>{passwordErrors.general}</Text>
               ) : null}
-            </View>
 
-            {passwordErrors.general ? (
-              <Text style={styles.errorText}>{passwordErrors.general}</Text>
-            ) : null}
-
-            <TouchableOpacity
-              style={[
-                styles.passwordActionButton,
-                changingPassword && styles.passwordActionButtonDisabled,
-              ]}
-              onPress={handleChangePassword}
-              disabled={changingPassword}
-            >
-              <Text style={styles.passwordActionButtonText}>
-                {changingPassword ? "Updating..." : "Update Password"}
-              </Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.passwordActionButton,
+                  changingPassword && styles.passwordActionButtonDisabled,
+                ]}
+                onPress={handleChangePassword}
+                disabled={changingPassword}
+              >
+                <Text style={styles.passwordActionButtonText}>
+                  {changingPassword ? "Updating..." : "Update Password"}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -776,18 +781,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,
   },
-  saveButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.circle,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-    alignItems: "center",
+  headerButton: {
+    width: 40,
+    height: 40,
     justifyContent: "center",
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
+    alignItems: "center",
   },
   card: {
     backgroundColor: colors.background.secondary,

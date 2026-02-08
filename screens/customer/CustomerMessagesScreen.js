@@ -85,7 +85,8 @@ export default function CustomerMessagesScreen({ navigation }) {
           conversation.customerId &&
           conversation.driverId &&
           conversation.requestId &&
-          conversation.driverId !== "support"
+          conversation.driverId !== "support" &&
+          conversation.driverId !== "ffffffff-ffff-ffff-ffff-ffffffffffff"
       );
 
       if (validConversations.length > 0) {
@@ -107,7 +108,12 @@ export default function CustomerMessagesScreen({ navigation }) {
       new Set(
         conversations
           .map((conversation) => conversation.driverId)
-          .filter((driverId) => Boolean(driverId) && driverId !== "support")
+          .filter(
+            (driverId) =>
+              Boolean(driverId) &&
+              driverId !== "support" &&
+              driverId !== "ffffffff-ffff-ffff-ffff-ffffffffffff"
+          )
       )
     );
     const missingIds = peerIds.filter((id) => !peerProfiles[id]);
@@ -336,10 +342,12 @@ export default function CustomerMessagesScreen({ navigation }) {
 
   const showBack = false;
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
-  const emptyStateMinHeight = Math.max(
-    280,
-    windowHeight - headerHeight - HEADER_ROW_HEIGHT * 3 - insets.bottom - 120
-  );
+  const emptyStateMinHeight =
+    windowHeight -
+    headerHeight -
+    HEADER_ROW_HEIGHT * 3 -
+    (insets.bottom > 0 ? insets.bottom : 20) - // Safe area or default padding
+    60; // Tab bar height approx
   const titleLockCompensation = scrollY.interpolate({
     inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
     outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
