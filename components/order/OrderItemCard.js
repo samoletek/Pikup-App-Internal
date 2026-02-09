@@ -310,11 +310,18 @@ const OrderItemCard = ({
                         </View>
                     )}
 
-                    {/* Delete Button */}
-                    <TouchableOpacity style={styles.deleteBtn} onPress={onDelete}>
-                        <Ionicons name="trash-outline" size={18} color={colors.error} />
-                        <Text style={styles.deleteBtnText}>Delete Item</Text>
-                    </TouchableOpacity>
+                    {/* Footer Actions */}
+                    <View style={styles.footerActions}>
+                        <TouchableOpacity style={[styles.footerActionBtn, styles.deleteActionBtn]} onPress={onDelete}>
+                            <Ionicons name="trash-outline" size={18} color={colors.error} />
+                            <Text style={[styles.footerActionText, styles.deleteActionText]}>Delete Item</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.footerActionBtn, styles.addActionBtn]} onPress={handleToggleExpand}>
+                            <Ionicons name="checkmark-circle-outline" size={18} color={colors.text.primary} />
+                            <Text style={[styles.footerActionText, styles.addActionText]}>Add</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             )}
         </View>
@@ -573,17 +580,38 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeight.semibold,
         marginLeft: spacing.sm
     },
-    deleteBtn: {
+    footerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        marginTop: spacing.base
+    },
+    footerActionBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: spacing.base,
-        paddingVertical: spacing.md
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.md,
+        borderWidth: 1
     },
-    deleteBtnText: {
-        color: colors.error,
+    deleteActionBtn: {
+        borderColor: colors.error,
+        backgroundColor: colors.errorLight
+    },
+    addActionBtn: {
+        borderColor: colors.success,
+        backgroundColor: colors.success
+    },
+    footerActionText: {
         fontWeight: typography.fontWeight.semibold,
-        marginLeft: 6
+        marginLeft: spacing.xs
+    },
+    deleteActionText: {
+        color: colors.error,
+    },
+    addActionText: {
+        color: colors.text.primary,
     }
 });
 

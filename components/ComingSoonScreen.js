@@ -14,12 +14,13 @@ export default function ComingSoonScreen({
   topInset = 0,
   iconName = "construct-outline",
   message = "This feature is under development",
+  onBack,
 }) {
   return (
     <View style={styles.container}>
       <ScreenHeader
         title={title}
-        onBack={() => navigation.goBack()}
+        onBack={onBack || (() => navigation.goBack())}
         topInset={topInset}
         showBack
       />

@@ -148,21 +148,12 @@ export default function CustomerWalletScreen({ navigation }) {
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionLabel}>PAYMENT METHODS</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("PaymentMethodsScreen")}>
-                <Text style={styles.sectionAction}>Manage</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.card}>
               {methods.length === 0 ? (
                 <View style={[styles.paymentRow, styles.rowLast]}>
                   <Text style={styles.emptyText}>No payment methods yet</Text>
-                  <TouchableOpacity
-                    style={styles.addInlineButton}
-                    onPress={() => navigation.navigate("PaymentMethodsScreen")}
-                  >
-                    <Text style={styles.addInlineText}>Add</Text>
-                  </TouchableOpacity>
                 </View>
               ) : (
                 methods.map((method, index) => (
@@ -216,9 +207,6 @@ export default function CustomerWalletScreen({ navigation }) {
           <View style={styles.sectionBlock}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionLabel}>RECENT ACTIVITY</Text>
-              <TouchableOpacity onPress={() => navigation.navigate("CustomerActivityScreen")}>
-                <Text style={styles.sectionAction}>View All</Text>
-              </TouchableOpacity>
             </View>
 
             <View style={styles.card}>
@@ -303,7 +291,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
   },
@@ -312,11 +300,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     letterSpacing: 0.8,
-  },
-  sectionAction: {
-    color: colors.primary,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
   },
   card: {
     backgroundColor: colors.background.secondary,
@@ -406,17 +389,6 @@ const styles = StyleSheet.create({
   emptyText: {
     color: colors.text.secondary,
     fontSize: typography.fontSize.base,
-  },
-  addInlineButton: {
-    backgroundColor: colors.background.brandTint,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  addInlineText: {
-    color: colors.primary,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
   },
   rowLast: {
     borderBottomWidth: 0,

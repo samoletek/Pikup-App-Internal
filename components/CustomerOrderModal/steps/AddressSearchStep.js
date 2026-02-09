@@ -18,6 +18,15 @@ import MapboxLocationService from '../../../services/MapboxLocationService';
 import { colors } from '../../../styles/theme';
 import { styles } from '../styles';
 
+const MAX_SCHEDULE_DAYS_AHEAD = 30;
+
+const getMaxScheduleDate = () => {
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + MAX_SCHEDULE_DAYS_AHEAD);
+    maxDate.setHours(23, 59, 59, 999);
+    return maxDate;
+};
+
 const AddressSearchStep = ({
     orderData,
     setOrderData,
@@ -33,6 +42,9 @@ const AddressSearchStep = ({
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [datePickerMode, setDatePickerMode] = useState('date');
     const searchTimeoutRef = useRef(null);
+    const maxScheduleDate = getMaxScheduleDate();
+    const iosPickerDisplay = datePickerMode === 'date' ? 'inline' : 'spinner';
+    const androidPickerDisplay = datePickerMode === 'date' ? 'calendar' : 'clock';
 
     // ============================================
     // ADDRESS SEARCH
@@ -246,6 +258,15 @@ const AddressSearchStep = ({
                 currentDate.setHours(selectedDate.getHours());
                 currentDate.setMinutes(selectedDate.getMinutes());
             }
+
+            if (currentDate > maxScheduleDate) {
+                Alert.alert(
+                    'Date limit reached',
+                    `You can schedule rides up to ${MAX_SCHEDULE_DAYS_AHEAD} days in advance.`
+                );
+                currentDate.setTime(maxScheduleDate.getTime());
+            }
+
             setOrderData(prev => ({ ...prev, scheduledDateTime: currentDate.toISOString() }));
         }
     };
@@ -296,8 +317,14 @@ const AddressSearchStep = ({
 
                     {orderData.scheduleType === 'scheduled' && (
                         <View style={styles.dateTimeSection}>
+                            <View style={styles.scheduleDisclaimer}>
+                                <Ionicons name="information-circle-outline" size={16} color={colors.text.muted} style={styles.scheduleDisclaimerIcon} />
+                                <Text style={styles.scheduleDisclaimerText}>
+                                    Scheduled booking is available up to {MAX_SCHEDULE_DAYS_AHEAD} days in advance.
+                                </Text>
+                            </View>
                             <TouchableOpacity
-                                style={styles.datePickerBtn}
+                                style={[styles.datePickerBtn, styles.datePickerBtnFirst]}
                                 onPress={() => { setDatePickerMode('date'); setShowDatePicker(true); }}
                             >
                                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
@@ -306,7 +333,7 @@ const AddressSearchStep = ({
                                         ? new Date(orderData.scheduledDateTime).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
                                         : 'Select date'}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={styles.datePickerChevron} />
                             </TouchableOpacity>
 
                             <TouchableOpacity
@@ -319,7 +346,7 @@ const AddressSearchStep = ({
                                         ? new Date(orderData.scheduledDateTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                                         : 'Select time'}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={{ marginLeft: 'auto' }} />
+                                <Ionicons name="chevron-forward" size={18} color={colors.text.muted} style={styles.datePickerChevron} />
                             </TouchableOpacity>
 
                             {Platform.OS === 'ios' ? (
@@ -335,11 +362,12 @@ const AddressSearchStep = ({
                                             <DateTimePicker
                                                 value={orderData.scheduledDateTime ? new Date(orderData.scheduledDateTime) : new Date()}
                                                 mode={datePickerMode}
-                                                display="spinner"
+                                                display={iosPickerDisplay}
                                                 minimumDate={new Date()}
+                                                maximumDate={datePickerMode === 'date' ? maxScheduleDate : undefined}
                                                 onChange={handleDateChange}
                                                 themeVariant="dark"
-                                                style={styles.datePickerSpinner}
+                                                style={styles.datePickerControl}
                                             />
                                         </View>
                                     </View>
@@ -349,8 +377,9 @@ const AddressSearchStep = ({
                                     <DateTimePicker
                                         value={orderData.scheduledDateTime ? new Date(orderData.scheduledDateTime) : new Date()}
                                         mode={datePickerMode}
-                                        display="default"
+                                        display={androidPickerDisplay}
                                         minimumDate={new Date()}
+                                        maximumDate={datePickerMode === 'date' ? maxScheduleDate : undefined}
                                         onChange={(event, selectedDate) => {
                                             setShowDatePicker(false);
                                             handleDateChange(event, selectedDate);

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
@@ -24,6 +25,7 @@ import {
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { width } = useWindowDimensions();
   const panelMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const {
@@ -505,7 +507,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       {region && (
         <Mapbox.MapView
           ref={mapRef}
-          style={styles.map}
+          style={[styles.map, { bottom: -tabBarHeight }]}
           styleURL={Mapbox.StyleURL.Dark}
           scaleBarEnabled={false}
           onPress={() => console.log('Map pressed')}

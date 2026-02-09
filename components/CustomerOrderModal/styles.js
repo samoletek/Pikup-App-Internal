@@ -1,7 +1,10 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+import { colors, borderRadius, spacing, typography, layout } from '../../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const DATE_PICKER_MODAL_WIDTH = Math.min(SCREEN_WIDTH - (spacing.xl * 2), layout.authMaxWidth);
+const AI_ACTION_ICON_SIZE = spacing.xxxl - spacing.xs;
+const SUBTLE_GAP = spacing.xs / 2;
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT };
 
@@ -32,6 +35,8 @@ export const styles = StyleSheet.create({
         borderRadius: borderRadius.full
     },
     continueBtnText: { color: colors.white, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, marginRight: spacing.sm },
+    continueBtnDisabled: { opacity: 0.7 },
+    continueBtnTextDisabled: { color: colors.white },
 
     // Step 1 Styles - Address Search
     inputWrapper: {
@@ -127,6 +132,18 @@ export const styles = StyleSheet.create({
     scheduleOptionActive: { backgroundColor: colors.primary },
     scheduleOptionText: { color: colors.text.muted, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
     scheduleOptionTextActive: { color: colors.white },
+    scheduleDisclaimer: {
+        marginBottom: spacing.md,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    scheduleDisclaimerIcon: {
+        marginRight: spacing.sm,
+    },
+    scheduleDisclaimerText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.sm,
+    },
     dateTimeSection: { marginTop: spacing.md },
     datePickerBtn: {
         flexDirection: 'row',
@@ -138,7 +155,11 @@ export const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: colors.border.default
     },
+    datePickerBtnFirst: {
+        marginTop: 0,
+    },
     datePickerText: { color: colors.text.primary, marginLeft: spacing.md, fontSize: typography.fontSize.md, flex: 1 },
+    datePickerChevron: { marginLeft: spacing.sm },
     datePickerDoneBtn: {
         alignSelf: 'center',
         backgroundColor: colors.primary,
@@ -152,19 +173,20 @@ export const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.6)'
+        backgroundColor: colors.overlayDark
     },
     datePickerModalContent: {
         backgroundColor: colors.background.secondary,
         borderRadius: borderRadius.xl,
-        width: '85%',
-        maxWidth: 340,
+        width: DATE_PICKER_MODAL_WIDTH,
+        alignItems: 'center',
         overflow: 'hidden'
     },
     datePickerModalHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        width: '100%',
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md,
         borderBottomWidth: 1,
@@ -175,35 +197,102 @@ export const styles = StyleSheet.create({
         fontSize: typography.fontSize.lg,
         fontWeight: typography.fontWeight.semibold
     },
-    datePickerSpinner: {
-        height: 200,
+    datePickerControl: {
+        width: '100%',
         backgroundColor: colors.background.secondary
     },
 
     // Step 2 Styles - Items
-    aiPhotoBtn: {
+    itemsStepContentContainer: {
+        paddingBottom: spacing.xxxl + spacing.xl,
+    },
+    aiActionsSection: {
+        marginBottom: spacing.lg,
+    },
+    aiPrimaryBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.background.tertiary,
+        backgroundColor: colors.primaryLight,
         borderRadius: borderRadius.lg,
-        padding: spacing.md,
+        padding: spacing.base,
         borderWidth: 1,
-        borderColor: colors.border.default,
-        marginBottom: spacing.md
+        borderColor: colors.primary,
     },
-    aiPhotoIconContainer: {
-        width: 40,
-        height: 40,
+    aiPrimaryIconContainer: {
+        width: AI_ACTION_ICON_SIZE,
+        height: AI_ACTION_ICON_SIZE,
         borderRadius: borderRadius.full,
         backgroundColor: colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: spacing.md
+        marginRight: spacing.base,
     },
-    aiPhotoTextContainer: { flex: 1 },
-    aiPhotoTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
-    aiPhotoSubtitle: { color: colors.text.secondary, fontSize: typography.fontSize.xs, marginTop: 2 },
-    divider: { height: 1, backgroundColor: colors.border.default, marginBottom: spacing.md },
+    aiSecondaryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.lg,
+        padding: spacing.base,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        marginTop: spacing.sm,
+    },
+    aiSecondaryBtnDisabled: {
+        opacity: 0.55,
+    },
+    aiSecondaryIconContainer: {
+        width: AI_ACTION_ICON_SIZE,
+        height: AI_ACTION_ICON_SIZE,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.background.input,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacing.base,
+    },
+    aiActionTextContainer: {
+        flex: 1,
+    },
+    aiPrimaryTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.bold,
+    },
+    aiSecondaryTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.semibold,
+    },
+    aiActionSubtitle: {
+        color: colors.text.secondary,
+        fontSize: typography.fontSize.sm,
+        marginTop: SUBTLE_GAP,
+    },
+    aiPoweredByRow: {
+        marginTop: spacing.sm,
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-end',
+    },
+    aiPoweredByText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        marginLeft: spacing.xs,
+    },
+    manualSectionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.base,
+    },
+    manualSectionLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: colors.border.default,
+    },
+    manualSectionText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.sm,
+        marginHorizontal: spacing.sm,
+    },
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
     emptyStateText: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.base },
     emptyStateSubtext: { color: colors.text.placeholder, fontSize: typography.fontSize.base, marginTop: spacing.sm },
@@ -220,6 +309,7 @@ export const styles = StyleSheet.create({
         marginTop: spacing.sm
     },
     addItemBtnText: { color: colors.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
+    itemsBottomSpacer: { height: spacing.xxxl },
 
     // Step 5 Styles - Vehicle Selection
     vehicleHint: { color: colors.text.muted, fontSize: typography.fontSize.base, marginBottom: spacing.base, textAlign: 'center' },
@@ -248,10 +338,89 @@ export const styles = StyleSheet.create({
     vehicleSummary: { flexDirection: 'row', alignItems: 'center' },
     vehicleSummaryImg: { width: 60, height: 35, resizeMode: 'contain', marginRight: spacing.md },
     vehicleSummaryName: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    paymentSummaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    paymentSummaryLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    paymentSummaryCopy: { marginLeft: spacing.md, flex: 1 },
+    paymentSummaryTitle: { color: colors.text.primary, fontSize: typography.fontSize.base, fontWeight: typography.fontWeight.semibold },
+    paymentSummarySubtitle: { color: colors.text.muted, fontSize: typography.fontSize.sm, marginTop: 2 },
+    noCardsContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.input,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing.base,
+        marginBottom: spacing.sm,
+    },
+    addPaymentCardButton: {
+        marginTop: spacing.sm,
+        height: 46,
+        borderRadius: borderRadius.full,
+        backgroundColor: colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addPaymentCardButtonText: {
+        marginLeft: spacing.xs,
+        color: colors.white,
+        fontSize: typography.fontSize.base,
+        fontWeight: typography.fontWeight.semibold,
+    },
     priceRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
     priceLabel: { color: colors.text.muted, fontSize: typography.fontSize.base },
     priceValue: { color: colors.text.primary, fontSize: typography.fontSize.base },
     priceDivider: { height: 1, backgroundColor: colors.border.default, marginVertical: spacing.md },
     totalLabel: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold },
-    totalValue: { color: colors.primary, fontSize: typography.fontSize.xxl, fontWeight: typography.fontWeight.bold }
+    totalValue: { color: colors.primary, fontSize: typography.fontSize.xxl, fontWeight: typography.fontWeight.bold },
+
+    paymentMethodRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        backgroundColor: colors.background.tertiary,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        padding: spacing.base,
+        marginBottom: spacing.sm,
+    },
+    paymentMethodRowSelected: {
+        borderColor: colors.success,
+        backgroundColor: colors.successLight,
+    },
+    paymentMethodRowLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    paymentMethodCopy: {
+        marginLeft: spacing.md,
+        flex: 1,
+    },
+    paymentMethodTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.base,
+        fontWeight: typography.fontWeight.semibold,
+    },
+    paymentMethodSubtitle: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.sm,
+        marginTop: 2,
+    },
+    paymentMethodBadges: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    defaultMethodBadge: {
+        color: colors.primary,
+        backgroundColor: colors.primaryLight,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        borderRadius: borderRadius.full,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+    },
 });

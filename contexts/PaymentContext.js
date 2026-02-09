@@ -5,7 +5,6 @@ import { useAuth } from './AuthContext';
 import { supabase } from '../config/supabase';
 
 const PaymentContext = createContext();
-const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://pikup-server.onrender.com';
 
 export const usePayment = () => {
   const context = useContext(PaymentContext);
@@ -22,12 +21,6 @@ export const PaymentProvider = ({ children }) => {
   const stripe = useStripe();
   const { currentUser } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
-
-  // Configuration - Backend server URL
-  // For Android emulator: use 10.0.2.2 if backend is on same machine
-  // For Android device: use your machine's IP address (e.g., 192.168.1.100)
-  // TODO: Replace with your actual backend URL
-  // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com'; // REMOVED
 
   const getPaymentMethodsKey = (targetUserId) => `paymentMethods:${targetUserId}`;
   const getDefaultMethodKey = (targetUserId) => `defaultPaymentMethod:${targetUserId}`;
@@ -174,7 +167,7 @@ export const PaymentProvider = ({ children }) => {
   };
 
   // Create a payment intent for processing payment
-  const createPaymentIntent = async (amount, currency = 'usd', rideDetails = {}) => {
+  const createPaymentIntent = async (amount, currency = 'usd', rideDetails = {}, paymentMethodId = null) => {
     if (!userId) {
       return { success: false, error: 'User not authenticated', errorCode: null };
     }
@@ -195,7 +188,7 @@ export const PaymentProvider = ({ children }) => {
           currency,
           userEmail: currentUser?.email,
           userId,
-          paymentMethodId: defaultPaymentMethod?.stripePaymentMethodId,
+          paymentMethodId: paymentMethodId || defaultPaymentMethod?.stripePaymentMethodId,
           rideDetails,
         }
       });
@@ -245,41 +238,40 @@ export const PaymentProvider = ({ children }) => {
         throw new Error('No payment method available');
       }
 
-      // Call your payment service to confirm the payment
-      const response = await fetch(`${PAYMENT_SERVICE_URL}/confirm-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add any auth headers you need
-          // 'Authorization': `Bearer ${userToken}`,
-        },
-        body: JSON.stringify({
-          clientSecret: paymentIntentClientSecret,
+      const { paymentIntent, error } = await stripe.confirmPayment(paymentIntentClientSecret, {
+        paymentMethodType: 'Card',
+        paymentMethodData: {
           paymentMethodId: paymentMethodToUse,
-        })
+        },
       });
 
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+      if (error) {
         return {
           success: false,
-          error: body.error || `Payment confirmation error: ${response.status}`,
-          errorCode: body.code || null,
+          error: error.message || 'Failed to confirm payment',
+          errorCode: error.code || null,
         };
       }
 
-      const result = await response.json();
-
-      if (!result.success) {
+      if (!paymentIntent) {
         return {
           success: false,
-          error: result.error || 'Failed to confirm payment',
-          errorCode: result.code || null,
+          error: 'Payment confirmation returned no payment intent.',
+          errorCode: null,
         };
       }
 
-      console.log('Payment confirmed successfully:', result.paymentIntent);
-      return { success: true, paymentIntent: result.paymentIntent };
+      const successfulStatuses = new Set(['Succeeded', 'Processing', 'RequiresCapture']);
+      if (!successfulStatuses.has(paymentIntent.status)) {
+        return {
+          success: false,
+          error: `Payment not completed (status: ${paymentIntent.status}).`,
+          errorCode: null,
+        };
+      }
+
+      console.log('Payment confirmed successfully:', paymentIntent);
+      return { success: true, paymentIntent };
 
     } catch (error) {
       console.error('Error confirming payment:', error);

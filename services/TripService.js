@@ -490,8 +490,6 @@ export const releaseRequestViewing = async (requestId) => {
 // Cancellation functions
 export const cancelOrder = async (orderId, reason = 'customer_request', currentUser) => {
     try {
-        console.log('Cancelling order:', orderId);
-
         const orderData = await getRequestById(orderId);
 
         if (!orderData) throw new Error('Order not found');
@@ -500,36 +498,52 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
             throw new Error('Order already finalized');
         }
 
-        const payload = {
-            orderId,
-            customerId: currentUser.uid || currentUser.id,
-            reason,
-            driverLocation: orderData.driver_location
-        };
+        const shouldNotifyPaymentBackend = normalizedOrderStatus !== TRIP_STATUS.PENDING;
+        const customerId = currentUser?.uid || currentUser?.id || orderData?.customerId || orderData?.customer_id;
 
-        const response = await fetch(`${PAYMENT_SERVICE_URL}/cancel-order`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        if (shouldNotifyPaymentBackend) {
+            const payload = {
+                orderId,
+                customerId,
+                reason,
+                driverLocation: orderData.driverLocation || orderData.driver_location || null
+            };
 
-        if (!response.ok) {
-            console.warn('Backend cancellation failed, proceeding with Database update if possible.');
+            try {
+                const response = await fetch(`${PAYMENT_SERVICE_URL}/cancel-order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    console.warn(
+                        `Payment backend cancellation returned ${response.status}. Proceeding with Supabase cancellation.`
+                    );
+                }
+            } catch (backendError) {
+                console.warn(
+                    'Payment backend cancellation request failed. Proceeding with Supabase cancellation.',
+                    backendError
+                );
+            }
         }
+
+        const cancellationUpdates = {
+            status: TRIP_STATUS.CANCELLED,
+            cancelled_at: new Date().toISOString(),
+            cancelled_by: customerId || null,
+            cancellation_reason: reason,
+            updated_at: new Date().toISOString()
+        };
 
         const { error } = await supabase
             .from('trips')
-            .update({
-                status: TRIP_STATUS.CANCELLED,
-                cancelled_at: new Date().toISOString(),
-                cancelled_by: currentUser.uid || currentUser.id,
-                cancellation_reason: reason,
-                updated_at: new Date().toISOString()
-            })
+            .update(cancellationUpdates)
             .eq('id', orderId);
 
         if (error) throw error;
-        console.log('Order cancelled successfully in Supabase');
+
         return { success: true };
 
     } catch (error) {

@@ -7,6 +7,7 @@ import BaseModal from '../BaseModal';
 import LocationDetailsStep from '../order/LocationDetailsStep';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
+import { usePayment } from '../../contexts/PaymentContext';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -29,6 +30,17 @@ const STEPS = [
     { id: 6, title: 'Review & Confirm' }
 ];
 
+const createLocationDetailsDefaults = () => ({
+    locationType: 'store',
+    buildingName: '',
+    unitNumber: '',
+    meetingPoint: '',
+    hasElevator: false,
+    driverHelpsLoading: false,
+    driverHelpsUnloading: false,
+    notes: '',
+});
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -36,6 +48,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     const insets = useSafeAreaInsets();
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { paymentMethods, defaultPaymentMethod } = usePayment();
 
     // Order Data State
     const [orderData, setOrderData] = useState({
@@ -44,9 +58,10 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
         scheduleType: 'asap',
         scheduledDateTime: null,
         items: [],
-        pickupDetails: { floor: '', hasElevator: false, driverHelpsLoading: false, notes: '' },
-        dropoffDetails: { floor: '', hasElevator: false, driverHelpsUnloading: false, notes: '' },
+        pickupDetails: createLocationDetailsDefaults(),
+        dropoffDetails: createLocationDetailsDefaults(),
         selectedVehicle: null,
+        selectedPaymentMethodId: null,
         distance: null,
         duration: null,
         pricing: null
@@ -77,15 +92,35 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
             scheduleType: 'asap',
             scheduledDateTime: null,
             items: [],
-            pickupDetails: { floor: '', hasElevator: false, driverHelpsLoading: false, notes: '' },
-            dropoffDetails: { floor: '', hasElevator: false, driverHelpsUnloading: false, notes: '' },
+            pickupDetails: createLocationDetailsDefaults(),
+            dropoffDetails: createLocationDetailsDefaults(),
             selectedVehicle: null,
+            selectedPaymentMethodId: null,
             distance: null,
             duration: null,
             pricing: null
         });
         setExpandedItemId(null);
+        setIsSubmitting(false);
     };
+
+    useEffect(() => {
+        if (!visible) return;
+
+        const fallbackMethodId = defaultPaymentMethod?.id || paymentMethods?.[0]?.id || null;
+        if (!fallbackMethodId) return;
+
+        setOrderData(prev => {
+            if (prev.selectedPaymentMethodId) {
+                const methodStillExists = paymentMethods?.some(method => method.id === prev.selectedPaymentMethodId);
+                if (methodStillExists) {
+                    return prev;
+                }
+            }
+
+            return { ...prev, selectedPaymentMethodId: fallbackMethodId };
+        });
+    }, [visible, paymentMethods, defaultPaymentMethod]);
 
     // ============================================
     // RECENT ADDRESSES
@@ -190,21 +225,27 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                 return true;
             case 3:
                 if (!orderData.pickupDetails.buildingName?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the Store or Building Name.');
+                    Alert.alert('Missing Info', 'Please enter the location name.');
                     return false;
                 }
-                if (!orderData.pickupDetails.unitNumber?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the Unit or Floor number.');
+                if (
+                    orderData.pickupDetails.locationType === 'apartment' &&
+                    !orderData.pickupDetails.unitNumber?.trim()
+                ) {
+                    Alert.alert('Missing Info', 'Please enter apartment/floor information.');
                     return false;
                 }
                 return true;
             case 4:
                 if (!orderData.dropoffDetails.buildingName?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the Store or Building Name.');
+                    Alert.alert('Missing Info', 'Please enter the location name.');
                     return false;
                 }
-                if (!orderData.dropoffDetails.unitNumber?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the Unit or Floor number.');
+                if (
+                    orderData.dropoffDetails.locationType === 'apartment' &&
+                    !orderData.dropoffDetails.unitNumber?.trim()
+                ) {
+                    Alert.alert('Missing Info', 'Please enter apartment/floor information.');
                     return false;
                 }
                 return true;
@@ -214,20 +255,44 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                     return false;
                 }
                 return true;
+            case 6:
+                if (!orderData.selectedPaymentMethodId) {
+                    Alert.alert('Payment Method Required', 'Please select a saved payment method to continue.');
+                    return false;
+                }
+                return true;
             default:
                 return true;
         }
     };
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         Keyboard.dismiss();
+        if (isSubmitting) return;
         if (!validateStep()) return;
 
         if (currentStep < 6) {
             goToStep(currentStep + 1, 'forward');
         } else {
-            const finalOrder = { ...orderData, pricing: calculatePricing() };
-            onConfirm(finalOrder);
+            const selectedPaymentMethod = paymentMethods?.find(method => method.id === orderData.selectedPaymentMethodId) || null;
+            const finalOrder = {
+                ...orderData,
+                pricing: calculatePricing(),
+                selectedPaymentMethod,
+            };
+
+            try {
+                setIsSubmitting(true);
+                const result = await onConfirm(finalOrder);
+
+                if (result?.success === false) {
+                    Alert.alert('Payment Issue', result.error || 'Unable to complete payment. Please try again.');
+                }
+            } catch (error) {
+                Alert.alert('Payment Issue', error?.message || 'Unable to complete payment. Please try again.');
+            } finally {
+                setIsSubmitting(false);
+            }
         }
     };
 
@@ -303,14 +368,22 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                         setOrderData={setOrderData}
                     />
                 );
-            case 6:
+            case 6: {
+                const selectedPaymentMethod = paymentMethods?.find(method => method.id === orderData.selectedPaymentMethodId) || null;
                 return (
                     <ReviewStep
                         orderData={orderData}
                         pricing={calculatePricing()}
                         onNavigateToStep={setCurrentStep}
+                        paymentMethods={paymentMethods || []}
+                        selectedPaymentMethod={selectedPaymentMethod}
+                        defaultPaymentMethodId={defaultPaymentMethod?.id || null}
+                        onSelectPaymentMethod={(method) =>
+                            setOrderData(prev => ({ ...prev, selectedPaymentMethodId: method?.id || null }))
+                        }
                     />
                 );
+            }
             default:
                 return null;
         }
@@ -362,11 +435,16 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                 {/* Continue Button */}
                 <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : 12 }]}>
                     <TouchableOpacity
-                        style={[styles.continueBtn, currentStep === 6 && { backgroundColor: colors.success }]}
+                        style={[
+                            styles.continueBtn,
+                            currentStep === 6 && { backgroundColor: colors.success },
+                            isSubmitting && styles.continueBtnDisabled,
+                        ]}
                         onPress={handleContinue}
+                        disabled={isSubmitting}
                     >
-                        <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }]}>
-                            {currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
+                        <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }, isSubmitting && styles.continueBtnTextDisabled]}>
+                            {isSubmitting ? 'Processing...' : currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
                         </Text>
                         {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     </TouchableOpacity>

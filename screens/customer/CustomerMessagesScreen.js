@@ -37,6 +37,83 @@ const ARCHIVE_STATUSES = new Set([
   "archived",
 ]);
 
+// Mock data for demo purposes
+const MOCK_CONVERSATIONS = [
+  {
+    id: "mock-conv-1",
+    customerId: "mock-customer",
+    driverId: "mock-driver-1",
+    requestId: "REQ12345678",
+    driverName: "Michael Johnson",
+    lastMessage: "I'm 5 minutes away from the pickup location",
+    lastMessageAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    unreadByCustomer: 2,
+    requestStatus: "in_progress",
+  },
+  {
+    id: "mock-conv-2",
+    customerId: "mock-customer",
+    driverId: "mock-driver-2",
+    requestId: "REQ87654321",
+    driverName: "Sarah Williams",
+    lastMessage: "Package has been picked up, on my way!",
+    lastMessageAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 1,
+    requestStatus: "picked_up",
+  },
+  {
+    id: "mock-conv-3",
+    customerId: "mock-customer",
+    driverId: "mock-driver-3",
+    requestId: "REQ11223344",
+    driverName: "James Brown",
+    lastMessage: "Delivery completed. Thank you for using PikUp!",
+    lastMessageAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 0,
+    requestStatus: "completed",
+    completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "mock-conv-4",
+    customerId: "mock-customer",
+    driverId: "mock-driver-4",
+    requestId: "REQ55667788",
+    driverName: "Emma Davis",
+    lastMessage: "Sorry, this delivery was cancelled",
+    lastMessageAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 0,
+    requestStatus: "cancelled",
+    archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const MOCK_PEER_PROFILES = {
+  "mock-driver-1": {
+    id: "mock-driver-1",
+    firstName: "Michael",
+    lastName: "Johnson",
+    email: "michael.j@example.com",
+  },
+  "mock-driver-2": {
+    id: "mock-driver-2",
+    firstName: "Sarah",
+    lastName: "Williams",
+    email: "sarah.w@example.com",
+  },
+  "mock-driver-3": {
+    id: "mock-driver-3",
+    firstName: "James",
+    lastName: "Brown",
+    email: "james.b@example.com",
+  },
+  "mock-driver-4": {
+    id: "mock-driver-4",
+    firstName: "Emma",
+    lastName: "Davis",
+    email: "emma.d@example.com",
+  },
+};
+
 export default function CustomerMessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -93,7 +170,9 @@ export default function CustomerMessagesScreen({ navigation }) {
         return;
       }
 
-      setConversations([]);
+      // Use mock data if no real conversations found
+      setConversations(MOCK_CONVERSATIONS);
+      setPeerProfiles(MOCK_PEER_PROFILES);
     } catch (error) {
       console.error("Error loading conversations:", error);
       Alert.alert("Unable to Load Messages", "Please try again later.");

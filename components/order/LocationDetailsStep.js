@@ -19,6 +19,23 @@ const LocationDetailsStep = ({
     const isPickup = type === 'pickup';
     const helpText = isPickup ? 'Driver helps with loading?' : 'Driver helps with unloading?';
     const helpKey = isPickup ? 'driverHelpsLoading' : 'driverHelpsUnloading';
+    const locationType = details.locationType || 'store';
+    const isApartment = locationType === 'apartment';
+
+    const getBuildingFieldLabel = () => {
+        if (locationType === 'apartment') return 'Apartment/Building name *';
+        if (locationType === 'house_other') return 'House or location name *';
+        return 'Store name *';
+    };
+
+    const setLocationType = (nextType) => {
+        onUpdate({
+            ...details,
+            locationType: nextType,
+            hasElevator: nextType === 'apartment' ? details.hasElevator : false,
+            unitNumber: nextType === 'apartment' ? details.unitNumber : '',
+        });
+    };
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -37,78 +54,111 @@ const LocationDetailsStep = ({
                 </View>
             </View>
 
-            {/* Building & Unit Row */}
-            <View style={[styles.field, { flexDirection: 'row' }]}>
-                <View style={{ flex: 1, marginRight: spacing.md }}>
-                    <Text style={styles.fieldLabel} numberOfLines={1}>Store or building name *</Text>
-                    <TextInput
-                        style={styles.textInput}
-                        placeholder="e.g. Business"
-                        placeholderTextColor={colors.text.placeholder}
-                        value={details.buildingName}
-                        onChangeText={(text) => onUpdate({ ...details, buildingName: text })}
-                    />
-                </View>
-                <View style={{ width: 100 }}>
-                    <Text style={styles.fieldLabel} numberOfLines={1}>Unit/floor *</Text>
-                    <TextInput
-                        style={styles.textInput}
-                        placeholder="Apt/Flr"
-                        placeholderTextColor={colors.text.placeholder}
-                        value={details.unitNumber}
-                        onChangeText={(text) => onUpdate({ ...details, unitNumber: text })}
-                    />
+            {/* Location Type */}
+            <View style={styles.field}>
+                <Text style={styles.fieldLabel}>Location type</Text>
+                <View style={styles.locationTypeRow}>
+                    <TouchableOpacity
+                        style={[styles.locationTypeChip, locationType === 'store' && styles.locationTypeChipActive]}
+                        onPress={() => setLocationType('store')}
+                    >
+                        <Text style={[styles.locationTypeChipText, locationType === 'store' && styles.locationTypeChipTextActive]}>
+                            Store
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.locationTypeChip, locationType === 'apartment' && styles.locationTypeChipActive]}
+                        onPress={() => setLocationType('apartment')}
+                    >
+                        <Text style={[styles.locationTypeChipText, locationType === 'apartment' && styles.locationTypeChipTextActive]}>
+                            Apartment
+                        </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.locationTypeChip, locationType === 'house_other' && styles.locationTypeChipActive]}
+                        onPress={() => setLocationType('house_other')}
+                    >
+                        <Text style={[styles.locationTypeChipText, locationType === 'house_other' && styles.locationTypeChipTextActive]}>
+                            House/Other
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Order Confirmation - Pickup Only */}
-            {isPickup && (
-                <View style={[styles.field, { marginTop: -spacing.md }]}>
-                    <Text style={styles.fieldLabel}>Order Confirmation Number</Text>
+            {/* Location Name */}
+            <View style={styles.field}>
+                <Text style={styles.fieldLabel}>{getBuildingFieldLabel()}</Text>
+                <TextInput
+                    style={styles.textInput}
+                    placeholder={locationType === 'store' ? 'e.g. Walmart' : 'Enter location name'}
+                    placeholderTextColor={colors.text.placeholder}
+                    value={details.buildingName}
+                    onChangeText={(text) => onUpdate({ ...details, buildingName: text })}
+                />
+            </View>
+
+            {isApartment ? (
+                <>
+                    {/* Apartment Unit/Floor */}
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Apartment / floor *</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. Apt 4B, Floor 3"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={details.unitNumber}
+                            onChangeText={(text) => onUpdate({ ...details, unitNumber: text })}
+                        />
+                    </View>
+
+                    {/* Elevator Toggle - Apartments only */}
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Is there a working elevator?</Text>
+                        <View style={styles.toggleRow}>
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, details.hasElevator && styles.toggleBtnActive]}
+                                onPress={() => onUpdate({ ...details, hasElevator: true })}
+                            >
+                                <Ionicons
+                                    name="checkmark-circle"
+                                    size={20}
+                                    color={details.hasElevator ? colors.text.primary : colors.text.muted}
+                                />
+                                <Text style={[styles.toggleText, details.hasElevator && styles.toggleTextActive]}>
+                                    Yes
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.toggleBtn, !details.hasElevator && styles.toggleBtnActive]}
+                                onPress={() => onUpdate({ ...details, hasElevator: false })}
+                            >
+                                <Ionicons
+                                    name="close-circle"
+                                    size={20}
+                                    color={!details.hasElevator ? colors.text.primary : colors.text.muted}
+                                />
+                                <Text style={[styles.toggleText, !details.hasElevator && styles.toggleTextActive]}>
+                                    No
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </>
+            ) : (
+                <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Meeting point / access details</Text>
                     <TextInput
                         style={styles.textInput}
-                        placeholder="E.g. AB123"
+                        placeholder={isPickup ? 'Where should driver pick up items?' : 'Where should driver drop off items?'}
                         placeholderTextColor={colors.text.placeholder}
-                        value={details.orderNumber}
-                        onChangeText={(text) => onUpdate({ ...details, orderNumber: text })}
+                        value={details.meetingPoint}
+                        onChangeText={(text) => onUpdate({ ...details, meetingPoint: text })}
                     />
-                    <Text style={styles.helperText}>This helps drivers verify your purchase with stores.</Text>
                 </View>
             )}
-
-            {/* Elevator Toggle */}
-            <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Is there a working elevator?</Text>
-                <View style={styles.toggleRow}>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, details.hasElevator && styles.toggleBtnActive]}
-                        onPress={() => onUpdate({ ...details, hasElevator: true })}
-                    >
-                        <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={details.hasElevator ? colors.text.primary : colors.text.muted}
-                        />
-                        <Text style={[styles.toggleText, details.hasElevator && styles.toggleTextActive]}>
-                            Yes
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, !details.hasElevator && styles.toggleBtnActive]}
-                        onPress={() => onUpdate({ ...details, hasElevator: false })}
-                    >
-                        <Ionicons
-                            name="close-circle"
-                            size={20}
-                            color={!details.hasElevator ? colors.text.primary : colors.text.muted}
-                        />
-                        <Text style={[styles.toggleText, !details.hasElevator && styles.toggleTextActive]}>
-                            No
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
 
             {/* Driver Help Toggle */}
             <View style={styles.field}>
@@ -213,6 +263,32 @@ const styles = StyleSheet.create({
     },
     field: {
         marginBottom: spacing.xl
+    },
+    locationTypeRow: {
+        flexDirection: 'row',
+        gap: spacing.sm,
+    },
+    locationTypeChip: {
+        flex: 1,
+        minHeight: 42,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background.input,
+    },
+    locationTypeChipActive: {
+        backgroundColor: colors.primary,
+        borderColor: colors.primary,
+    },
+    locationTypeChipText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
+    },
+    locationTypeChipTextActive: {
+        color: colors.white,
     },
     fieldLabel: {
         color: colors.text.primary,

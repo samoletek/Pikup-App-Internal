@@ -26,9 +26,9 @@ import CustomerWalletScreen from "./screens/customer/CustomerWalletScreen";
 import CustomerPersonalInfoScreen from "./screens/customer/CustomerPersonalInfoScreen";
 import CustomerSafetyScreen from "./screens/customer/CustomerSafetyScreen";
 import CustomerSettingsScreen from "./screens/customer/CustomerSettingsScreen";
-import DeliveryTrackingScreen from "./screens/customer/DeliveryTrackingScreen";
 import PaymentMethodsScreen from "./screens/customer/PaymentMethodsScreen";
 import OrderSummaryScreen from "./screens/customer/OrderSummaryScreen";
+import CustomerTripDetailsScreen from "./screens/customer/CustomerTripDetailsScreen";
 
 // Driver screens
 import DriverMessagesScreen from "./screens/driver/DriverMessagesScreen";
@@ -70,12 +70,13 @@ const CustomerStack = () => (
     <Stack.Screen name="CustomerPersonalInfoScreen" component={CustomerPersonalInfoScreen} />
     <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
     <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
+    <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
 
     {/* Shared / Interaction Screens */}
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
     <Stack.Screen name="DeliveryFeedbackScreen" component={DeliveryFeedbackScreen} />
-    <Stack.Screen name="DeliveryTrackingScreen" component={DeliveryTrackingScreen} />
     <Stack.Screen name="OrderSummaryScreen" component={OrderSummaryScreen} />
+    <Stack.Screen name="CustomerTripDetailsScreen" component={CustomerTripDetailsScreen} />
   </Stack.Navigator>
 );
 

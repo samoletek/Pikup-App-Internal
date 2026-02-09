@@ -13,7 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CardField, useStripe } from "@stripe/stripe-react-native";
 import { usePayment } from "../contexts/PaymentContext";
 import BaseModal from "./BaseModal";
-import { colors } from "../styles/theme";
+import { colors, spacing, typography } from "../styles/theme";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -80,17 +80,26 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
         throw new Error(error.message);
       }
 
-      // Safely access card properties with fallbacks
-      const cardInfo = paymentMethod?.card || {};
+      // Stripe SDK shape differs by version:
+      // newer builds expose `card`, older ones expose `Card`.
+      const stripeCardInfo = paymentMethod?.card || paymentMethod?.Card || {};
+      const resolvedBrand = stripeCardInfo.brand || cardDetails?.brand;
+      const resolvedLast4 = stripeCardInfo.last4 || cardDetails?.last4;
+      const resolvedExpMonth = stripeCardInfo.expMonth ?? cardDetails?.expiryMonth;
+      const resolvedExpYear = stripeCardInfo.expYear ?? cardDetails?.expiryYear;
+
+      if (!resolvedLast4 || !resolvedExpMonth || !resolvedExpYear) {
+        throw new Error('Unable to read card details. Please try adding the card again.');
+      }
 
       // Create payment method object for our app
       const newPaymentMethod = {
         id: paymentMethod.id,
         type: 'card',
-        brand: cardInfo.brand || 'card',
-        last4: cardInfo.last4 || '****',
-        expMonth: cardInfo.expMonth || 1,
-        expYear: cardInfo.expYear || 2025,
+        brand: resolvedBrand && resolvedBrand !== 'Unknown' ? resolvedBrand : 'card',
+        last4: resolvedLast4,
+        expMonth: resolvedExpMonth,
+        expYear: resolvedExpYear,
         stripePaymentMethodId: paymentMethod.id,
         createdAt: new Date().toISOString(),
       };
@@ -126,8 +135,9 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
 
   const renderHeader = (closeModal) => (
     <View style={styles.header}>
-      <Text style={styles.title}>Add Payment Method</Text>
-      <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
+      <View style={styles.headerBtnPlaceholder} />
+      <Text style={styles.headerTitle}>Add Payment Method</Text>
+      <TouchableOpacity onPress={closeModal} style={styles.headerBtn}>
         <Ionicons name="close" size={24} color={colors.text.primary} />
       </TouchableOpacity>
     </View>
@@ -138,10 +148,9 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
       visible={visible}
       onClose={onClose}
       height={SCREEN_HEIGHT * 0.75}
-      backgroundColor={colors.background.secondary} // Match AuthModal background
+      backgroundColor={colors.background.secondary}
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: colors.border.strong }} // Match dark theme handle
     >
       {() => (
         <View style={styles.content}>
@@ -149,7 +158,7 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
           <View style={styles.securityNotice}>
             <Ionicons name="shield-checkmark" size={20} color={colors.success} />
             <Text style={styles.securityText}>
-              Encrypted & Secure
+              Powered by Stripe
             </Text>
           </View>
 
@@ -224,31 +233,41 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    height: 56,
+    paddingHorizontal: spacing.base,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
   },
-  closeButton: {
-    padding: 4,
+  headerBtnPlaceholder: {
+    width: 40,
+    height: 40,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.base,
   },
   securityNotice: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0, 212, 170, 0.1)",
+    backgroundColor: colors.successLight,
     paddingVertical: 10,
     borderRadius: 8,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: "rgba(0, 212, 170, 0.2)",
+    borderColor: colors.success,
   },
   securityText: {
     color: colors.success,

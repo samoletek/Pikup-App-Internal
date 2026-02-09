@@ -23,10 +23,71 @@ import {
   spacing,
   typography,
 } from "../../styles/theme";
-import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
+import {
+  TRIP_STATUS,
+  normalizeTripStatus,
+} from "../../constants/tripStatus";
 
-const TERMINAL_TRIP_STATUSES = [TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED];
 const HEADER_ROW_HEIGHT = 56;
+
+// Mock data for demo purposes
+const MOCK_TRIPS = [
+  {
+    id: "mock-trip-1",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "Jan 15, 2026",
+    pickup: "123 Main Street, Los Angeles, CA 90012",
+    dropoff: "456 Oak Avenue, Beverly Hills, CA 90210",
+    item: "Small Package",
+    driver: "Michael",
+    amount: "$24.50",
+    timestamp: "2026-01-15T14:30:00Z",
+  },
+  {
+    id: "mock-trip-2",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "Jan 12, 2026",
+    pickup: "789 Sunset Blvd, West Hollywood, CA 90069",
+    dropoff: "321 Wilshire Blvd, Santa Monica, CA 90401",
+    item: "Documents",
+    driver: "Sarah",
+    amount: "$18.75",
+    timestamp: "2026-01-12T10:15:00Z",
+  },
+  {
+    id: "mock-trip-3",
+    status: TRIP_STATUS.CANCELLED,
+    dateLabel: "Jan 10, 2026",
+    pickup: "555 Hollywood Blvd, Hollywood, CA 90028",
+    dropoff: "888 Venice Beach, Venice, CA 90291",
+    item: "Electronics",
+    driver: "James",
+    amount: "$0.00",
+    timestamp: "2026-01-10T16:45:00Z",
+  },
+  {
+    id: "mock-trip-4",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "Jan 8, 2026",
+    pickup: "200 Downtown LA, Los Angeles, CA 90015",
+    dropoff: "400 Pasadena Ave, Pasadena, CA 91101",
+    item: "Fragile Box",
+    driver: "Emma",
+    amount: "$32.00",
+    timestamp: "2026-01-08T09:00:00Z",
+  },
+  {
+    id: "mock-trip-5",
+    status: TRIP_STATUS.CANCELLED,
+    dateLabel: "Jan 5, 2026",
+    pickup: "100 Century City, Los Angeles, CA 90067",
+    dropoff: "700 Marina del Rey, Marina del Rey, CA 90292",
+    item: "Gift Package",
+    driver: "David",
+    amount: "$0.00",
+    timestamp: "2026-01-05T13:20:00Z",
+  },
+];
 const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TOTAL_COLLAPSE_DISTANCE =
@@ -54,6 +115,11 @@ const formatDate = (value) => {
   });
 };
 
+const formatCurrencyLabel = (amount) => {
+  const normalizedAmount = Number(amount) || 0;
+  return `$${normalizedAmount.toFixed(2)}`;
+};
+
 const statusLabel = (status) => {
   const normalizedStatus = normalizeTripStatus(status);
   if (normalizedStatus === TRIP_STATUS.COMPLETED) {
@@ -76,7 +142,7 @@ const statusColor = (status) => {
   return colors.text.tertiary;
 };
 
-export default function CustomerActivityScreen({ navigation, route }) {
+export default function CustomerActivityScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const scrollRef = useRef(null);
@@ -87,12 +153,6 @@ export default function CustomerActivityScreen({ navigation, route }) {
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState([]);
-
-  const { requestId, status, request } = route?.params || {};
-  const normalizedRouteStatus = normalizeTripStatus(status);
-  const hasTripInRoute = Boolean(requestId && status);
-  const isActiveTripInRoute =
-    hasTripInRoute && !TERMINAL_TRIP_STATUSES.includes(normalizedRouteStatus);
 
   const fetchTrips = async () => {
     if (!currentUser) {
@@ -122,14 +182,21 @@ export default function CustomerActivityScreen({ navigation, route }) {
             driver:
               (trip.assignedDriverEmail || trip.driverEmail || "Driver")
                 .split("@")[0],
-            amount: `$${amountValue.toFixed(2)}`,
+            amount: formatCurrencyLabel(amountValue),
             timestamp,
+            rawTrip: trip,
           };
         })
-        .filter((trip) => TERMINAL_TRIP_STATUSES.includes(trip.status))
-        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        .filter((trip) => trip.status === TRIP_STATUS.COMPLETED || trip.status === TRIP_STATUS.CANCELLED)
+        .sort((a, b) => {
+          return new Date(b.timestamp) - new Date(a.timestamp);
+        });
 
-      setTrips(normalizedTrips);
+      setTrips(
+        normalizedTrips.length > 0
+          ? normalizedTrips
+          : MOCK_TRIPS
+      );
     } catch (error) {
       console.error("Error fetching trips:", error);
       Alert.alert("Unable to Load Activity", "Please try again later.");
@@ -139,16 +206,8 @@ export default function CustomerActivityScreen({ navigation, route }) {
   };
 
   useEffect(() => {
-    if (isActiveTripInRoute) {
-      navigation.replace("DeliveryTrackingScreen", {
-        requestId,
-        requestData: request,
-      });
-      return;
-    }
-
     fetchTrips();
-  }, [currentUser, isActiveTripInRoute]);
+  }, [currentUser]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -241,8 +300,21 @@ export default function CustomerActivityScreen({ navigation, route }) {
     snapToNearestOffset(event.nativeEvent.contentOffset.y);
   };
 
+  const handleTripPress = (trip) => {
+    navigation.navigate("CustomerTripDetailsScreen", {
+      tripId: trip.id,
+      tripSummary: trip,
+      tripSnapshot: trip.rawTrip || trip,
+    });
+  };
+
   const renderTripCard = (trip) => (
-    <TouchableOpacity key={trip.id} style={styles.tripCard} activeOpacity={0.9}>
+    <TouchableOpacity
+      key={trip.id}
+      style={styles.tripCard}
+      activeOpacity={0.9}
+      onPress={() => handleTripPress(trip)}
+    >
       <View style={styles.tripHeader}>
         <View style={styles.statusRow}>
           <Ionicons

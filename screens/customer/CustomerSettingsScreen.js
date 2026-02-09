@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Constants from "expo-constants";
 import { useAuth } from "../../contexts/AuthContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
@@ -71,6 +72,11 @@ export default function CustomerSettingsScreen({ navigation }) {
   });
   const isDriver = userType === "driver";
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const appVersion =
+    Constants.expoConfig?.version ||
+    Constants.manifest2?.extra?.expoClient?.version ||
+    Constants.nativeAppVersion ||
+    "0.0.0";
 
   const toggleSetting = (settingKey) => {
     setSettings((prev) => ({
@@ -148,6 +154,11 @@ export default function CustomerSettingsScreen({ navigation }) {
           onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
         },
         {
+          icon: "card-outline",
+          label: "Payment Methods",
+          onPress: () => navigation.navigate("PaymentMethodsScreen"),
+        },
+        {
           icon: "globe-outline",
           label: "Language",
           value: settings.language,
@@ -221,7 +232,7 @@ export default function CustomerSettingsScreen({ navigation }) {
               ))}
             </View>
           </View>
-          <Text style={styles.versionText}>PikUp App v1.0.0</Text>
+          <Text style={styles.versionText}>v{appVersion}</Text>
         </View>
       </ScrollView>
     </View>

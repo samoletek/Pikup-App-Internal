@@ -123,15 +123,8 @@ export default function OrderSummaryScreen({ navigation, route }) {
         throw new Error(paymentResult.error);
       }
 
-      navigation.replace('DeliveryTrackingScreen', {
-        bookingData: {
-          selectedVehicle,
-          selectedLocations,
-          paymentIntent: paymentResult.paymentIntent,
-          total: pricing.total,
-          distance,
-          duration,
-        },
+      navigation.replace('CustomerTabs', {
+        screen: 'Home',
       });
     } catch (error) {
       console.error('Payment failed:', error);

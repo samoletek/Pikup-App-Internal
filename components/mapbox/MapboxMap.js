@@ -1,15 +1,11 @@
-import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import Mapbox from '@rnmapbox/maps';
 
 // Configure Mapbox with your token
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
-console.log('=== MAPBOX MAP DEBUG ===');
-console.log('Token available:', !!MAPBOX_TOKEN);
-console.log('Token prefix:', MAPBOX_TOKEN ? MAPBOX_TOKEN.substring(0, 10) + '...' : 'NO TOKEN');
 
 if (MAPBOX_TOKEN) {
   Mapbox.setAccessToken(MAPBOX_TOKEN);
-  console.log('Mapbox token set successfully');
 } else {
   console.error('MAPBOX TOKEN IS MISSING! Maps will not work.');
 }
@@ -78,10 +74,6 @@ const MapboxMap = forwardRef(({
     console.error('Mapbox Map Error:', error);
   };
 
-  const handleDidFinishLoadingMap = () => {
-    console.log('Mapbox map loaded successfully');
-  };
-
   return (
     <Mapbox.MapView
       ref={mapViewRef}
@@ -89,8 +81,7 @@ const MapboxMap = forwardRef(({
       onPress={onPress}
       styleURL={customMapStyle || Mapbox.StyleURL.Dark} // Dark theme like current app
       scaleBarEnabled={false} // Remove scale bar
-      onDidFailLoadingMap={handleMapError}
-      onDidFinishLoadingMap={handleDidFinishLoadingMap}
+      onMapLoadingError={handleMapError}
       logoPosition={{ bottom: 8, left: 8 }} // Symmetric bottom-left
       attributionPosition={{ bottom: 8, right: 0 }} // Closer to right edge
       {...props}
