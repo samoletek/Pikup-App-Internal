@@ -25,6 +25,120 @@ import {
 } from "../../styles/theme";
 
 const FILTERS = ["all", "active", "archive"];
+
+// ======== MOCK DATA FOR UI DEVELOPMENT ========
+const MOCK_CONVERSATIONS = [
+  {
+    id: "conv-001",
+    customerId: "current-user-id",
+    driverId: "driver-001",
+    driverName: "Alex Johnson",
+    requestId: "req-abc12345",
+    requestStatus: "in_progress",
+    lastMessage: "I'm 5 minutes away from your location",
+    lastMessageAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    unreadByCustomer: 2,
+  },
+  {
+    id: "conv-002",
+    customerId: "current-user-id",
+    driverId: "driver-002",
+    driverName: "Maria Garcia",
+    requestId: "req-def67890",
+    requestStatus: "pickup_started",
+    lastMessage: "Package picked up, heading to drop-off",
+    lastMessageAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    unreadByCustomer: 1,
+  },
+  {
+    id: "conv-003",
+    customerId: "current-user-id",
+    driverId: "driver-003",
+    driverName: "John Smith",
+    requestId: "req-ghi11111",
+    requestStatus: "completed",
+    lastMessage: "Thanks for using Pikup! Have a great day!",
+    lastMessageAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 0,
+    completedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "conv-004",
+    customerId: "current-user-id",
+    driverId: "driver-004",
+    driverName: "Lisa Chen",
+    requestId: "req-jkl22222",
+    requestStatus: "delivered",
+    lastMessage: "Your package has been delivered successfully",
+    lastMessageAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 0,
+    completedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "conv-005",
+    customerId: "current-user-id",
+    driverId: "driver-005",
+    driverName: "Mike Wilson",
+    requestId: "req-mno33333",
+    requestStatus: "cancelled",
+    lastMessage: "Order was cancelled. Sorry for any inconvenience.",
+    lastMessageAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    unreadByCustomer: 0,
+    archivedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "conv-006",
+    customerId: "current-user-id",
+    driverId: "driver-006",
+    driverName: "Sarah Davis",
+    requestId: "req-pqr44444",
+    requestStatus: "pending_pickup",
+    lastMessage: "On my way to pick up your package now",
+    lastMessageAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    unreadByCustomer: 3,
+  },
+];
+
+const MOCK_PEER_PROFILES = {
+  "driver-001": {
+    id: "driver-001",
+    first_name: "Alex",
+    last_name: "Johnson",
+    profileImageUrl: null,
+  },
+  "driver-002": {
+    id: "driver-002",
+    first_name: "Maria",
+    last_name: "Garcia",
+    profileImageUrl: null,
+  },
+  "driver-003": {
+    id: "driver-003",
+    first_name: "John",
+    last_name: "Smith",
+    profileImageUrl: null,
+  },
+  "driver-004": {
+    id: "driver-004",
+    first_name: "Lisa",
+    last_name: "Chen",
+    profileImageUrl: null,
+  },
+  "driver-005": {
+    id: "driver-005",
+    first_name: "Mike",
+    last_name: "Wilson",
+    profileImageUrl: null,
+  },
+  "driver-006": {
+    id: "driver-006",
+    first_name: "Sarah",
+    last_name: "Davis",
+    profileImageUrl: null,
+  },
+};
+// ======== END MOCK DATA ========
+
 const HEADER_ROW_HEIGHT = 56;
 const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
@@ -36,83 +150,6 @@ const ARCHIVE_STATUSES = new Set([
   "delivered",
   "archived",
 ]);
-
-// Mock data for demo purposes
-const MOCK_CONVERSATIONS = [
-  {
-    id: "mock-conv-1",
-    customerId: "mock-customer",
-    driverId: "mock-driver-1",
-    requestId: "REQ12345678",
-    driverName: "Michael Johnson",
-    lastMessage: "I'm 5 minutes away from the pickup location",
-    lastMessageAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    unreadByCustomer: 2,
-    requestStatus: "in_progress",
-  },
-  {
-    id: "mock-conv-2",
-    customerId: "mock-customer",
-    driverId: "mock-driver-2",
-    requestId: "REQ87654321",
-    driverName: "Sarah Williams",
-    lastMessage: "Package has been picked up, on my way!",
-    lastMessageAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    unreadByCustomer: 1,
-    requestStatus: "picked_up",
-  },
-  {
-    id: "mock-conv-3",
-    customerId: "mock-customer",
-    driverId: "mock-driver-3",
-    requestId: "REQ11223344",
-    driverName: "James Brown",
-    lastMessage: "Delivery completed. Thank you for using PikUp!",
-    lastMessageAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    unreadByCustomer: 0,
-    requestStatus: "completed",
-    completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "mock-conv-4",
-    customerId: "mock-customer",
-    driverId: "mock-driver-4",
-    requestId: "REQ55667788",
-    driverName: "Emma Davis",
-    lastMessage: "Sorry, this delivery was cancelled",
-    lastMessageAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    unreadByCustomer: 0,
-    requestStatus: "cancelled",
-    archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
-const MOCK_PEER_PROFILES = {
-  "mock-driver-1": {
-    id: "mock-driver-1",
-    firstName: "Michael",
-    lastName: "Johnson",
-    email: "michael.j@example.com",
-  },
-  "mock-driver-2": {
-    id: "mock-driver-2",
-    firstName: "Sarah",
-    lastName: "Williams",
-    email: "sarah.w@example.com",
-  },
-  "mock-driver-3": {
-    id: "mock-driver-3",
-    firstName: "James",
-    lastName: "Brown",
-    email: "james.b@example.com",
-  },
-  "mock-driver-4": {
-    id: "mock-driver-4",
-    firstName: "Emma",
-    lastName: "Davis",
-    email: "emma.d@example.com",
-  },
-};
 
 export default function CustomerMessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -157,23 +194,21 @@ export default function CustomerMessagesScreen({ navigation }) {
 
     try {
       const userConversations = await getConversations(currentUser.uid, "customer");
-      const validConversations = userConversations.filter(
+      const validConversations = (Array.isArray(userConversations) ? userConversations : []).filter(
         (conversation) =>
           conversation.customerId &&
           conversation.driverId &&
-          conversation.requestId &&
-          conversation.driverId !== "support" &&
-          conversation.driverId !== "ffffffff-ffff-ffff-ffff-ffffffffffff"
+          (conversation.requestId ||
+            conversation.driverId === "support" ||
+            conversation.driverId === "ffffffff-ffff-ffff-ffff-ffffffffffff") &&
+          conversation.driverId !== conversation.customerId
       );
 
       if (validConversations.length > 0) {
         setConversations(validConversations);
-        return;
+      } else {
+        setConversations([]);
       }
-
-      // Use mock data if no real conversations found
-      setConversations(MOCK_CONVERSATIONS);
-      setPeerProfiles(MOCK_PEER_PROFILES);
     } catch (error) {
       console.error("Error loading conversations:", error);
       Alert.alert("Unable to Load Messages", "Please try again later.");
@@ -187,12 +222,7 @@ export default function CustomerMessagesScreen({ navigation }) {
       new Set(
         conversations
           .map((conversation) => conversation.driverId)
-          .filter(
-            (driverId) =>
-              Boolean(driverId) &&
-              driverId !== "support" &&
-              driverId !== "ffffffff-ffff-ffff-ffff-ffffffffffff"
-          )
+          .filter((driverId) => Boolean(driverId))
       )
     );
     const missingIds = peerIds.filter((id) => !peerProfiles[id]);
@@ -202,6 +232,15 @@ export default function CustomerMessagesScreen({ navigation }) {
 
     const profileEntries = await Promise.all(
       missingIds.map(async (id) => {
+        // Return static profile for support
+        if (id === "support" || id === "ffffffff-ffff-ffff-ffff-ffffffffffff") {
+          return [id, {
+            first_name: "PikUp",
+            last_name: "Support",
+            photo_url: null
+          }];
+        }
+
         try {
           const profile = await getUserProfile(id);
           return [id, profile];
@@ -365,7 +404,8 @@ export default function CustomerMessagesScreen({ navigation }) {
     const isArchived = isArchivedConversation(conversation);
     const metaIconName = isArchived ? "archive-outline" : "car-outline";
     const metaColor = isArchived ? colors.text.tertiary : colors.primary;
-    const metaLabel = `Request #${conversation.requestId.substring(0, 8)}`;
+    const requestShortId = conversation.requestId?.substring(0, 8);
+    const metaLabel = requestShortId ? `Request #${requestShortId}` : "Support";
 
     return (
       <TouchableOpacity
@@ -425,8 +465,8 @@ export default function CustomerMessagesScreen({ navigation }) {
     windowHeight -
     headerHeight -
     HEADER_ROW_HEIGHT * 3 -
-    (insets.bottom > 0 ? insets.bottom : 20) - // Safe area or default padding
-    60; // Tab bar height approx
+    insets.bottom -
+    120;
   const titleLockCompensation = scrollY.interpolate({
     inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
     outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
@@ -588,9 +628,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: spacing.xs,
   },
-  messagesSection: {
-    paddingTop: spacing.sm,
-  },
+  messagesSection: {},
   filterRow: {
     flexDirection: "row",
     alignItems: "center",

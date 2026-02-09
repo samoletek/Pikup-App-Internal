@@ -59,18 +59,39 @@ export default function CustomerHelpScreen({ navigation }) {
       const SUPPORT_DRIVER_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
       const SUPPORT_REQUEST_ID = "00000000-0000-0000-0000-000000000000";
 
-      const conversationId = await createConversation(
-        null,
-        currentUser.uid || currentUser.id,
-        null,
-        currentUserName,
-        "PikUp Support"
-      );
+      let conversationId;
+      let usedSupportId = SUPPORT_DRIVER_ID;
+
+      try {
+        conversationId = await createConversation(
+          null,
+          currentUser.uid || currentUser.id,
+          SUPPORT_DRIVER_ID,
+          currentUserName,
+          "Support"
+        );
+      } catch (err) {
+        // If hardcoded ID fails (FK constraint), fallback to Self-Chat (Note-to-Self)
+        // This allows testing the UI flow without a real support user in DB
+        if (err.message && (err.message.includes("foreign key") || err.code === "23503")) {
+          console.warn("Support ID not found, falling back to Self-Support (Note-to-Self)");
+          usedSupportId = currentUser.uid || currentUser.id;
+          conversationId = await createConversation(
+            null,
+            currentUser.uid || currentUser.id,
+            usedSupportId, // driverId = customerId
+            currentUserName,
+            "Support"
+          );
+        } else {
+          throw err;
+        }
+      }
 
       navigation.navigate("MessageScreen", {
         conversationId,
-        driverId: SUPPORT_DRIVER_ID,
-        driverName: "PikUp Support",
+        driverId: usedSupportId,
+        driverName: "Support",
       });
     } catch (error) {
       console.error("Error creating support chat:", error);

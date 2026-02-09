@@ -14,12 +14,22 @@ import { supabase } from '../config/supabase';
  */
 export const createConversation = async (requestId, customerId, driverId, customerName, driverName) => {
     try {
-        // Check if conversation already exists
-        const { data: existing } = await supabase
+        // Build query to check if conversation exists
+        let query = supabase
             .from('conversations')
             .select('id')
-            .match({ request_id: requestId, customer_id: customerId, driver_id: driverId })
-            .maybeSingle();
+            .eq('customer_id', customerId)
+            .eq('driver_id', driverId);
+
+        if (requestId) {
+            query = query.eq('request_id', requestId);
+        } else {
+            query = query.is('request_id', null);
+        }
+
+        const { data: existing, error: fetchError } = await query.maybeSingle();
+
+        if (fetchError) console.error("Error fetching existing conversation:", fetchError);
 
         if (existing) return existing.id;
 
@@ -51,13 +61,23 @@ export const createConversation = async (requestId, customerId, driverId, custom
  */
 export const getConversations = async (userId, userType) => {
     try {
-        const column = userType === 'customer' ? 'customer_id' : 'driver_id';
-
-        const { data, error } = await supabase
+        let query = supabase
             .from('conversations')
             .select('*')
-            .eq(column, userId)
             .order('updated_at', { ascending: false });
+
+        if (userType === 'driver') {
+            // Drivers need to see:
+            // 1. Trips where they are the driver (driver_id = userId)
+            // 2. Support chats where they are the customer (customer_id = userId AND driver_id = SUPPORT)
+            // We use an OR condition
+            query = query.or(`driver_id.eq.${userId},and(customer_id.eq.${userId},driver_id.eq.ffffffff-ffff-ffff-ffff-ffffffffffff)`);
+        } else {
+            // Customers just see their own chats
+            query = query.eq('customer_id', userId);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
 
@@ -113,13 +133,22 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
             updated_at: new Date().toISOString()
         };
 
-        // Increment unread count
+        // Increment unread count based on who sent the message (support chat compatibility)
         const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single();
         if (conv) {
-            if (senderType === 'customer') {
+            if (senderId === conv.customer_id) {
+                // Sender is the customer (or driver acting as customer in support chat)
                 updates.unread_by_driver = (conv.unread_by_driver || 0) + 1;
-            } else {
+            } else if (senderId === conv.driver_id) {
+                // Sender is the driver (or support)
                 updates.unread_by_customer = (conv.unread_by_customer || 0) + 1;
+            } else {
+                // Determine by role if ID check fails (fallback)
+                if (senderType === 'customer') {
+                    updates.unread_by_driver = (conv.unread_by_driver || 0) + 1;
+                } else {
+                    updates.unread_by_customer = (conv.unread_by_customer || 0) + 1;
+                }
             }
             await supabase.from('conversations').update(updates).eq('id', conversationId);
         }
