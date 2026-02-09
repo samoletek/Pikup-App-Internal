@@ -57,7 +57,7 @@
 - [x] #99 Components refactoring
 
 ### Authentication Screens
-- [x] #8 Forgot Password flow (UI)
+- [x] #8 Forgot Password flow (UI only)
 - [x] #9 Loading states (spinners, disabled buttons)
 - [x] #10 Error handling on all failures
 - [x] #11 Back button on Sign Up screen
@@ -88,8 +88,8 @@
 - [x] #37 Fix button container overflow
 - [x] #38 Handle unavailable insurance state
 - [x] Apple HIG compliant interface
-- [ ] Working authentication with password reset
-- [ ] 0 Useless components
+- [ ] Working authentication with "forgot password"
+- [x] 0 Useless components
 - [x] New/Used item selection with insurance logic
 
 ---
@@ -103,42 +103,42 @@
 - [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement)
 
 ### Customer Flow - Messages Screen
-- [ ] #43 Fix messaging - currently not functional
-- [ ] #44 Auto-create chat room per trip
-- [ ] #45 Move Support messages to Account > Help
-- [ ] #46 Center "No messages" empty state
+- [ ] #43 Fix messaging - currently not functional - adrei
+- [ ] #44 Auto-create chat room per trip - adrei
+- [ ] #45 Move Support messages to Account > Help - adrei
+- [x] #46 Center "No messages" empty state
 
 ### Customer Flow - Account Screen
 - [x] #47 Account deletion (App Store requirement)
-- [ ] #48 Remove Driver toggle - separate accounts
-- [ ] #49 Remove Wallet for customer - direct payment
-- [ ] #50 Remove duplicate buttons (already in tab bar)
-- [ ] #51 Move Promo banner to Home screen
-- [ ] #52 Terms/Privacy as website links
-- [ ] #53 Full Account UI rebuild
-- [ ] #54 Separate Settings from profile editing
-- [ ] #55 Data Usage/Download - implement or remove
-- [ ] #56 Remove Clear app data option
+- [x] #48 Remove Driver toggle - separate accounts
+- [ ] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses) - erema
+- [ ] #50 Remove duplicate buttons in account screen (already in tab bar) - erema
+- [ ] #51 Move Promo banner to Home screen (if exists) - erema
+- [x] #52 Terms/Privacy as website links
+- [ ] #53 Full Account UI rebuild (cascade menu) - erema
+- [ ] #54 Separate Settings from profile editing - erema
+- [ ] #55 Data Usage/Download - implement or remove - erema
+- [ ] #56 Remove Clear app data option - erema
 
 ### Driver Flow - Onboarding
-- [ ] #58 Phone verification (SMS) - prevent fake numbers
-- [ ] #59 Driver address autocomplete
-- [ ] #60 Cascading vehicle picker: Make > Model > Year (trucks/SUVs only)
-- [ ] #61 Convert to multi-step onboarding form
+- [ ] #58 Phone verification (SMS) - prevent fake numbers - khan
+- [ ] #59 Driver address autocomplete - khan
+- [ ] #60 Cascading vehicle picker: Make > Model > Year (trucks/SUVs only) - khan
+- [x] #61 Convert to multi-step onboarding form
 
 ### Backend / Infrastructure
-- [ ] #70 Dynamic pricing algorithm
-- [ ] #39 Audit all price calculations
+- [ ] #70 Dynamic pricing algorithm - khan
+- [ ] #39 Audit all price calculations - khan
 
 ### New Features (from Jan 24 call)
-- [ ] #72 Multiple items - grid for adding items
-- [ ] #73 Each item: photo + frame + AI description + new/used
-- [ ] #74 Receipt photo for new items (insurance)
-- [ ] #75 Confirmation dialog: verify description and count
-- [ ] #76 Driver preferences UI (size, equipment, extra help)
-- [ ] #77 Gamification - weekly milestones, bonuses, progress
-- [ ] #78 AI - adjustable frame for photo selection
-- [ ] #79 AI - simplify system prompt for concise descriptions
+- [x] #72 Multiple items - grid for adding items
+- [ ] #73 Each item: photo + frame + AI description + new/used - adrei
+- [ ] #74 Receipt photo for new items (insurance) - adrei
+- [ ] #75 Confirmation dialog: verify description and count - adrei
+- [ ] #76 Driver preferences UI (size, equipment, extra help) - erema
+- [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
+- [ ] #78 AI - adjustable frame for photo selection - adrei
+- [ ] #79 AI - simplify system prompt for concise descriptions - adrei
 
 ### Milestone 3 Deliverables
 - [ ] Working messaging system
@@ -156,9 +156,9 @@
 **Focus:** Driver screens, matching algorithm, payments, deployment
 
 ### Customer Flow - Activity Screen
-- [ ] #40 Fix Filter button - currently non-functional
-- [ ] #41 Center "No trips Found" text
-- [ ] #42 Verify Recent/All filters work
+- [x] #40 Fix Filter button - currently non-functional
+- [x] #41 Center "No trips Found" text
+- [x] #42 Verify Recent/All filters work
 
 ### Customer Flow - Account Screen
 - [ ] #57 Referral program with deep links
@@ -180,8 +180,8 @@
 - [ ] #69 Order matching algorithm (nearest driver + preferences)
 
 ### Insurance API
-- [ ] #81 Verify Redkik quote flow - **BLOCKED: waiting for API access**
-- [ ] #82 Test insurance logic end-to-end - **BLOCKED: waiting for API access**
+- [ ] #81 Verify Redkik quote flow
+- [ ] #82 Test insurance logic end-to-end
 
 ### Stripe Payments
 - [ ] #83 Customer payment flow testing
