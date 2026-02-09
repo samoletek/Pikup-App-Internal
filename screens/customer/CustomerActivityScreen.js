@@ -26,6 +26,78 @@ import {
 import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
 
 const TERMINAL_TRIP_STATUSES = [TRIP_STATUS.COMPLETED, TRIP_STATUS.CANCELLED];
+
+// ======== MOCK DATA FOR UI DEVELOPMENT ========
+const MOCK_TRIPS = [
+  {
+    id: "trip-001",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "2 hr ago",
+    pickup: "123 Main Street, San Francisco, CA 94102",
+    dropoff: "456 Market Street, San Francisco, CA 94103",
+    item: "Small Package",
+    driver: "alex.driver",
+    amount: "$24.99",
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "trip-002",
+    status: TRIP_STATUS.CANCELLED,
+    dateLabel: "5 hr ago",
+    pickup: "789 Oak Avenue, San Francisco, CA 94117",
+    dropoff: "321 Pine Street, San Francisco, CA 94108",
+    item: "Documents",
+    driver: "maria.express",
+    amount: "$15.50",
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "trip-003",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "1 day ago",
+    pickup: "555 Mission Street, San Francisco, CA 94105",
+    dropoff: "888 Howard Street, San Francisco, CA 94103",
+    item: "Food Delivery",
+    driver: "john.quick",
+    amount: "$18.75",
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "trip-004",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "2 days ago",
+    pickup: "100 Van Ness Avenue, San Francisco, CA 94102",
+    dropoff: "200 Folsom Street, San Francisco, CA 94107",
+    item: "Electronics",
+    driver: "lisa.courier",
+    amount: "$32.00",
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "trip-005",
+    status: TRIP_STATUS.CANCELLED,
+    dateLabel: "3 days ago",
+    pickup: "Golden Gate Park, San Francisco, CA",
+    dropoff: "Fisherman's Wharf, San Francisco, CA",
+    item: "Gift Box",
+    driver: "mike.delivery",
+    amount: "$28.50",
+    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "trip-006",
+    status: TRIP_STATUS.COMPLETED,
+    dateLabel: "Jan 15, 2026",
+    pickup: "Pier 39, San Francisco, CA 94133",
+    dropoff: "Union Square, San Francisco, CA 94108",
+    item: "Clothing",
+    driver: "sarah.fast",
+    amount: "$21.25",
+    timestamp: new Date("2026-01-15T14:30:00").toISOString(),
+  },
+];
+// ======== END MOCK DATA ========
+
 const HEADER_ROW_HEIGHT = 56;
 const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;

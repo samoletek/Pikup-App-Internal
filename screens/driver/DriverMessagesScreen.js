@@ -86,7 +86,8 @@ export default function DriverMessagesScreen({ navigation, route }) {
           conversation.customerId &&
           conversation.driverId &&
           conversation.requestId &&
-          conversation.customerId !== "support"
+          conversation.customerId !== "support" &&
+          conversation.driverId !== conversation.customerId
       );
       setConversations(validConversations);
     } catch (error) {
@@ -266,13 +267,24 @@ export default function DriverMessagesScreen({ navigation, route }) {
   };
 
   const renderConversationItem = (conversation) => {
-    const profile = peerProfiles[conversation.customerId];
-    const fallbackName =
-      conversation.customerName ||
-      `Customer ${conversation.customerId?.substring(0, 8) || ""}`;
-    const customerName = getDisplayNameFromProfile(profile, fallbackName);
-    const avatarUrl = getAvatarUrlFromProfile(profile);
-    const avatarInitial = getAvatarInitial(customerName);
+    const isSupport = conversation.driverId === "ffffffff-ffff-ffff-ffff-ffffffffffff" || conversation.driverId === "support";
+
+    let customerName, avatarUrl, avatarInitial;
+
+    if (isSupport) {
+      customerName = "Support";
+      avatarUrl = null; // Or a specific support icon URL
+      avatarInitial = "S";
+    } else {
+      const profile = peerProfiles[conversation.customerId];
+      const fallbackName =
+        conversation.customerName ||
+        `Customer ${conversation.customerId?.substring(0, 8) || ""}`;
+      customerName = getDisplayNameFromProfile(profile, fallbackName);
+      avatarUrl = getAvatarUrlFromProfile(profile);
+      avatarInitial = getAvatarInitial(customerName);
+    }
+
     const isUnread = (conversation.unreadByDriver || 0) > 0;
     const isArchived = isArchivedConversation(conversation);
     const metaIconName = isArchived ? "archive-outline" : "cube-outline";
@@ -538,7 +550,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   messagesSection: {
-    paddingTop: spacing.sm,
+    // paddingTop: spacing.sm, // Removed to match Activity screen layout
   },
   filterRow: {
     flexDirection: "row",
@@ -676,6 +688,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: spacing.xxxl,
+    paddingBottom: 56 + spacing.xxxl - spacing.base, // 88px (56+48-16) for exact pixel match
   },
   emptyStateTitle: {
     color: colors.text.primary,
