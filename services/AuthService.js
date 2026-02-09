@@ -170,8 +170,20 @@ export const logout = async () => {
     try {
         const { error } = await supabase.auth.signOut();
 
+        const allKeys = await AsyncStorage.getAllKeys();
+        const scopedPaymentKeys = allKeys.filter((key) =>
+            key === 'paymentMethods' ||
+            key === 'defaultPaymentMethod' ||
+            key.startsWith('paymentMethods:') ||
+            key.startsWith('defaultPaymentMethod:') ||
+            key === 'expected_role'
+        );
+
         await AsyncStorage.removeItem('currentUser');
         await AsyncStorage.removeItem('userType');
+        if (scopedPaymentKeys.length > 0) {
+            await AsyncStorage.multiRemove(scopedPaymentKeys);
+        }
 
         console.log('Logged out successfully');
 
@@ -310,6 +322,67 @@ const extractParamsFromUrl = (url) => {
     return params;
 };
 
+const resolveRoleTables = (userRole) => {
+    const targetTable = userRole === 'driver' ? 'drivers' : 'customers';
+    const otherTable = userRole === 'driver' ? 'customers' : 'drivers';
+    return { targetTable, otherTable };
+};
+
+const ensureOAuthRoleProfile = async (user, userRole) => {
+    const { targetTable, otherTable } = resolveRoleTables(userRole);
+
+    const { data: otherProfile, error: otherProfileError } = await supabase
+        .from(otherTable)
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (otherProfileError) {
+        throw otherProfileError;
+    }
+
+    if (otherProfile) {
+        await supabase.auth.signOut();
+        throw new Error(
+            `Wrong portal. You are registered as a ${otherTable === 'drivers' ? 'Driver' : 'Customer'}. Please use the correct login button.`
+        );
+    }
+
+    const { data: existingProfile, error: existingProfileError } = await supabase
+        .from(targetTable)
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    if (existingProfileError) {
+        throw existingProfileError;
+    }
+
+    if (existingProfile) {
+        return existingProfile;
+    }
+
+    const profileSeed = {
+        id: user.id,
+        email: user.email,
+        rating: 5.0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    };
+
+    const { data: newProfile, error: upsertError } = await supabase
+        .from(targetTable)
+        .upsert(profileSeed)
+        .select('*')
+        .single();
+
+    if (upsertError) {
+        throw upsertError;
+    }
+
+    return newProfile;
+};
+
 /**
  * Sign in with Google
  * @param {string} userRole - Expected role ('customer' or 'driver')
@@ -347,8 +420,42 @@ export const signInWithGoogle = async (userRole = 'customer') => {
                         refresh_token,
                     });
                     if (sessionError) throw sessionError;
+
+                    const {
+                        data: { user },
+                        error: userError
+                    } = await supabase.auth.getUser();
+
+                    if (userError || !user) {
+                        throw new Error('Google authentication succeeded but user data is unavailable.');
+                    }
+
+                    const profile = await ensureOAuthRoleProfile(user, userRole);
+
+                    const { error: metadataError } = await supabase.auth.updateUser({
+                        data: {
+                            user_type: userRole,
+                        }
+                    });
+                    if (metadataError) {
+                        console.warn('Unable to persist user_type metadata after Google sign-in:', metadataError);
+                    }
+
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const activeSession = sessionData?.session;
+                    const fullUser = {
+                        ...user,
+                        ...profile,
+                        uid: user.id,
+                        accessToken: activeSession?.access_token || access_token,
+                        user_type: userRole,
+                    };
+
+                    await AsyncStorage.setItem('currentUser', JSON.stringify(fullUser));
+                    await AsyncStorage.setItem('userType', userRole);
+
                     console.log('Supabase session set successfully');
-                    return { success: true, userType: userRole };
+                    return { success: true, user: fullUser, userType: userRole };
                 } else {
                     console.warn('No tokens found in URL');
                     throw new Error('Authentication failed: No tokens received');

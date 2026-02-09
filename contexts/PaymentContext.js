@@ -21,6 +21,7 @@ export const PaymentProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const stripe = useStripe();
   const { currentUser } = useAuth();
+  const userId = currentUser?.uid || currentUser?.id;
 
   // Configuration - Backend server URL
   // For Android emulator: use 10.0.2.2 if backend is on same machine
@@ -28,38 +29,50 @@ export const PaymentProvider = ({ children }) => {
   // TODO: Replace with your actual backend URL
   // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com'; // REMOVED
 
-  // Load saved payment methods on app start
-  useEffect(() => {
-    loadSavedPaymentMethods();
-  }, []);
+  const getPaymentMethodsKey = (targetUserId) => `paymentMethods:${targetUserId}`;
+  const getDefaultMethodKey = (targetUserId) => `defaultPaymentMethod:${targetUserId}`;
 
-  // Fetch saved payment methods from Stripe when user logs in
-  useEffect(() => {
-    if (currentUser?.uid || currentUser?.id) {
-      fetchStripePaymentMethods();
+  const loadSavedPaymentMethods = async (targetUserId = userId) => {
+    if (!targetUserId) {
+      setPaymentMethods([]);
+      setDefaultPaymentMethod(null);
+      return;
     }
-  }, [currentUser]);
 
-  const loadSavedPaymentMethods = async () => {
     try {
-      const saved = await AsyncStorage.getItem('paymentMethods');
-      const defaultMethod = await AsyncStorage.getItem('defaultPaymentMethod');
+      const saved = await AsyncStorage.getItem(getPaymentMethodsKey(targetUserId));
+      const defaultMethod = await AsyncStorage.getItem(getDefaultMethodKey(targetUserId));
 
       if (saved) {
         setPaymentMethods(JSON.parse(saved));
+      } else {
+        setPaymentMethods([]);
       }
+
       if (defaultMethod) {
         setDefaultPaymentMethod(JSON.parse(defaultMethod));
+      } else {
+        setDefaultPaymentMethod(null);
       }
     } catch (error) {
       console.error('Error loading payment methods:', error);
     }
   };
 
+  useEffect(() => {
+    if (!userId) {
+      setPaymentMethods([]);
+      setDefaultPaymentMethod(null);
+      return;
+    }
+
+    loadSavedPaymentMethods(userId);
+    fetchStripePaymentMethods(userId);
+  }, [userId]);
+
   // Fetch saved payment methods from Stripe
-  const fetchStripePaymentMethods = async () => {
-    const userId = currentUser?.uid || currentUser?.id;
-    if (!userId) return;
+  const fetchStripePaymentMethods = async (targetUserId = userId) => {
+    if (!targetUserId) return;
 
     try {
       setLoading(true);
@@ -75,16 +88,16 @@ export const PaymentProvider = ({ children }) => {
       console.log('Payment methods fetched:', data.paymentMethods?.length);
 
       setPaymentMethods(data.paymentMethods || []);
-      await AsyncStorage.setItem('paymentMethods', JSON.stringify(data.paymentMethods || []));
+      await AsyncStorage.setItem(getPaymentMethodsKey(targetUserId), JSON.stringify(data.paymentMethods || []));
 
       // Set default if exists
       const defaultMethod = data.paymentMethods?.find(pm => pm.isDefault);
       if (defaultMethod) {
         setDefaultPaymentMethod(defaultMethod);
-        await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(defaultMethod));
+        await AsyncStorage.setItem(getDefaultMethodKey(targetUserId), JSON.stringify(defaultMethod));
       } else {
         setDefaultPaymentMethod(null);
-        await AsyncStorage.removeItem('defaultPaymentMethod');
+        await AsyncStorage.removeItem(getDefaultMethodKey(targetUserId));
       }
     } catch (error) {
       console.error('Error fetching Stripe payment methods:', error);
@@ -95,6 +108,10 @@ export const PaymentProvider = ({ children }) => {
   };
 
   const savePaymentMethod = async (paymentMethod) => {
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
     try {
       const newMethods = [...paymentMethods, paymentMethod];
       setPaymentMethods(newMethods);
@@ -102,10 +119,10 @@ export const PaymentProvider = ({ children }) => {
       // Set as default if it's the first one
       if (newMethods.length === 1) {
         setDefaultPaymentMethod(paymentMethod);
-        await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(paymentMethod));
+        await AsyncStorage.setItem(getDefaultMethodKey(userId), JSON.stringify(paymentMethod));
       }
 
-      await AsyncStorage.setItem('paymentMethods', JSON.stringify(newMethods));
+      await AsyncStorage.setItem(getPaymentMethodsKey(userId), JSON.stringify(newMethods));
       return { success: true };
     } catch (error) {
       console.error('Error saving payment method:', error);
@@ -114,6 +131,10 @@ export const PaymentProvider = ({ children }) => {
   };
 
   const removePaymentMethod = async (methodId) => {
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
     try {
       const updatedMethods = paymentMethods.filter(method => method.id !== methodId);
       setPaymentMethods(updatedMethods);
@@ -123,13 +144,13 @@ export const PaymentProvider = ({ children }) => {
         const newDefault = updatedMethods.length > 0 ? updatedMethods[0] : null;
         setDefaultPaymentMethod(newDefault);
         if (newDefault) {
-          await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(newDefault));
+          await AsyncStorage.setItem(getDefaultMethodKey(userId), JSON.stringify(newDefault));
         } else {
-          await AsyncStorage.removeItem('defaultPaymentMethod');
+          await AsyncStorage.removeItem(getDefaultMethodKey(userId));
         }
       }
 
-      await AsyncStorage.setItem('paymentMethods', JSON.stringify(updatedMethods));
+      await AsyncStorage.setItem(getPaymentMethodsKey(userId), JSON.stringify(updatedMethods));
       return { success: true };
     } catch (error) {
       console.error('Error removing payment method:', error);
@@ -138,9 +159,13 @@ export const PaymentProvider = ({ children }) => {
   };
 
   const setDefault = async (paymentMethod) => {
+    if (!userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
     try {
       setDefaultPaymentMethod(paymentMethod);
-      await AsyncStorage.setItem('defaultPaymentMethod', JSON.stringify(paymentMethod));
+      await AsyncStorage.setItem(getDefaultMethodKey(userId), JSON.stringify(paymentMethod));
       return { success: true };
     } catch (error) {
       console.error('Error setting default payment method:', error);
@@ -150,17 +175,26 @@ export const PaymentProvider = ({ children }) => {
 
   // Create a payment intent for processing payment
   const createPaymentIntent = async (amount, currency = 'usd', rideDetails = {}) => {
+    if (!userId) {
+      return { success: false, error: 'User not authenticated', errorCode: null };
+    }
+
+    const normalizedAmount = Number(amount);
+    if (!Number.isInteger(normalizedAmount) || normalizedAmount <= 0) {
+      return { success: false, error: 'Invalid payment amount', errorCode: null };
+    }
+
     try {
       setLoading(true);
-      console.log(`Creating payment intent for ${amount}`);
+      console.log(`Creating payment intent for ${normalizedAmount} cents`);
 
       // Call Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('create-payment-intent', {
         body: {
-          amount,
+          amount: normalizedAmount,
           currency,
           userEmail: currentUser?.email,
-          userId: currentUser?.uid || currentUser?.id,
+          userId,
           paymentMethodId: defaultPaymentMethod?.stripePaymentMethodId,
           rideDetails,
         }

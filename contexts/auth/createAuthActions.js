@@ -64,7 +64,12 @@ export const createAuthActions = ({
   const signInWithGoogle = async (userRole) => {
     setLoading(true);
     try {
-      return await AuthService.signInWithGoogle(userRole);
+      const result = await AuthService.signInWithGoogle(userRole);
+      if (result?.user) {
+        setCurrentUser(result.user);
+        setUserType(result.userType || userRole);
+      }
+      return result;
     } finally {
       setLoading(false);
     }

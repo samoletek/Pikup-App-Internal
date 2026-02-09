@@ -119,6 +119,13 @@ module.exports = {
             "Pikup needs camera access to verify your identity and capture photos of items.",
         },
       ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          merchantIdentifier: process.env.EXPO_PUBLIC_STRIPE_MERCHANT_ID || "merchant.com.pikup",
+        },
+      ],
+      "expo-font",
     ],
   },
 };

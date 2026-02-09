@@ -1,7 +1,7 @@
 
 [functions.create-payment-intent]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/create-payment-intent/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -12,7 +12,7 @@ entrypoint = "./functions/create-payment-intent/index.ts"
 
 [functions.process-payout]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/process-payout/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -23,7 +23,7 @@ entrypoint = "./functions/process-payout/index.ts"
 
 [functions.delete-user]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/delete-user/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -34,7 +34,7 @@ entrypoint = "./functions/delete-user/index.ts"
 
 [functions.get-payment-methods]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/get-payment-methods/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -45,7 +45,7 @@ entrypoint = "./functions/get-payment-methods/index.ts"
 
 [functions.calculate-trip-price]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/calculate-trip-price/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -56,7 +56,7 @@ entrypoint = "./functions/calculate-trip-price/index.ts"
 
 [functions.check-user-exists]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/check-user-exists/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -67,15 +67,15 @@ entrypoint = "./functions/check-user-exists/index.ts"
 
 [functions.submit-claim]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/submit-claim/index.ts"
 
 [functions.submit-feedback]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/submit-feedback/index.ts"
 
 [functions.create-verification-session]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 entrypoint = "./functions/create-verification-session/index.ts"

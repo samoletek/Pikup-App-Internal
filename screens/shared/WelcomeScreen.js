@@ -44,11 +44,11 @@ export default function WelcomeScreen({ navigation }) {
       const navigateAfterLogin = async () => {
         try {
           if (userType === "driver") {
-            const driverProfile = await getDriverProfile(currentUser.uid);
+            const driverProfile = await getDriverProfile(currentUser.uid || currentUser.id);
             if (driverProfile?.onboardingComplete) {
               navigation.replace("DriverTabs");
             } else {
-              navigation.replace("DriverOnboarding");
+              navigation.replace("DriverOnboardingScreen");
             }
           } else {
             navigation.replace("CustomerTabs");

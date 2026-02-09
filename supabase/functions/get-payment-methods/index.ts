@@ -69,6 +69,7 @@ serve(async (req) => {
     const formattedMethods = paymentMethods.data.map(pm => ({
       id: pm.id,
       stripePaymentMethodId: pm.id,
+      brand: pm.card.brand,
       cardBrand: pm.card.brand,
       last4: pm.card.last4,
       expMonth: pm.card.exp_month,

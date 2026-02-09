@@ -73,19 +73,6 @@ serve(async (req) => {
     // However, if they try to sign up with same email, Supabase Auth will fail ("User already exists").
     // So we SHOULD check auth.users to be safe, so the UI can define "Login" instead of "Register".
 
-    const { data: { users }, error: authError } = await supabaseAdmin.auth.admin.listUsers()
-    // basic listUsers might not filter by email efficiently without args? 
-    // Actually listUsers() is for pagination. listUsers({ page: 1, perPage: 1000 }) etc.
-    // It's not efficient to scan all users.
-    // Better way: Attempt to create a dummy user or just assume 'not found'.
-    // BUT: admin.createUser will fail.
-
-    // There isn't a simple "admin.getUserByEmail" in older SDKs?
-    // In v2: supabaseAdmin.auth.admin.getUserByEmail is NOT standard?
-    // Wait, createClient autocompletes often show listUsers.
-    // Let's rely on Public Tables for now. If Supabase Auth throws "User already registered" later during signup,
-    // the UI will catch it and tell user "Account exists, please login".
-
     return new Response(
       JSON.stringify({ exists: false, userType: null }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

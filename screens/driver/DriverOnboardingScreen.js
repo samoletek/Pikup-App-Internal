@@ -260,9 +260,6 @@ export default function DriverOnboardingScreen({ navigation }) {
         body: {
           userId: currentUser.uid || currentUser.id,
           email: currentUser.email,
-        },
-        headers: {
-          Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`
         }
       });
 

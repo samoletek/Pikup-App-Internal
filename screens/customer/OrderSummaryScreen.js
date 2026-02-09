@@ -104,7 +104,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
       };
 
       const paymentIntentResult = await createPaymentIntent(
-        parseFloat(pricing.total),
+        Math.round(parseFloat(pricing.total) * 100),
         'usd',
         rideDetails
       );
@@ -167,7 +167,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
 
     return {
       icon: 'card',
-      text: `${defaultPaymentMethod.brand?.toUpperCase()} •••• ${defaultPaymentMethod.last4}`,
+      text: `${(defaultPaymentMethod.brand || defaultPaymentMethod.cardBrand || 'Card').toUpperCase()} •••• ${defaultPaymentMethod.last4}`,
       subtext: `Expires ${defaultPaymentMethod.expMonth}/${defaultPaymentMethod.expYear}`,
     };
   };

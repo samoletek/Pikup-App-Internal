@@ -128,6 +128,7 @@ export const processTripPayout = async (payoutData) => {
                 currency: 'usd',
                 connectAccountId: payoutData.connectAccountId,
                 transferGroup: payoutData.tripId,
+                driverId: payoutData.driverId,
             }
         });
 

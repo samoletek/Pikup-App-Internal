@@ -73,7 +73,16 @@ export function AuthProvider({ children }) {
           if (!session) return;
 
           const metadata = session.user.user_metadata || {};
-          const detectedUserType = metadata.user_type || 'customer';
+          let detectedUserType = metadata.user_type;
+
+          if (!detectedUserType) {
+            const [{ data: driverProfile }, { data: customerProfile }] = await Promise.all([
+              supabase.from('drivers').select('id').eq('id', session.user.id).maybeSingle(),
+              supabase.from('customers').select('id').eq('id', session.user.id).maybeSingle(),
+            ]);
+
+            detectedUserType = driverProfile ? 'driver' : customerProfile ? 'customer' : 'customer';
+          }
 
           const fullUser = {
             ...session.user,

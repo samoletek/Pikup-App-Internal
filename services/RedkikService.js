@@ -1,102 +1,48 @@
-import Constants from 'expo-constants';
+// Redkik calls must run through a trusted backend.
+// Do not place Redkik client secrets in the mobile app bundle.
 
-// Get Redkik config from env via Expo Constants (if exposed) or process.env shim
-// Note: In Expo, process.env isn't always reliable without specific setup, 
-// so we typically rely on EXPO_PUBLIC_ prefix or .env.local being loaded into process.env by the bundler.
-// Since these vars lack EXPO_PUBLIC_ prefix in .env.local, they might not be exposed to the client bundle 
-// unless configured in app.config.js or via babel-plugin-transform-inline-environment-variables.
-// 
-// HOWEVER, the user asked to "do the task" and we found them in .env.local.
-// Check if they are actually accessible. If not, we might need to add EXPO_PUBLIC_ prefix or similar.
+const REDKIK_PROXY_BASE_URL =
+  process.env.EXPO_PUBLIC_REDKIK_PROXY_BASE_URL ||
+  process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL ||
+  null;
 
-// Assuming for now they will be shimmed or we will use a hardcoded fallback structure for development 
-// if process.env fails (SECURITY RISK: Only for local dev). 
+const buildProxyUrl = (path) => {
+  if (!REDKIK_PROXY_BASE_URL) {
+    throw new Error(
+      'Redkik proxy is not configured. Set EXPO_PUBLIC_REDKIK_PROXY_BASE_URL.'
+    );
+  }
 
-// BETTER APPROACH for secure client-side:
-const REDKIK_BASE_URL = process.env.EXPO_PUBLIC_REDKIK_BASE_URL || 'https://sales.app.redkik.com';
-const CLIENT_ID = process.env.EXPO_PUBLIC_REDKIK_CLIENT_ID;
-const CLIENT_SECRET = process.env.EXPO_PUBLIC_REDKIK_CLIENT_SECRET;
+  const baseUrl = REDKIK_PROXY_BASE_URL.endsWith("/")
+    ? REDKIK_PROXY_BASE_URL.slice(0, -1)
+    : REDKIK_PROXY_BASE_URL;
 
-// In-memory token storage
-let accessToken = null;
-let tokenExpiry = null;
+  return `${baseUrl}${path}`;
+};
 
 const RedkikService = {
-    /**
-     * authenticate
-     * Exchanges Client ID and Secret for a Bearer Token.
-     */
-    async authenticate() {
-        if (accessToken && tokenExpiry && new Date() < tokenExpiry) {
-            console.log('✅ Redkik: Using cached token');
-            return accessToken;
-        }
+  async authenticate() {
+    // Kept for compatibility with existing call sites.
+    // Authentication is handled server-side by the proxy.
+    return true;
+  },
 
-        console.log('🔄 Redkik: Authenticating...');
-        try {
-            if (!CLIENT_ID || !CLIENT_SECRET) {
-                throw new Error('Missing Redkik Credentials. Check .env.local');
-            }
+  async getQuote(bookingDetails) {
+    const response = await fetch(buildProxyUrl('/redkik/quotes'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bookingDetails || {}),
+    });
 
-            const response = await fetch(`${REDKIK_BASE_URL}/oauth/token`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    grant_type: 'client_credentials',
-                    client_id: CLIENT_ID,
-                    client_secret: CLIENT_SECRET,
-                    scope: 'quote:write policy:write claim:write', // Adjust scopes as needed
-                }),
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ Redkik Auth Failed:', response.status, errorText);
-                throw new Error(`Redkik Auth Failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            accessToken = data.access_token;
-
-            // Calculate expiry (minus 60s safety buffer)
-            const expiresIn = data.expires_in || 3600;
-            tokenExpiry = new Date(new Date().getTime() + (expiresIn - 60) * 1000);
-
-            console.log('✅ Redkik: Authenticated successfully');
-            return accessToken;
-        } catch (error) {
-            console.error('Redkik Auth Error:', error);
-            throw error;
-        }
-    },
-
-    /**
-     * getQuote
-     * Generic method to get a quote
-     */
-    async getQuote(bookingDetails) {
-        const token = await this.authenticate();
-
-        // TODO: Implement actual quote payload mapping
-        // This is a placeholder for the authenticated request
-        try {
-            const response = await fetch(`${REDKIK_BASE_URL}/quotes`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(bookingDetails),
-            });
-
-            return await response.json();
-        } catch (error) {
-            console.error('Redkik Quote Error:', error);
-            throw error;
-        }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Redkik quote request failed: ${response.status} ${errorText}`);
     }
+
+    return await response.json();
+  },
 };
 
 export default RedkikService;

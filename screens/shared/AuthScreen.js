@@ -114,7 +114,7 @@ export default function AuthScreen({ navigation, route }) {
 
         try {
             if (isLogin) {
-                await login(email, password);
+                await login(email, password, userRole);
             } else {
                 await signup(email, password, userRole, {
                     firstName: firstName,

@@ -16,7 +16,6 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import BaseModal from './BaseModal';
 import { useAuth } from '../contexts/AuthContext';
@@ -237,7 +236,6 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
 
     const handleAppleSignIn = async () => {
         try {
-            await AsyncStorage.setItem('expected_role', selectedRole); // For Context awareness
             await signInWithApple(selectedRole);
             handleClose();
         } catch (error) {
@@ -247,7 +245,6 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
 
     const handleGoogleSignIn = async () => {
         try {
-            await AsyncStorage.setItem('expected_role', selectedRole); // For Context awareness
             await signInWithGoogle(selectedRole);
             // setModalVisible(false); // AuthModal logic usually handles closing based on auth state?
             // Actually signInWithGoogle logic might wait for redirect.

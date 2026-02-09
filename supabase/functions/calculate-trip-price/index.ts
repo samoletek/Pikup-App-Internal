@@ -12,7 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { distance, duration, vehicleType } = await req.json()
+    const payload = await req.json()
+    const details = payload?.rideDetails || payload || {}
+    const { distance, duration, vehicleType } = details
 
     // Basic Validation
     if (distance === undefined || duration === undefined) {
