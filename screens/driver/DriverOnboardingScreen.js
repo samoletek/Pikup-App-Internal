@@ -11,9 +11,9 @@ import {
   Animated,
   Image,
   ActivityIndicator,
-  Modal,
   useWindowDimensions,
   Platform,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,8 @@ import {
   spacing,
   typography,
 } from '../../styles/theme';
+import BaseModal from '../../components/BaseModal';
+import MapboxLocationService from '../../services/MapboxLocationService';
 
 const steps = [
   {
@@ -228,7 +230,7 @@ const pickLatestDraft = (localDraft, remoteDraft) => {
 
 export default function DriverOnboardingScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
   const { currentUser, updateDriverPaymentProfile } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
@@ -241,6 +243,7 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const statePickerRef = useRef(null);
   const saveTimeoutRef = useRef(null);
   const lastSavedDraftRef = useRef(null);
   const lastRemoteSyncSignatureRef = useRef(null);
@@ -336,6 +339,80 @@ export default function DriverOnboardingScreen({ navigation }) {
   }, [status, verificationSessionId, currentUser]);
 
   const [showStatePicker, setShowStatePicker] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const addressSearchTimeout = useRef(null);
+
+  useEffect(() => {
+    MapboxLocationService.getCurrentLocation()
+      .then(loc => { if (loc) setUserLocation(loc); })
+      .catch(() => {});
+  }, []);
+
+  const closeStatePicker = () => {
+    if (statePickerRef.current) {
+      statePickerRef.current.close();
+    } else {
+      setShowStatePicker(false);
+    }
+  };
+
+  const searchAddress = (query) => {
+    if (addressSearchTimeout.current) clearTimeout(addressSearchTimeout.current);
+
+    if (!query || query.length < 2) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    addressSearchTimeout.current = setTimeout(async () => {
+      try {
+        setIsLoadingAddress(true);
+        const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+        let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
+          `access_token=${accessToken}&country=us&types=address,place&limit=5&autocomplete=true&fuzzy_match=true`;
+
+        if (userLocation) {
+          url += `&proximity=${userLocation.longitude},${userLocation.latitude}`;
+        }
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.features?.length > 0) {
+          setAddressSuggestions(data.features);
+        } else {
+          setAddressSuggestions([]);
+        }
+      } catch (error) {
+        console.error('Address search error:', error);
+      } finally {
+        setIsLoadingAddress(false);
+      }
+    }, 200);
+  };
+
+  const handleAddressSelect = (feature) => {
+    Keyboard.dismiss();
+    const context = feature.context || [];
+
+    const line1 = feature.address
+      ? `${feature.address} ${feature.text}`
+      : feature.place_name?.split(',')[0] || feature.text;
+
+    const city = context.find(c => c.id.startsWith('place'))?.text || '';
+    const stateEntry = context.find(c => c.id.startsWith('region'));
+    const state = stateEntry?.short_code?.replace('US-', '') || '';
+    const zip = context.find(c => c.id.startsWith('postcode'))?.text || '';
+
+    updateFormData('address.line1', line1);
+    if (city) updateFormData('address.city', city);
+    if (state) updateFormData('address.state', state);
+    if (zip) updateFormData('address.postalCode', zip);
+
+    setAddressSuggestions([]);
+  };
 
   const buildDraftSnapshot = () => ({
     currentStep: normalizeStep(currentStep),
@@ -754,16 +831,44 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 3: // Address
         return (
           <View style={styles.formContent}>
-            <View style={styles.inputContainer}>
+            <View style={[styles.inputContainer, { zIndex: 10 }]}>
               <Text style={styles.inputLabel}>Street Address *</Text>
               <TextInput
                 style={styles.textInput}
                 value={formData.address.line1}
-                onChangeText={(value) => updateFormData('address.line1', value)}
-                placeholder="123 Main Street"
+                onChangeText={(value) => {
+                  updateFormData('address.line1', value);
+                  searchAddress(value);
+                }}
+                placeholder="Start typing an address..."
                 placeholderTextColor={colors.text.placeholder}
                 autoCapitalize="words"
               />
+              {isLoadingAddress && (
+                <View style={styles.addressLoadingIndicator}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              )}
+              {addressSuggestions.length > 0 && (
+                <ScrollView
+                  style={styles.suggestionsContainer}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                >
+                  {addressSuggestions.map((feature) => (
+                    <TouchableOpacity
+                      key={feature.id}
+                      style={styles.suggestionItem}
+                      onPress={() => handleAddressSelect(feature)}
+                    >
+                      <Ionicons name="location-outline" size={18} color={colors.text.subtle} style={{ marginRight: 10 }} />
+                      <Text style={styles.suggestionText} numberOfLines={2}>
+                        {feature.place_name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
             </View>
 
             <View style={styles.inputRow}>
@@ -809,48 +914,54 @@ export default function DriverOnboardingScreen({ navigation }) {
             </View>
 
             {/* State Picker Modal */}
-            <Modal
+            <BaseModal
+              ref={statePickerRef}
               visible={showStatePicker}
-              transparent={true}
-              animationType="slide"
-              onRequestClose={() => setShowStatePicker(false)}
+              onClose={() => setShowStatePicker(false)}
+              height={screenHeight * 0.5}
+              backgroundColor={colors.background.tertiary}
             >
-              <View style={styles.pickerModalOverlay}>
-                <View style={styles.pickerModal}>
-                  <View style={styles.pickerHeader}>
-                    <Text style={styles.pickerTitle}>Select State</Text>
-                    <TouchableOpacity onPress={() => setShowStatePicker(false)}>
-                      <Ionicons name="close" size={24} color={colors.white} />
-                    </TouchableOpacity>
-                  </View>
-                  <ScrollView style={styles.pickerList}>
-                    {US_STATES.map((state) => (
-                      <TouchableOpacity
-                        key={state.value}
-                        style={[
-                          styles.pickerItem,
-                          formData.address.state === state.value && styles.pickerItemSelected
-                        ]}
-                        onPress={() => {
-                          updateFormData('address.state', state.value);
-                          setShowStatePicker(false);
-                        }}
-                      >
-                        <Text style={[
-                          styles.pickerItemText,
-                          formData.address.state === state.value && styles.pickerItemTextSelected
-                        ]}>
-                          {state.label}
-                        </Text>
-                        {formData.address.state === state.value && (
-                          <Ionicons name="checkmark" size={20} color={colors.success} />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerTitle}>Select State</Text>
               </View>
-            </Modal>
+              <ScrollView style={styles.pickerList} contentContainerStyle={{ paddingBottom: 40 }}>
+                {formData.address.state ? (
+                  <TouchableOpacity
+                    style={styles.pickerItem}
+                    onPress={() => {
+                      updateFormData('address.state', '');
+                      closeStatePicker();
+                    }}
+                  >
+                    <Text style={[styles.pickerItemText, { color: colors.text.subtle }]}>Clear selection</Text>
+                    <Ionicons name="close-circle-outline" size={20} color={colors.text.subtle} />
+                  </TouchableOpacity>
+                ) : null}
+                {US_STATES.map((state) => (
+                  <TouchableOpacity
+                    key={state.value}
+                    style={[
+                      styles.pickerItem,
+                      formData.address.state === state.value && styles.pickerItemSelected
+                    ]}
+                    onPress={() => {
+                      updateFormData('address.state', state.value);
+                      closeStatePicker();
+                    }}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      formData.address.state === state.value && styles.pickerItemTextSelected
+                    ]}>
+                      {state.label}
+                    </Text>
+                    {formData.address.state === state.value && (
+                      <Ionicons name="checkmark" size={20} color={colors.success} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </BaseModal>
           </View>
         );
 
@@ -1498,17 +1609,6 @@ const styles = StyleSheet.create({
     color: colors.text.subtle,
     fontSize: typography.fontSize.md,
   },
-  pickerModalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlayDark,
-    justifyContent: 'flex-end',
-  },
-  pickerModal: {
-    backgroundColor: colors.background.tertiary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '60%',
-  },
   pickerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1545,5 +1645,41 @@ const styles = StyleSheet.create({
   pickerItemTextSelected: {
     color: colors.primary,
     fontWeight: typography.fontWeight.semibold,
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    marginTop: 4,
+    maxHeight: 200,
+    zIndex: 10,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border.strong,
+  },
+  suggestionText: {
+    flex: 1,
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    lineHeight: 18,
+  },
+  addressLoadingIndicator: {
+    position: 'absolute',
+    right: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
   },
 });

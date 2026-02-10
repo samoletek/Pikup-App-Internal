@@ -121,8 +121,8 @@
 - [ ] #56 Remove Clear app data option - erema
 
 ### Driver Flow - Onboarding
-- [ ] #58 Phone verification (SMS) - prevent fake numbers - khan
-- [ ] #59 Driver address autocomplete - khan
+- [-] #58 Phone verification (SMS) - prevent fake numbers - khan
+- [x] #59 Driver address autocomplete - khan
 - [ ] #60 Cascading vehicle picker: Make > Model > Year (trucks/SUVs only) - khan
 - [x] #61 Convert to multi-step onboarding form
 
