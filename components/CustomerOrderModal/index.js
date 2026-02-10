@@ -32,10 +32,12 @@ const STEPS = [
 
 const createLocationDetailsDefaults = () => ({
     locationType: 'store',
+    storeName: '',
+    orderConfirmationNumber: '',
     buildingName: '',
+    unitFloor: '',
     unitNumber: '',
-    meetingPoint: '',
-    hasElevator: false,
+    hasElevator: null,
     driverHelpsLoading: false,
     driverHelpsUnloading: false,
     notes: '',
@@ -195,6 +197,35 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     // ============================================
     // VALIDATION
     // ============================================
+    const validateLocationDetails = (locationDetails, label) => {
+        const rawLocationType = locationDetails.locationType || 'store';
+        const locationType = rawLocationType === 'house_other' ? 'residential_other' : rawLocationType;
+
+        if (locationType === 'store') {
+            if (!locationDetails.storeName?.trim()) {
+                return `Please enter the store name for ${label}.`;
+            }
+            return null;
+        }
+
+        if (locationType === 'apartment') {
+            if (!locationDetails.buildingName?.trim()) {
+                return `Please enter the building name/number for ${label}.`;
+            }
+
+            const unitFloor = locationDetails.unitFloor ?? locationDetails.unitNumber;
+            if (!unitFloor?.trim()) {
+                return `Please enter the unit/floor for ${label}.`;
+            }
+
+            if (locationDetails.hasElevator !== true && locationDetails.hasElevator !== false) {
+                return `Please specify if there is a working elevator for ${label}.`;
+            }
+        }
+
+        return null;
+    };
+
     const validateStep = () => {
         switch (currentStep) {
             case 1:
@@ -224,31 +255,23 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                 }
                 return true;
             case 3:
-                if (!orderData.pickupDetails.buildingName?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the location name.');
-                    return false;
+                {
+                    const pickupError = validateLocationDetails(orderData.pickupDetails, 'pickup');
+                    if (pickupError) {
+                        Alert.alert('Missing Info', pickupError);
+                        return false;
+                    }
+                    return true;
                 }
-                if (
-                    orderData.pickupDetails.locationType === 'apartment' &&
-                    !orderData.pickupDetails.unitNumber?.trim()
-                ) {
-                    Alert.alert('Missing Info', 'Please enter apartment/floor information.');
-                    return false;
-                }
-                return true;
             case 4:
-                if (!orderData.dropoffDetails.buildingName?.trim()) {
-                    Alert.alert('Missing Info', 'Please enter the location name.');
-                    return false;
+                {
+                    const dropoffError = validateLocationDetails(orderData.dropoffDetails, 'dropoff');
+                    if (dropoffError) {
+                        Alert.alert('Missing Info', dropoffError);
+                        return false;
+                    }
+                    return true;
                 }
-                if (
-                    orderData.dropoffDetails.locationType === 'apartment' &&
-                    !orderData.dropoffDetails.unitNumber?.trim()
-                ) {
-                    Alert.alert('Missing Info', 'Please enter apartment/floor information.');
-                    return false;
-                }
-                return true;
             case 5:
                 if (!orderData.selectedVehicle) {
                     Alert.alert('Missing Info', 'Please select a vehicle.');

@@ -27,6 +27,21 @@ const getMaxScheduleDate = () => {
     return maxDate;
 };
 
+const getMinScheduleDate = () => {
+    const minDate = new Date();
+    minDate.setHours(0, 0, 0, 0);
+    return minDate;
+};
+
+const safeParseDate = (value) => {
+    if (!value) {
+        return new Date();
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
 const AddressSearchStep = ({
     orderData,
     setOrderData,
@@ -39,12 +54,33 @@ const AddressSearchStep = ({
     const [activeField, setActiveField] = useState(null);
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
     const [isLoadingCurrentLocation, setIsLoadingCurrentLocation] = useState(false);
-    const [showDatePicker, setShowDatePicker] = useState(false);
-    const [datePickerMode, setDatePickerMode] = useState('date');
+    const [activePicker, setActivePicker] = useState(null);
     const searchTimeoutRef = useRef(null);
+    const minScheduleDate = getMinScheduleDate();
     const maxScheduleDate = getMaxScheduleDate();
-    const iosPickerDisplay = datePickerMode === 'date' ? 'inline' : 'spinner';
-    const androidPickerDisplay = datePickerMode === 'date' ? 'calendar' : 'clock';
+
+    const clampScheduledDate = (date, showDateLimitAlert = false) => {
+        const now = new Date();
+        if (date > maxScheduleDate) {
+            if (showDateLimitAlert) {
+                Alert.alert(
+                    'Date limit reached',
+                    `You can schedule rides up to ${MAX_SCHEDULE_DAYS_AHEAD} days in advance.`
+                );
+            }
+            return new Date(maxScheduleDate.getTime());
+        }
+        if (date < now) {
+            return new Date(now.getTime());
+        }
+        return date;
+    };
+
+    const parseScheduledDateTime = () => safeParseDate(orderData.scheduledDateTime);
+
+    const normalizeScheduledDate = (date) => clampScheduledDate(date, true);
+
+    const getDatePickerValue = () => clampScheduledDate(parseScheduledDateTime());
 
     // ============================================
     // ADDRESS SEARCH
@@ -247,29 +283,43 @@ const AddressSearchStep = ({
     // ============================================
     // DATE/TIME HANDLING
     // ============================================
-    const handleDateChange = (event, selectedDate) => {
-        if (selectedDate) {
-            const currentDate = orderData.scheduledDateTime ? new Date(orderData.scheduledDateTime) : new Date();
-            if (datePickerMode === 'date') {
-                currentDate.setFullYear(selectedDate.getFullYear());
-                currentDate.setMonth(selectedDate.getMonth());
-                currentDate.setDate(selectedDate.getDate());
-            } else {
-                currentDate.setHours(selectedDate.getHours());
-                currentDate.setMinutes(selectedDate.getMinutes());
-            }
+    const applyScheduledChange = (selectedDate, mode) => {
+        if (!selectedDate) return;
 
-            if (currentDate > maxScheduleDate) {
-                Alert.alert(
-                    'Date limit reached',
-                    `You can schedule rides up to ${MAX_SCHEDULE_DAYS_AHEAD} days in advance.`
-                );
-                currentDate.setTime(maxScheduleDate.getTime());
-            }
-
-            setOrderData(prev => ({ ...prev, scheduledDateTime: currentDate.toISOString() }));
+        const currentDate = parseScheduledDateTime();
+        if (mode === 'date') {
+            currentDate.setFullYear(selectedDate.getFullYear());
+            currentDate.setMonth(selectedDate.getMonth());
+            currentDate.setDate(selectedDate.getDate());
+        } else {
+            currentDate.setHours(selectedDate.getHours());
+            currentDate.setMinutes(selectedDate.getMinutes());
         }
+
+        const normalized = normalizeScheduledDate(currentDate);
+        setOrderData(prev => ({ ...prev, scheduledDateTime: normalized.toISOString() }));
     };
+
+    const setScheduledMode = () => {
+        const normalizedDateTime = orderData.scheduledDateTime
+            ? clampScheduledDate(safeParseDate(orderData.scheduledDateTime))
+            : clampScheduledDate(new Date());
+
+        setOrderData(prev => ({
+            ...prev,
+            scheduleType: 'scheduled',
+            scheduledDateTime: normalizedDateTime.toISOString()
+        }));
+    };
+
+    const openPicker = (pickerType) => {
+        if (orderData.scheduleType !== 'scheduled') {
+            return;
+        }
+        setActivePicker(pickerType);
+    };
+
+    const closePicker = () => setActivePicker(null);
 
     const handleOutsideTap = () => {
         if (activeField) {
@@ -293,7 +343,10 @@ const AddressSearchStep = ({
                     <View style={styles.scheduleToggle}>
                         <TouchableOpacity
                             style={[styles.scheduleOption, orderData.scheduleType === 'asap' && styles.scheduleOptionActive]}
-                            onPress={() => setOrderData(prev => ({ ...prev, scheduleType: 'asap', scheduledDateTime: null }))}
+                            onPress={() => {
+                                closePicker();
+                                setOrderData(prev => ({ ...prev, scheduleType: 'asap', scheduledDateTime: null }));
+                            }}
                         >
                             <Ionicons
                                 name="flash"
@@ -304,7 +357,7 @@ const AddressSearchStep = ({
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.scheduleOption, orderData.scheduleType === 'scheduled' && styles.scheduleOptionActive]}
-                            onPress={() => setOrderData(prev => ({ ...prev, scheduleType: 'scheduled' }))}
+                            onPress={setScheduledMode}
                         >
                             <Ionicons
                                 name="calendar"
@@ -325,7 +378,7 @@ const AddressSearchStep = ({
                             </View>
                             <TouchableOpacity
                                 style={[styles.datePickerBtn, styles.datePickerBtnFirst]}
-                                onPress={() => { setDatePickerMode('date'); setShowDatePicker(true); }}
+                                onPress={() => openPicker('date')}
                             >
                                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
                                 <Text style={styles.datePickerText}>
@@ -338,7 +391,7 @@ const AddressSearchStep = ({
 
                             <TouchableOpacity
                                 style={styles.datePickerBtn}
-                                onPress={() => { setDatePickerMode('time'); setShowDatePicker(true); }}
+                                onPress={() => openPicker('time')}
                             >
                                 <Ionicons name="time-outline" size={20} color={colors.primary} />
                                 <Text style={styles.datePickerText}>
@@ -350,43 +403,95 @@ const AddressSearchStep = ({
                             </TouchableOpacity>
 
                             {Platform.OS === 'ios' ? (
-                                <Modal visible={showDatePicker} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
-                                    <View style={styles.datePickerModal}>
-                                        <View style={styles.datePickerModalContent}>
-                                            <View style={styles.datePickerModalHeader}>
-                                                <Text style={styles.datePickerModalTitle}>{datePickerMode === 'date' ? 'Select Date' : 'Select Time'}</Text>
-                                                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                                                    <Text style={styles.datePickerDoneText}>Done</Text>
-                                                </TouchableOpacity>
+                                <>
+                                    {activePicker === 'date' && (
+                                        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+                                            <View style={styles.datePickerModal}>
+                                                <View style={styles.datePickerModalContent}>
+                                                    <View style={styles.datePickerModalHeader}>
+                                                        <Text style={styles.datePickerModalTitle}>Select Date</Text>
+                                                        <TouchableOpacity onPress={closePicker}>
+                                                            <Text style={styles.datePickerDoneText}>Done</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <DateTimePicker
+                                                        value={getDatePickerValue()}
+                                                        mode="date"
+                                                        display="spinner"
+                                                        minimumDate={minScheduleDate}
+                                                        maximumDate={maxScheduleDate}
+                                                        onChange={(event, selectedDate) => {
+                                                            if (event?.type === 'set' && selectedDate) {
+                                                                applyScheduledChange(selectedDate, 'date');
+                                                            }
+                                                        }}
+                                                        themeVariant="dark"
+                                                        style={styles.datePickerControl}
+                                                    />
+                                                </View>
                                             </View>
-                                            <DateTimePicker
-                                                value={orderData.scheduledDateTime ? new Date(orderData.scheduledDateTime) : new Date()}
-                                                mode={datePickerMode}
-                                                display={iosPickerDisplay}
-                                                minimumDate={new Date()}
-                                                maximumDate={datePickerMode === 'date' ? maxScheduleDate : undefined}
-                                                onChange={handleDateChange}
-                                                themeVariant="dark"
-                                                style={styles.datePickerControl}
-                                            />
-                                        </View>
-                                    </View>
-                                </Modal>
+                                        </Modal>
+                                    )}
+                                    {activePicker === 'time' && (
+                                        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+                                            <View style={styles.datePickerModal}>
+                                                <View style={styles.datePickerModalContent}>
+                                                    <View style={styles.datePickerModalHeader}>
+                                                        <Text style={styles.datePickerModalTitle}>Select Time</Text>
+                                                        <TouchableOpacity onPress={closePicker}>
+                                                            <Text style={styles.datePickerDoneText}>Done</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                    <DateTimePicker
+                                                        value={parseScheduledDateTime()}
+                                                        mode="time"
+                                                        display="spinner"
+                                                        onChange={(event, selectedDate) => {
+                                                            if (event?.type === 'set' && selectedDate) {
+                                                                applyScheduledChange(selectedDate, 'time');
+                                                            }
+                                                        }}
+                                                        themeVariant="dark"
+                                                        style={styles.datePickerControl}
+                                                    />
+                                                </View>
+                                            </View>
+                                        </Modal>
+                                    )}
+                                </>
                             ) : (
-                                showDatePicker && (
-                                    <DateTimePicker
-                                        value={orderData.scheduledDateTime ? new Date(orderData.scheduledDateTime) : new Date()}
-                                        mode={datePickerMode}
-                                        display={androidPickerDisplay}
-                                        minimumDate={new Date()}
-                                        maximumDate={datePickerMode === 'date' ? maxScheduleDate : undefined}
-                                        onChange={(event, selectedDate) => {
-                                            setShowDatePicker(false);
-                                            handleDateChange(event, selectedDate);
-                                        }}
-                                        themeVariant="dark"
-                                    />
-                                )
+                                <>
+                                    {activePicker === 'date' && (
+                                        <DateTimePicker
+                                            value={getDatePickerValue()}
+                                            mode="date"
+                                            display="calendar"
+                                            minimumDate={minScheduleDate}
+                                            maximumDate={maxScheduleDate}
+                                            onChange={(event, selectedDate) => {
+                                                setActivePicker(null);
+                                                if (event?.type === 'set' && selectedDate) {
+                                                    applyScheduledChange(selectedDate, 'date');
+                                                }
+                                            }}
+                                            themeVariant="dark"
+                                        />
+                                    )}
+                                    {activePicker === 'time' && (
+                                        <DateTimePicker
+                                            value={parseScheduledDateTime()}
+                                            mode="time"
+                                            display="clock"
+                                            onChange={(event, selectedDate) => {
+                                                setActivePicker(null);
+                                                if (event?.type === 'set' && selectedDate) {
+                                                    applyScheduledChange(selectedDate, 'time');
+                                                }
+                                            }}
+                                            themeVariant="dark"
+                                        />
+                                    )}
+                                </>
                             )}
                         </View>
                     )}

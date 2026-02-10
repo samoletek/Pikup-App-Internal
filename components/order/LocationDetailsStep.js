@@ -10,6 +10,20 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
 
+const LOCATION_TYPES = [
+    { id: 'store', label: 'Store' },
+    { id: 'apartment', label: 'Apartment/Condo' },
+    { id: 'residential_other', label: 'Residential/Other' },
+];
+
+const normalizeLocationType = (value) => {
+    if (value === 'house_other') {
+        return 'residential_other';
+    }
+
+    return value || 'store';
+};
+
 const LocationDetailsStep = ({
     address,
     type, // 'pickup' | 'dropoff'
@@ -19,21 +33,21 @@ const LocationDetailsStep = ({
     const isPickup = type === 'pickup';
     const helpText = isPickup ? 'Driver helps with loading?' : 'Driver helps with unloading?';
     const helpKey = isPickup ? 'driverHelpsLoading' : 'driverHelpsUnloading';
-    const locationType = details.locationType || 'store';
+    const locationType = normalizeLocationType(details.locationType);
+    const isStore = locationType === 'store';
     const isApartment = locationType === 'apartment';
+    const unitFloorValue = details.unitFloor ?? details.unitNumber ?? '';
 
-    const getBuildingFieldLabel = () => {
-        if (locationType === 'apartment') return 'Apartment/Building name *';
-        if (locationType === 'house_other') return 'House or location name *';
-        return 'Store name *';
+    const updateDetails = (patch) => {
+        onUpdate({ ...details, ...patch });
     };
 
     const setLocationType = (nextType) => {
-        onUpdate({
-            ...details,
+        updateDetails({
             locationType: nextType,
-            hasElevator: nextType === 'apartment' ? details.hasElevator : false,
-            unitNumber: nextType === 'apartment' ? details.unitNumber : '',
+            hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
+            unitFloor: nextType === 'apartment' ? unitFloorValue : '',
+            unitNumber: nextType === 'apartment' ? unitFloorValue : '',
         });
     };
 
@@ -43,130 +57,134 @@ const LocationDetailsStep = ({
             <View style={styles.addressCard}>
                 <View style={[styles.addressIcon, isPickup ? styles.pickupIcon : styles.dropoffIcon]}>
                     <Ionicons
-                        name={isPickup ? "location" : "navigate"}
+                        name={isPickup ? 'location' : 'navigate'}
                         size={20}
                         color={colors.text.primary}
                     />
                 </View>
                 <View style={styles.addressInfo}>
-                    <Text style={styles.addressLabel}>{isPickup ? 'Pickup' : 'Dropoff'}</Text>
+                    <Text style={styles.addressLabel}>{isPickup ? 'Pickup Address:' : 'Dropoff Address:'}</Text>
                     <Text style={styles.addressText} numberOfLines={2}>{address}</Text>
                 </View>
             </View>
 
             {/* Location Type */}
             <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Location type</Text>
+                <Text style={styles.fieldLabel}>Location Type</Text>
                 <View style={styles.locationTypeRow}>
-                    <TouchableOpacity
-                        style={[styles.locationTypeChip, locationType === 'store' && styles.locationTypeChipActive]}
-                        onPress={() => setLocationType('store')}
-                    >
-                        <Text style={[styles.locationTypeChipText, locationType === 'store' && styles.locationTypeChipTextActive]}>
-                            Store
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.locationTypeChip, locationType === 'apartment' && styles.locationTypeChipActive]}
-                        onPress={() => setLocationType('apartment')}
-                    >
-                        <Text style={[styles.locationTypeChipText, locationType === 'apartment' && styles.locationTypeChipTextActive]}>
-                            Apartment
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[styles.locationTypeChip, locationType === 'house_other' && styles.locationTypeChipActive]}
-                        onPress={() => setLocationType('house_other')}
-                    >
-                        <Text style={[styles.locationTypeChipText, locationType === 'house_other' && styles.locationTypeChipTextActive]}>
-                            House/Other
-                        </Text>
-                    </TouchableOpacity>
+                    {LOCATION_TYPES.map((item) => {
+                        const isActive = locationType === item.id;
+                        return (
+                            <TouchableOpacity
+                                key={item.id}
+                                style={[styles.locationTypeChip, isActive && styles.locationTypeChipActive]}
+                                onPress={() => setLocationType(item.id)}
+                            >
+                                <Text
+                                    style={[styles.locationTypeChipText, isActive && styles.locationTypeChipTextActive]}
+                                    numberOfLines={2}
+                                >
+                                    {item.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
             </View>
 
-            {/* Location Name */}
-            <View style={styles.field}>
-                <Text style={styles.fieldLabel}>{getBuildingFieldLabel()}</Text>
-                <TextInput
-                    style={styles.textInput}
-                    placeholder={locationType === 'store' ? 'e.g. Walmart' : 'Enter location name'}
-                    placeholderTextColor={colors.text.placeholder}
-                    value={details.buildingName}
-                    onChangeText={(text) => onUpdate({ ...details, buildingName: text })}
-                />
-            </View>
-
-            {isApartment ? (
+            {/* Dynamic Input Area */}
+            {isStore && (
                 <>
-                    {/* Apartment Unit/Floor */}
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Apartment / floor *</Text>
+                        <Text style={styles.fieldLabel}>Store Name *</Text>
                         <TextInput
                             style={styles.textInput}
-                            placeholder="e.g. Apt 4B, Floor 3"
+                            placeholder="e.g. Home Depot"
                             placeholderTextColor={colors.text.placeholder}
-                            value={details.unitNumber}
-                            onChangeText={(text) => onUpdate({ ...details, unitNumber: text })}
+                            value={details.storeName || ''}
+                            onChangeText={(text) => updateDetails({ storeName: text })}
                         />
                     </View>
 
-                    {/* Elevator Toggle - Apartments only */}
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Order Confirmation # (Optional)</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter confirmation number"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={details.orderConfirmationNumber || ''}
+                            onChangeText={(text) => updateDetails({ orderConfirmationNumber: text })}
+                        />
+                    </View>
+                </>
+            )}
+
+            {isApartment && (
+                <>
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Building Name/Number *</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter building name or number"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={details.buildingName || ''}
+                            onChangeText={(text) => updateDetails({ buildingName: text })}
+                        />
+                    </View>
+
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Unit / Floor *</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. Apt 4B / Floor 3"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={unitFloorValue}
+                            onChangeText={(text) => updateDetails({ unitFloor: text, unitNumber: text })}
+                        />
+                    </View>
+
                     <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Is there a working elevator?</Text>
                         <View style={styles.toggleRow}>
                             <TouchableOpacity
-                                style={[styles.toggleBtn, details.hasElevator && styles.toggleBtnActive]}
-                                onPress={() => onUpdate({ ...details, hasElevator: true })}
+                                style={[styles.toggleBtn, details.hasElevator === true && styles.toggleBtnActive]}
+                                onPress={() => updateDetails({ hasElevator: true })}
                             >
                                 <Ionicons
                                     name="checkmark-circle"
                                     size={20}
-                                    color={details.hasElevator ? colors.text.primary : colors.text.muted}
+                                    color={details.hasElevator === true ? colors.text.primary : colors.text.muted}
                                 />
-                                <Text style={[styles.toggleText, details.hasElevator && styles.toggleTextActive]}>
+                                <Text style={[styles.toggleText, details.hasElevator === true && styles.toggleTextActive]}>
                                     Yes
                                 </Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={[styles.toggleBtn, !details.hasElevator && styles.toggleBtnActive]}
-                                onPress={() => onUpdate({ ...details, hasElevator: false })}
+                                style={[styles.toggleBtn, details.hasElevator === false && styles.toggleBtnActive]}
+                                onPress={() => updateDetails({ hasElevator: false })}
                             >
                                 <Ionicons
                                     name="close-circle"
                                     size={20}
-                                    color={!details.hasElevator ? colors.text.primary : colors.text.muted}
+                                    color={details.hasElevator === false ? colors.text.primary : colors.text.muted}
                                 />
-                                <Text style={[styles.toggleText, !details.hasElevator && styles.toggleTextActive]}>
+                                <Text style={[styles.toggleText, details.hasElevator === false && styles.toggleTextActive]}>
                                     No
                                 </Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </>
-            ) : (
-                <View style={styles.field}>
-                    <Text style={styles.fieldLabel}>Meeting point / access details</Text>
-                    <TextInput
-                        style={styles.textInput}
-                        placeholder={isPickup ? 'Where should driver pick up items?' : 'Where should driver drop off items?'}
-                        placeholderTextColor={colors.text.placeholder}
-                        value={details.meetingPoint}
-                        onChangeText={(text) => onUpdate({ ...details, meetingPoint: text })}
-                    />
-                </View>
             )}
 
-            {/* Driver Help Toggle */}
+            {/* Static Global Fields */}
             <View style={styles.field}>
                 <Text style={styles.fieldLabel}>{helpText}</Text>
                 <View style={styles.toggleRow}>
                     <TouchableOpacity
                         style={[styles.toggleBtn, details[helpKey] && styles.toggleBtnActive]}
-                        onPress={() => onUpdate({ ...details, [helpKey]: true })}
+                        onPress={() => updateDetails({ [helpKey]: true })}
                     >
                         <Ionicons
                             name="people"
@@ -180,7 +198,7 @@ const LocationDetailsStep = ({
 
                     <TouchableOpacity
                         style={[styles.toggleBtn, !details[helpKey] && styles.toggleBtnActive]}
-                        onPress={() => onUpdate({ ...details, [helpKey]: false })}
+                        onPress={() => updateDetails({ [helpKey]: false })}
                     >
                         <Ionicons
                             name="person"
@@ -192,25 +210,22 @@ const LocationDetailsStep = ({
                         </Text>
                     </TouchableOpacity>
                 </View>
-                {details[helpKey] && (
-                    <View style={styles.helpNote}>
-                        <Ionicons name="information-circle" size={16} color={colors.primary} />
-                        <Text style={styles.helpNoteText}>
-                            Additional fee may apply for loading/unloading assistance
-                        </Text>
-                    </View>
-                )}
+                <View style={styles.helpNote}>
+                    <Ionicons name="information-circle" size={16} color={colors.primary} />
+                    <Text style={styles.helpNoteText}>
+                        Additional fee may apply for loading/unloading.
+                    </Text>
+                </View>
             </View>
 
-            {/* Additional Notes */}
             <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Additional Notes (Optional)</Text>
                 <TextInput
                     style={[styles.textInput, styles.textArea]}
-                    placeholder="Any special instructions for the driver..."
+                    placeholder='e.g., "Park in the rear" or "Fragile glass top"'
                     placeholderTextColor={colors.text.placeholder}
-                    value={details.notes}
-                    onChangeText={(text) => onUpdate({ ...details, notes: text })}
+                    value={details.notes || ''}
+                    onChangeText={(text) => updateDetails({ notes: text })}
                     multiline
                     numberOfLines={4}
                 />
@@ -254,7 +269,6 @@ const styles = StyleSheet.create({
         color: colors.text.muted,
         fontSize: typography.fontSize.sm,
         fontWeight: typography.fontWeight.semibold,
-        textTransform: 'uppercase',
         marginBottom: spacing.xs
     },
     addressText: {
@@ -270,13 +284,14 @@ const styles = StyleSheet.create({
     },
     locationTypeChip: {
         flex: 1,
-        minHeight: 42,
+        minHeight: 44,
         borderRadius: borderRadius.full,
         borderWidth: 1,
         borderColor: colors.border.default,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.background.input,
+        paddingHorizontal: spacing.xs,
     },
     locationTypeChipActive: {
         backgroundColor: colors.primary,
@@ -286,6 +301,8 @@ const styles = StyleSheet.create({
         color: colors.text.muted,
         fontSize: typography.fontSize.sm,
         fontWeight: typography.fontWeight.semibold,
+        textAlign: 'center',
+        lineHeight: 16,
     },
     locationTypeChipTextActive: {
         color: colors.white,
@@ -345,11 +362,6 @@ const styles = StyleSheet.create({
         marginLeft: spacing.sm,
         flex: 1
     },
-    helperText: {
-        color: colors.text.muted,
-        fontSize: typography.fontSize.sm,
-        marginTop: spacing.xs
-    }
 });
 
 export default LocationDetailsStep;
