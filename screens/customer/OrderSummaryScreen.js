@@ -14,7 +14,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePayment } from '../../contexts/PaymentContext';
+import { useAuth } from '../../contexts/AuthContext';
 import AddPaymentMethodModal from '../../components/AddPaymentMethodModal';
+import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import {
   borderRadius,
@@ -36,7 +38,10 @@ export default function OrderSummaryScreen({ navigation, route }) {
     duration,
   } = route.params || {};
 
+  const { currentUser, refreshProfile } = useAuth();
+
   const [addPaymentModalVisible, setAddPaymentModalVisible] = useState(false);
+  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [priceBreakdownAnim] = useState(new Animated.Value(0));
@@ -75,6 +80,21 @@ export default function OrderSummaryScreen({ navigation, route }) {
   };
 
   const handleSchedule = async () => {
+    if (!currentUser?.phone_verified) {
+      Alert.alert(
+        'Phone Verification Required',
+        'Please verify your phone number before requesting a pickup.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Verify Now',
+            onPress: () => setPhoneVerifyVisible(true),
+          },
+        ]
+      );
+      return;
+    }
+
     if (!defaultPaymentMethod && paymentMethods.length === 0) {
       Alert.alert(
         'Payment Method Required',
@@ -330,6 +350,18 @@ export default function OrderSummaryScreen({ navigation, route }) {
           setAddPaymentModalVisible(false);
           setTimeout(handleSchedule, 500);
         }}
+      />
+
+      <PhoneVerificationModal
+        visible={phoneVerifyVisible}
+        onClose={() => setPhoneVerifyVisible(false)}
+        onVerified={async () => {
+          setPhoneVerifyVisible(false);
+          await refreshProfile();
+          setTimeout(handleSchedule, 500);
+        }}
+        userId={currentUser?.uid || currentUser?.id}
+        userTable="customers"
       />
     </View>
   );

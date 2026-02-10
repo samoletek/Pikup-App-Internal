@@ -24,6 +24,7 @@ import {
   normalizeTripStatus,
 } from "../../constants/tripStatus";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
+import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
@@ -100,7 +101,7 @@ export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
-  const { getUserPickupRequests, createPickupRequest, cancelOrder } = useAuth();
+  const { currentUser, refreshProfile, getUserPickupRequests, createPickupRequest, cancelOrder } = useAuth();
   const { createPaymentIntent, confirmPayment } = usePayment();
 
   const [userLocation, setUserLocation] = useState(null);
@@ -110,6 +111,8 @@ export default function CustomerHomeScreen({ navigation }) {
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [isSearchSheetExpanded, setIsSearchSheetExpanded] = useState(false);
   const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
+  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
+  const [orderModalKey, setOrderModalKey] = useState(0);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
 
@@ -349,6 +352,11 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
+      if (!currentUser?.phone_verified) {
+        setPhoneVerifyVisible(true);
+        return { pending: true };
+      }
+
       if (activeDelivery || pendingBooking) {
         return {
           success: false,
@@ -430,6 +438,7 @@ export default function CustomerHomeScreen({ navigation }) {
         });
 
         setSearchModalVisible(false);
+        setOrderModalKey((prev) => prev + 1);
         setPendingBooking(createdRequest || null);
         setIsSearchSheetExpanded(false);
         checkActiveDeliveries();
@@ -444,6 +453,7 @@ export default function CustomerHomeScreen({ navigation }) {
       }
     },
     [
+      currentUser?.phone_verified,
       activeDelivery,
       pendingBooking,
       createPaymentIntent,
@@ -688,10 +698,23 @@ export default function CustomerHomeScreen({ navigation }) {
       )}
 
       <CustomerOrderModal
+        key={orderModalKey}
         visible={searchModalVisible && canCreateOrder}
         onClose={() => setSearchModalVisible(false)}
         onConfirm={handleOrderConfirm}
         userLocation={userLocation}
+        renderPhoneVerification={() => (
+          <PhoneVerificationModal
+            visible={phoneVerifyVisible}
+            onClose={() => setPhoneVerifyVisible(false)}
+            onVerified={async () => {
+              setPhoneVerifyVisible(false);
+              await refreshProfile();
+            }}
+            userId={currentUser?.uid || currentUser?.id}
+            userTable="customers"
+          />
+        )}
       />
     </View>
   );

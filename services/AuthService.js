@@ -45,6 +45,7 @@ export const signup = async (email, password, type, additionalData = {}) => {
             first_name: additionalData.firstName || '',
             last_name: additionalData.lastName || '',
             phone_number: additionalData.phoneNumber || '',
+            phone_verified: !!additionalData.phoneVerified,
             rating: 5.0,
             created_at: new Date().toISOString()
         };

@@ -21,6 +21,7 @@ import BaseModal from './BaseModal';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
 import { colors } from '../styles/theme';
+import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -91,7 +92,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
     const { login, signup, signInWithGoogle, signInWithApple, loading } = useAuth();
 
     // State
-    const [step, setStep] = useState('initial'); // 'initial' | 'email_check' | 'password' | 'register'
+    const [step, setStep] = useState('initial'); // 'initial' | 'email_check' | 'password' | 'register' | 'phone_input' | 'phone_verify'
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -101,6 +102,19 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
 
     // Checking state
     const [checkingEmail, setCheckingEmail] = useState(false);
+
+    // Phone verification state
+    const [phoneNumber, setPhoneNumber] = useState('');
+    const countryCode = '+1';
+    const [otpCode, setOtpCode] = useState('');
+    const [phoneError, setPhoneError] = useState('');
+    const [otpError, setOtpError] = useState('');
+    const [sendingOtp, setSendingOtp] = useState(false);
+    const [verifyingOtp, setVerifyingOtp] = useState(false);
+    const [resendTimer, setResendTimer] = useState(0);
+
+    // OTP input ref
+    const otpInputRef = useRef(null);
 
     // Fade animation for step transitions
     const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -131,7 +145,29 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
         setNameError('');
         setConfirmPasswordError('');
         setCheckingEmail(false);
+        setPhoneNumber('');
+        setOtpCode('');
+        setPhoneError('');
+        setOtpError('');
+        setSendingOtp(false);
+        setVerifyingOtp(false);
+        setResendTimer(0);
     };
+
+    // Resend timer countdown
+    useEffect(() => {
+        if (resendTimer <= 0) return;
+        const interval = setInterval(() => {
+            setResendTimer(prev => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [resendTimer]);
 
     const handleClose = () => {
         Keyboard.dismiss();
@@ -259,6 +295,10 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             animateStepChange('initial');
         } else if (step === 'password' || step === 'register') {
             animateStepChange('email_check');
+        } else if (step === 'phone_input') {
+            animateStepChange('register');
+        } else if (step === 'phone_verify') {
+            animateStepChange('phone_input');
         } else {
             animateStepChange('initial'); // fallback
         }
@@ -301,28 +341,116 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
         const isConfirmValid = validateConfirmPassword(confirmPassword);
 
         if (isNameValid && isPasswordValid && isConfirmValid) {
-            try {
-                // signup(email, password, role, additionalData)
-                // Split name for consistency if needed, but Context usually handles raw data
-                const nameParts = name.trim().split(' ');
-                const firstName = nameParts[0];
-                const lastName = nameParts.slice(1).join(' ') || '';
+            animateStepChange('phone_input');
+        }
+    };
 
-                await signup(email, password, selectedRole, {
-                    name: name.trim(),
-                    firstName,
-                    lastName
-                });
+    const handleSkipPhone = async () => {
+        // Create account without phone verification
+        try {
+            const nameParts = name.trim().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ') || '';
 
-                // Navigate directly to CustomerTabs/DriverTabs to avoid WelcomeScreen flash
-                handleClose();
-                if (navigation) {
-                    const targetScreen = selectedRole === 'driver' ? 'DriverTabs' : 'CustomerTabs';
-                    navigation.replace(targetScreen);
-                }
-            } catch (e) {
+            await signup(email, password, selectedRole, {
+                name: name.trim(),
+                firstName,
+                lastName,
+                phoneNumber: '',
+                phoneVerified: false
+            });
+
+            handleClose();
+            if (navigation) {
+                const targetScreen = selectedRole === 'driver' ? 'DriverTabs' : 'CustomerTabs';
+                navigation.replace(targetScreen);
+            }
+        } catch (e) {
+            Alert.alert('Registration Failed', e.message);
+        }
+    };
+
+    const handleSendOtp = async () => {
+        if (!validatePhoneNumber(phoneNumber)) {
+            setPhoneError('Please enter a valid phone number');
+            return;
+        }
+
+        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        setSendingOtp(true);
+        setPhoneError('');
+
+        try {
+            await sendPhoneOtp(fullPhone);
+            setResendTimer(60);
+            animateStepChange('phone_verify');
+        } catch (err) {
+            setPhoneError(err.message || 'Failed to send verification code');
+        } finally {
+            setSendingOtp(false);
+        }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (otpCode.length !== 6) {
+            setOtpError('Please enter the 6-digit code');
+            return;
+        }
+
+        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        setVerifyingOtp(true);
+        setOtpError('');
+
+        try {
+            const result = await verifyPhoneOtp(fullPhone, otpCode);
+            if (!result?.verified) throw new Error('Invalid verification code');
+
+            // Phone verified — now complete registration
+            const nameParts = name.trim().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ') || '';
+
+            await signup(email, password, selectedRole, {
+                name: name.trim(),
+                firstName,
+                lastName,
+                phoneNumber: fullPhone,
+                phoneVerified: true
+            });
+
+            handleClose();
+            if (navigation) {
+                const targetScreen = selectedRole === 'driver' ? 'DriverTabs' : 'CustomerTabs';
+                navigation.replace(targetScreen);
+            }
+        } catch (e) {
+            if (e.message?.includes('expired')) {
+                setOtpError('Code expired. Please request a new one.');
+            } else if (e.message?.includes('Invalid') || e.message?.includes('invalid')) {
+                setOtpError('Incorrect code. Please try again.');
+            } else {
                 Alert.alert('Registration Failed', e.message);
             }
+        } finally {
+            setVerifyingOtp(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (resendTimer > 0) return;
+
+        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        setSendingOtp(true);
+
+        try {
+            await sendPhoneOtp(fullPhone);
+            setResendTimer(60);
+            setOtpError('');
+            setOtpCode('');
+        } catch (err) {
+            setOtpError('Failed to resend code. Please try again.');
+        } finally {
+            setSendingOtp(false);
         }
     };
 
@@ -497,7 +625,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             </Text>
 
             <Button
-                title="Create Account"
+                title="Continue"
                 onPress={handleRegister}
                 loading={loading}
             />
@@ -505,12 +633,127 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
     );
 
 
+    const renderPhoneInputStep = () => (
+        <>
+            <Text style={styles.stepDescription}>
+                We'll send a verification code to confirm your phone number.
+            </Text>
+
+            <View style={[styles.inputWrapper, { marginBottom: 12 }, phoneError && styles.inputError]}>
+                <RNTextInput
+                    style={styles.input}
+                    value={phoneNumber}
+                    onChangeText={(t) => {
+                        setPhoneNumber(formatPhoneForDisplay(t));
+                        setPhoneError('');
+                    }}
+                    placeholder="(555) 123-4567"
+                    placeholderTextColor={colors.text.tertiary}
+                    keyboardType="phone-pad"
+                    maxLength={14}
+                />
+            </View>
+            {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
+
+            <Button
+                title="Send Verification Code"
+                onPress={handleSendOtp}
+                loading={sendingOtp}
+            />
+
+            <TouchableOpacity
+                onPress={handleSkipPhone}
+                style={styles.skipBtn}
+                disabled={loading}
+            >
+                <Text style={styles.skipText}>Skip for Now</Text>
+            </TouchableOpacity>
+        </>
+    );
+
+    const renderPhoneVerifyStep = () => {
+        const digits = phoneNumber.replace(/[^\d]/g, '');
+        const maskedPhone = `${countryCode} ****${digits.slice(-4)}`;
+
+        return (
+            <>
+                <Text style={styles.stepDescription}>
+                    Enter the 6-digit code sent to {maskedPhone}
+                </Text>
+
+                <TouchableOpacity
+                    activeOpacity={1}
+                    style={styles.otpContainer}
+                    onPress={() => otpInputRef.current?.focus()}
+                >
+                    {[0, 1, 2, 3, 4, 5].map((index) => (
+                        <View
+                            key={index}
+                            style={[
+                                styles.otpBox,
+                                otpCode.length === index && styles.otpBoxActive,
+                                otpError && styles.otpBoxError,
+                            ]}
+                        >
+                            <Text style={styles.otpDigit}>
+                                {otpCode[index] || ''}
+                            </Text>
+                        </View>
+                    ))}
+                </TouchableOpacity>
+
+                <RNTextInput
+                    ref={otpInputRef}
+                    style={styles.hiddenOtpInput}
+                    value={otpCode}
+                    onChangeText={(t) => {
+                        const cleaned = t.replace(/[^\d]/g, '').slice(0, 6);
+                        setOtpCode(cleaned);
+                        setOtpError('');
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    textContentType="oneTimeCode"
+                />
+
+                {otpError ? <Text style={styles.errorText}>{otpError}</Text> : null}
+
+                <Button
+                    title="Verify & Create Account"
+                    onPress={handleVerifyOtp}
+                    loading={verifyingOtp}
+                    disabled={otpCode.length !== 6}
+                />
+
+                <TouchableOpacity
+                    onPress={handleResendOtp}
+                    disabled={resendTimer > 0 || sendingOtp}
+                    style={styles.resendBtn}
+                >
+                    <Text style={[
+                        styles.resendText,
+                        (resendTimer > 0 || sendingOtp) && { color: colors.text.muted }
+                    ]}>
+                        {sendingOtp
+                            ? 'Sending...'
+                            : resendTimer > 0
+                                ? `Resend code in ${resendTimer}s`
+                                : 'Resend Code'}
+                    </Text>
+                </TouchableOpacity>
+            </>
+        );
+    };
+
     const getTitle = () => {
         switch (step) {
             case 'initial': return `${selectedRole === 'driver' ? 'Driver' : 'Customer'} Login`;
             case 'email_check': return 'What\'s your email?';
             case 'password': return 'Welcome Back';
             case 'register': return 'Create Account';
+            case 'phone_input': return 'Verify Phone Number';
+            case 'phone_verify': return 'Enter Code';
             default: return '';
         }
     };
@@ -527,6 +770,12 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
         if (step === 'password') {
             // Updated to 40% as requested (Email field + Password field)
             return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.40 : SCREEN_HEIGHT * 0.45;
+        }
+        if (step === 'phone_input') {
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.45 : SCREEN_HEIGHT * 0.50;
+        }
+        if (step === 'phone_verify') {
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.45 : SCREEN_HEIGHT * 0.50;
         }
         // 'initial' (3 buttons)
         return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.35 : SCREEN_HEIGHT * 0.40;
@@ -575,6 +824,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                         {step === 'email_check' && renderEmailCheckStep()}
                         {step === 'password' && renderPasswordStep()}
                         {step === 'register' && renderRegisterStep()}
+                        {step === 'phone_input' && renderPhoneInputStep()}
+                        {step === 'phone_verify' && renderPhoneVerifyStep()}
                     </Animated.View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -702,5 +953,67 @@ const styles = StyleSheet.create({
     linkText: {
         color: colors.primary,
         fontWeight: '600'
-    }
+    },
+
+    // Phone input
+    stepDescription: {
+        fontSize: 14,
+        color: colors.text.secondary,
+        textAlign: 'center',
+        marginBottom: 20,
+        lineHeight: 20,
+    },
+
+    // OTP input
+    otpContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+        marginBottom: 16,
+    },
+    otpBox: {
+        width: 44,
+        height: 52,
+        borderRadius: 12,
+        borderWidth: 1.5,
+        borderColor: colors.border.light,
+        backgroundColor: colors.background.input,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    otpBoxActive: {
+        borderColor: colors.primary,
+    },
+    otpBoxError: {
+        borderColor: colors.error,
+    },
+    otpDigit: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: colors.white,
+    },
+    hiddenOtpInput: {
+        position: 'absolute',
+        opacity: 0,
+        height: 0,
+        width: 0,
+    },
+    resendBtn: {
+        alignSelf: 'center',
+        marginTop: 16,
+    },
+    resendText: {
+        color: colors.primary,
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    skipBtn: {
+        alignSelf: 'center',
+        marginTop: 16,
+    },
+    skipText: {
+        color: colors.text.subtle,
+        fontSize: 14,
+    },
+
 });

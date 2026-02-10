@@ -46,7 +46,7 @@ const createLocationDetailsDefaults = () => ({
 // ============================================
 // MAIN COMPONENT
 // ============================================
-const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
+const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderPhoneVerification }) => {
     const insets = useSafeAreaInsets();
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
@@ -81,8 +81,6 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
     useEffect(() => {
         if (visible) {
             loadRecentAddresses();
-        } else {
-            resetState();
         }
     }, [visible]);
 
@@ -473,6 +471,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation }) => {
                     </TouchableOpacity>
                 </View>
             </View>
+            {renderPhoneVerification && renderPhoneVerification()}
         </BaseModal>
     );
 };
