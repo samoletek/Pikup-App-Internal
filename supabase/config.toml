@@ -82,6 +82,6 @@ entrypoint = "./functions/create-verification-session/index.ts"
 
 [functions.accept-trip]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/accept-trip/deno.json"
 entrypoint = "./functions/accept-trip/index.ts"
