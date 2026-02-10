@@ -79,3 +79,9 @@ entrypoint = "./functions/submit-feedback/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/create-verification-session/index.ts"
+
+[functions.accept-trip]
+enabled = true
+verify_jwt = true
+import_map = "./functions/accept-trip/deno.json"
+entrypoint = "./functions/accept-trip/index.ts"

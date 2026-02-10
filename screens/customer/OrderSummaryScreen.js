@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePayment } from '../../contexts/PaymentContext';
+import { useAuth } from '../../contexts/AuthContext';
 import AddPaymentMethodModal from '../../components/AddPaymentMethodModal';
 import ScreenHeader from '../../components/ScreenHeader';
 import {
@@ -34,10 +35,12 @@ export default function OrderSummaryScreen({ navigation, route }) {
     selectedLocations = {},
     distance,
     duration,
+    summaryData,
   } = route.params || {};
 
   const [addPaymentModalVisible, setAddPaymentModalVisible] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [priceBreakdownAnim] = useState(new Animated.Value(0));
 
@@ -48,6 +51,8 @@ export default function OrderSummaryScreen({ navigation, route }) {
     confirmPayment,
     loading: paymentLoading,
   } = usePayment();
+
+  const { createPickupRequest, uploadToSupabase } = useAuth();
 
   const getPricingData = () => {
     if (selectedVehicle?.pricing) {
@@ -74,7 +79,80 @@ export default function OrderSummaryScreen({ navigation, route }) {
     };
   };
 
+  const uploadItemPhotos = async (items) => {
+    if (!items || items.length === 0) return [];
+
+    setUploadingPhotos(true);
+    const uploadedItems = [];
+
+    try {
+      for (const item of items) {
+        const uploadedItem = { ...item };
+
+        // Upload item photos
+        if (item.photos && item.photos.length > 0) {
+          const uploadedPhotoUrls = [];
+          for (let i = 0; i < item.photos.length; i++) {
+            const photo = item.photos[i];
+            const photoUri = photo.uri || photo;
+            if (photoUri && !photoUri.startsWith('http')) {
+              try {
+                const filename = `items/${item.id}/photo_${Date.now()}_${i}.jpg`;
+                const url = await uploadToSupabase(photoUri, 'trip_photos', filename);
+                uploadedPhotoUrls.push(url);
+              } catch (err) {
+                console.error('Error uploading item photo:', err);
+              }
+            } else if (photoUri) {
+              uploadedPhotoUrls.push(photoUri);
+            }
+          }
+          uploadedItem.photos = uploadedPhotoUrls;
+        }
+
+        // Upload invoice photo
+        if (item.invoicePhoto && !item.invoicePhoto.startsWith('http')) {
+          try {
+            const filename = `items/${item.id}/invoice_${Date.now()}.jpg`;
+            const url = await uploadToSupabase(item.invoicePhoto, 'trip_photos', filename);
+            uploadedItem.invoicePhoto = url;
+          } catch (err) {
+            console.error('Error uploading invoice:', err);
+          }
+        }
+
+        uploadedItems.push(uploadedItem);
+      }
+    } finally {
+      setUploadingPhotos(false);
+    }
+
+    return uploadedItems;
+  };
+
   const handleSchedule = async () => {
+    // Dev mode bypass: always offer test order option
+    if (__DEV__) {
+      console.log('⚠️ DEV MODE: Offering test order option');
+
+      Alert.alert(
+        'Development Mode',
+        'Choose how to create order:',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Create Test Order (No Payment)',
+            onPress: () => handleScheduleWithMockPayment(),
+          },
+          defaultPaymentMethod ? {
+            text: 'Try Real Payment',
+            onPress: () => processOrder(),
+          } : null,
+        ].filter(Boolean)
+      );
+      return;
+    }
+
     if (!defaultPaymentMethod && paymentMethods.length === 0) {
       Alert.alert(
         'Payment Method Required',
@@ -90,9 +168,71 @@ export default function OrderSummaryScreen({ navigation, route }) {
       return;
     }
 
+    await processOrder();
+  };
+
+  const handleScheduleWithMockPayment = async () => {
     setProcessing(true);
 
     try {
+      // Step 1: Upload all item photos first
+      console.log('Uploading item photos...');
+      const itemsWithUploadedPhotos = await uploadItemPhotos(summaryData?.items || []);
+
+      const pricing = getPricingData();
+
+      // Step 2: Create pickup request directly (skip payment)
+      console.log('Creating pickup request with mock payment...');
+      const requestData = {
+        pickup: selectedLocations?.pickup,
+        dropoff: selectedLocations?.dropoff,
+        vehicle: { type: selectedVehicle?.type || 'Standard' },
+        pricing: {
+          total: pricing.total,
+          distance: distance || 0,
+        },
+        items: itemsWithUploadedPhotos,
+        pickupDetails: summaryData?.pickupDetails,
+        dropoffDetails: summaryData?.dropoffDetails,
+      };
+
+      const createdRequest = await createPickupRequest(requestData);
+      console.log('✅ DEV: Pickup request created:', createdRequest.id);
+
+      // Step 3: Show success and go back to home
+      Alert.alert(
+        '✅ Order Created!',
+        `Your test order has been created.\n\nOrder ID: ${createdRequest.id?.slice(0, 8)}...\n\nCheck the driver app to accept it!`,
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.popToTop(),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Order creation failed:', error);
+      Alert.alert(
+        'Order Creation Error',
+        error.message || "We couldn't create your order. Please try again.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Try Again', onPress: () => setTimeout(() => handleScheduleWithMockPayment(), 500) },
+        ]
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const processOrder = async () => {
+    setProcessing(true);
+
+    try {
+      // Step 1: Upload all item photos first
+      console.log('Uploading item photos...');
+      const itemsWithUploadedPhotos = await uploadItemPhotos(summaryData?.items || []);
+
       const pricing = getPricingData();
       const rideDetails = {
         vehicleType: selectedVehicle?.type,
@@ -100,9 +240,12 @@ export default function OrderSummaryScreen({ navigation, route }) {
         dropoff: selectedLocations?.dropoff,
         distance,
         duration,
+        items: itemsWithUploadedPhotos,
         timestamp: new Date().toISOString(),
       };
 
+      // Step 2: Create payment intent
+      console.log('Creating payment intent...');
       const paymentIntentResult = await createPaymentIntent(
         parseFloat(pricing.total),
         'usd',
@@ -114,6 +257,8 @@ export default function OrderSummaryScreen({ navigation, route }) {
         return;
       }
 
+      // Step 3: Confirm payment
+      console.log('Confirming payment...');
       const paymentResult = await confirmPayment(
         paymentIntentResult.paymentIntent.client_secret,
         defaultPaymentMethod?.stripePaymentMethodId
@@ -123,6 +268,25 @@ export default function OrderSummaryScreen({ navigation, route }) {
         throw new Error(paymentResult.error);
       }
 
+      // Step 4: Create pickup request in database
+      console.log('Creating pickup request...');
+      const requestData = {
+        pickup: selectedLocations?.pickup,
+        dropoff: selectedLocations?.dropoff,
+        vehicle: { type: selectedVehicle?.type || 'Standard' },
+        pricing: {
+          total: pricing.total,
+          distance: distance || 0,
+        },
+        items: itemsWithUploadedPhotos,
+        pickupDetails: summaryData?.pickupDetails,
+        dropoffDetails: summaryData?.dropoffDetails,
+      };
+
+      const createdRequest = await createPickupRequest(requestData);
+      console.log('Pickup request created:', createdRequest.id);
+
+      // Step 5: Navigate to tracking screen
       navigation.replace('DeliveryTrackingScreen', {
         bookingData: {
           selectedVehicle,
@@ -131,16 +295,17 @@ export default function OrderSummaryScreen({ navigation, route }) {
           total: pricing.total,
           distance,
           duration,
+          requestId: createdRequest.id,
         },
       });
     } catch (error) {
-      console.error('Payment failed:', error);
+      console.error('Order creation failed:', error);
       Alert.alert(
-        'Payment Issue',
-        error.message || "We couldn't process your payment. Please try again.",
+        uploadingPhotos ? 'Upload Error' : 'Payment Issue',
+        error.message || "We couldn't process your order. Please try again.",
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Try Again', onPress: () => setTimeout(() => handleSchedule(), 500) },
+          { text: 'Try Again', onPress: () => setTimeout(() => processOrder(), 500) },
         ]
       );
     } finally {
@@ -309,12 +474,17 @@ export default function OrderSummaryScreen({ navigation, route }) {
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + spacing.base }]}>
         <View style={[styles.bottomInner, { maxWidth: contentMaxWidth }]}>
           <TouchableOpacity
-            style={[styles.confirmButton, (processing || paymentLoading) && styles.confirmButtonDisabled]}
+            style={[styles.confirmButton, (processing || paymentLoading || uploadingPhotos) && styles.confirmButtonDisabled]}
             onPress={handleSchedule}
-            disabled={processing || paymentLoading}
+            disabled={processing || paymentLoading || uploadingPhotos}
           >
-            {processing || paymentLoading ? (
-              <ActivityIndicator size="small" color={colors.white} />
+            {processing || paymentLoading || uploadingPhotos ? (
+              <>
+                <ActivityIndicator size="small" color={colors.white} />
+                {uploadingPhotos && (
+                  <Text style={[styles.confirmButtonText, { marginLeft: spacing.sm }]}>Uploading photos...</Text>
+                )}
+              </>
             ) : (
               <>
                 <Ionicons

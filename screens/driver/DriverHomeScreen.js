@@ -320,7 +320,19 @@ export default function DriverHomeScreen({ navigation, route }) {
       setDriverLocation(driverPos);
 
       // Set driver online in backend
-      const sessionId = await setDriverOnline(currentUser.uid, driverPos);
+      let sessionId = null;
+      try {
+        sessionId = await setDriverOnline(currentUser.uid, driverPos);
+      } catch (apiError) {
+        // Dev mode fallback: if API fails, continue with mock session
+        if (__DEV__) {
+          console.log('⚠️ DEV MODE: API failed, using mock session for testing');
+          sessionId = `dev_session_${Date.now()}`;
+        } else {
+          throw apiError;
+        }
+      }
+
       setCurrentSessionId(sessionId);
 
       // Set local state
