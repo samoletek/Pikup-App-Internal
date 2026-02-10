@@ -22,7 +22,7 @@
     "@rnmapbox/maps": "10.2.10",
     "@stripe/stripe-identity-react-native": "^0.4.1",
     "@stripe/stripe-js": "^7.4.0",
-    "@stripe/stripe-react-native": "^0.57.2",
+    "@stripe/stripe-react-native": "^0.57.3",
     "@supabase/supabase-js": "^2.93.2",
     "base64-arraybuffer": "^1.0.2",
     "expo": "~54.0.25",

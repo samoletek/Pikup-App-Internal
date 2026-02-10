@@ -8,11 +8,13 @@ import * as Location from 'expo-location';
 // Configure Mapbox with your token
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN);
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../config/supabase';
 import OfflineDashboard from '../../components/OfflineDashboard';
 import DrivingProgressModal from '../../components/DrivingProgressModal';
 import NavigationModal from '../../components/NavigationModal';
 import RequestModal from '../../components/RequestModal';
 import IncomingRequestModal from '../../components/IncomingRequestModal';
+import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import {
@@ -54,6 +56,9 @@ export default function DriverHomeScreen({ navigation, route }) {
   // New incoming request modal state
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState(null);
+
+  // Phone verification modal
+  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
 
   // State for tracking available requests
   const [availableRequests, setAvailableRequests] = useState([]);
@@ -297,11 +302,77 @@ export default function DriverHomeScreen({ navigation, route }) {
     });
   };
 
+  const checkDriverReadiness = async () => {
+    const driverId = currentUser?.uid || currentUser?.id;
+    if (!driverId) return { ready: false, issues: ['Not authenticated'] };
+
+    // Fetch fresh profile from DB
+    const { data: profile, error } = await supabase
+      .from('drivers')
+      .select('phone_number, onboarding_complete, identity_verified')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !profile) return { ready: false, issues: ['Could not load profile'] };
+
+    const issues = [];
+    if (!profile.phone_number) issues.push('phone');
+    if (!profile.onboarding_complete) issues.push('vehicle');
+    if (!profile.identity_verified) issues.push('identity');
+
+    return { ready: issues.length === 0, issues, profile };
+  };
+
   const handleGoOnline = async () => {
     if (isOnline || !currentUser?.uid) return;
 
     try {
       setLoading(true);
+
+      // Check driver readiness
+      const { ready, issues } = await checkDriverReadiness();
+
+      if (!ready) {
+        setLoading(false);
+
+        if (issues.includes('phone')) {
+          Alert.alert(
+            'Phone Verification Required',
+            'You must verify your phone number before going online.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Verify Now', onPress: () => setPhoneVerifyVisible(true) },
+            ]
+          );
+          return;
+        }
+
+        if (issues.includes('vehicle')) {
+          Alert.alert(
+            'Vehicle Registration Required',
+            'Please complete your vehicle registration in the onboarding section before going online.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Go to Profile', onPress: () => navigation.navigate('DriverProfile') },
+            ]
+          );
+          return;
+        }
+
+        if (issues.includes('identity')) {
+          Alert.alert(
+            'Identity Verification Required',
+            'Please complete identity verification before going online.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Go to Profile', onPress: () => navigation.navigate('DriverProfile') },
+            ]
+          );
+          return;
+        }
+
+        return;
+      }
 
       // Check location permissions
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -706,6 +777,17 @@ export default function DriverHomeScreen({ navigation, route }) {
           navigation={navigation}
         />
       )}
+
+      {/* Phone Verification Modal */}
+      <PhoneVerificationModal
+        visible={phoneVerifyVisible}
+        onClose={() => setPhoneVerifyVisible(false)}
+        onVerified={() => {
+          setPhoneVerifyVisible(false);
+        }}
+        userId={currentUser?.uid || currentUser?.id}
+        userTable="drivers"
+      />
 
     </View>
   );
