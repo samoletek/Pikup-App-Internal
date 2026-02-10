@@ -130,11 +130,11 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
             const result = await verifyPhoneOtp(fullPhone, otpCode);
             if (!result?.verified) throw new Error('Invalid verification code');
 
-            // Update phone number in DB
+            // Update phone number and mark as verified in DB
             if (userId && userTable) {
                 const { error: updateError } = await supabase
                     .from(userTable)
-                    .update({ phone_number: fullPhone })
+                    .update({ phone_number: fullPhone, phone_verified: true })
                     .eq('id', userId);
 
                 if (updateError) {
@@ -198,10 +198,6 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
             </Text>
 
             <View style={styles.phoneInputRow}>
-                <View style={styles.countryCodeBtn}>
-                    <Text style={styles.countryCodeText}>{countryCode}</Text>
-                </View>
-
                 <View style={[styles.phoneInputWrapper, phoneError && styles.inputError]}>
                     <RNTextInput
                         style={styles.input}
@@ -398,22 +394,6 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
         marginBottom: 12,
-    },
-    countryCodeBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.background.input,
-        borderWidth: 1,
-        borderColor: colors.border.light,
-        borderRadius: 30,
-        height: 52,
-        paddingHorizontal: 14,
-    },
-    countryCodeText: {
-        fontSize: 16,
-        color: colors.white,
-        fontWeight: '600',
     },
     phoneInputWrapper: {
         flex: 1,

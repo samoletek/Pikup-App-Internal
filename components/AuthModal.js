@@ -356,7 +356,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 name: name.trim(),
                 firstName,
                 lastName,
-                phoneNumber: ''
+                phoneNumber: '',
+                phoneVerified: false
             });
 
             handleClose();
@@ -413,7 +414,8 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 name: name.trim(),
                 firstName,
                 lastName,
-                phoneNumber: fullPhone
+                phoneNumber: fullPhone,
+                phoneVerified: true
             });
 
             handleClose();

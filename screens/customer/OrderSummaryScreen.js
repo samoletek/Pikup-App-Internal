@@ -38,7 +38,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
     duration,
   } = route.params || {};
 
-  const { currentUser } = useAuth();
+  const { currentUser, refreshProfile } = useAuth();
 
   const [addPaymentModalVisible, setAddPaymentModalVisible] = useState(false);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
@@ -80,8 +80,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
   };
 
   const handleSchedule = async () => {
-    // Check phone verification
-    if (!currentUser?.phone_number) {
+    if (!currentUser?.phone_verified) {
       Alert.alert(
         'Phone Verification Required',
         'Please verify your phone number before requesting a pickup.',
@@ -356,8 +355,9 @@ export default function OrderSummaryScreen({ navigation, route }) {
       <PhoneVerificationModal
         visible={phoneVerifyVisible}
         onClose={() => setPhoneVerifyVisible(false)}
-        onVerified={() => {
+        onVerified={async () => {
           setPhoneVerifyVisible(false);
+          await refreshProfile();
           setTimeout(handleSchedule, 500);
         }}
         userId={currentUser?.uid || currentUser?.id}

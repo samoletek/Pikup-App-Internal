@@ -39,7 +39,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverLocation,
     setDriverOnline,
     setDriverOffline,
-    updateDriverHeartbeat
+    updateDriverHeartbeat,
+    refreshProfile
   } = useAuth();
   const [region, setRegion] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
@@ -309,14 +310,14 @@ export default function DriverHomeScreen({ navigation, route }) {
     // Fetch fresh profile from DB
     const { data: profile, error } = await supabase
       .from('drivers')
-      .select('phone_number, onboarding_complete, identity_verified')
+      .select('phone_verified, onboarding_complete, identity_verified')
       .eq('id', driverId)
       .single();
 
     if (error || !profile) return { ready: false, issues: ['Could not load profile'] };
 
     const issues = [];
-    if (!profile.phone_number) issues.push('phone');
+    if (!profile.phone_verified) issues.push('phone');
     if (!profile.onboarding_complete) issues.push('vehicle');
     if (!profile.identity_verified) issues.push('identity');
 
@@ -782,8 +783,9 @@ export default function DriverHomeScreen({ navigation, route }) {
       <PhoneVerificationModal
         visible={phoneVerifyVisible}
         onClose={() => setPhoneVerifyVisible(false)}
-        onVerified={() => {
+        onVerified={async () => {
           setPhoneVerifyVisible(false);
+          await refreshProfile();
         }}
         userId={currentUser?.uid || currentUser?.id}
         userTable="drivers"

@@ -128,6 +128,16 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const uid = currentUser?.id || currentUser?.uid;
+    if (!uid || !userType) return;
+    const table = userType === 'driver' ? 'drivers' : 'customers';
+    const { data } = await supabase.from(table).select('*').eq('id', uid).single();
+    if (data) {
+      setCurrentUser((prev) => (prev ? { ...prev, ...data } : data));
+    }
+  }, [currentUser?.id, currentUser?.uid, userType]);
+
   const actions = useMemo(() => {
     return createAuthActions({
       currentUser,
@@ -147,9 +157,10 @@ export function AuthProvider({ children }) {
       loading,
       isInitializing,
       profileImage,
+      refreshProfile,
       ...actions,
     };
-  }, [currentUser, userType, loading, isInitializing, profileImage, actions]);
+  }, [currentUser, userType, loading, isInitializing, profileImage, refreshProfile, actions]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
