@@ -526,14 +526,43 @@ export const deleteAccount = async (currentUser) => {
     try {
         console.log('Starting account deletion process...');
         const userId = currentUser.id || currentUser.uid;
-
-        const { data, error } = await supabase.functions.invoke('delete-user');
-
-        if (error) {
-            throw error;
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+            throw sessionError;
         }
 
-        if (!data.success) {
+        const accessToken = sessionData?.session?.access_token;
+        if (!accessToken) {
+            throw new Error('Your session has expired. Please sign in again and retry account deletion.');
+        }
+
+        const { data, error } = await supabase.functions.invoke('delete-user', {
+            body: { userId },
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+
+        if (error) {
+            let functionMessage = '';
+
+            if (error?.context) {
+                try {
+                    const errorBody = await error.context.clone().json();
+                    functionMessage = errorBody?.error || errorBody?.message || '';
+                } catch (parseError) {
+                    try {
+                        functionMessage = await error.context.clone().text();
+                    } catch (textParseError) {
+                        functionMessage = '';
+                    }
+                }
+            }
+
+            throw new Error(functionMessage || error?.message || 'Failed to delete account');
+        }
+
+        if (!data?.success) {
             throw new Error(data.error || 'Failed to delete account');
         }
 
