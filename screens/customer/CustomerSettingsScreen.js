@@ -4,14 +4,11 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import { useAuth } from "../../contexts/AuthContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -57,7 +54,6 @@ const notificationItems = [
 export default function CustomerSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { userType } = useAuth();
   const [settings, setSettings] = useState({
     notifications: {
       pushNotifications: true,
@@ -70,7 +66,6 @@ export default function CustomerSettingsScreen({ navigation }) {
     language: "English",
     currency: "USD",
   });
-  const isDriver = userType === "driver";
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const appVersion =
     Constants.expoConfig?.version ||
@@ -87,90 +82,6 @@ export default function CustomerSettingsScreen({ navigation }) {
       },
     }));
   };
-
-  const renderRow = ({
-    icon,
-    label,
-    onPress,
-    value,
-    isLast = false,
-    isExternal = false,
-  }) => (
-    <TouchableOpacity
-      style={[styles.row, isLast && styles.rowLast]}
-      onPress={onPress}
-      accessibilityRole="button"
-    >
-      <View style={styles.rowLeft}>
-        {icon ? <Ionicons name={icon} size={20} color={colors.primary} /> : null}
-        <Text style={styles.rowTitle}>{label}</Text>
-      </View>
-
-      <View style={styles.rowRight}>
-        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-        <Ionicons
-          name={isExternal ? "open-outline" : "chevron-forward"}
-          size={18}
-          color={colors.text.tertiary}
-        />
-      </View>
-    </TouchableOpacity>
-  );
-
-  const accountRows = isDriver
-    ? [
-        {
-          icon: "person-outline",
-          label: "Personal Information",
-          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
-        },
-        {
-          icon: "options-outline",
-          label: "Driver Preferences",
-          onPress: () => navigation.navigate("DriverPreferencesScreen"),
-        },
-        {
-          icon: "card-outline",
-          label: "Payment Settings",
-          onPress: () => navigation.navigate("DriverPaymentSettingsScreen"),
-        },
-        {
-          icon: "globe-outline",
-          label: "Language",
-          value: settings.language,
-          onPress: () => {},
-        },
-        {
-          icon: "cash-outline",
-          label: "Currency",
-          value: settings.currency,
-          onPress: () => {},
-        },
-      ]
-    : [
-        {
-          icon: "person-outline",
-          label: "Personal Information",
-          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
-        },
-        {
-          icon: "card-outline",
-          label: "Payment Methods",
-          onPress: () => navigation.navigate("PaymentMethodsScreen"),
-        },
-        {
-          icon: "globe-outline",
-          label: "Language",
-          value: settings.language,
-          onPress: () => {},
-        },
-        {
-          icon: "cash-outline",
-          label: "Currency",
-          value: settings.currency,
-          onPress: () => {},
-        },
-      ];
 
   return (
     <View style={styles.container}>
@@ -189,18 +100,6 @@ export default function CustomerSettingsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionLabel}>ACCOUNT</Text>
-            <View style={styles.card}>
-              {accountRows.map((row, index) =>
-                renderRow({
-                  ...row,
-                  isLast: index === accountRows.length - 1,
-                })
-              )}
-            </View>
-          </View>
-
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
             <View style={styles.card}>
@@ -273,37 +172,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border.strong,
     overflow: "hidden",
   },
-  row: {
-    minHeight: 54,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.base,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.strong,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  rowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  rowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  rowTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    marginLeft: spacing.md,
-  },
-  rowValue: {
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
-    marginRight: spacing.xs,
-  },
   switchRow: {
     minHeight: 68,
     flexDirection: "row",
@@ -316,6 +184,11 @@ const styles = StyleSheet.create({
   switchInfo: {
     flex: 1,
     paddingRight: spacing.base,
+  },
+  rowTitle: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: typography.fontWeight.medium,
   },
   switchDescription: {
     color: colors.text.tertiary,
