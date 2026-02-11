@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
   Image,
+  LayoutAnimation,
   Linking,
+  Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import { useAuth } from "../../contexts/AuthContext";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
@@ -24,11 +29,15 @@ import {
   typography,
 } from "../../styles/theme";
 
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 const HEADER_ROW_HEIGHT = 56;
-const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
-const TOTAL_COLLAPSE_DISTANCE =
-  SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
 
 export default function CustomerProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -45,7 +54,6 @@ export default function CustomerProfileScreen({ navigation }) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const isSnappingRef = useRef(false);
 
-  const [searchText, setSearchText] = useState("");
   const [customerProfile, setCustomerProfile] = useState(null);
   const [displayName, setDisplayName] = useState("User");
   const [accountStats, setAccountStats] = useState({
@@ -53,6 +61,9 @@ export default function CustomerProfileScreen({ navigation }) {
     totalSpent: 0,
     avgRating: 5,
   });
+  const [savedAddressCount, setSavedAddressCount] = useState(0);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
+  const [memberSince, setMemberSince] = useState("New on Pikup");
 
   useEffect(() => {
     loadCustomerProfile();
@@ -63,15 +74,30 @@ export default function CustomerProfileScreen({ navigation }) {
   }, [currentUser, customerProfile]);
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: SEARCH_COLLAPSE_DISTANCE,
-        animated: false,
-      });
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
+    const loadAddressCount = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("@pikup_recent_addresses");
+        if (stored) {
+          const addresses = JSON.parse(stored);
+          setSavedAddressCount(Array.isArray(addresses) ? addresses.length : 0);
+        }
+      } catch (error) {
+        console.error("Error loading address count:", error);
+      }
+    };
+    loadAddressCount();
   }, []);
+
+  useEffect(() => {
+    const dateStr =
+      customerProfile?.created_at || currentUser?.created_at;
+    if (dateStr) {
+      const createdYear = new Date(dateStr).getFullYear();
+      const currentYear = new Date().getFullYear();
+      const years = currentYear - createdYear;
+      setMemberSince(years > 0 ? `${years} yr on Pikup` : "New on Pikup");
+    }
+  }, [customerProfile, currentUser]);
 
   const loadCustomerProfile = async () => {
     try {
@@ -95,10 +121,7 @@ export default function CustomerProfileScreen({ navigation }) {
   };
 
   const loadAccountStats = async () => {
-    if (!currentUser) {
-      return;
-    }
-
+    if (!currentUser) return;
     try {
       const pickupRequests = await getUserPickupRequests?.();
       const requests = Array.isArray(pickupRequests) ? pickupRequests : [];
@@ -112,8 +135,8 @@ export default function CustomerProfileScreen({ navigation }) {
       const rating =
         Number(
           customerProfile?.rating ||
-          customerProfile?.customerProfile?.rating ||
-          5
+            customerProfile?.customerProfile?.rating ||
+            5
         ) || 5;
 
       setAccountStats({
@@ -143,192 +166,59 @@ export default function CustomerProfileScreen({ navigation }) {
     ]);
   };
 
+  const toggleAboutSection = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setAboutExpanded((prev) => !prev);
+  };
+
   const initials = displayName
     .split(" ")
     .filter(Boolean)
-    .map((namePart) => namePart[0])
+    .map((part) => part[0])
     .join("")
     .substring(0, 2)
     .toUpperCase();
 
   const totalTrips = String(accountStats.totalTrips || 0);
-  const totalSpent = `$${Math.round(accountStats.totalSpent || 0)}`;
   const ratingValue = (accountStats.avgRating || 5).toFixed(1);
 
-  const quickActions = useMemo(
-    () => [
-      {
-        id: "help",
-        title: "Help",
-        icon: "help-circle-outline",
-        keywords: "support assistance",
-        onPress: () => navigation.navigate("CustomerHelpScreen"),
-      },
-      {
-        id: "wallet",
-        title: "Wallet",
-        icon: "wallet-outline",
-        keywords: "payment cards balance",
-        onPress: () => navigation.navigate("CustomerWalletScreen"),
-      },
-    ],
-    [navigation]
-  );
+  const appVersion =
+    Constants.expoConfig?.version ||
+    Constants.manifest2?.extra?.expoClient?.version ||
+    Constants.nativeAppVersion ||
+    "0.0.0";
 
-  const accountItems = useMemo(
-    () => [
-      {
-        id: "profile",
-        title: "View Profile",
-        icon: "person-outline",
-        keywords: "name avatar personal info",
-        onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
-      },
-      {
-        id: "notifications",
-        title: "Notifications",
-        icon: "notifications-outline",
-        keywords: "alerts push settings",
-        onPress: () => navigation.navigate("CustomerSettingsScreen"),
-      },
-
-      {
-        id: "settings",
-        title: "Settings",
-        icon: "settings-outline",
-        keywords: "preferences account",
-        onPress: () => navigation.navigate("CustomerSettingsScreen"),
-      },
-      {
-        id: "claims",
-        title: "Claims",
-        icon: "shield-outline",
-        keywords: "issues report support",
-        onPress: () => navigation.navigate("CustomerClaimsScreen"),
-      },
-      {
-        id: "terms",
-        title: "Terms of Service",
-        icon: "document-text-outline",
-        keywords: "legal documents",
-        external: true,
-        onPress: () => Linking.openURL("https://pikup-app.com/"),
-      },
-      {
-        id: "privacy",
-        title: "Privacy Policy",
-        icon: "lock-closed-outline",
-        keywords: "privacy legal policy",
-        external: true,
-        onPress: () => Linking.openURL("https://pikup-app.com/"),
-      },
-      {
-        id: "about",
-        title: "About Pikup",
-        icon: "information-circle-outline",
-        keywords: "version app info",
-        onPress: () => { },
-      },
-    ],
-    [navigation]
-  );
-
-  const query = searchText.trim().toLowerCase();
-  const filteredQuickActions = useMemo(() => {
-    if (!query) {
-      return quickActions;
-    }
-
-    return quickActions.filter((action) =>
-      `${action.title} ${action.keywords}`.toLowerCase().includes(query)
-    );
-  }, [quickActions, query]);
-
-  const filteredAccountItems = useMemo(() => {
-    if (!query) {
-      return accountItems;
-    }
-
-    return accountItems.filter((item) =>
-      `${item.title} ${item.keywords}`.toLowerCase().includes(query)
-    );
-  }, [accountItems, query]);
-
+  /* ── Scroll snap (same pattern as Activity/Messages) ── */
   const titleLockCompensation = scrollY.interpolate({
-    inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
-    outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
+    inputRange: [0, TITLE_COLLAPSE_DISTANCE],
+    outputRange: [0, TITLE_COLLAPSE_DISTANCE],
     extrapolate: "clamp",
   });
 
   const getSnapOffset = (offsetY) => {
-    if (offsetY < 0 || offsetY > TOTAL_COLLAPSE_DISTANCE) {
-      return null;
-    }
-
-    if (offsetY < SEARCH_COLLAPSE_DISTANCE) {
-      return offsetY < SEARCH_COLLAPSE_DISTANCE / 2
-        ? 0
-        : SEARCH_COLLAPSE_DISTANCE;
-    }
-
-    const titleProgress = offsetY - SEARCH_COLLAPSE_DISTANCE;
-    return titleProgress < TITLE_COLLAPSE_DISTANCE / 2
-      ? SEARCH_COLLAPSE_DISTANCE
-      : TOTAL_COLLAPSE_DISTANCE;
+    if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) return null;
+    return offsetY < TITLE_COLLAPSE_DISTANCE / 2 ? 0 : TITLE_COLLAPSE_DISTANCE;
   };
 
   const snapToNearestOffset = (offsetY) => {
-    const targetOffset = getSnapOffset(offsetY);
-    if (targetOffset === null || Math.abs(targetOffset - offsetY) < 1) {
-      return;
-    }
-
-    if (!scrollRef.current) {
-      return;
-    }
-
+    const target = getSnapOffset(offsetY);
+    if (target === null || Math.abs(target - offsetY) < 1) return;
+    if (!scrollRef.current) return;
     isSnappingRef.current = true;
-    scrollRef.current.scrollTo({ y: targetOffset, animated: true });
-    setTimeout(() => {
-      isSnappingRef.current = false;
-    }, 220);
+    scrollRef.current.scrollTo({ y: target, animated: true });
+    setTimeout(() => { isSnappingRef.current = false; }, 220);
   };
 
-  const handleScrollEndDrag = (event) => {
-    if (isSnappingRef.current) {
-      return;
-    }
-
-    const velocityY = event.nativeEvent.velocity?.y ?? 0;
-    if (Math.abs(velocityY) < 0.15) {
-      snapToNearestOffset(event.nativeEvent.contentOffset.y);
-    }
+  const handleScrollEndDrag = (e) => {
+    if (isSnappingRef.current) return;
+    const vy = e.nativeEvent.velocity?.y ?? 0;
+    if (Math.abs(vy) < 0.15) snapToNearestOffset(e.nativeEvent.contentOffset.y);
   };
 
-  const handleMomentumScrollEnd = (event) => {
-    if (isSnappingRef.current) {
-      return;
-    }
-    snapToNearestOffset(event.nativeEvent.contentOffset.y);
+  const handleMomentumScrollEnd = (e) => {
+    if (isSnappingRef.current) return;
+    snapToNearestOffset(e.nativeEvent.contentOffset.y);
   };
-
-  const renderMenuItem = (item, isLast) => (
-    <TouchableOpacity
-      key={item.id}
-      style={[styles.menuItem, isLast && styles.menuItemLast]}
-      onPress={item.onPress}
-    >
-      <View style={styles.menuItemLeft}>
-        <Ionicons name={item.icon} size={20} color={colors.primary} />
-        <Text style={styles.menuItemTitle}>{item.title}</Text>
-      </View>
-      <Ionicons
-        name={item.external ? "open-outline" : "chevron-forward"}
-        size={20}
-        color={colors.text.tertiary}
-      />
-    </TouchableOpacity>
-  );
 
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
 
@@ -339,7 +229,7 @@ export default function CustomerProfileScreen({ navigation }) {
         topInset={insets.top}
         showBack={false}
         scrollY={scrollY}
-        searchCollapseDistance={SEARCH_COLLAPSE_DISTANCE}
+        searchCollapseDistance={0}
         titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
       />
 
@@ -348,8 +238,8 @@ export default function CustomerProfileScreen({ navigation }) {
         style={styles.scrollView}
         contentContainerStyle={{
           paddingTop: headerHeight,
-          paddingBottom: insets.bottom + 90,
           paddingHorizontal: spacing.base,
+          paddingBottom: insets.bottom + 100,
         }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -360,6 +250,7 @@ export default function CustomerProfileScreen({ navigation }) {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
+        {/* Large title (collapses on scroll like Activity/Messages) */}
         <Animated.View
           style={[
             styles.largeTitleSection,
@@ -369,123 +260,295 @@ export default function CustomerProfileScreen({ navigation }) {
           <Text style={styles.largeTitle}>Account</Text>
         </Animated.View>
 
-        <View style={styles.searchSection}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search account and settings"
-              placeholderTextColor={colors.text.placeholder}
-              value={searchText}
-              onChangeText={setSearchText}
-              autoCapitalize="none"
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-            />
-          </View>
-        </View>
-
+        {/* Profile Card */}
         <View style={styles.profileCard}>
-          <View style={styles.profileCardContent}>
-            <View style={styles.profileLeftSide}>
-              <TouchableOpacity
-                style={styles.avatarContainer}
-                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
-              >
-                {profileImage ? (
-                  <Image source={{ uri: profileImage }} style={styles.profileImage} />
-                ) : (
-                  <View style={styles.profileInitials}>
-                    <Text style={styles.profileInitialsText}>{initials}</Text>
-                  </View>
-                )}
+          <View style={styles.profileTopRow}>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+            >
+              {profileImage ? (
+                <Image
+                  source={{ uri: profileImage }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.avatarGradient}
+                >
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                </LinearGradient>
+              )}
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark" size={10} color="#fff" />
+              </View>
+            </TouchableOpacity>
 
-                <View style={styles.verifiedBadgeOnAvatar}>
-                  <Ionicons name="checkmark" size={12} color={colors.white} />
-                </View>
-              </TouchableOpacity>
-
+            <View style={styles.profileInfo}>
               <Text style={styles.userName}>{displayName}</Text>
-
               <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color={colors.primary} />
-                <Text style={styles.ratingText}>{ratingValue}</Text>
-                <Text style={styles.badgeText}>Trusted Customer</Text>
+                <Ionicons name="star" size={14} color={colors.warning} />
+                <Text style={styles.ratingValue}>{ratingValue}</Text>
+                <View style={styles.dotSeparator} />
+                <Text style={styles.memberSinceText}>{memberSince}</Text>
               </View>
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() =>
+                  navigation.navigate("CustomerPersonalInfoScreen")
+                }
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={14}
+                  color={colors.primary}
+                />
+                <Text style={styles.editProfileText}>Edit profile</Text>
+              </TouchableOpacity>
             </View>
+          </View>
 
-            <View style={styles.statsColumn}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalTrips}</Text>
-                <Text style={styles.statLabel}>Trips</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{totalSpent}</Text>
-                <Text style={styles.statLabel}>Spent</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{ratingValue}</Text>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
+          <View style={styles.statsBar}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{totalTrips}</Text>
+              <Text style={styles.statLabel}>TRIPS</Text>
+            </View>
+            <View style={styles.statDividerVertical} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{totalTrips}</Text>
+              <Text style={styles.statLabel}>REVIEWS</Text>
+            </View>
+            <View style={styles.statDividerVertical} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{ratingValue}</Text>
+              <Text style={styles.statLabel}>RATING</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.statusCard}>
-          <View style={styles.statusLeft}>
-            <Ionicons name="sparkles-outline" size={22} color={colors.primary} />
-            <View style={styles.statusText}>
-              <Text style={styles.statusTitle}>Account in Good Standing</Text>
-              <Text style={styles.statusSubtitle}>
-                Your profile is verified and ready for new trips
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate("CustomerHelpScreen")}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons
+                name="help-circle-outline"
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.quickActionLabel}>Help</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate("CustomerWalletScreen")}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons
+                name="wallet-outline"
+                size={24}
+                color={colors.primary}
+              />
+            </View>
+            <Text style={styles.quickActionLabel}>Wallet</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate("Activity")}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons
+                name="receipt-outline"
+                size={24}
+                color={colors.primary}
+              />
+              <View style={styles.notificationDot} />
+            </View>
+            <Text style={styles.quickActionLabel}>Orders</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Settings — unified card */}
+        <Text style={styles.sectionLabel}>SETTINGS</Text>
+        <View style={styles.sectionCard}>
+          {/* My Addresses */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+          >
+            <View
+              style={[styles.menuIcon, { backgroundColor: colors.info + "20" }]}
+            >
+              <Ionicons name="location-outline" size={20} color={colors.info} />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={styles.menuTitle}>My Addresses</Text>
+              <Text style={styles.menuSubtitle}>
+                {savedAddressCount > 0
+                  ? `${savedAddressCount} saved addresses`
+                  : "No saved addresses"}
               </Text>
             </View>
-          </View>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>Active</Text>
-          </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.text.muted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Claims */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("CustomerClaimsScreen")}
+          >
+            <View
+              style={[
+                styles.menuIcon,
+                { backgroundColor: colors.success + "20" },
+              ]}
+            >
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={20}
+                color={colors.success}
+              />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={styles.menuTitle}>Claims</Text>
+              <Text style={styles.menuSubtitle}>No active claims</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.text.muted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Notifications */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("CustomerSettingsScreen")}
+          >
+            <View
+              style={[
+                styles.menuIcon,
+                { backgroundColor: colors.warning + "20" },
+              ]}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={colors.warning}
+              />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={styles.menuTitle}>Notifications</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={18}
+              color={colors.text.muted}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* About & Legal */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={toggleAboutSection}
+          >
+            <View
+              style={[
+                styles.menuIcon,
+                { backgroundColor: colors.primaryLight },
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color={colors.primary}
+              />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={styles.menuTitle}>About & Legal</Text>
+            </View>
+            <Ionicons
+              name={aboutExpanded ? "chevron-up" : "chevron-down"}
+              size={18}
+              color={colors.text.muted}
+            />
+          </TouchableOpacity>
+
+          {aboutExpanded && (
+            <View style={styles.expandedSection}>
+              <TouchableOpacity
+                style={styles.subRow}
+                onPress={() => Linking.openURL("https://pikup-app.com/")}
+              >
+                <Text style={styles.subRowText}>Terms of Service</Text>
+                <Ionicons
+                  name="open-outline"
+                  size={16}
+                  color={colors.text.muted}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.subRowDivider} />
+
+              <TouchableOpacity
+                style={styles.subRow}
+                onPress={() => Linking.openURL("https://pikup-app.com/")}
+              >
+                <Text style={styles.subRowText}>Privacy Policy</Text>
+                <Ionicons
+                  name="open-outline"
+                  size={16}
+                  color={colors.text.muted}
+                />
+              </TouchableOpacity>
+
+              <View style={styles.subRowDivider} />
+
+              <View style={styles.subRow}>
+                <Text style={styles.subRowText}>About Pikup</Text>
+                <Text style={styles.versionText}>v{appVersion}</Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {filteredQuickActions.length > 0 ? (
-          <View style={styles.quickActions}>
-            {filteredQuickActions.map((action, index) => (
-              <React.Fragment key={action.id}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={action.onPress}
-                >
-                  <Ionicons name={action.icon} size={32} color={colors.primary} />
-                  <Text style={styles.actionText}>{action.title}</Text>
-                </TouchableOpacity>
-                {index < filteredQuickActions.length - 1 ? (
-                  <View style={styles.actionDivider} />
-                ) : null}
-              </React.Fragment>
-            ))}
-          </View>
-        ) : null}
-
-        {filteredAccountItems.length > 0 ? (
-          <View style={styles.menuSections}>
-            {filteredAccountItems.map((item, index) =>
-              renderMenuItem(item, index === filteredAccountItems.length - 1)
-            )}
-          </View>
-        ) : (
-          <View style={styles.searchEmptyState}>
-            <Ionicons name="search-outline" size={36} color={colors.text.tertiary} />
-            <Text style={styles.searchEmptyTitle}>No matches found</Text>
-            <Text style={styles.searchEmptySubtitle}>
-              Try another keyword for account settings
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Sign out</Text>
-        </TouchableOpacity>
+        {/* Sign Out */}
+        <View style={[styles.sectionCard, { marginTop: spacing.md }]}>
+          <TouchableOpacity style={styles.menuRow} onPress={handleLogout}>
+            <View
+              style={[
+                styles.menuIcon,
+                { backgroundColor: colors.error + "18" },
+              ]}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={20}
+                color={colors.error}
+              />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={[styles.menuTitle, { color: colors.error }]}>
+                Sign out
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       </Animated.ScrollView>
     </View>
   );
@@ -499,6 +562,8 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+
+  /* Large title */
   largeTitleSection: {
     height: HEADER_ROW_HEIGHT,
     justifyContent: "center",
@@ -511,108 +576,115 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xxxl,
     fontWeight: typography.fontWeight.bold,
   },
-  searchSection: {
-    height: HEADER_ROW_HEIGHT,
-    justifyContent: "center",
-    paddingVertical: spacing.xs,
-    zIndex: 1,
-    marginBottom: spacing.sm,
-  },
-  searchBar: {
-    height: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.base,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-  },
+
+  /* Profile Card */
   profileCard: {
     backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.md,
   },
-  profileCardContent: {
+  profileTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  profileLeftSide: {
-    alignItems: "center",
-    flex: 1,
+    gap: spacing.lg,
   },
   avatarContainer: {
     position: "relative",
   },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.circle,
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.xl,
   },
-  profileInitials: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
+  avatarGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
-  profileInitialsText: {
-    color: colors.white,
-    fontSize: 34,
-    fontWeight: typography.fontWeight.semibold,
+  avatarInitials: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: typography.fontWeight.bold,
   },
-  verifiedBadgeOnAvatar: {
+  verifiedBadge: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 24,
-    height: 24,
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
     borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: colors.background.secondary,
+  },
+  profileInfo: {
+    flex: 1,
   },
   userName: {
     fontSize: 22,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginTop: spacing.md,
     textTransform: "capitalize",
+    marginBottom: spacing.xs,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
-  ratingText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
+  ratingValue: {
+    fontSize: 15,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.warning,
     marginLeft: spacing.xs,
-    marginRight: spacing.sm,
-    fontWeight: typography.fontWeight.semibold,
   },
-  badgeText: {
+  dotSeparator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.text.muted,
+    marginHorizontal: spacing.sm,
+  },
+  memberSinceText: {
     fontSize: typography.fontSize.sm,
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.medium,
+    color: colors.text.muted,
   },
-  statsColumn: {
-    alignItems: "flex-start",
-    paddingLeft: spacing.md,
+  editProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  editProfileText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary,
+  },
+
+  /* Stats Bar */
+  statsBar: {
+    flexDirection: "row",
+    marginTop: spacing.xl,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
   },
   statItem: {
-    paddingVertical: spacing.sm,
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.md,
   },
   statNumber: {
     fontSize: 20,
@@ -620,149 +692,131 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statLabel: {
-    fontSize: typography.fontSize.base,
+    fontSize: 11,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.text.muted,
-    marginTop: 2,
+    marginTop: 3,
+    letterSpacing: 0.5,
   },
-  statDivider: {
-    width: 120,
-    height: 1,
+  statDividerVertical: {
+    width: 1,
     backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
   },
-  statusCard: {
-    backgroundColor: colors.background.elevated,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.base,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  statusLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  statusText: {
-    marginLeft: spacing.sm,
-    flex: 1,
-  },
-  statusTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  statusSubtitle: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    marginTop: 2,
-  },
-  statusBadge: {
-    backgroundColor: colors.primaryLight,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  statusBadgeText: {
-    color: colors.primary,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
+
+  /* Quick Actions */
   quickActions: {
     flexDirection: "row",
-    backgroundColor: colors.background.secondary,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    justifyContent: "space-around",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  quickActionButton: {
+    flex: 1,
     alignItems: "center",
-    marginBottom: spacing.base,
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
-  actionButton: {
-    alignItems: "center",
-    flex: 1,
+  quickActionIcon: {
+    position: "relative",
   },
-  actionText: {
-    fontSize: typography.fontSize.base,
+  quickActionLabel: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
+  },
+  notificationDot: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning,
+  },
+
+  /* Section Label */
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.muted,
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
     marginTop: spacing.sm,
-    fontWeight: typography.fontWeight.medium,
   },
-  actionDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: colors.border.strong,
-  },
-  menuSections: {
+
+  /* Section Card */
+  sectionCard: {
     backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
     overflow: "hidden",
   },
-  menuItem: {
+
+  /* Menu Rows */
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md + 2,
+    gap: spacing.md,
+  },
+  menuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuTextCol: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 15,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
+  },
+  menuSubtitle: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    marginTop: 1,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: colors.border.strong,
+    marginLeft: spacing.base + 40 + spacing.md,
+  },
+
+  /* Expandable About & Legal */
+  expandedSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+  },
+  subRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.base,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.strong,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.base + 40 + spacing.md,
+    paddingRight: spacing.base,
   },
-  menuItemLast: {
-    borderBottomWidth: 0,
-  },
-  menuItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  menuItemTitle: {
-    fontSize: typography.fontSize.md,
-    color: colors.text.primary,
-    marginLeft: spacing.md,
-  },
-  searchEmptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.xxl,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    backgroundColor: colors.background.secondary,
-  },
-  searchEmptyTitle: {
-    marginTop: spacing.sm,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  searchEmptySubtitle: {
-    marginTop: spacing.xs,
-    color: colors.text.tertiary,
+  subRowText: {
     fontSize: typography.fontSize.base,
-  },
-  logoutButton: {
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    alignItems: "center",
-  },
-  logoutText: {
-    fontSize: typography.fontSize.md,
-    color: colors.error,
+    color: colors.text.muted,
     fontWeight: typography.fontWeight.medium,
-    textAlign: "center",
+  },
+  subRowDivider: {
+    height: 1,
+    backgroundColor: colors.border.strong,
+    marginLeft: spacing.base + 40 + spacing.md,
+  },
+  versionText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
   },
 });
