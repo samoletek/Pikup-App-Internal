@@ -205,7 +205,7 @@ export const PaymentProvider = ({ children }) => {
         };
       }
 
-      console.log('Payment intent created successfully:', data.clientSecret);
+      console.log('Payment intent created successfully');
       // Construct paymentIntent object similar to what Stripe expects or existing app logic
       return {
         success: true,
@@ -226,7 +226,7 @@ export const PaymentProvider = ({ children }) => {
   const confirmPayment = async (paymentIntentClientSecret, paymentMethodId = null) => {
     try {
       setLoading(true);
-      console.log('Confirming payment with client secret:', paymentIntentClientSecret);
+      console.log('Confirming payment with selected payment method');
 
       if (!stripe) {
         throw new Error('Stripe not initialized');

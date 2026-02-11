@@ -19,6 +19,7 @@ import CollapsibleMessagesHeader, {
 import {
   borderRadius,
   colors,
+  sizing,
   spacing,
   typography,
 } from "../../styles/theme";
@@ -358,7 +359,7 @@ export default function DriverProfileScreen({ navigation }) {
                   !isReadyToEarn && styles.verifiedBadgePending,
                 ]}
               >
-                <Ionicons name="checkmark" size={10} color="#fff" />
+                <Ionicons name="checkmark" size={10} color={colors.white} />
               </View>
             </TouchableOpacity>
 
@@ -580,33 +581,33 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   avatarImage: {
-    width: 80,
-    height: 80,
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
     borderRadius: borderRadius.xl,
   },
   avatarGradient: {
-    width: 80,
-    height: 80,
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
     borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarInitials: {
-    color: "#fff",
-    fontSize: 32,
+    color: colors.white,
+    fontSize: sizing.avatarInitialsFontSize,
     fontWeight: typography.fontWeight.bold,
   },
   verifiedBadge: {
     position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
+    bottom: -sizing.verificationBadgeOffset,
+    right: -sizing.verificationBadgeOffset,
+    width: sizing.verificationBadgeSize,
+    height: sizing.verificationBadgeSize,
     borderRadius: borderRadius.circle,
     backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
+    borderWidth: sizing.verificationBadgeBorderWidth,
     borderColor: colors.background.secondary,
   },
   verifiedBadgePending: {
@@ -616,7 +617,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 22,
+    fontSize: sizing.profileNameFontSize,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     textTransform: "capitalize",
@@ -640,9 +641,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 6,
+    gap: sizing.compactGap,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: sizing.compactButtonVerticalPadding,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.strong,
@@ -670,11 +671,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: sizing.statLabelFontSize,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.muted,
-    marginTop: 3,
-    letterSpacing: 0.5,
+    marginTop: sizing.statLabelMarginTop,
+    letterSpacing: sizing.statLabelLetterSpacing,
   },
   statDividerVertical: {
     width: 1,

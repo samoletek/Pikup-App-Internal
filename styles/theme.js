@@ -138,6 +138,23 @@ export const spacing = {
 };
 
 // ============================================
+// SIZING
+// ============================================
+export const sizing = {
+    avatarLg: 80,
+    avatarInitialsFontSize: 32,
+    verificationBadgeSize: 22,
+    verificationBadgeOffset: 2,
+    verificationBadgeBorderWidth: 3,
+    profileNameFontSize: 22,
+    compactGap: 6,
+    compactButtonVerticalPadding: 6,
+    statLabelFontSize: 11,
+    statLabelMarginTop: 3,
+    statLabelLetterSpacing: 0.5,
+};
+
+// ============================================
 // LAYOUT
 // ============================================
 export const layout = {

@@ -23,6 +23,7 @@ import {
 export default function DriverPaymentSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
+  // TODO(cleanup): Replace demo paymentData with real backend-driven payment state.
   const [paymentData, setPaymentData] = useState({
     instantPay: false,
     weeklyDeposit: true,
@@ -49,7 +50,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // In production, load actual payment data
+    // TODO(cleanup): Wire loadPaymentData to real payment service.
     loadPaymentData();
   }, []);
 

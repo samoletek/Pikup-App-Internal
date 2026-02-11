@@ -26,6 +26,7 @@ import {
 
 const FILTERS = ["all", "active", "archive"];
 
+// TODO(cleanup): Remove mock conversations/profiles when backend data is stable.
 // ======== MOCK DATA FOR UI DEVELOPMENT ========
 const MOCK_CONVERSATIONS = [
   {

@@ -27,6 +27,9 @@ Pods/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.swp
+*.swo
+*~
 
 # macOS
 .DS_Store

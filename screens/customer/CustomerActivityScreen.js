@@ -30,7 +30,8 @@ import {
 
 const HEADER_ROW_HEIGHT = 56;
 
-// Mock data for demo purposes
+// TODO(cleanup): Remove mock fallback before production release.
+// This data is only for local UI development when no trips are returned.
 const MOCK_TRIPS = [
   {
     id: "mock-trip-1",
@@ -192,11 +193,8 @@ export default function CustomerActivityScreen({ navigation }) {
           return new Date(b.timestamp) - new Date(a.timestamp);
         });
 
-      setTrips(
-        normalizedTrips.length > 0
-          ? normalizedTrips
-          : MOCK_TRIPS
-      );
+      // TODO(cleanup): Remove MOCK_TRIPS fallback and show proper empty state only.
+      setTrips(normalizedTrips.length > 0 ? normalizedTrips : MOCK_TRIPS);
     } catch (error) {
       console.error("Error fetching trips:", error);
       Alert.alert("Unable to Load Activity", "Please try again later.");
