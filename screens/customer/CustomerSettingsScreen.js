@@ -118,35 +118,7 @@ export default function CustomerSettingsScreen({ navigation }) {
   );
 
   const accountRows = isDriver
-    ? [
-        {
-          icon: "person-outline",
-          label: "Personal Information",
-          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
-        },
-        {
-          icon: "options-outline",
-          label: "Driver Preferences",
-          onPress: () => navigation.navigate("DriverPreferencesScreen"),
-        },
-        {
-          icon: "card-outline",
-          label: "Payment Settings",
-          onPress: () => navigation.navigate("DriverPaymentSettingsScreen"),
-        },
-        {
-          icon: "globe-outline",
-          label: "Language",
-          value: settings.language,
-          onPress: () => {},
-        },
-        {
-          icon: "cash-outline",
-          label: "Currency",
-          value: settings.currency,
-          onPress: () => {},
-        },
-      ]
+    ? []
     : [
         {
           icon: "person-outline",
@@ -175,7 +147,7 @@ export default function CustomerSettingsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Settings"
+        title={isDriver ? "Notifications" : "Settings"}
         onBack={() => navigation.goBack()}
         topInset={insets.top}
       />
@@ -189,17 +161,19 @@ export default function CustomerSettingsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionLabel}>ACCOUNT</Text>
-            <View style={styles.card}>
-              {accountRows.map((row, index) =>
-                renderRow({
-                  ...row,
-                  isLast: index === accountRows.length - 1,
-                })
-              )}
+          {accountRows.length > 0 && (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>ACCOUNT</Text>
+              <View style={styles.card}>
+                {accountRows.map((row, index) =>
+                  renderRow({
+                    ...row,
+                    isLast: index === accountRows.length - 1,
+                  })
+                )}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>

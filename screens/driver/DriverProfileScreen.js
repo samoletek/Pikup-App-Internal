@@ -6,11 +6,11 @@ import {
   Linking,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import CollapsibleMessagesHeader, {
@@ -24,10 +24,7 @@ import {
 } from "../../styles/theme";
 
 const HEADER_ROW_HEIGHT = 56;
-const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
-const TOTAL_COLLAPSE_DISTANCE =
-  SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
 
 export default function DriverProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -45,7 +42,6 @@ export default function DriverProfileScreen({ navigation }) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const isSnappingRef = useRef(false);
 
-  const [searchText, setSearchText] = useState("");
   const [driverProfile, setDriverProfile] = useState(null);
   const [displayName, setDisplayName] = useState("Driver");
   const [onboardingStatus, setOnboardingStatus] = useState({
@@ -59,17 +55,6 @@ export default function DriverProfileScreen({ navigation }) {
 
   useEffect(() => {
     loadDriverProfile();
-  }, []);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: SEARCH_COLLAPSE_DISTANCE,
-        animated: false,
-      });
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
   }, []);
 
   const loadDriverProfile = async () => {
@@ -181,7 +166,6 @@ export default function DriverProfileScreen({ navigation }) {
     ? `${driverProfile?.acceptanceRate || 98}%`
     : "--";
   const ratingValue = isReadyToEarn ? String(driverProfile?.rating || "5.0") : "--";
-
   const statusConfig = isReadyToEarn
     ? {
         title: "Ready to Earn",
@@ -219,86 +203,43 @@ export default function DriverProfileScreen({ navigation }) {
 
   const feedbackToRender = recentFeedback.slice(0, 3);
 
-  const quickActions = [
-    {
-      id: "help",
-      title: "Help",
-      icon: "help-circle-outline",
-      keywords: "support assistance",
-      onPress: () => navigation.navigate("CustomerHelpScreen"),
-      disabled: false,
-    },
-    {
-      id: "earnings",
-      title: "Earnings",
-      icon: "wallet-outline",
-      keywords: "income payouts trips",
-      onPress: isReadyToEarn ? handleEarnings : handleResumeOnboarding,
-      disabled: !isReadyToEarn,
-    },
-  ];
-
   const menuItems = [
     {
-      id: "terms",
-      title: "Terms and Privacy",
-      icon: "document-text-outline",
-      keywords: "legal privacy policy",
-      onPress: () => Linking.openURL("https://pikup-app.com/"),
+      id: "notifications",
+      title: "Notifications",
+      icon: "notifications-outline",
+      onPress: () => navigation.navigate("CustomerSettingsScreen"),
       disabled: false,
-      external: true,
+    },
+    {
+      id: "driverPreferences",
+      title: "Driver Preferences",
+      icon: "options-outline",
+      onPress: () => navigation.navigate("DriverPreferencesScreen"),
+      disabled: false,
     },
     {
       id: "safety",
       title: "Safety",
       icon: "shield-checkmark-outline",
-      keywords: "safe trust emergency",
       onPress: () => navigation.navigate("CustomerSafetyScreen"),
       disabled: false,
     },
     {
-      id: "settings",
-      title: "Settings",
-      icon: "settings-outline",
-      keywords: "preferences notifications",
-      onPress: () => navigation.navigate("CustomerSettingsScreen"),
+      id: "terms",
+      title: "Terms and Privacy",
+      icon: "document-text-outline",
+      onPress: () => Linking.openURL("https://pikup-app.com/"),
       disabled: false,
+      external: true,
     },
   ];
 
-  const query = searchText.trim().toLowerCase();
-  const filteredQuickActions = !query
-    ? quickActions
-    : quickActions.filter((action) =>
-        `${action.title} ${action.keywords}`.toLowerCase().includes(query)
-      );
-  const filteredMenuItems = !query
-    ? menuItems
-    : menuItems.filter((item) =>
-        `${item.title} ${item.keywords}`.toLowerCase().includes(query)
-      );
-
-  const titleLockCompensation = scrollY.interpolate({
-    inputRange: [0, SEARCH_COLLAPSE_DISTANCE],
-    outputRange: [0, SEARCH_COLLAPSE_DISTANCE],
-    extrapolate: "clamp",
-  });
-
   const getSnapOffset = (offsetY) => {
-    if (offsetY < 0 || offsetY > TOTAL_COLLAPSE_DISTANCE) {
+    if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) {
       return null;
     }
-
-    if (offsetY < SEARCH_COLLAPSE_DISTANCE) {
-      return offsetY < SEARCH_COLLAPSE_DISTANCE / 2
-        ? 0
-        : SEARCH_COLLAPSE_DISTANCE;
-    }
-
-    const titleProgress = offsetY - SEARCH_COLLAPSE_DISTANCE;
-    return titleProgress < TITLE_COLLAPSE_DISTANCE / 2
-      ? SEARCH_COLLAPSE_DISTANCE
-      : TOTAL_COLLAPSE_DISTANCE;
+    return offsetY < TITLE_COLLAPSE_DISTANCE / 2 ? 0 : TITLE_COLLAPSE_DISTANCE;
   };
 
   const snapToNearestOffset = (offsetY) => {
@@ -370,7 +311,7 @@ export default function DriverProfileScreen({ navigation }) {
         topInset={insets.top}
         showBack={false}
         scrollY={scrollY}
-        searchCollapseDistance={SEARCH_COLLAPSE_DISTANCE}
+        searchCollapseDistance={0}
         titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
       />
 
@@ -391,60 +332,44 @@ export default function DriverProfileScreen({ navigation }) {
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View
-          style={[
-            styles.largeTitleSection,
-            { transform: [{ translateY: titleLockCompensation }] },
-          ]}
-        >
+        <View style={styles.largeTitleSection}>
           <Text style={styles.largeTitle}>Account</Text>
-        </Animated.View>
-
-        <View style={styles.searchSection}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search account and settings"
-              placeholderTextColor={colors.text.placeholder}
-              value={searchText}
-              onChangeText={setSearchText}
-              autoCapitalize="none"
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-            />
-          </View>
         </View>
 
         <View style={styles.profileCard}>
-          <View style={styles.profileCardContent}>
-            <View style={styles.profileLeftSide}>
-              <TouchableOpacity
-                style={styles.avatarContainer}
-                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
-              >
-                {profileImage ? (
-                  <Image source={{ uri: profileImage }} style={styles.profileImage} />
-                ) : (
-                  <View style={styles.profileInitials}>
-                    <Text style={styles.profileInitialsText}>{initials}</Text>
-                  </View>
-                )}
-                <View
-                  style={[
-                    styles.verifiedBadgeOnAvatar,
-                    !isReadyToEarn && styles.verifiedBadgeOnAvatarPending,
-                  ]}
+          <View style={styles.profileTopRow}>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+            >
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <LinearGradient
+                  colors={[colors.primary, colors.primaryDark]}
+                  style={styles.avatarGradient}
                 >
-                  <Ionicons name="checkmark" size={12} color={colors.white} />
-                </View>
-              </TouchableOpacity>
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                </LinearGradient>
+              )}
+              <View
+                style={[
+                  styles.verifiedBadge,
+                  !isReadyToEarn && styles.verifiedBadgePending,
+                ]}
+              >
+                <Ionicons name="checkmark" size={10} color="#fff" />
+              </View>
+            </TouchableOpacity>
 
+            <View style={styles.profileInfo}>
               <Text style={styles.userName}>{displayName}</Text>
-
               <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color={colors.primary} />
-                <Text style={styles.ratingText}>{ratingValue}</Text>
+                <Ionicons
+                  name={isReadyToEarn ? "checkmark-circle" : "time"}
+                  size={14}
+                  color={isReadyToEarn ? colors.success : colors.warning}
+                />
                 <Text
                   style={[
                     styles.verifiedText,
@@ -454,23 +379,30 @@ export default function DriverProfileScreen({ navigation }) {
                   {isReadyToEarn ? "Verified Driver" : "Pending Verification"}
                 </Text>
               </View>
+              <TouchableOpacity
+                style={styles.editProfileButton}
+                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+              >
+                <Ionicons name="create-outline" size={14} color={colors.primary} />
+                <Text style={styles.editProfileText}>Edit profile</Text>
+              </TouchableOpacity>
             </View>
+          </View>
 
-            <View style={styles.statsColumn}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{completedTrips}</Text>
-                <Text style={styles.statLabel}>Trips</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{acceptanceRate}</Text>
-                <Text style={styles.statLabel}>Acceptance</Text>
-              </View>
-              <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>{ratingValue}</Text>
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
+          <View style={styles.statsBar}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{completedTrips}</Text>
+              <Text style={styles.statLabel}>TRIPS</Text>
+            </View>
+            <View style={styles.statDividerVertical} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{acceptanceRate}</Text>
+              <Text style={styles.statLabel}>ACCEPTANCE</Text>
+            </View>
+            <View style={styles.statDividerVertical} />
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{ratingValue}</Text>
+              <Text style={styles.statLabel}>RATING</Text>
             </View>
           </View>
         </View>
@@ -502,64 +434,44 @@ export default function DriverProfileScreen({ navigation }) {
           ) : null}
         </TouchableOpacity>
 
-        {filteredQuickActions.length > 0 ? (
-          <View style={styles.quickActions}>
-            {filteredQuickActions.map((action, index) => (
-              <React.Fragment key={action.id}>
-                <TouchableOpacity
-                  style={[styles.actionButton, action.disabled && styles.actionButtonDisabled]}
-                  onPress={action.onPress}
-                >
-                  <Ionicons
-                    name={action.icon}
-                    size={32}
-                    color={action.disabled ? colors.text.muted : colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.actionText,
-                      action.disabled && styles.actionTextDisabled,
-                    ]}
-                  >
-                    {action.title}
-                  </Text>
-                </TouchableOpacity>
-                {index < filteredQuickActions.length - 1 ? (
-                  <View style={styles.actionDivider} />
-                ) : null}
-              </React.Fragment>
-            ))}
-          </View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[styles.infoCard, !isReadyToEarn && styles.infoCardDisabled]}
-          onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
-          activeOpacity={0.85}
-        >
-          <View style={styles.infoCardContent}>
-            <Text style={styles.infoCardTitle}>
-              {isReadyToEarn ? "Today's Earnings" : "Earnings Locked"}
-            </Text>
-            <Text style={styles.infoCardSubtitle}>
-              {isReadyToEarn
-                ? "Complete more trips to increase earnings"
-                : "Complete setup to start earning"}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.infoIconCircle,
-              !isReadyToEarn && styles.infoIconCircleDisabled,
-            ]}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate("CustomerHelpScreen")}
           >
-            <Ionicons
-              name={isReadyToEarn ? "cash-outline" : "lock-closed-outline"}
-              size={22}
-              color={isReadyToEarn ? colors.success : colors.text.muted}
-            />
-          </View>
-        </TouchableOpacity>
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.quickActionLabel}>Help</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionButton}
+            onPress={() => navigation.navigate("DriverPaymentSettingsScreen")}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons name="card-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.quickActionLabel}>Payment</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionButton, !isReadyToEarn && styles.quickActionButtonDisabled]}
+            onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
+            disabled={!isReadyToEarn}
+          >
+            <View style={styles.quickActionIcon}>
+              <Ionicons
+                name="wallet-outline"
+                size={24}
+                color={!isReadyToEarn ? colors.text.muted : colors.primary}
+              />
+            </View>
+            <Text style={[styles.quickActionLabel, !isReadyToEarn && styles.quickActionLabelDisabled]}>
+              Earnings
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {isReadyToEarn ? (
           <View style={styles.feedbackCard}>
@@ -615,21 +527,11 @@ export default function DriverProfileScreen({ navigation }) {
           </View>
         ) : null}
 
-        {filteredMenuItems.length > 0 ? (
-          <View style={styles.menuSections}>
-            {filteredMenuItems.map((item, index) =>
-              renderMenuItem(item, index === filteredMenuItems.length - 1)
-            )}
-          </View>
-        ) : (
-          <View style={styles.searchEmptyState}>
-            <Ionicons name="search-outline" size={36} color={colors.text.tertiary} />
-            <Text style={styles.searchEmptyTitle}>No matches found</Text>
-            <Text style={styles.searchEmptySubtitle}>
-              Try another keyword for account settings
-            </Text>
-          </View>
-        )}
+        <View style={styles.menuSections}>
+          {menuItems.map((item, index) =>
+            renderMenuItem(item, index === menuItems.length - 1)
+          )}
+        </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutText}>Sign out</Text>
@@ -661,114 +563,106 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xxxl,
     fontWeight: typography.fontWeight.bold,
   },
-  searchSection: {
-    height: HEADER_ROW_HEIGHT,
-    justifyContent: "center",
-    paddingVertical: spacing.xs,
-    zIndex: 1,
-    marginBottom: spacing.sm,
-  },
-  searchBar: {
-    height: 40,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.base,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-  },
   profileCard: {
     backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.md,
   },
-  profileCardContent: {
+  profileTopRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  profileLeftSide: {
-    alignItems: "center",
-    flex: 1,
+    gap: spacing.lg,
   },
   avatarContainer: {
     position: "relative",
   },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.circle,
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.xl,
   },
-  profileInitials: {
-    width: 100,
-    height: 100,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
+  avatarGradient: {
+    width: 80,
+    height: 80,
+    borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
-  profileInitialsText: {
-    color: colors.white,
-    fontSize: 34,
-    fontWeight: typography.fontWeight.semibold,
+  avatarInitials: {
+    color: "#fff",
+    fontSize: 32,
+    fontWeight: typography.fontWeight.bold,
   },
-  verifiedBadgeOnAvatar: {
+  verifiedBadge: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 24,
-    height: 24,
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
     borderRadius: borderRadius.circle,
     backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: colors.background.secondary,
   },
-  verifiedBadgeOnAvatarPending: {
+  verifiedBadgePending: {
     backgroundColor: colors.warning,
+  },
+  profileInfo: {
+    flex: 1,
   },
   userName: {
     fontSize: 22,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
-    marginTop: spacing.md,
     textTransform: "capitalize",
+    marginBottom: spacing.xs,
   },
   ratingRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.xs,
-  },
-  ratingText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    marginLeft: spacing.xs,
-    marginRight: spacing.sm,
-    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
   },
   verifiedText: {
     fontSize: typography.fontSize.sm,
     color: colors.success,
     fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
   },
   verifiedTextPending: {
     color: colors.warning,
   },
-  statsColumn: {
-    alignItems: "flex-start",
-    paddingLeft: spacing.md,
+  editProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  editProfileText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary,
+  },
+  statsBar: {
+    flexDirection: "row",
+    marginTop: spacing.xl,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
   },
   statItem: {
-    paddingVertical: spacing.sm,
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.md,
   },
   statNumber: {
     fontSize: 20,
@@ -776,14 +670,16 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statLabel: {
-    fontSize: typography.fontSize.base,
+    fontSize: 11,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.text.muted,
-    marginTop: 2,
+    marginTop: 3,
+    letterSpacing: 0.5,
   },
-  statDivider: {
-    width: 120,
-    height: 1,
+  statDividerVertical: {
+    width: 1,
     backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
   },
   statusCard: {
     marginBottom: spacing.base,
@@ -829,73 +725,32 @@ const styles = StyleSheet.create({
   },
   quickActions: {
     flexDirection: "row",
-    backgroundColor: colors.background.secondary,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    justifyContent: "space-around",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  quickActionButton: {
+    flex: 1,
     alignItems: "center",
-    marginBottom: spacing.base,
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
-  actionButton: {
-    alignItems: "center",
-    flex: 1,
-  },
-  actionButtonDisabled: {
+  quickActionButtonDisabled: {
     opacity: 0.5,
   },
-  actionText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.primary,
-    marginTop: spacing.sm,
-    fontWeight: typography.fontWeight.medium,
+  quickActionIcon: {
+    position: "relative",
   },
-  actionTextDisabled: {
-    color: colors.text.muted,
-  },
-  actionDivider: {
-    width: 1,
-    height: 50,
-    backgroundColor: colors.border.strong,
-  },
-  infoCard: {
-    backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: spacing.base,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  infoCardDisabled: {
-    opacity: 0.7,
-  },
-  infoCardContent: {
-    flex: 1,
-  },
-  infoCardTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
+  quickActionLabel: {
+    fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
+    color: colors.text.primary,
   },
-  infoCardSubtitle: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-  },
-  infoIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.background.elevated,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  infoIconCircleDisabled: {
-    backgroundColor: colors.background.tertiary,
+  quickActionLabelDisabled: {
+    color: colors.text.muted,
   },
   feedbackCard: {
     backgroundColor: colors.background.secondary,
@@ -986,29 +841,6 @@ const styles = StyleSheet.create({
   },
   menuItemTitleDisabled: {
     color: colors.text.muted,
-  },
-  searchEmptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.xxl,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    backgroundColor: colors.background.secondary,
-  },
-  searchEmptyTitle: {
-    marginTop: spacing.sm,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  searchEmptySubtitle: {
-    marginTop: spacing.xs,
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
-    textAlign: "center",
-    paddingHorizontal: spacing.xl,
   },
   logoutButton: {
     backgroundColor: colors.background.secondary,
