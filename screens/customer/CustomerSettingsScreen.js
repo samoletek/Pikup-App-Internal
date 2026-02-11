@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
+import { useAuth } from "../../contexts/AuthContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -54,6 +55,7 @@ const notificationItems = [
 export default function CustomerSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { userType } = useAuth();
   const [settings, setSettings] = useState({
     notifications: {
       pushNotifications: true,
@@ -66,6 +68,7 @@ export default function CustomerSettingsScreen({ navigation }) {
     language: "English",
     currency: "USD",
   });
+  const isDriver = userType === "driver";
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const appVersion =
     Constants.expoConfig?.version ||
@@ -86,7 +89,7 @@ export default function CustomerSettingsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title="Settings"
+        title={isDriver ? "Notifications" : "Settings"}
         onBack={() => navigation.goBack()}
         topInset={insets.top}
       />
