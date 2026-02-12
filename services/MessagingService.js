@@ -3,6 +3,24 @@
 
 import { supabase } from '../config/supabase';
 
+const ensureAuthenticatedUserId = async () => {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (!userError && userData?.user?.id) {
+        return userData.user.id;
+    }
+
+    // Try to refresh silently if local session exists but user fetch failed.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+        const { data: refreshedData } = await supabase.auth.refreshSession();
+        if (refreshedData?.user?.id) {
+            return refreshedData.user.id;
+        }
+    }
+
+    return null;
+};
+
 /**
  * Create a new conversation or return existing one
  * @param {string} requestId - Trip/request ID
@@ -14,12 +32,23 @@ import { supabase } from '../config/supabase';
  */
 export const createConversation = async (requestId, customerId, driverId, customerName, driverName) => {
     try {
+        const authUid = await ensureAuthenticatedUserId();
+        if (!authUid) {
+            throw new Error('Session expired. Please sign in again.');
+        }
+
+        const effectiveCustomerId = customerId || authUid;
+        const effectiveDriverId = driverId || authUid;
+        if (authUid !== effectiveCustomerId && authUid !== effectiveDriverId) {
+            throw new Error('Cannot create conversation: authenticated user is not a participant.');
+        }
+
         // Build query to check if conversation exists
         let query = supabase
             .from('conversations')
             .select('id')
-            .eq('customer_id', customerId)
-            .eq('driver_id', driverId);
+            .eq('customer_id', effectiveCustomerId)
+            .eq('driver_id', effectiveDriverId);
 
         if (requestId) {
             query = query.eq('request_id', requestId);
@@ -37,8 +66,8 @@ export const createConversation = async (requestId, customerId, driverId, custom
             .from('conversations')
             .insert({
                 request_id: requestId,
-                customer_id: customerId,
-                driver_id: driverId,
+                customer_id: effectiveCustomerId,
+                driver_id: effectiveDriverId,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             })

@@ -51,6 +51,11 @@ export default function CustomerHelpScreen({ navigation }) {
     setLoading(true);
 
     try {
+      const currentUserId = currentUser?.uid || currentUser?.id;
+      if (!currentUserId) {
+        throw new Error("Session expired. Please sign in again.");
+      }
+
       const currentUserName =
         currentUser?.first_name || currentUser?.email?.split("@")[0] || "User";
 
@@ -65,7 +70,7 @@ export default function CustomerHelpScreen({ navigation }) {
       try {
         conversationId = await createConversation(
           null,
-          currentUser.uid || currentUser.id,
+          currentUserId,
           SUPPORT_DRIVER_ID,
           currentUserName,
           "Support"
@@ -75,10 +80,10 @@ export default function CustomerHelpScreen({ navigation }) {
         // This allows testing the UI flow without a real support user in DB
         if (err.message && (err.message.includes("foreign key") || err.code === "23503")) {
           console.warn("Support ID not found, falling back to Self-Support (Note-to-Self)");
-          usedSupportId = currentUser.uid || currentUser.id;
+          usedSupportId = currentUserId;
           conversationId = await createConversation(
             null,
-            currentUser.uid || currentUser.id,
+            currentUserId,
             usedSupportId, // driverId = customerId
             currentUserName,
             "Support"

@@ -96,8 +96,8 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
         }
         setPersonalInfo((prev) => ({
           ...prev,
-          firstName: profile.firstName || prev.firstName || "",
-          lastName: profile.lastName || prev.lastName || "",
+          firstName: profile.firstName || profile.first_name || prev.firstName || "",
+          lastName: profile.lastName || profile.last_name || prev.lastName || "",
           email: profile.email || prev.email || currentUser?.email || "",
         }));
       } catch (error) {
@@ -250,8 +250,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
         setSaving(false);
         return;
       }
-      const name = `${firstName} ${lastName}`;
-      await updateUserProfile({ firstName, lastName, name });
+      await updateUserProfile({ firstName, lastName });
       setPersonalInfo((prev) => ({ ...prev, firstName, lastName }));
       await getUserProfile(userId);
       Alert.alert("Success", "Your personal information has been updated.");

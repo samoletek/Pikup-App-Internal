@@ -72,7 +72,8 @@ export default function DriverMessagesScreen({ navigation, route }) {
   }, []);
 
   const loadConversations = async () => {
-    if (!currentUser) {
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (!currentUserId) {
       setConversations([]);
       setLoading(false);
       return;
@@ -80,7 +81,7 @@ export default function DriverMessagesScreen({ navigation, route }) {
 
     try {
       setLoading(true);
-      const userConversations = await getConversations(currentUser.uid, "driver");
+      const userConversations = await getConversations(currentUserId, "driver");
       const validConversations = userConversations.filter(
         (conversation) =>
           conversation.customerId &&

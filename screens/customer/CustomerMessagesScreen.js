@@ -187,14 +187,15 @@ export default function CustomerMessagesScreen({ navigation }) {
   const loadConversations = async () => {
     setLoading(true);
 
-    if (!currentUser) {
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (!currentUserId) {
       setConversations([]);
       setLoading(false);
       return;
     }
 
     try {
-      const userConversations = await getConversations(currentUser.uid, "customer");
+      const userConversations = await getConversations(currentUserId, "customer");
       const validConversations = (Array.isArray(userConversations) ? userConversations : []).filter(
         (conversation) =>
           conversation.customerId &&

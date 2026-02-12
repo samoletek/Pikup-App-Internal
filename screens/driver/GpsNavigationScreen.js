@@ -803,6 +803,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     if (isCreatingChat) return;
     setIsCreatingChat(true);
     try {
+      const currentUserId = currentUser?.uid || currentUser?.id;
       const req = requestData || route.params?.request || {};
       const requestId = req.id || req.requestId;
       const customerId = req.customerId || req.customerUid || req.customer?.uid || req.userId;
@@ -813,13 +814,18 @@ export default function GpsNavigationScreen({ route, navigation }) {
         req.customer?.displayName ||
         (customerEmail ? customerEmail.split('@')[0] : 'Customer');
       
-      if (!requestId || !customerId || !currentUser?.uid) {
-        console.error('Missing required data for chat:', { requestId, customerId, currentUserUid: currentUser?.uid });
+      if (!requestId || !customerId || !currentUserId) {
+        console.error('Missing required data for chat:', { requestId, customerId, currentUserId });
         return;
       }
 
-      const conversationId = `${requestId}_${customerId}_${currentUser.uid}`;
-      await createConversation(requestId, customerId, currentUser.uid, customerName, req.assignedDriverName);
+      const conversationId = await createConversation(
+        requestId,
+        customerId,
+        currentUserId,
+        customerName,
+        req.assignedDriverName
+      );
 
       navigation.navigate('MessageScreen', {
         conversationId,

@@ -4,6 +4,51 @@
 import { supabase } from '../config/supabase';
 import { uploadToSupabase } from './StorageService';
 
+const PROFILE_UPDATE_FIELD_MAP = Object.freeze({
+    firstName: 'first_name',
+    lastName: 'last_name',
+    phoneNumber: 'phone_number',
+    profileImageUrl: 'profile_image_url',
+    profile_image_url: 'profile_image_url',
+    avatarUrl: 'avatar_url',
+    avatar_url: 'avatar_url',
+    email: 'email',
+});
+
+const isNoRowsError = (error) => error?.code === 'PGRST116';
+
+const buildProfileUpdatePayload = (updates = {}) => {
+    const payload = {};
+
+    Object.entries(updates).forEach(([key, value]) => {
+        if (typeof value === 'undefined') return;
+        const mappedKey = PROFILE_UPDATE_FIELD_MAP[key];
+        if (mappedKey) {
+            payload[mappedKey] = value;
+        }
+    });
+
+    return payload;
+};
+
+const normalizeProfile = (profile, fallbackEmail = null) => {
+    if (!profile) return null;
+
+    return {
+        ...profile,
+        uid: profile.uid || profile.id || null,
+        email: profile.email || fallbackEmail || null,
+        firstName: profile.first_name ?? profile.firstName ?? '',
+        lastName: profile.last_name ?? profile.lastName ?? '',
+        phoneNumber: profile.phone_number ?? profile.phoneNumber ?? '',
+        profileImageUrl:
+            profile.profileImageUrl ||
+            profile.profile_image_url ||
+            profile.avatar_url ||
+            null,
+    };
+};
+
 /**
  * Update user profile in database
  * @param {Object} updates - Profile fields to update
@@ -15,20 +60,64 @@ export const updateUserProfile = async (updates, currentUser, userType) => {
     if (!currentUser) throw new Error('User not authenticated');
 
     try {
-        const { data, error } = await supabase
-            .from(userType === 'driver' ? 'drivers' : 'customers')
-            .update({
-                ...updates,
-                first_name: updates.firstName,
-                last_name: updates.lastName,
-                phone_number: updates.phoneNumber
-            })
-            .eq('id', currentUser.id || currentUser.uid)
-            .select()
-            .single();
+        const userId = currentUser.id || currentUser.uid;
+        const tableName = userType === 'driver' ? 'drivers' : 'customers';
+        const dbUpdates = buildProfileUpdatePayload(updates);
 
-        if (error) throw error;
-        return data;
+        if (Object.keys(dbUpdates).length === 0) {
+            return normalizeProfile(currentUser, currentUser?.email);
+        }
+
+        const { data: existingProfile, error: existingProfileError } = await supabase
+            .from(tableName)
+            .select('id, email')
+            .eq('id', userId)
+            .maybeSingle();
+
+        if (existingProfileError && !isNoRowsError(existingProfileError)) {
+            throw existingProfileError;
+        }
+
+        dbUpdates.updated_at = new Date().toISOString();
+
+        const { data, error } = await supabase
+            .from(tableName)
+            .update(dbUpdates)
+            .eq('id', userId)
+            .select('*')
+            .maybeSingle();
+
+        if (error && !isNoRowsError(error)) throw error;
+        if (data) return normalizeProfile(data, currentUser?.email);
+
+        // If update succeeded but no row was returned, keep local profile consistent.
+        if (existingProfile) {
+            return normalizeProfile(
+                { ...currentUser, ...existingProfile, ...dbUpdates, id: userId },
+                currentUser?.email
+            );
+        }
+
+        // Fallback for missing row or strict RLS returning no selected rows.
+        const { data: authData } = await supabase.auth.getUser();
+        const fallbackEmail = updates?.email || currentUser?.email || authData?.user?.email || null;
+        const upsertPayload = {
+            id: userId,
+            ...dbUpdates,
+        };
+
+        if (fallbackEmail && !upsertPayload.email) {
+            upsertPayload.email = fallbackEmail;
+        }
+
+        const { data: upsertedData, error: upsertError } = await supabase
+            .from(tableName)
+            .upsert(upsertPayload)
+            .select('*')
+            .maybeSingle();
+
+        if (upsertError) throw upsertError;
+        return normalizeProfile(upsertedData || upsertPayload, fallbackEmail);
     } catch (error) {
         console.error('Error updating profile:', error);
         throw error;
@@ -79,7 +168,11 @@ export const getProfileImage = async (currentUser, userType) => {
             .from(userType === 'driver' ? 'drivers' : 'customers')
             .select('profile_image_url')
             .eq('id', userId)
-            .single();
+            .maybeSingle();
+
+        if (error && !isNoRowsError(error)) {
+            throw error;
+        }
 
         if (data?.profile_image_url) {
             return data.profile_image_url;
@@ -141,18 +234,16 @@ export const getUserProfile = async (currentUser) => {
         }
 
         if (profile) {
-            return {
-                uid: userId,
-                email: profile.email || fallbackEmail || null,
-                profileImageUrl: profile.avatar_url || profile.profile_image_url || null,
-                ...profile
-            };
+            return normalizeProfile(profile, fallbackEmail);
         }
 
         // Fallback if no profile found
         return {
             uid: userId,
             email: fallbackEmail || null,
+            firstName: '',
+            lastName: '',
+            phoneNumber: '',
             profileImageUrl: null
         };
 

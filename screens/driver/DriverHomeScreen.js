@@ -244,12 +244,14 @@ export default function DriverHomeScreen({ navigation, route }) {
         };
         setDriverLocation(newLocation);
 
+        const currentUserId = currentUser?.uid || currentUser?.id;
+
         // Update driver heartbeat in backend when online (throttled)
-        if (isOnline && currentUser?.uid) {
+        if (isOnline && currentUserId) {
           const now = Date.now();
           if (now - lastHeartbeatAt.current >= HEARTBEAT_INTERVAL_MS && movedEnough(driverLocation, newLocation)) {
             lastHeartbeatAt.current = now;
-            updateDriverHeartbeat(currentUser.uid, newLocation).catch(error => {
+            updateDriverHeartbeat(currentUserId, newLocation).catch(error => {
               console.error('Error updating heartbeat:', error);
             });
           }
@@ -325,7 +327,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const handleGoOnline = async () => {
-    if (isOnline || !currentUser?.uid) return;
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (isOnline || !currentUserId) return;
 
     try {
       setLoading(true);
@@ -394,7 +397,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       setDriverLocation(driverPos);
 
       // Set driver online in backend
-      const sessionId = await setDriverOnline(currentUser.uid, driverPos);
+      const sessionId = await setDriverOnline(currentUserId, driverPos);
       setCurrentSessionId(sessionId);
 
       // Set local state
@@ -423,13 +426,14 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const confirmGoOffline = async () => {
-    if (!currentUser?.uid) return;
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (!currentUserId) return;
 
     try {
       setLoading(true);
 
       // Set driver offline in backend
-      await setDriverOffline(currentUser.uid);
+      await setDriverOffline(currentUserId);
       setCurrentSessionId(null);
 
       // Set local state

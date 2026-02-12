@@ -3,6 +3,8 @@
 
 import { supabase } from '../config/supabase';
 
+const isNoRowsError = (error) => error?.code === 'PGRST116';
+
 /**
  * Create Stripe Connect account for driver (Currently disabled)
  * @param {Object} driverInfo - Driver information
@@ -33,20 +35,30 @@ export const getDriverOnboardingLink = async (connectAccountId, refreshUrl, retu
  */
 export const updateDriverPaymentProfile = async (driverId, updates) => {
     try {
+        if (!driverId) {
+            throw new Error('Driver ID is required');
+        }
+
+        const now = new Date().toISOString();
+
         // Fetch current profile metadata
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
             .from('drivers')
-            .select('metadata')
+            .select('id, email, metadata')
             .eq('id', driverId)
-            .single();
+            .maybeSingle();
+
+        if (profileError && !isNoRowsError(profileError)) {
+            throw profileError;
+        }
 
         const currentMeta = profile?.metadata || {};
 
         // Merge updates
-        const newMeta = { ...currentMeta, ...updates, updatedAt: new Date().toISOString() };
+        const newMeta = { ...currentMeta, ...updates, updatedAt: now };
         const columnUpdates = {
             metadata: newMeta,
-            updated_at: new Date().toISOString(),
+            updated_at: now,
         };
 
         if (Object.prototype.hasOwnProperty.call(updates, 'onboardingComplete')) {
@@ -65,11 +77,40 @@ export const updateDriverPaymentProfile = async (driverId, updates) => {
             .from('drivers')
             .update(columnUpdates)
             .eq('id', driverId)
-            .select()
-            .single();
+            .select('*')
+            .maybeSingle();
 
-        if (error) throw error;
-        return data;
+        if (error && !isNoRowsError(error)) throw error;
+        if (data) return data;
+
+        if (profile) {
+            return {
+                ...profile,
+                ...columnUpdates,
+                id: driverId,
+                metadata: newMeta,
+            };
+        }
+
+        // Fallback: recreate or patch missing profile row for this driver id.
+        const { data: authData } = await supabase.auth.getUser();
+        const fallbackEmail = profile?.email || authData?.user?.email || null;
+        const upsertPayload = {
+            id: driverId,
+            ...columnUpdates,
+        };
+        if (fallbackEmail) {
+            upsertPayload.email = fallbackEmail;
+        }
+
+        const { data: upsertedData, error: upsertError } = await supabase
+            .from('drivers')
+            .upsert(upsertPayload)
+            .select('*')
+            .maybeSingle();
+
+        if (upsertError) throw upsertError;
+        return upsertedData || upsertPayload;
     } catch (error) {
         console.error('Error updating driver payment profile:', error);
         throw error;
