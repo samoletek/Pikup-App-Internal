@@ -10,6 +10,7 @@ import {
     Platform,
     Alert,
     Image,
+    Linking,
     useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -49,6 +50,7 @@ export default function AuthScreen({ navigation, route }) {
     const contentMaxWidth = Math.min(layout.authMaxWidth, width - spacing.xl);
     const iconSize = isCompact ? 88 : 100;
     const logoSize = isCompact ? 52 : 60;
+    const legalDocsUrl = "https://pikup-app.com/";
 
     // Validate email format
     const validateEmail = (email) => {
@@ -271,7 +273,20 @@ export default function AuthScreen({ navigation, route }) {
                                             />
                                             <View style={styles.termsTextContainer}>
                                                 <Text style={styles.termsText}>I accept the </Text>
-                                                <TouchableOpacity onPress={() => navigation.navigate('TermsAndPrivacy')}>
+                                                <TouchableOpacity
+                                                    onPress={async () => {
+                                                        try {
+                                                            const supported = await Linking.canOpenURL(legalDocsUrl);
+                                                            if (!supported) {
+                                                                Alert.alert("Error", `Cannot open this link: ${legalDocsUrl}`);
+                                                                return;
+                                                            }
+                                                            await Linking.openURL(legalDocsUrl);
+                                                        } catch (error) {
+                                                            Alert.alert("Error", "Failed to open legal documents.");
+                                                        }
+                                                    }}
+                                                >
                                                     <Text style={styles.termsLink}>Terms of Service & Privacy Policy</Text>
                                                 </TouchableOpacity>
                                             </View>
