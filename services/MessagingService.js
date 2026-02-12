@@ -30,7 +30,14 @@ const ensureAuthenticatedUserId = async () => {
  * @param {string} driverName - Driver display name (unused, for future)
  * @returns {Promise<string>} Conversation ID
  */
-export const createConversation = async (requestId, customerId, driverId, customerName, driverName) => {
+export const createConversation = async (
+    requestId,
+    customerId,
+    driverId,
+    customerName,
+    driverName,
+    options = {}
+) => {
     try {
         const authUid = await ensureAuthenticatedUserId();
         if (!authUid) {
@@ -77,7 +84,9 @@ export const createConversation = async (requestId, customerId, driverId, custom
         if (error) throw error;
         return data.id;
     } catch (error) {
-        console.error('Error creating conversation:', error);
+        if (!options?.suppressLog) {
+            console.error('Error creating conversation:', error);
+        }
         throw error;
     }
 };

@@ -73,7 +73,8 @@ export default function CustomerHelpScreen({ navigation }) {
           currentUserId,
           SUPPORT_DRIVER_ID,
           currentUserName,
-          "Support"
+          "Support",
+          { suppressLog: true }
         );
       } catch (err) {
         // If hardcoded ID fails (FK constraint), fallback to Self-Chat (Note-to-Self)
@@ -86,7 +87,8 @@ export default function CustomerHelpScreen({ navigation }) {
             currentUserId,
             usedSupportId, // driverId = customerId
             currentUserName,
-            "Support"
+            "Support",
+            { suppressLog: true }
           );
         } else {
           throw err;
