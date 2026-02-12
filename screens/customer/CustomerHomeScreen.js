@@ -31,6 +31,7 @@ import MapboxMap from "../../components/mapbox/MapboxMap";
 import {
   borderRadius,
   colors,
+  shadows,
   spacing,
   typography,
 } from "../../styles/theme";
@@ -122,7 +123,7 @@ export default function CustomerHomeScreen({ navigation }) {
   );
 
   const logoWidth = useMemo(
-    () => Math.min(Math.max(width * 0.24, 90), 132),
+    () => Math.min(Math.max(width * 0.2, 76), 112),
     [width]
   );
 
@@ -533,7 +534,7 @@ export default function CustomerHomeScreen({ navigation }) {
         )}
       </MapboxMap>
 
-      <View style={[styles.header, { paddingTop: Math.max(insets.top - 14, 20) }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Image
           source={require("../../assets/pikup-logo.png")}
           style={[styles.headerLogo, { width: logoWidth }]}
@@ -741,9 +742,9 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   headerLogo: {
-    height: 24,
+    height: 20,
     resizeMode: "contain",
-    marginTop: spacing.sm,
+    ...shadows.lg,
   },
   trackerContainer: {
     position: "absolute",

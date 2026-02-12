@@ -1,7 +1,9 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, typography, shadows } from "../styles/theme";
+import { borderRadius, colors, spacing, typography, shadows } from "../styles/theme";
+
+const STANDARD_HEADER_BAR_HEIGHT = 46;
 
 export default function ScreenHeader({
   title,
@@ -9,27 +11,35 @@ export default function ScreenHeader({
   topInset = 0,
   rightContent = null,
   showBack = true,
+  sideSlotWidth = 36,
 }) {
   return (
-    <View style={[styles.container, { paddingTop: topInset + spacing.sm }]}>
-      {showBack ? (
-        <TouchableOpacity
-          style={styles.sideButton}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.sideButton} />
-      )}
+    <View
+      style={[
+        styles.container,
+        { paddingTop: topInset, height: topInset + STANDARD_HEADER_BAR_HEIGHT },
+      ]}
+    >
+      <View style={[styles.leftSlot, { width: sideSlotWidth }]}>
+        {showBack ? (
+          <TouchableOpacity
+            style={styles.sideButton}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.sideButton} />
+        )}
+      </View>
 
       <Text numberOfLines={1} style={styles.title}>
         {title}
       </Text>
 
-      <View style={styles.rightSlot}>
+      <View style={[styles.rightSlot, { width: sideSlotWidth }]}>
         {rightContent || <View style={styles.sideButton} />}
       </View>
     </View>
@@ -42,19 +52,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.base,
-    paddingBottom: spacing.sm,
     backgroundColor: colors.background.primary,
     ...shadows.md,
   },
   sideButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: borderRadius.circle,
     justifyContent: "center",
     alignItems: "center",
   },
+  leftSlot: {
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
   rightSlot: {
-    width: 40,
     alignItems: "flex-end",
     justifyContent: "center",
   },
@@ -62,7 +74,7 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     color: colors.text.primary,
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     marginHorizontal: spacing.sm,
   },

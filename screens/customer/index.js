@@ -6,7 +6,7 @@ export { default as CustomerMessagesScreen } from './CustomerMessagesScreen';
 export { default as CustomerClaimsScreen } from './CustomerClaimsScreen';
 export { default as CustomerHelpScreen } from './CustomerHelpScreen';
 export { default as CustomerWalletScreen } from './CustomerWalletScreen';
-export { default as CustomerPersonalInfoScreen } from './CustomerPersonalInfoScreen';
+export { default as CustomerSavedAddressesScreen } from './CustomerSavedAddressesScreen';
 export { default as CustomerSafetyScreen } from './CustomerSafetyScreen';
 export { default as CustomerSettingsScreen } from './CustomerSettingsScreen';
 export { default as PaymentMethodsScreen } from './PaymentMethodsScreen';

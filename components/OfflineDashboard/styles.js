@@ -113,14 +113,14 @@ export const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 20,
         paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border.strong,
+    },
+    headerSideSpacer: {
+        width: 36,
+        height: 36,
     },
     closeBtn: {
         width: 36,
         height: 36,
-        borderRadius: 18,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -128,6 +128,8 @@ export const styles = StyleSheet.create({
         fontSize: 17,
         fontWeight: '600',
         color: colors.text.primary,
+        flex: 1,
+        textAlign: 'center',
     },
     scrollContent: {
         flex: 1,

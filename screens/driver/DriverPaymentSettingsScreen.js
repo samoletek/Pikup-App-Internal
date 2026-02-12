@@ -6,12 +6,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppSwitch from '../../components/AppSwitch';
 import ScreenHeader from '../../components/ScreenHeader';
 import {
   borderRadius,
@@ -261,11 +261,9 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          <Switch
+          <AppSwitch
             value={paymentData.instantPay}
             onValueChange={handleInstantPayToggle}
-            thumbColor={paymentData.instantPay ? colors.success : colors.text.subtle}
-            trackColor={{ false: colors.border.strong, true: colors.successLight }}
           />
         </View>
 
@@ -281,11 +279,9 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
               </Text>
             </View>
           </View>
-          <Switch
+          <AppSwitch
             value={paymentData.notificationsEnabled}
             onValueChange={handleNotificationsToggle}
-            thumbColor={paymentData.notificationsEnabled ? colors.success : colors.text.subtle}
-            trackColor={{ false: colors.border.strong, true: colors.successLight }}
           />
         </View>
 

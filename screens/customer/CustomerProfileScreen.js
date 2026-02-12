@@ -3,20 +3,15 @@ import {
   Alert,
   Animated,
   Image,
-  LayoutAnimation,
-  Linking,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
-  UIManager,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import Constants from "expo-constants";
 import { useAuth } from "../../contexts/AuthContext";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
@@ -28,13 +23,6 @@ import {
   spacing,
   typography,
 } from "../../styles/theme";
-
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const HEADER_ROW_HEIGHT = 56;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
@@ -48,7 +36,10 @@ export default function CustomerProfileScreen({ navigation }) {
     getUserPickupRequests,
     profileImage,
     getProfileImage,
+    uploadProfileImage,
+    deleteProfileImage,
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -61,8 +52,6 @@ export default function CustomerProfileScreen({ navigation }) {
     totalSpent: 0,
     avgRating: 5,
   });
-  const [savedAddressCount, setSavedAddressCount] = useState(0);
-  const [aboutExpanded, setAboutExpanded] = useState(false);
   const [memberSince, setMemberSince] = useState("New on Pikup");
 
   useEffect(() => {
@@ -72,21 +61,6 @@ export default function CustomerProfileScreen({ navigation }) {
   useEffect(() => {
     loadAccountStats();
   }, [currentUser, customerProfile]);
-
-  useEffect(() => {
-    const loadAddressCount = async () => {
-      try {
-        const stored = await AsyncStorage.getItem("@pikup_recent_addresses");
-        if (stored) {
-          const addresses = JSON.parse(stored);
-          setSavedAddressCount(Array.isArray(addresses) ? addresses.length : 0);
-        }
-      } catch (error) {
-        console.error("Error loading address count:", error);
-      }
-    };
-    loadAddressCount();
-  }, []);
 
   useEffect(() => {
     const dateStr =
@@ -101,7 +75,7 @@ export default function CustomerProfileScreen({ navigation }) {
 
   const loadCustomerProfile = async () => {
     try {
-      const profile = await getUserProfile?.(currentUser?.uid);
+      const profile = await getUserProfile?.(currentUserId);
       setCustomerProfile(profile?.customerProfile || profile || null);
 
       const firstName = profile?.first_name || profile?.firstName || "";
@@ -166,9 +140,89 @@ export default function CustomerProfileScreen({ navigation }) {
     ]);
   };
 
-  const toggleAboutSection = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setAboutExpanded((prev) => !prev);
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Camera permission is required to take photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Photo library permission is required to choose photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const removePhoto = () => {
+    Alert.alert(
+      "Remove Photo",
+      "Are you sure you want to remove your profile photo?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteProfileImage?.();
+              Alert.alert("Success", "Profile picture removed.");
+            } catch (error) {
+              Alert.alert("Error", "Failed to remove profile picture.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleProfilePhotoPress = () => {
+    Alert.alert("Update Profile Picture", "Choose an option", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Take Photo", onPress: takePhoto },
+      { text: "Choose from Library", onPress: pickImage },
+      { text: "Remove Photo", style: "destructive", onPress: removePhoto },
+    ]);
   };
 
   const initials = displayName
@@ -181,12 +235,6 @@ export default function CustomerProfileScreen({ navigation }) {
 
   const totalTrips = String(accountStats.totalTrips || 0);
   const ratingValue = (accountStats.avgRating || 5).toFixed(1);
-
-  const appVersion =
-    Constants.expoConfig?.version ||
-    Constants.manifest2?.extra?.expoClient?.version ||
-    Constants.nativeAppVersion ||
-    "0.0.0";
 
   /* ── Scroll snap (same pattern as Activity/Messages) ── */
   const titleLockCompensation = scrollY.interpolate({
@@ -265,7 +313,7 @@ export default function CustomerProfileScreen({ navigation }) {
           <View style={styles.profileTopRow}>
             <TouchableOpacity
               style={styles.avatarContainer}
-              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+              onPress={handleProfilePhotoPress}
             >
               {profileImage ? (
                 <Image
@@ -296,7 +344,7 @@ export default function CustomerProfileScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.editProfileButton}
                 onPress={() =>
-                  navigation.navigate("CustomerPersonalInfoScreen")
+                  navigation.navigate("PersonalInfoScreen")
                 }
               >
                 <Ionicons
@@ -369,7 +417,7 @@ export default function CustomerProfileScreen({ navigation }) {
               />
               <View style={styles.notificationDot} />
             </View>
-            <Text style={styles.quickActionLabel}>Orders</Text>
+            <Text style={styles.quickActionLabel}>Activity</Text>
           </TouchableOpacity>
         </View>
 
@@ -379,25 +427,18 @@ export default function CustomerProfileScreen({ navigation }) {
           {/* My Addresses */}
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+            onPress={() => navigation.navigate("CustomerSavedAddressesScreen")}
           >
-            <View
-              style={[styles.menuIcon, { backgroundColor: colors.info + "20" }]}
-            >
-              <Ionicons name="location-outline" size={20} color={colors.info} />
+            <View style={styles.menuIcon}>
+              <Ionicons name="location-outline" size={20} color={colors.primary} />
             </View>
             <View style={styles.menuTextCol}>
               <Text style={styles.menuTitle}>My Addresses</Text>
-              <Text style={styles.menuSubtitle}>
-                {savedAddressCount > 0
-                  ? `${savedAddressCount} saved addresses`
-                  : "No saved addresses"}
-              </Text>
             </View>
             <Ionicons
               name="chevron-forward"
-              size={18}
-              color={colors.text.muted}
+              size={20}
+              color={colors.text.tertiary}
             />
           </TouchableOpacity>
 
@@ -408,26 +449,20 @@ export default function CustomerProfileScreen({ navigation }) {
             style={styles.menuRow}
             onPress={() => navigation.navigate("CustomerClaimsScreen")}
           >
-            <View
-              style={[
-                styles.menuIcon,
-                { backgroundColor: colors.success + "20" },
-              ]}
-            >
+            <View style={styles.menuIcon}>
               <Ionicons
                 name="shield-checkmark-outline"
                 size={20}
-                color={colors.success}
+                color={colors.primary}
               />
             </View>
             <View style={styles.menuTextCol}>
               <Text style={styles.menuTitle}>Claims</Text>
-              <Text style={styles.menuSubtitle}>No active claims</Text>
             </View>
             <Ionicons
               name="chevron-forward"
-              size={18}
-              color={colors.text.muted}
+              size={20}
+              color={colors.text.tertiary}
             />
           </TouchableOpacity>
 
@@ -438,16 +473,11 @@ export default function CustomerProfileScreen({ navigation }) {
             style={styles.menuRow}
             onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
-            <View
-              style={[
-                styles.menuIcon,
-                { backgroundColor: colors.warning + "20" },
-              ]}
-            >
+            <View style={styles.menuIcon}>
               <Ionicons
                 name="notifications-outline"
                 size={20}
-                color={colors.warning}
+                color={colors.primary}
               />
             </View>
             <View style={styles.menuTextCol}>
@@ -455,24 +485,19 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
             <Ionicons
               name="chevron-forward"
-              size={18}
-              color={colors.text.muted}
+              size={20}
+              color={colors.text.tertiary}
             />
           </TouchableOpacity>
 
           <View style={styles.rowDivider} />
 
-          {/* About & Legal */}
+          {/* About */}
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={toggleAboutSection}
+            onPress={() => navigation.navigate("AboutScreen")}
           >
-            <View
-              style={[
-                styles.menuIcon,
-                { backgroundColor: colors.primaryLight },
-              ]}
-            >
+            <View style={styles.menuIcon}>
               <Ionicons
                 name="information-circle-outline"
                 size={20}
@@ -480,62 +505,20 @@ export default function CustomerProfileScreen({ navigation }) {
               />
             </View>
             <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>About & Legal</Text>
+              <Text style={styles.menuTitle}>About</Text>
             </View>
             <Ionicons
-              name={aboutExpanded ? "chevron-up" : "chevron-down"}
-              size={18}
-              color={colors.text.muted}
+              name="chevron-forward"
+              size={20}
+              color={colors.text.tertiary}
             />
           </TouchableOpacity>
-
-          {aboutExpanded && (
-            <View style={styles.expandedSection}>
-              <TouchableOpacity
-                style={styles.subRow}
-                onPress={() => Linking.openURL("https://pikup-app.com/")}
-              >
-                <Text style={styles.subRowText}>Terms of Service</Text>
-                <Ionicons
-                  name="open-outline"
-                  size={16}
-                  color={colors.text.muted}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.subRowDivider} />
-
-              <TouchableOpacity
-                style={styles.subRow}
-                onPress={() => Linking.openURL("https://pikup-app.com/")}
-              >
-                <Text style={styles.subRowText}>Privacy Policy</Text>
-                <Ionicons
-                  name="open-outline"
-                  size={16}
-                  color={colors.text.muted}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.subRowDivider} />
-
-              <View style={styles.subRow}>
-                <Text style={styles.subRowText}>About Pikup</Text>
-                <Text style={styles.versionText}>v{appVersion}</Text>
-              </View>
-            </View>
-          )}
         </View>
 
         {/* Sign Out */}
         <View style={[styles.sectionCard, { marginTop: spacing.md }]}>
           <TouchableOpacity style={styles.menuRow} onPress={handleLogout}>
-            <View
-              style={[
-                styles.menuIcon,
-                { backgroundColor: colors.error + "18" },
-              ]}
-            >
+            <View style={styles.menuIcon}>
               <Ionicons
                 name="log-out-outline"
                 size={20}
@@ -762,14 +745,14 @@ const styles = StyleSheet.create({
   menuRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md + 2,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
     gap: spacing.md,
   },
   menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
+    width: 20,
+    height: 20,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -777,46 +760,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuTitle: {
-    fontSize: 15,
-    fontWeight: typography.fontWeight.medium,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.regular,
     color: colors.text.primary,
   },
-  menuSubtitle: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.muted,
-    marginTop: 1,
-  },
   rowDivider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border.strong,
-    marginLeft: spacing.base + 40 + spacing.md,
+    marginLeft: 0,
   },
 
-  /* Expandable About & Legal */
-  expandedSection: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-  },
-  subRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.base + 40 + spacing.md,
-    paddingRight: spacing.base,
-  },
-  subRowText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.muted,
-    fontWeight: typography.fontWeight.medium,
-  },
-  subRowDivider: {
-    height: 1,
-    backgroundColor: colors.border.strong,
-    marginLeft: spacing.base + 40 + spacing.md,
-  },
-  versionText: {
-    fontSize: typography.fontSize.sm,
-    color: colors.text.muted,
-  },
 });

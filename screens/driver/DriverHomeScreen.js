@@ -21,6 +21,7 @@ import {
   borderRadius,
   colors,
   layout,
+  shadows,
   spacing,
   typography,
 } from '../../styles/theme';
@@ -661,7 +662,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       )}
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <Image
           source={require('../../assets/pikup-logo.png')}
           style={styles.logoImage}
@@ -820,10 +821,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   logoImage: {
-    width: 120,
-    height: 22,
+    width: 106,
+    height: 20,
     resizeMode: 'contain',
-    marginTop: spacing.xs,
+    ...shadows.lg,
   },
   bottomPanel: {
     position: 'absolute',

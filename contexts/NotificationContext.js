@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import ToastNotification from '../components/ToastNotification';
+import AnyFilmToastNotification from '../components/AnyFilmToastNotification';
 import NotificationService from '../services/NotificationService';
 
 const NotificationContext = createContext();
@@ -68,7 +68,7 @@ export function NotificationProvider({ children }) {
   return (
     <NotificationContext.Provider value={notificationMethods}>
       {children}
-      <ToastNotification
+      <AnyFilmToastNotification
         visible={toast.visible}
         message={toast.message}
         type={toast.type}

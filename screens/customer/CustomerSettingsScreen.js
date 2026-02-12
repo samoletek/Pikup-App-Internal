@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -10,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
 import { useAuth } from "../../contexts/AuthContext";
+import AppSwitch from "../../components/AppSwitch";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -118,15 +118,7 @@ export default function CustomerSettingsScreen({ navigation }) {
                     <Text style={styles.rowTitle}>{item.title}</Text>
                     <Text style={styles.switchDescription}>{item.description}</Text>
                   </View>
-                  <Switch
-                    trackColor={{
-                      false: colors.border.strong,
-                      true: colors.background.brandTint,
-                    }}
-                    thumbColor={
-                      settings.notifications[item.key] ? colors.primary : colors.white
-                    }
-                    ios_backgroundColor={colors.border.strong}
+                  <AppSwitch
                     onValueChange={() => toggleSetting(item.key)}
                     value={settings.notifications[item.key]}
                   />

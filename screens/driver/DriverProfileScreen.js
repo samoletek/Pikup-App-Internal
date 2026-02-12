@@ -3,7 +3,6 @@ import {
   Alert,
   Animated,
   Image,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import CollapsibleMessagesHeader, {
@@ -37,7 +37,10 @@ export default function DriverProfileScreen({ navigation }) {
     profileImage,
     getProfileImage,
     getDriverFeedback,
+    uploadProfileImage,
+    deleteProfileImage,
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -60,7 +63,7 @@ export default function DriverProfileScreen({ navigation }) {
 
   const loadDriverProfile = async () => {
     try {
-      const profile = await getDriverProfile?.(currentUser?.uid);
+      const profile = await getDriverProfile?.(currentUserId);
       setDriverProfile(profile);
 
       const user = await getUserProfile?.();
@@ -96,13 +99,13 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   const loadDriverFeedback = async () => {
-    if (!currentUser?.uid) {
+    if (!currentUserId) {
       return;
     }
 
     setLoadingFeedback(true);
     try {
-      const feedback = await getDriverFeedback(currentUser.uid, 5);
+      const feedback = await getDriverFeedback(currentUserId, 5);
       setRecentFeedback(feedback);
     } catch (error) {
       console.error("Error loading feedback:", error);
@@ -149,6 +152,91 @@ export default function DriverProfileScreen({ navigation }) {
       return;
     }
     navigation.navigate("DriverEarningsScreen");
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Camera permission is required to take photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Photo library permission is required to choose photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const removePhoto = () => {
+    Alert.alert(
+      "Remove Photo",
+      "Are you sure you want to remove your profile photo?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteProfileImage?.();
+              Alert.alert("Success", "Profile picture removed.");
+            } catch (error) {
+              Alert.alert("Error", "Failed to remove profile picture.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleProfilePhotoPress = () => {
+    Alert.alert("Update Profile Picture", "Choose an option", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Take Photo", onPress: takePhoto },
+      { text: "Choose from Library", onPress: pickImage },
+      { text: "Remove Photo", style: "destructive", onPress: removePhoto },
+    ]);
   };
 
   const initials = displayName
@@ -220,19 +308,11 @@ export default function DriverProfileScreen({ navigation }) {
       disabled: false,
     },
     {
-      id: "safety",
-      title: "Safety",
-      icon: "shield-checkmark-outline",
-      onPress: () => navigation.navigate("CustomerSafetyScreen"),
+      id: "about",
+      title: "About",
+      icon: "information-circle-outline",
+      onPress: () => navigation.navigate("AboutScreen"),
       disabled: false,
-    },
-    {
-      id: "terms",
-      title: "Terms and Privacy",
-      icon: "document-text-outline",
-      onPress: () => Linking.openURL("https://pikup-app.com/"),
-      disabled: false,
-      external: true,
     },
   ];
 
@@ -341,7 +421,7 @@ export default function DriverProfileScreen({ navigation }) {
           <View style={styles.profileTopRow}>
             <TouchableOpacity
               style={styles.avatarContainer}
-              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+              onPress={handleProfilePhotoPress}
             >
               {profileImage ? (
                 <Image source={{ uri: profileImage }} style={styles.avatarImage} />
@@ -382,7 +462,7 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
               <TouchableOpacity
                 style={styles.editProfileButton}
-                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+                onPress={() => navigation.navigate("PersonalInfoScreen")}
               >
                 <Ionicons name="create-outline" size={14} color={colors.primary} />
                 <Text style={styles.editProfileText}>Edit profile</Text>

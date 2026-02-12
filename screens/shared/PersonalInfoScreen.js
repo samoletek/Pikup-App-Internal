@@ -5,7 +5,6 @@ import {
   Image,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -16,6 +15,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import AppSwitch from "../../components/AppSwitch";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -25,7 +25,7 @@ import {
   typography,
 } from "../../styles/theme";
 
-export default function CustomerPersonalInfoScreen({ navigation }) {
+export default function PersonalInfoScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const {
@@ -60,6 +60,10 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
     dataCollection: true,
   });
   const [saving, setSaving] = useState(false);
+  const [initialNameState, setInitialNameState] = useState({
+    firstName: "",
+    lastName: "",
+  });
   const [changingPassword, setChangingPassword] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -94,12 +98,24 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
         if (!profile) {
           return;
         }
+
+        const loadedFirstName = toTitle(
+          (profile.firstName || profile.first_name || "").trim()
+        );
+        const loadedLastName = toTitle(
+          (profile.lastName || profile.last_name || "").trim()
+        );
+
         setPersonalInfo((prev) => ({
           ...prev,
-          firstName: profile.firstName || profile.first_name || prev.firstName || "",
-          lastName: profile.lastName || profile.last_name || prev.lastName || "",
+          firstName: loadedFirstName,
+          lastName: loadedLastName,
           email: profile.email || prev.email || currentUser?.email || "",
         }));
+        setInitialNameState({
+          firstName: loadedFirstName,
+          lastName: loadedLastName,
+        });
       } catch (error) {
         console.error("Error loading profile data:", error);
       }
@@ -242,6 +258,9 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
       if (saving) {
         return;
       }
+      if (!hasNameChanges) {
+        return;
+      }
       setSaving(true);
       const firstName = toTitle((personalInfo.firstName || "").trim());
       const lastName = toTitle((personalInfo.lastName || "").trim());
@@ -252,6 +271,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
       }
       await updateUserProfile({ firstName, lastName });
       setPersonalInfo((prev) => ({ ...prev, firstName, lastName }));
+      setInitialNameState({ firstName, lastName });
       await getUserProfile(userId);
       Alert.alert("Success", "Your personal information has been updated.");
     } catch (error) {
@@ -348,31 +368,39 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
     `${personalInfo.firstName?.[0] || ""}${personalInfo.lastName?.[0] || ""}` || "U"
   ).toUpperCase();
 
+  const normalizedFirstName = toTitle((personalInfo.firstName || "").trim());
+  const normalizedLastName = toTitle((personalInfo.lastName || "").trim());
+  const hasNameChanges =
+    normalizedFirstName !== initialNameState.firstName ||
+    normalizedLastName !== initialNameState.lastName;
+
   return (
     <View style={styles.container}>
       <ScreenHeader
         title="Personal Information"
         onBack={() => navigation.goBack()}
         topInset={insets.top}
-        rightContent={(
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleSave}
-            disabled={saving}
-            accessibilityRole="button"
-            accessibilityLabel="Save changes"
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.text.primary} />
-            ) : (
-              <Ionicons
-                name="checkmark"
-                size={24}
-                color={colors.text.primary}
-              />
-            )}
-          </TouchableOpacity>
-        )}
+        rightContent={
+          hasNameChanges ? (
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save changes"
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={colors.text.primary} />
+              ) : (
+                <Ionicons
+                  name="checkmark"
+                  size={24}
+                  color={colors.text.primary}
+                />
+              )}
+            </TouchableOpacity>
+          ) : null
+        }
       />
 
       <ScrollView
@@ -544,10 +572,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
                     Allow app to access your location while using the service
                   </Text>
                 </View>
-                <Switch
-                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                  thumbColor={privacySettings.shareLocation ? colors.primary : colors.white}
-                  ios_backgroundColor={colors.border.strong}
+                <AppSwitch
                   onValueChange={() => toggleSwitch("shareLocation")}
                   value={privacySettings.shareLocation}
                 />
@@ -560,10 +585,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
                     Allow sharing your trip status with friends and family
                   </Text>
                 </View>
-                <Switch
-                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                  thumbColor={privacySettings.shareRideInfo ? colors.primary : colors.white}
-                  ios_backgroundColor={colors.border.strong}
+                <AppSwitch
                   onValueChange={() => toggleSwitch("shareRideInfo")}
                   value={privacySettings.shareRideInfo}
                 />
@@ -576,10 +598,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
                     Receive promotional emails and offers
                   </Text>
                 </View>
-                <Switch
-                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                  thumbColor={privacySettings.marketingEmails ? colors.primary : colors.white}
-                  ios_backgroundColor={colors.border.strong}
+                <AppSwitch
                   onValueChange={() => toggleSwitch("marketingEmails")}
                   value={privacySettings.marketingEmails}
                 />
@@ -592,10 +611,7 @@ export default function CustomerPersonalInfoScreen({ navigation }) {
                     Allow collection of usage data to improve service quality
                   </Text>
                 </View>
-                <Switch
-                  trackColor={{ false: colors.border.strong, true: colors.background.brandTint }}
-                  thumbColor={privacySettings.dataCollection ? colors.primary : colors.white}
-                  ios_backgroundColor={colors.border.strong}
+                <AppSwitch
                   onValueChange={() => toggleSwitch("dataCollection")}
                   value={privacySettings.dataCollection}
                 />
@@ -781,8 +797,8 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xs,
   },
   headerButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: "center",
     alignItems: "center",
   },

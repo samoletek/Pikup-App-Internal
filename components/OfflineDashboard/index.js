@@ -233,6 +233,11 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
 
     const milestoneProgress = Math.min((driverStats.currentWeekTrips / driverStats.weeklyMilestone) * 100, 100);
     const tripsRemaining = Math.max(driverStats.weeklyMilestone - driverStats.currentWeekTrips, 0);
+    const goOnlineButtonOpacity = animatedHeight.interpolate({
+        inputRange: [COLLAPSED_HEIGHT, EXPANDED_HEIGHT],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+    });
 
     return (
         <>
@@ -295,11 +300,11 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                         <>
                             {/* Header with Close */}
                             <View style={styles.expandedHeader}>
+                                <View style={styles.headerSideSpacer} />
+                                <Text style={styles.expandedTitle}>Driver Dashboard</Text>
                                 <TouchableOpacity onPress={collapse} style={styles.closeBtn}>
                                     <Ionicons name="chevron-down" size={24} color={colors.text.primary} />
                                 </TouchableOpacity>
-                                <Text style={styles.expandedTitle}>Driver Dashboard</Text>
-                                <View style={{ width: 40 }} />
                             </View>
 
                             <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -383,13 +388,13 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                                             <Ionicons name="stats-chart-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Earnings</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('CustomerPersonalInfoScreen')}>
+                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('PersonalInfoScreen')}>
                                             <Ionicons name="person-outline" size={22} color={colors.success} />
                                             <Text style={styles.actionText}>Profile</Text>
                                         </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverPreferencesScreen')}>
-                                            <Ionicons name="settings-outline" size={22} color={colors.success} />
-                                            <Text style={styles.actionText}>Settings</Text>
+                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverMessagesScreen')}>
+                                            <Ionicons name="chatbubbles-outline" size={22} color={colors.success} />
+                                            <Text style={styles.actionText}>Messages</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('CustomerHelpScreen')}>
                                             <Ionicons name="help-circle-outline" size={22} color={colors.success} />
@@ -404,14 +409,17 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                     )}
 
                     {/* Go Online Button - Always visible at bottom */}
-                    <View style={styles.buttonContainer}>
+                    <Animated.View
+                        style={[styles.buttonContainer, { opacity: goOnlineButtonOpacity }]}
+                        pointerEvents={isExpanded ? 'none' : 'auto'}
+                    >
                         <TouchableOpacity onPress={onGoOnline} activeOpacity={0.8}>
                             <View style={styles.goOnlineBtn}>
                                 <Ionicons name="radio-button-off" size={18} color={colors.text.primary} style={{ marginRight: 8 }} />
                                 <Text style={styles.goOnlineText}>Go Online</Text>
                             </View>
                         </TouchableOpacity>
-                    </View>
+                    </Animated.View>
 
                 </LinearGradient>
             </Animated.View>

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   useWindowDimensions,
   View,
@@ -10,6 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import AppSwitch from "../../components/AppSwitch";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -252,17 +252,11 @@ export default function DriverPreferencesScreen({ navigation }) {
                       style={[styles.toggleRow, index === items.length - 1 && styles.rowLast]}
                     >
                       <Text style={styles.toggleLabel}>{label}</Text>
-                      <Switch
+                      <AppSwitch
                         value={state?.[key]}
                         onValueChange={(value) =>
                           handleToggleChange(section.sectionKey, key, value)
                         }
-                        trackColor={{
-                          false: colors.border.strong,
-                          true: colors.background.brandTint,
-                        }}
-                        thumbColor={state?.[key] ? colors.primary : colors.white}
-                        ios_backgroundColor={colors.border.strong}
                       />
                     </View>
                   ))}

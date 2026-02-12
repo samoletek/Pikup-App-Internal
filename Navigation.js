@@ -8,6 +8,8 @@ import { stackScreenOptions } from "./navigation/navigationTheme";
 // Shared screens
 import WelcomeScreen from "./screens/shared/WelcomeScreen";
 import AuthScreen from "./screens/shared/AuthScreen";
+import PersonalInfoScreen from "./screens/shared/PersonalInfoScreen";
+import AboutScreen from "./screens/shared/AboutScreen";
 // RoleSelectionScreen removed - role selection is now on WelcomeScreen
 import MessageScreen from "./screens/shared/MessageScreen";
 import DeliveryFeedbackScreen from "./screens/shared/DeliveryFeedbackScreen";
@@ -23,7 +25,7 @@ import CustomerMessagesScreen from "./screens/customer/CustomerMessagesScreen";
 import CustomerClaimsScreen from "./screens/customer/CustomerClaimsScreen";
 import CustomerHelpScreen from "./screens/customer/CustomerHelpScreen";
 import CustomerWalletScreen from "./screens/customer/CustomerWalletScreen";
-import CustomerPersonalInfoScreen from "./screens/customer/CustomerPersonalInfoScreen";
+import CustomerSavedAddressesScreen from "./screens/customer/CustomerSavedAddressesScreen";
 import CustomerSafetyScreen from "./screens/customer/CustomerSafetyScreen";
 import CustomerSettingsScreen from "./screens/customer/CustomerSettingsScreen";
 import PaymentMethodsScreen from "./screens/customer/PaymentMethodsScreen";
@@ -67,7 +69,9 @@ const CustomerStack = () => (
     {/* Customer Profile Screens */}
     <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />
     <Stack.Screen name="CustomerWalletScreen" component={CustomerWalletScreen} />
-    <Stack.Screen name="CustomerPersonalInfoScreen" component={CustomerPersonalInfoScreen} />
+    <Stack.Screen name="CustomerSavedAddressesScreen" component={CustomerSavedAddressesScreen} />
+    <Stack.Screen name="PersonalInfoScreen" component={PersonalInfoScreen} />
+    <Stack.Screen name="AboutScreen" component={AboutScreen} />
     <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
     <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
     <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
@@ -91,7 +95,8 @@ const DriverStack = () => (
     <Stack.Screen name="DriverEarningsScreen" component={DriverEarningsScreen} />
     <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
     <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />
-    <Stack.Screen name="CustomerPersonalInfoScreen" component={CustomerPersonalInfoScreen} />
+    <Stack.Screen name="PersonalInfoScreen" component={PersonalInfoScreen} />
+    <Stack.Screen name="AboutScreen" component={AboutScreen} />
     <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
     <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
 

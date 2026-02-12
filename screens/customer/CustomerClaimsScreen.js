@@ -7,7 +7,6 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Image,
   Alert,
   FlatList,
   ActivityIndicator,
@@ -40,6 +39,7 @@ export default function CustomerClaimsScreen({ navigation }) {
   const [claimDescription, setClaimDescription] = useState('');
   const [claimType, setClaimType] = useState('DAMAGED_GOODS');
   const [showPastTrips, setShowPastTrips] = useState(false);
+  const [showInsuranceInfo, setShowInsuranceInfo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState([]);
@@ -461,6 +461,29 @@ export default function CustomerClaimsScreen({ navigation }) {
     </View>
   );
 
+  const activeClaims = activeTab === 'ongoing' ? ongoingClaims : completedClaims;
+
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <TouchableOpacity
+        style={styles.headerIconButton}
+        onPress={() => setShowInsuranceInfo(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Open Redkik insurance info"
+      >
+        <Ionicons name="information-circle-outline" size={22} color={colors.text.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.headerIconButton}
+        onPress={loadClaimsData}
+        accessibilityRole="button"
+        accessibilityLabel="Refresh claims"
+      >
+        <Ionicons name="refresh" size={22} color={colors.text.primary} />
+      </TouchableOpacity>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -469,16 +492,8 @@ export default function CustomerClaimsScreen({ navigation }) {
           onBack={() => navigation.goBack()}
           topInset={insets.top}
           showBack
-          rightContent={
-            <TouchableOpacity
-              style={styles.refreshButton}
-              onPress={loadClaimsData}
-              accessibilityRole="button"
-              accessibilityLabel="Refresh claims"
-            >
-              <Ionicons name="refresh" size={22} color={colors.text.primary} />
-            </TouchableOpacity>
-          }
+          sideSlotWidth={88}
+          rightContent={headerActions}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -495,32 +510,11 @@ export default function CustomerClaimsScreen({ navigation }) {
         onBack={() => navigation.goBack()}
         topInset={insets.top}
         showBack
-        rightContent={
-          <TouchableOpacity
-            style={styles.refreshButton}
-            onPress={loadClaimsData}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh claims"
-          >
-            <Ionicons name="refresh" size={22} color={colors.text.primary} />
-          </TouchableOpacity>
-        }
+        sideSlotWidth={88}
+        rightContent={headerActions}
       />
 
       <View style={[styles.topSection, { maxWidth: contentMaxWidth }]}>
-        {/* Insurance Banner */}
-        <View style={styles.insuranceBanner}>
-          <View style={styles.insuranceIcon}>
-            <Ionicons name="shield-checkmark" size={24} color={colors.primary} />
-          </View>
-          <View style={styles.insuranceContent}>
-            <Text style={styles.insuranceTitle}>Redkik Insurance</Text>
-            <Text style={styles.insuranceBannerText}>
-              File claims for insured deliveries through our secure portal
-            </Text>
-          </View>
-        </View>
-
         {/* Tab Selector */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -546,11 +540,14 @@ export default function CustomerClaimsScreen({ navigation }) {
       {!showPastTrips ? (
         <>
           <FlatList
-            data={activeTab === 'ongoing' ? ongoingClaims : completedClaims}
+            data={activeClaims}
             renderItem={renderClaimItem}
             keyExtractor={(item) => item.id}
             style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
-            contentContainerStyle={styles.claimsList}
+            contentContainerStyle={[
+              styles.claimsList,
+              activeClaims.length === 0 && styles.claimsListEmpty,
+            ]}
             refreshing={loading}
             onRefresh={loadClaimsData}
             ListEmptyComponent={
@@ -596,7 +593,10 @@ export default function CustomerClaimsScreen({ navigation }) {
             renderItem={renderTripItem}
             keyExtractor={(item) => item.id}
             style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
-            contentContainerStyle={styles.tripsList}
+            contentContainerStyle={[
+              styles.tripsList,
+              pastTrips.length === 0 && styles.tripsListEmpty,
+            ]}
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="shield-outline" size={48} color={colors.text.subtle} />
@@ -609,6 +609,48 @@ export default function CustomerClaimsScreen({ navigation }) {
           />
         </>
       )}
+
+      <Modal
+        visible={showInsuranceInfo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInsuranceInfo(false)}
+      >
+        <View style={styles.infoModalOverlay}>
+          <View style={styles.infoModalCard}>
+            <View style={styles.infoModalHeader}>
+              <View style={styles.infoTitleRow}>
+                <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+                <Text style={styles.infoModalTitle}>Redkik Insurance</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowInsuranceInfo(false)}
+                style={styles.infoModalCloseButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close Redkik insurance info"
+              >
+                <Ionicons name="close" size={20} color={colors.text.subtle} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.infoModalText}>
+              Claims are available only for completed deliveries that were purchased with Redkik
+              insurance coverage.
+            </Text>
+            <Text style={styles.infoModalText}>
+              To avoid claim rejection, include a clear issue description and attach photos or
+              supporting documents when possible.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.infoModalOkButton}
+              onPress={() => setShowInsuranceInfo(false)}
+            >
+              <Text style={styles.infoModalOkButtonText}>Understood</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Enhanced Claim Modal */}
       <Modal
@@ -767,7 +809,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flex: 1,
   },
-  refreshButton: {
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -783,70 +829,100 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     marginTop: spacing.sm + spacing.xs,
   },
-  insuranceBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background.panel,
-    marginHorizontal: spacing.base,
-    marginTop: spacing.base,
-    padding: spacing.md + spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  insuranceIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: colors.primaryLight,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.md + spacing.xs,
-  },
-  insuranceContent: {
-    flex: 1,
-  },
-  insuranceTitle: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.white,
-    marginBottom: spacing.xs,
-  },
-  insuranceBannerText: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.tertiary,
-    lineHeight: 20,
-  },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: spacing.base,
     marginTop: spacing.base,
     marginBottom: spacing.base,
-    backgroundColor: colors.background.panel,
-    borderRadius: borderRadius.sm,
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.full,
     padding: spacing.xs,
   },
   tab: {
     flex: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: 16,
-    borderRadius: borderRadius.xs + 2,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
   },
   activeTab: {
     backgroundColor: colors.primary,
   },
   tabText: {
     fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-    color: colors.text.tertiary,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.muted,
   },
   activeTabText: {
+    color: colors.white,
+  },
+  infoModalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlayDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  infoModalCard: {
+    width: '100%',
+    maxWidth: layout.sheetMaxWidth,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.lg,
+  },
+  infoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.base,
+  },
+  infoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexShrink: 1,
+  },
+  infoModalTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  infoModalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.circle,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoModalText: {
+    fontSize: typography.fontSize.base,
+    lineHeight: 20,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
+  },
+  infoModalOkButton: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoModalOkButtonText: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
     color: colors.white,
   },
   claimsList: {
     paddingHorizontal: spacing.base,
     paddingBottom: 100,
+  },
+  claimsListEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   claimCard: {
     backgroundColor: colors.background.panel,
@@ -937,7 +1013,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   emptyState: {
+    width: '100%',
+    alignSelf: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 60,
   },
   emptyStateText: {
@@ -945,6 +1024,7 @@ const styles = StyleSheet.create({
     color: colors.text.subtle,
     marginTop: spacing.base,
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   emptyStateSubtext: {
     fontSize: typography.fontSize.base,
@@ -996,6 +1076,10 @@ const styles = StyleSheet.create({
   tripsList: {
     paddingHorizontal: spacing.base,
     paddingBottom: spacing.xl + spacing.xs,
+  },
+  tripsListEmpty: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   tripCard: {
     backgroundColor: colors.background.panel,

@@ -6,5 +6,6 @@ export { default as WelcomeScreen } from './WelcomeScreen';
 // TermsAndPrivacyScreen removed - opens via Linking.openURL now
 export { default as MessageScreen } from './MessageScreen';
 export { default as DeliveryFeedbackScreen } from './DeliveryFeedbackScreen';
+export { default as PersonalInfoScreen } from './PersonalInfoScreen';
+export { default as AboutScreen } from './AboutScreen';
 // HelpOptionsModal removed
-
