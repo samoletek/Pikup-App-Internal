@@ -24,6 +24,8 @@ import { colors } from '../styles/theme';
 import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const TERMS_URL = 'https://pikup-app.com/pikup-app-terms-of-service/';
+const PRIVACY_URL = 'https://pikup-app.com/pikup-app-privacy-policy/';
 
 // --- Simple Reusable Components (Inline for portability) ---
 
@@ -587,11 +589,11 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                     onPress={async () => {
                         console.log('Opening Terms...');
                         try {
-                            const supported = await Linking.canOpenURL('https://pikup-app.com/');
+                            const supported = await Linking.canOpenURL(TERMS_URL);
                             if (supported) {
-                                await Linking.openURL('https://pikup-app.com/');
+                                await Linking.openURL(TERMS_URL);
                             } else {
-                                Alert.alert('Error', 'Cannot open this link: https://pikup-app.com/');
+                                Alert.alert('Error', `Cannot open this link: ${TERMS_URL}`);
                             }
                         } catch (err) {
                             console.error('An error occurred', err);
@@ -608,9 +610,9 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                     onPress={async () => {
                         console.log('Opening Privacy...');
                         try {
-                            const supported = await Linking.canOpenURL('https://pikup-app.com/');
+                            const supported = await Linking.canOpenURL(PRIVACY_URL);
                             if (supported) {
-                                await Linking.openURL('https://pikup-app.com/');
+                                await Linking.openURL(PRIVACY_URL);
                             } else {
                                 Alert.alert('Error', 'Cannot open this link');
                             }

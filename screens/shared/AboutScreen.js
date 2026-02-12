@@ -16,8 +16,8 @@ import ScreenHeader from "../../components/ScreenHeader";
 import { borderRadius, colors, spacing, typography } from "../../styles/theme";
 
 const WEBSITE_URL = "https://pikup-app.com/";
-const PRIVACY_URL = WEBSITE_URL;
-const TERMS_URL = WEBSITE_URL;
+const PRIVACY_URL = "https://pikup-app.com/pikup-app-privacy-policy/";
+const TERMS_URL = "https://pikup-app.com/pikup-app-terms-of-service/";
 
 async function openExternalLink(url, label) {
   try {

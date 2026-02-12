@@ -50,7 +50,8 @@ export default function AuthScreen({ navigation, route }) {
     const contentMaxWidth = Math.min(layout.authMaxWidth, width - spacing.xl);
     const iconSize = isCompact ? 88 : 100;
     const logoSize = isCompact ? 52 : 60;
-    const legalDocsUrl = "https://pikup-app.com/";
+    const termsUrl = "https://pikup-app.com/pikup-app-terms-of-service/";
+    const privacyUrl = "https://pikup-app.com/pikup-app-privacy-policy/";
 
     // Validate email format
     const validateEmail = (email) => {
@@ -276,18 +277,35 @@ export default function AuthScreen({ navigation, route }) {
                                                 <TouchableOpacity
                                                     onPress={async () => {
                                                         try {
-                                                            const supported = await Linking.canOpenURL(legalDocsUrl);
+                                                            const supported = await Linking.canOpenURL(termsUrl);
                                                             if (!supported) {
-                                                                Alert.alert("Error", `Cannot open this link: ${legalDocsUrl}`);
+                                                                Alert.alert("Error", `Cannot open this link: ${termsUrl}`);
                                                                 return;
                                                             }
-                                                            await Linking.openURL(legalDocsUrl);
+                                                            await Linking.openURL(termsUrl);
                                                         } catch (error) {
-                                                            Alert.alert("Error", "Failed to open legal documents.");
+                                                            Alert.alert("Error", "Failed to open Terms of Service.");
                                                         }
                                                     }}
                                                 >
-                                                    <Text style={styles.termsLink}>Terms of Service & Privacy Policy</Text>
+                                                    <Text style={styles.termsLink}>Terms of Service</Text>
+                                                </TouchableOpacity>
+                                                <Text style={styles.termsText}> & </Text>
+                                                <TouchableOpacity
+                                                    onPress={async () => {
+                                                        try {
+                                                            const supported = await Linking.canOpenURL(privacyUrl);
+                                                            if (!supported) {
+                                                                Alert.alert("Error", `Cannot open this link: ${privacyUrl}`);
+                                                                return;
+                                                            }
+                                                            await Linking.openURL(privacyUrl);
+                                                        } catch (error) {
+                                                            Alert.alert("Error", "Failed to open Privacy Policy.");
+                                                        }
+                                                    }}
+                                                >
+                                                    <Text style={styles.termsLink}>Privacy Policy</Text>
                                                 </TouchableOpacity>
                                             </View>
                                         </TouchableOpacity>
