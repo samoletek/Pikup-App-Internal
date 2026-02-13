@@ -241,6 +241,8 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [verificationStatus, setVerificationStatus] = useState('pending'); // pending, completed, failed, canceled
   const [formData, setFormData] = useState(initialFormData);
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
+  const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const statePickerRef = useRef(null);
@@ -282,10 +284,10 @@ export default function DriverOnboardingScreen({ navigation }) {
       }
 
       console.log('Edge Function Response Data:', JSON.stringify(data, null, 2));
+      setVerificationSessionId(data.id);
 
       if (!data.ephemeral_key_secret) {
         console.error('MISSING ephemeral_key_secret in response!');
-        // Note: We don't block here to see if it works anyway, but log clearly
       }
 
       const logo = Image.resolveAssetSource(require('../../assets/pikup-logo.png'));
@@ -303,17 +305,79 @@ export default function DriverOnboardingScreen({ navigation }) {
     }
   };
 
+  const fetchVerificationData = async (sessionId, retryCount = 0) => {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 3000;
+
+    try {
+      setIsLoadingVerificationData(true);
+
+      const { data, error } = await supabase.functions.invoke('get-verification-data', {
+        body: { sessionId },
+      });
+
+      if (error) {
+        console.error('Error fetching verification data:', error);
+        setIsLoadingVerificationData(false);
+        return;
+      }
+
+      if (data?.status === 'processing' && retryCount < MAX_RETRIES) {
+        console.log(`Verification processing, retrying in ${RETRY_DELAY / 1000}s (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => fetchVerificationData(sessionId, retryCount + 1), RETRY_DELAY);
+        return;
+      }
+
+      if (!data || data.status === 'processing' || data.error) {
+        console.log('Verification data not available');
+        setIsLoadingVerificationData(false);
+        return;
+      }
+
+      setFormData(prev => {
+        const updated = { ...prev };
+
+        if (data.firstName && !prev.firstName) updated.firstName = data.firstName;
+        if (data.lastName && !prev.lastName) updated.lastName = data.lastName;
+        if (data.dob && !prev.dateOfBirth) {
+          const month = String(data.dob.month).padStart(2, '0');
+          const day = String(data.dob.day).padStart(2, '0');
+          const year = String(data.dob.year);
+          updated.dateOfBirth = `${month}/${day}/${year}`;
+        }
+
+        if (data.address) {
+          updated.address = {
+            ...prev.address,
+            line1: data.address.line1 || prev.address.line1,
+            city: data.address.city || prev.address.city,
+            state: data.address.state || prev.address.state,
+            postalCode: data.address.postalCode || prev.address.postalCode,
+          };
+        }
+
+        return updated;
+      });
+
+      setVerificationDataPopulated(true);
+      setIsLoadingVerificationData(false);
+
+    } catch (error) {
+      console.error('Failed to fetch verification data:', error);
+      setIsLoadingVerificationData(false);
+    }
+  };
+
   const { status, present, loading: identityLoading } = useStripeIdentity(fetchVerificationSessionParams);
 
   // Handle verification status changes from Stripe Identity SDK
   useEffect(() => {
-    console.log('🔐 Stripe Identity status changed:', status);
+    console.log('Stripe Identity status changed:', status);
 
     if (status === 'FlowCompleted') {
-      console.log('✅ Verification completed successfully!');
+      console.log('Verification completed successfully!');
       setVerificationStatus('completed');
 
-      // Optionally persist to database
       if (verificationSessionId && currentUser) {
         supabase
           .from('drivers')
@@ -325,8 +389,11 @@ export default function DriverOnboardingScreen({ navigation }) {
           .eq('id', currentUser.uid || currentUser.id)
           .then(({ error }) => {
             if (error) console.error('Failed to update driver verification status:', error);
-            else console.log('✅ Driver verification status saved to DB');
+            else console.log('Driver verification status saved to DB');
           });
+
+        // Fetch verified data from Stripe and auto-populate form
+        fetchVerificationData(verificationSessionId);
       }
     } else if (status === 'FlowCanceled') {
       console.log('⚠️ Verification was canceled by user');
@@ -417,6 +484,7 @@ export default function DriverOnboardingScreen({ navigation }) {
   const buildDraftSnapshot = () => ({
     currentStep: normalizeStep(currentStep),
     verificationStatus: normalizeVerificationStatus(verificationStatus),
+    verificationDataPopulated,
     formData: {
       ...mergeFormDataWithDefaults(formData),
       // Do not persist SSN in local/remote onboarding drafts.
@@ -474,6 +542,9 @@ export default function DriverOnboardingScreen({ navigation }) {
         setCurrentStep(restoredStep);
         setVerificationStatus(restoredVerificationStatus);
         setFormData(restoredFormData);
+        if (latestDraft.verificationDataPopulated) {
+          setVerificationDataPopulated(true);
+        }
         progressAnim.setValue(restoredStep / (steps.length - 1));
 
         lastSavedDraftRef.current = JSON.stringify({
@@ -761,6 +832,18 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 2: // Personal Info
         return (
           <View style={styles.formContent}>
+            {isLoadingVerificationData && (
+              <View style={styles.autoFilledBanner}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.autoFilledText}>Loading verified information...</Text>
+              </View>
+            )}
+            {verificationDataPopulated && !isLoadingVerificationData && (
+              <View style={styles.autoFilledBanner}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Text style={styles.autoFilledText}>Pre-filled from your ID verification. Review and edit if needed.</Text>
+              </View>
+            )}
             <View style={styles.inputRow}>
               <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
                 <Text style={styles.inputLabel}>First Name *</Text>
@@ -831,6 +914,12 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 3: // Address
         return (
           <View style={styles.formContent}>
+            {verificationDataPopulated && !isLoadingVerificationData && formData.address.line1 && (
+              <View style={styles.autoFilledBanner}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Text style={styles.autoFilledText}>Address pre-filled from your ID. Review and edit if needed.</Text>
+              </View>
+            )}
             <View style={[styles.inputContainer, { zIndex: 10 }]}>
               <Text style={styles.inputLabel}>Street Address *</Text>
               <TextInput
@@ -1125,7 +1214,12 @@ export default function DriverOnboardingScreen({ navigation }) {
       </View>
 
       {/* Content */}
-      <View style={styles.contentArea}>
+      <ScrollView
+        style={styles.contentArea}
+        contentContainerStyle={styles.contentAreaInner}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={[styles.stepContainer, { maxWidth: contentMaxWidth }]}>
           <View style={[styles.stepIcon, { backgroundColor: `${steps[currentStep].color}20` }]}>
             <Ionicons
@@ -1140,7 +1234,7 @@ export default function DriverOnboardingScreen({ navigation }) {
 
           {renderStepContent()}
         </View>
-      </View>
+      </ScrollView>
 
       {/* Bottom Actions */}
       <View
@@ -1253,12 +1347,14 @@ const styles = StyleSheet.create({
   },
   contentArea: {
     flex: 1,
+  },
+  contentAreaInner: {
     paddingTop: spacing.sm,
     paddingHorizontal: spacing.base,
     alignItems: 'center',
+    paddingBottom: spacing.xl,
   },
   stepContainer: {
-    flex: 1,
     width: '100%',
     paddingTop: spacing.sm,
     alignItems: 'center',
@@ -1681,5 +1777,21 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     justifyContent: 'center',
+  },
+  autoFilledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+  },
+  autoFilledText: {
+    color: colors.success,
+    fontSize: typography.fontSize.sm,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 18,
   },
 });
