@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-**Total: 85 tasks, 8-10 weeks**
+**Total: 118 tasks, 8-10 weeks**
+
+**Legend:**
+- `*` = Added during calls (scope refinement)
+- `[-]` = In progress / partially done
 
 ---
 
@@ -16,7 +20,7 @@
 - [x] #2 Sign in with Apple (App Store requirement)
 - [x] #3 Sign in with Google (Play Store requirement)
 - [x] #4 Account deletion feature (required by both stores)
-- [ ] #5 Terms/Privacy - links to pikup-app.com (need to create)
+- [x] #5 Terms/Privacy - links to pikup-app.com (need to create)
 
 ### Customer Flow - Step 1: Pickup & Dropoff
 - [x] #21 Address autocomplete (Mapbox API)
@@ -36,14 +40,6 @@
 ### Insurance API
 - [x] #80 Redkik API authentication 
 
-### Milestone 1 Deliverables
-- [x] Working social authentication (Apple + Google)
-- [x] Account deletion functionality
-- [x] Supabase backend configured and migrated
-- [x] Fixed modal system with proper navigation
-- [x] Address autocomplete working
-- [x] Price calculation audit complete
-
 ---
 
 ## Milestone 2: Customer Flow Polish
@@ -61,6 +57,7 @@
 - [x] #9 Loading states (spinners, disabled buttons)
 - [x] #10 Error handling on all failures
 - [x] #11 Back button on Sign Up screen
+- [ ] #8.1 Forgot Password - Supabase integration (UI - Done)
 
 ### Customer Flow - Home Screen
 - [x] #12 Logo positioning fix
@@ -82,69 +79,117 @@
 - [x] #27 Add New/Used selection toggle
 - [x] #28 Insurance logic: New = auto-insured, Used = disclaimer
 - [x] #30 Enlarge Description field
-
-### Milestone 2 Deliverables
 - [x] #36 Tap on summary item jumps to that step
 - [x] #37 Fix button container overflow
 - [x] #38 Handle unavailable insurance state
-- [x] Apple HIG compliant interface
-- [ ] Working authentication with "forgot password"
-- [x] 0 Useless components
-- [x] New/Used item selection with insurance logic
 
 ---
 
 ## Milestone 3: Features & Driver Onboarding
 
 **Timeline:** 2-3 weeks  
-**Focus:** Messaging, account screens, driver onboarding, new features
+**Focus:** AI features, messaging, account screens, driver onboarding
 
-### Previous
+### Customer Flow - Schedule Booking *
+- [x] #86 DatePicker limit: max +30 days from current date
+
+### Customer Flow - Step 3/4: Pickup/Dropoff Details *
+- [x] #87 Cascading questions by location type (Store/Apartment/House/Other)
+- [x] #88 Remove "Order Confirmation Number" field
+- [x] #107 Store vs Marketplace selection (optional, not critical)
+- [ ] #108 Global "Driver help" question (applies to both pickup & dropoff) *
+
+### Customer Flow - Step 6: Review & Payment (REDESIGN) *
+- [x] #89 Remove intermediate summary screen
+- [x] #90 Create single full-screen Review + Payment + Confirm
+- [x] #91 Add "Edit" buttons to return to any step
+
+### Customer Flow - Step 2: Item Details (AI Flow) *
+- [x] #92 Value field: show only if item = New, hide for Used
+- [ ] #93 AI analysis: trigger ONCE after "Confirm" (not per photo)
+- [ ] #94 Auto-create separate item cards from AI analysis
+- [x] #95 Add explicit hint: "You can upload multiple photos/items"
+- [x] #96 Fix photo picker: allow selecting up to 3 photos at once
+- [x] #97 Add "Powered by AI" visual indicator
+
+### Customer Flow - Driver Help *
+- [ ] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
+
+### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
+- [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found)
+- [ ] #101 Show size/capacity ranges in cards
+- [ ] #102 Change price format to "starting at $X"
+- [ ] #103 Make vehicles expandable cards (like items)
+- [ ] #104 AI recommendation badge on best vehicle
+
+### AI Features *
 - [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement)
+- [ ] #73 Each item: photo + frame + AI description + new/used
+- [x] #74 Receipt photo for new items (insurance)
+- [ ] #75 Confirmation dialog: verify description and count
+- [ ] #78 AI - adjustable frame for photo selection
+- [ ] #79 AI - simplify system prompt for concise descriptions
+
+### Authentication Flow Improvements *
+- [x] #105 Email flow: check if exists → show password OR signup form
+- [x] #106 Account type detection: "Switch to Driver account?" dialog
 
 ### Customer Flow - Messages Screen
-- [ ] #43 Fix messaging - currently not functional - adrei
-- [ ] #44 Auto-create chat room per trip - adrei
-- [ ] #45 Move Support messages to Account > Help - adrei
+- [ ] #43 Fix messaging - currently not functional
+- [ ] #44 Auto-create chat room per trip
+- [x] #45 Move Support messages to Account > Help
 - [x] #46 Center "No messages" empty state
 
 ### Customer Flow - Account Screen
 - [x] #47 Account deletion (App Store requirement)
 - [x] #48 Remove Driver toggle - separate accounts
-- [ ] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses) - erema
-- [ ] #50 Remove duplicate buttons in account screen (already in tab bar) - erema
-- [ ] #51 Move Promo banner to Home screen (if exists) - erema
+- [ ] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses)
+- [ ] #50 Remove duplicate buttons in account screen (already in tab bar)
+- [ ] #51 Move Promo banner to Home screen (if exists)
 - [x] #52 Terms/Privacy as website links
-- [ ] #53 Full Account UI rebuild (cascade menu) - erema
-- [ ] #54 Separate Settings from profile editing - erema
-- [ ] #55 Data Usage/Download - implement or remove - erema
-- [ ] #56 Remove Clear app data option - erema
+- [ ] #53 Full Account UI rebuild (cascade menu)
+- [ ] #54 Separate Settings from profile editing
+- [ ] #55 Data Usage/Download - implement or remove
+- [ ] #56 Remove Clear app data option
+
+### Customer Flow - Activity Screen
+- [x] #40 Fix Filter button - currently non-functional
+- [x] #41 Center "No trips Found" text
+- [x] #42 Verify Recent/All filters work
+
+### Driver Preferences UI *
+- [x] #109 Group options by sections (Items / Equipment / Team)
+- [x] #110 Fix grid/layout bugs
+- [ ] #76 Driver preferences UI (size, equipment, extra help)
 
 ### Driver Flow - Onboarding
-- [-] #58 Phone verification (SMS) - prevent fake numbers - khan
-- [x] #59 Driver address autocomplete - khan
-- [ ] #60 Cascading vehicle picker: Make > Model > Year (trucks/SUVs only) - khan
+- [-] #58 Phone verification (SMS) - prevent fake numbers
+- [x] #59 Driver address autocomplete
+- [ ] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
+- [ ] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) *
+- [ ] #112 [DISCUSSION] Vehicle age limit (15 vs 30 years - postponed) *
+
+### Driver UI Enhancements *
+- [x] #113 Weekly Milestones display (progress bars, bonuses)
+- [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.)
+- [ ] #115 "Go Online" flow: ask "Solo or Team today?"
+- [ ] #116 Order notification card: full design with photos, timer
+- [ ] #77 Gamification - weekly milestones, bonuses, progress
 
 ### Backend / Infrastructure
-- [ ] #70 Dynamic pricing algorithm - khan
-- [ ] #39 Audit all price calculations - khan
+- [ ] #70 Dynamic pricing algorithm
+- [ ] #39 Audit all price calculations
 
-### New Features (from Jan 24 call)
+### New Features *
 - [x] #72 Multiple items - grid for adding items
-- [ ] #73 Each item: photo + frame + AI description + new/used - adrei
-- [ ] #74 Receipt photo for new items (insurance) - adrei
-- [ ] #75 Confirmation dialog: verify description and count - adrei
-- [ ] #76 Driver preferences UI (size, equipment, extra help) - erema
-- [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
-- [ ] #78 AI - adjustable frame for photo selection - adrei
-- [ ] #79 AI - simplify system prompt for concise descriptions - adrei
 
 ### Milestone 3 Deliverables
+- [ ] Complete AI-powered item analysis flow
+- [ ] Simplified vehicle selection (4 categories)
 - [ ] Working messaging system
 - [ ] Rebuilt Account screens (Customer + Driver)
-- [ ] Complete driver onboarding with verification
-- [ ] Multiple items support with receipts
+- [ ] Complete driver onboarding with AI vehicle detection
 - [ ] Driver preferences and gamification UI
 - [ ] Dynamic pricing implemented
 
@@ -154,11 +199,6 @@
 
 **Timeline:** 2-3 weeks  
 **Focus:** Driver screens, matching algorithm, payments, deployment
-
-### Customer Flow - Activity Screen
-- [x] #40 Fix Filter button - currently non-functional
-- [x] #41 Center "No trips Found" text
-- [x] #42 Verify Recent/All filters work
 
 ### Customer Flow - Account Screen
 - [ ] #57 Referral program with deep links
@@ -179,6 +219,10 @@
 ### Backend / Infrastructure
 - [ ] #69 Order matching algorithm (nearest driver + preferences)
 
+### Summary Screen (Labor Time) *
+- [ ] #117 Add Labor Time calculation display
+- [ ] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)"
+
 ### Insurance API
 - [ ] #81 Verify Redkik quote flow
 - [ ] #82 Test insurance logic end-to-end
@@ -196,6 +240,37 @@
 - [ ] Insurance integration (pending Redkik API access)
 - [ ] Full cross-platform testing (iOS + Android)
 - [ ] App Store + Play Store submission
+
+---
+
+## Phase 2: Post-Launch Features
+
+**Timeline:** TBD  
+**Focus:** Advanced features post-launch
+
+### Team & Helper Features
+- [ ] Team option for drivers (display "Truck + Team")
+- [ ] Team mode pricing adjustments
+
+### Advanced AI Features
+- [ ] Adjustable frame for AI photo analysis
+
+### Communication
+- [ ] Voice calls (Customer ↔ Driver)
+
+### Booking Enhancements
+- [ ] Multiple pickup/dropoff points
+- [ ] Scheduled recurring deliveries
+
+### Business Features
+- [ ] Corporate accounts
+
+### Financial Features
+- [ ] In-app wallet system
+
+### Analytics & Growth
+- [ ] Advanced analytics dashboard for drivers
+- [ ] Referral program (enhanced)
 
 ---
 
