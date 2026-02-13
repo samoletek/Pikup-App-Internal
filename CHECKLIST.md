@@ -113,11 +113,11 @@
 - [x] #97 Add "Powered by AI" visual indicator
 
 ### Customer Flow - Driver Help *
-- [ ] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
+- [x] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
 
 ### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
 - [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found)
-- [ ] #101 Show size/capacity ranges in cards
+- [x] #101 Show size/capacity ranges in cards
 - [ ] #102 Change price format to "starting at $X"
 - [ ] #103 Make vehicles expandable cards (like items)
 - [ ] #104 AI recommendation badge on best vehicle
@@ -150,7 +150,7 @@
 - [ ] #53 Full Account UI rebuild (cascade menu)
 - [ ] #54 Separate Settings from profile editing
 - [ ] #55 Data Usage/Download - implement or remove
-- [ ] #56 Remove Clear app data option
+- [x] #56 Remove Clear app data option
 
 ### Customer Flow - Activity Screen
 - [x] #40 Fix Filter button - currently non-functional
@@ -163,7 +163,7 @@
 - [ ] #76 Driver preferences UI (size, equipment, extra help)
 
 ### Driver Flow - Onboarding
-- [-] #58 Phone verification (SMS) - prevent fake numbers
+- [x] #58 Phone verification (SMS) - prevent fake numbers
 - [x] #59 Driver address autocomplete
 - [ ] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
@@ -178,8 +178,8 @@
 - [ ] #77 Gamification - weekly milestones, bonuses, progress
 
 ### Backend / Infrastructure
-- [ ] #70 Dynamic pricing algorithm
-- [ ] #39 Audit all price calculations
+- [x] #70 Dynamic pricing algorithm
+- [x] #39 Audit all price calculations
 
 ### New Features *
 - [x] #72 Multiple items - grid for adding items
