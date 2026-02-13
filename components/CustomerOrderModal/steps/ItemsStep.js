@@ -24,6 +24,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
             isFragile: false,
             condition: 'used',
             hasInsurance: false,
+            value: '',
             invoicePhoto: null
         };
         setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
@@ -96,7 +97,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
                 <View style={styles.emptyState}>
                     <Ionicons name="cube-outline" size={64} color={colors.border.light} />
                     <Text style={styles.emptyStateText}>No items added yet</Text>
-                    <Text style={styles.emptyStateSubtext}>Use AI above or add one item at a time below</Text>
+                    <Text style={styles.emptyStateSubtext}>You can add multiple items to your order</Text>
                 </View>
             ) : (
                 orderData.items.map(item => (

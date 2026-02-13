@@ -31,21 +31,24 @@ const OrderItemCard = ({
 }) => {
     const [isUploading, setIsUploading] = useState(false);
 
+    const remainingSlots = MAX_PHOTOS - item.photos.length;
+
     const handleAddPhoto = async () => {
-        if (item.photos.length >= MAX_PHOTOS) {
+        if (remainingSlots <= 0) {
             Alert.alert('Limit Reached', `Maximum ${MAX_PHOTOS} photos per item.`);
             return;
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.8
+            allowsMultipleSelection: true,
+            selectionLimit: remainingSlots,
+            quality: 0.8,
         });
 
-        if (!result.canceled && result.assets[0]) {
-            const newPhotos = [...item.photos, result.assets[0].uri];
+        if (!result.canceled && result.assets?.length > 0) {
+            const selectedUris = result.assets.map(a => a.uri);
+            const newPhotos = [...item.photos, ...selectedUris].slice(0, MAX_PHOTOS);
             onUpdate({ ...item, photos: newPhotos });
         }
     };
@@ -157,8 +160,16 @@ const OrderItemCard = ({
                     >
                         <Ionicons name="camera" size={24} color={colors.text.primary} />
                         <View style={{ marginLeft: 12 }}>
-                            <Text style={styles.addPhotoBtnTopTitle}>Add Photo (up to {MAX_PHOTOS})</Text>
-                            <Text style={styles.addPhotoBtnTopSubtitle}>Take a photo or choose from gallery</Text>
+                            <Text style={styles.addPhotoBtnTopTitle}>
+                                {item.photos.length === 0
+                                    ? `Add Photos (up to ${MAX_PHOTOS})`
+                                    : `${item.photos.length}/${MAX_PHOTOS} Photos`}
+                            </Text>
+                            <Text style={styles.addPhotoBtnTopSubtitle}>
+                                {remainingSlots > 0
+                                    ? `You can select ${remainingSlots} more photo${remainingSlots > 1 ? 's' : ''}`
+                                    : 'Photo limit reached'}
+                            </Text>
                         </View>
                         <Ionicons name="add-circle" size={24} color={colors.primary} style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
@@ -224,14 +235,29 @@ const OrderItemCard = ({
                             <TouchableOpacity
                                 style={[styles.conditionBtn, (item.condition === 'used' || !item.condition) && styles.conditionBtnActive]} // Default visual to Used
                                 onPress={() => {
-                                    // Used = Insurance OFF and Disabled
-                                    onUpdate({ ...item, condition: 'used', hasInsurance: false });
+                                    // Used = Insurance OFF, Value cleared
+                                    onUpdate({ ...item, condition: 'used', hasInsurance: false, value: '' });
                                 }}
                             >
                                 <Text style={[styles.conditionBtnText, (item.condition === 'used' || !item.condition) && styles.conditionBtnTextActive]}>Used</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
+
+                    {/* Value (only for New items) */}
+                    {item.condition === 'new' && (
+                        <View style={styles.field}>
+                            <Text style={styles.fieldLabel}>Item Value</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="Estimated value in dollars"
+                                placeholderTextColor={colors.text.placeholder}
+                                value={item.value}
+                                onChangeText={(text) => onUpdate({ ...item, value: text.replace(/[^0-9.]/g, '') })}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    )}
 
                     {/* Toggles */}
                     <View style={styles.toggleRow}>
