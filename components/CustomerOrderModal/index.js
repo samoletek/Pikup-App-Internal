@@ -235,6 +235,10 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     Alert.alert('Missing Info', 'Please enter a dropoff address.');
                     return false;
                 }
+                if (orderData.pickup.address.trim().toLowerCase() === orderData.dropoff.address.trim().toLowerCase()) {
+                    Alert.alert('Same Address', 'Pickup and dropoff addresses cannot be the same.');
+                    return false;
+                }
                 return true;
             case 2:
                 if (orderData.items.length === 0) {

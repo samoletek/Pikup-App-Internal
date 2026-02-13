@@ -210,10 +210,18 @@ const LocationDetailsStep = ({
                         </Text>
                     </TouchableOpacity>
                 </View>
+                {details[helpKey] && (
+                    <View style={styles.helpNote}>
+                        <Ionicons name="information-circle" size={16} color={colors.primary} />
+                        <Text style={styles.helpNoteText}>
+                            Additional fee may apply for loading/unloading.
+                        </Text>
+                    </View>
+                )}
                 <View style={styles.helpNote}>
-                    <Ionicons name="information-circle" size={16} color={colors.primary} />
+                    <Ionicons name="time-outline" size={16} color={colors.secondary} />
                     <Text style={styles.helpNoteText}>
-                        Additional fee may apply for loading/unloading.
+                        Please be at the {isPickup ? 'pickup' : 'dropoff'} location ~5 min before the driver arrives.
                     </Text>
                 </View>
             </View>
