@@ -8,6 +8,7 @@ import LocationDetailsStep from '../order/LocationDetailsStep';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 import { usePayment } from '../../contexts/PaymentContext';
+import { calculatePrice } from '../../services/PricingService';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -75,6 +76,9 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     // Step 2 specific state
     const [expandedItemId, setExpandedItemId] = useState(null);
 
+    // Pricing preview for ReviewStep (step 6)
+    const [previewPricing, setPreviewPricing] = useState(null);
+
     // ============================================
     // EFFECTS
     // ============================================
@@ -101,6 +105,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             pricing: null
         });
         setExpandedItemId(null);
+        setPreviewPricing(null);
         setIsSubmitting(false);
     };
 
@@ -297,12 +302,17 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         if (!validateStep()) return;
 
         if (currentStep < 6) {
+            // Pre-compute pricing when entering Review step
+            if (currentStep === 5) {
+                calculatePricing().then(p => setPreviewPricing(p));
+            }
             goToStep(currentStep + 1, 'forward');
         } else {
             const selectedPaymentMethod = paymentMethods?.find(method => method.id === orderData.selectedPaymentMethodId) || null;
+            const pricing = await calculatePricing();
             const finalOrder = {
                 ...orderData,
-                pricing: calculatePricing(),
+                pricing,
                 selectedPaymentMethod,
             };
 
@@ -324,24 +334,14 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     // ============================================
     // PRICING CALCULATION
     // ============================================
-    const calculatePricing = () => {
+    const calculatePricing = async () => {
         const vehicle = orderData.selectedVehicle;
         if (!vehicle) return null;
 
         const distance = orderData.distance || 10;
-        const baseFare = vehicle.basePrice;
-        const perMileFee = distance * vehicle.perMile;
+        const duration = orderData.duration || 0;
 
-        let loadingFee = 0;
-        if (orderData.pickupDetails.driverHelpsLoading) loadingFee += 25;
-        if (orderData.dropoffDetails.driverHelpsUnloading) loadingFee += 25;
-
-        const insuredItems = orderData.items.filter(item => item.hasInsurance);
-        const insuranceFee = insuredItems.length * 15;
-
-        const total = baseFare + perMileFee + loadingFee + insuranceFee;
-
-        return { baseFare, perMileFee, loadingFee, insuranceFee, total, distance };
+        return calculatePrice(vehicle, distance, duration);
     };
 
     // ============================================
@@ -398,7 +398,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 return (
                     <ReviewStep
                         orderData={orderData}
-                        pricing={calculatePricing()}
+                        pricing={previewPricing}
                         onNavigateToStep={setCurrentStep}
                         paymentMethods={paymentMethods || []}
                         selectedPaymentMethod={selectedPaymentMethod}

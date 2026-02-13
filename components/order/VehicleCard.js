@@ -8,50 +8,17 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
-
-// Vehicle data - same as VehicleSelectionModal
-const VEHICLES = [
-    {
-        id: 'cargo-van',
-        type: 'Cargo Van',
-        image: require('../../assets/van.png'),
-        capacity: 'Up to 500 lbs',
-        items: [
-            'Sofa or Loveseat',
-            'Queen Mattress & Bed Frame',
-            'Up to 15 Medium Boxes',
-            'Large TV (boxed)',
-            'Office Desk & Chair'
-        ],
-        basePrice: 30.00,
-        perMile: 2.00
-    },
-    {
-        id: 'pickup-truck',
-        type: 'Pickup Truck',
-        image: require('../../assets/pickup.png'),
-        capacity: 'Up to 300 lbs',
-        items: [
-            'Loveseat or Small Couch',
-            'Small to Medium Mattress',
-            'Up to 10 Medium Boxes',
-            'Medium TV (boxed)',
-            'Office Desk & Chair'
-        ],
-        basePrice: 27.00,
-        perMile: 1.50
-    }
-];
+import { calculateEstimate } from '../../services/PricingService';
 
 const VehicleCard = ({
     vehicle,
     isSelected,
     onSelect,
     distance,
+    duration,
     isLoadingPrice = false
 }) => {
-    // Calculate estimated price
-    const estimatedPrice = vehicle.basePrice + (distance || 10) * vehicle.perMile;
+    const estimatedPrice = calculateEstimate(vehicle, distance, duration);
 
     return (
         <TouchableOpacity
@@ -82,9 +49,6 @@ const VehicleCard = ({
         </TouchableOpacity>
     );
 };
-
-// Export VEHICLES for use in CustomerOrderModal
-export { VEHICLES };
 
 const styles = StyleSheet.create({
     card: {

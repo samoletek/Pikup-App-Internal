@@ -1,22 +1,50 @@
-import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import VehicleCard, { VEHICLES } from '../../order/VehicleCard';
+import VehicleCard from '../../order/VehicleCard';
+import { getVehicleRates } from '../../../services/PricingService';
 import { styles } from '../styles';
 import { colors } from '../../../styles/theme';
 
 const VehicleStep = ({ orderData, setOrderData }) => {
+    const [vehicles, setVehicles] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const loadVehicles = async () => {
+            try {
+                const rates = await getVehicleRates();
+                setVehicles(rates);
+            } catch (error) {
+                console.error('Failed to load vehicle rates:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadVehicles();
+    }, []);
+
+    if (isLoading) {
+        return (
+            <View style={[styles.stepContent, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ color: colors.text.muted, marginTop: 12 }}>Loading vehicles...</Text>
+            </View>
+        );
+    }
+
     return (
         <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
             <Text style={styles.vehicleHint}>Choose the vehicle that fits your items</Text>
 
-            {VEHICLES.map(vehicle => (
+            {vehicles.map(vehicle => (
                 <VehicleCard
                     key={vehicle.id}
                     vehicle={vehicle}
                     isSelected={orderData.selectedVehicle?.id === vehicle.id}
                     onSelect={(v) => setOrderData(prev => ({ ...prev, selectedVehicle: v }))}
                     distance={orderData.distance || 10}
+                    duration={orderData.duration || 0}
                 />
             ))}
 

@@ -376,9 +376,6 @@ export const finishDelivery = async (requestId, photos = [], driverLocation = nu
             await uploadRequestPhotos(requestId, photos, 'dropoff');
         }
 
-        const request = await getRequestById(requestId);
-        const driverEarnings = (request.price || 0) * 0.8;
-
         await completeDelivery(requestId, {
             completed_by: currentUser?.id
         });

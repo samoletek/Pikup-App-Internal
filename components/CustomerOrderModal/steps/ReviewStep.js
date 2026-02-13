@@ -89,23 +89,33 @@ const ReviewStep = ({
                     </View>
 
                     <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Distance ({pricing?.distance || 0} mi × ${orderData.selectedVehicle?.perMile?.toFixed(2) || '0.00'})</Text>
-                        <Text style={styles.priceValue}>${pricing?.perMileFee?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.priceLabel}>Mileage ({pricing?.distance || 0} mi)</Text>
+                        <Text style={styles.priceValue}>${pricing?.mileageFee?.toFixed(2) || '0.00'}</Text>
                     </View>
 
-                    {pricing?.loadingFee > 0 && (
+                    {pricing?.laborFee > 0 && (
                         <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Loading/Unloading Help</Text>
-                            <Text style={styles.priceValue}>${pricing.loadingFee.toFixed(2)}</Text>
+                            <Text style={styles.priceLabel}>Labor ({pricing?.duration || 0} min)</Text>
+                            <Text style={styles.priceValue}>${pricing.laborFee.toFixed(2)}</Text>
                         </View>
                     )}
 
-                    {pricing?.insuranceFee > 0 && (
+                    {pricing?.surgeFee > 0 && (
                         <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Insurance ({orderData.items.filter(i => i.hasInsurance).length} items)</Text>
-                            <Text style={styles.priceValue}>${pricing.insuranceFee.toFixed(2)}</Text>
+                            <Text style={styles.priceLabel}>Surge ({pricing.surgeLabel})</Text>
+                            <Text style={styles.priceValue}>${pricing.surgeFee.toFixed(2)}</Text>
                         </View>
                     )}
+
+                    <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Service & Technology Fee</Text>
+                        <Text style={styles.priceValue}>${pricing?.serviceFee?.toFixed(2) || '0.00'}</Text>
+                    </View>
+
+                    <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Mandatory Insurance</Text>
+                        <Text style={styles.priceValue}>${pricing?.mandatoryInsurance?.toFixed(2) || '0.00'}</Text>
+                    </View>
 
                     <View style={styles.priceDivider} />
 

@@ -196,7 +196,7 @@ export const createAuthActions = ({
         const driverProfile = await getDriverProfile(trip.driver_id);
 
         if (driverProfile?.driverProfile?.connectAccountId) {
-          const driverEarnings = calculateDriverEarnings(trip.pricing?.total || 0);
+          const driverEarnings = await calculateDriverEarnings(trip.pricing?.total || 0);
 
           const payoutResult = await processTripPayout({
             tripId,

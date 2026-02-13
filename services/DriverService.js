@@ -4,20 +4,21 @@
 import { supabase } from '../config/supabase';
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
+import { getPlatformFees } from './PricingService';
 
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
 
 /**
- * Calculate driver earnings (70% of total, minimum $5)
+ * Calculate driver earnings from platform config
  * @param {number} totalAmount - Total trip amount
- * @returns {number} Driver earnings
+ * @returns {Promise<number>} Driver earnings
  */
-export const calculateDriverEarnings = (totalAmount) => {
-    const driverPercentage = 0.70;
-    const minimumEarnings = 5.00;
+export const calculateDriverEarnings = async (totalAmount) => {
+    const platformFees = await getPlatformFees();
+    const driverPercentage = platformFees.driverPayoutPercent || 0.75;
     const calculatedEarnings = totalAmount * driverPercentage;
-    return Math.max(calculatedEarnings, minimumEarnings);
+    return Math.round(calculatedEarnings * 100) / 100;
 };
 
 /**
@@ -45,12 +46,12 @@ export const getDriverTrips = async (driverId) => {
 
         console.log(`Found ${data.length} completed trips for driver`);
 
-        return data.map((trip) => {
+        return Promise.all(data.map(async (trip) => {
             const mappedTrip = mapTripFromDb(trip);
             const price = parseFloat(trip.price || 0);
-            const driverEarnings = calculateDriverEarnings(price);
+            const driverEarnings = await calculateDriverEarnings(price);
             return { ...mappedTrip, driverEarnings, pricing: { total: price } };
-        });
+        }));
 
     } catch (error) {
         console.error('Error getting driver trips:', error);
@@ -139,7 +140,7 @@ export const getDriverStats = async (driverId) => {
 export const updateDriverEarnings = async (driverId, tripData) => {
     try {
         console.log('Updating driver earnings for:', driverId);
-        const tripEarnings = tripData.driverEarnings || calculateDriverEarnings(tripData.pricing?.total || 0);
+        const tripEarnings = tripData.driverEarnings || await calculateDriverEarnings(tripData.pricing?.total || 0);
 
         // Fetch current profile
         const { data: profile } = await supabase
