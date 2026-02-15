@@ -106,8 +106,8 @@
 
 ### Customer Flow - Step 2: Item Details (AI Flow) *
 - [x] #92 Value field: show only if item = New, hide for Used
-- [ ] #93 AI analysis: trigger ONCE after "Confirm" (not per photo) - adrei
-- [ ] #94 Auto-create separate item cards from AI analysis - adrei
+- [x] #93 AI analysis: trigger ONCE after "Confirm" (not per photo) - adrei
+- [x] #94 Auto-create separate item cards from AI analysis - adrei
 - [x] #95 Add explicit hint: "You can upload multiple photos/items"
 - [x] #96 Fix photo picker: allow selecting up to 3 photos at once
 - [x] #97 Add "Powered by AI" visual indicator
@@ -135,8 +135,8 @@
 - [x] #106 Account type detection: "Switch to Driver account?" dialog
 
 ### Customer Flow - Messages Screen
-- [ ] #43 Fix messaging - currently not functional - adrei
-- [ ] #44 Auto-create chat room per trip - adrei
+- [x] #43 Fix messaging - currently not functional - adrei
+- [x] #44 Auto-create chat room per trip - adrei
 - [x] #45 Move Support messages to Account > Help
 - [x] #46 Center "No messages" empty state
 
@@ -173,7 +173,7 @@
 ### Driver UI Enhancements *
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
 - [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.) - adrei
-- [ ] #115 "Go Online" flow: ask "Solo or Team today?" - adrei
+- [x] #115 "Go Online" flow: ask "Solo or Team today?" - adrei
 - [ ] #116 Order notification card: full design with photos, timer - khan
 - [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
 
