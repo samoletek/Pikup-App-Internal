@@ -164,7 +164,7 @@ export const createAuthActions = ({
   const updateDriverEarnings = DriverService.updateDriverEarnings;
   const calculateDriverEarnings = DriverService.calculateDriverEarnings;
   const getDriverProfile = DriverService.getDriverProfile;
-  const setDriverOnline = (driverId, location) => DriverService.setDriverOnline(driverId, location, authFetch);
+  const setDriverOnline = (driverId, location, mode) => DriverService.setDriverOnline(driverId, { ...location, mode }, authFetch);
   const setDriverOffline = (driverId) => DriverService.setDriverOffline(driverId, authFetch);
   const updateDriverHeartbeat = (driverId, location) =>
     DriverService.updateDriverHeartbeat(driverId, location, authFetch);
