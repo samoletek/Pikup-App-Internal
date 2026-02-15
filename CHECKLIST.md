@@ -5,7 +5,7 @@
 **Total: 118 tasks, 8-10 weeks**
 
 **Legend:**
-- `*` = Added during calls (scope refinement)
+- `*` = Added during calls 
 - `[-]` = In progress / partially done
 
 ---
@@ -106,8 +106,8 @@
 
 ### Customer Flow - Step 2: Item Details (AI Flow) *
 - [x] #92 Value field: show only if item = New, hide for Used
-- [ ] #93 AI analysis: trigger ONCE after "Confirm" (not per photo)
-- [ ] #94 Auto-create separate item cards from AI analysis
+- [x] #93 AI analysis: trigger ONCE after "Confirm" (not per photo) - adrei
+- [x] #94 Auto-create separate item cards from AI analysis - adrei
 - [x] #95 Add explicit hint: "You can upload multiple photos/items"
 - [x] #96 Fix photo picker: allow selecting up to 3 photos at once
 - [x] #97 Add "Powered by AI" visual indicator
@@ -116,31 +116,31 @@
 - [x] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
 
 ### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
-- [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found)
+- [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
 - [x] #101 Show size/capacity ranges in cards
-- [ ] #102 Change price format to "starting at $X"
-- [ ] #103 Make vehicles expandable cards (like items)
-- [ ] #104 AI recommendation badge on best vehicle
+- [ ] #102 Change price format to "starting at $X" - khan
+- [ ] #103 Make vehicles expandable cards (like items) - khan
+- [ ] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
-- [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement)
-- [ ] #73 Each item: photo + frame + AI description + new/used
+- [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
+- [ ] #73 Each item: photo + frame + AI description + new/used - adrei
 - [x] #74 Receipt photo for new items (insurance)
-- [ ] #75 Confirmation dialog: verify description and count
-- [ ] #78 AI - adjustable frame for photo selection
-- [ ] #79 AI - simplify system prompt for concise descriptions
+- [ ] #75 Confirmation dialog: verify description and count - adrei
+- [ ] #78 AI - adjustable frame for photo selection - adrei
+- [ ] #79 AI - simplify system prompt for concise descriptions - adrei
 
 ### Authentication Flow Improvements *
 - [x] #105 Email flow: check if exists → show password OR signup form
 - [x] #106 Account type detection: "Switch to Driver account?" dialog
 
 ### Customer Flow - Messages Screen
-- [ ] #43 Fix messaging - currently not functional
-- [ ] #44 Auto-create chat room per trip
+- [x] #43 Fix messaging - currently not functional - adrei
+- [x] #44 Auto-create chat room per trip - adrei
 - [x] #45 Move Support messages to Account > Help
 - [x] #46 Center "No messages" empty state
 
-### Customer Flow - Account Screen
+### Customer Flow - Account Screen - erema
 - [x] #47 Account deletion (App Store requirement)
 - [x] #48 Remove Driver toggle - separate accounts
 - [ ] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses)
@@ -160,22 +160,22 @@
 ### Driver Preferences UI *
 - [x] #109 Group options by sections (Items / Equipment / Team)
 - [x] #110 Fix grid/layout bugs
-- [ ] #76 Driver preferences UI (size, equipment, extra help)
+- [ ] #76 Driver preferences UI (size, equipment, extra help) - erema
 
 ### Driver Flow - Onboarding
 - [x] #58 Phone verification (SMS) - prevent fake numbers
 - [x] #59 Driver address autocomplete
-- [ ] #60 Cascading vehicle picker [CHANGED: AI car analysis]
+- [ ] #60 Cascading vehicle picker [CHANGED: AI car analysis] - khan
 - [x] #61 Convert to multi-step onboarding form
-- [ ] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) *
+- [ ] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) * - khan
 - [ ] #112 [DISCUSSION] Vehicle age limit (15 vs 30 years - postponed) *
 
 ### Driver UI Enhancements *
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
-- [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.)
-- [ ] #115 "Go Online" flow: ask "Solo or Team today?"
-- [ ] #116 Order notification card: full design with photos, timer
-- [ ] #77 Gamification - weekly milestones, bonuses, progress
+- [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.) - adrei
+- [x] #115 "Go Online" flow: ask "Solo or Team today?" - adrei
+- [ ] #116 Order notification card: full design with photos, timer - khan
+- [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
 
 ### Backend / Infrastructure
 - [x] #70 Dynamic pricing algorithm
@@ -204,33 +204,33 @@
 - [ ] #57 Referral program with deep links
 
 ### Driver Flow - Home Screen
-- [ ] #62 Large buttons for driver (use while driving)
-- [ ] #63 Evaluate Map + Online toggle for scheduled moving
-- [ ] #64 Add button to open recent trips modal
+- [ ] #62 Large buttons for driver (use while driving) - khan
+- [ ] #63 Evaluate Map + Online toggle for scheduled moving - TBD
+- [ ] #64 Add button to open recent trips modal - erema
 
 ### Driver Flow - Earnings Screen
-- [ ] #65 Fix non-functional Earnings screen buttons
-- [ ] #66 Realtime sync with Supabase
+- [ ] #65 Fix non-functional Earnings screen buttons - erema
+- [ ] #66 Realtime sync with Supabase - erema
 
 ### Driver Flow - Order Notification
-- [ ] #67 Popup modal for incoming orders with timer
-- [ ] #68 Show: pickup location, earnings, accept/decline time
+- [ ] #67 Popup modal for incoming orders with timer - khan
+- [ ] #68 Show: pickup location, earnings, accept/decline time - khan
 
 ### Backend / Infrastructure
-- [ ] #69 Order matching algorithm (nearest driver + preferences)
+- [ ] #69 Order matching algorithm (nearest driver + preferences) - adrei and drew
 
 ### Summary Screen (Labor Time) *
-- [ ] #117 Add Labor Time calculation display
-- [ ] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)"
+- [ ] #117 Add Labor Time calculation display - khan
+- [ ] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)" - khan
 
 ### Insurance API
-- [ ] #81 Verify Redkik quote flow
-- [ ] #82 Test insurance logic end-to-end
+- [ ] #81 Verify Redkik quote flow - erema
+- [ ] #82 Test insurance logic end-to-end - erema
 
 ### Stripe Payments
-- [ ] #83 Customer payment flow testing
-- [ ] #84 Driver payout (Stripe Connect) - **Backend currently returns 500 error**
-- [ ] #85 70% earnings calculation verification
+- [ ] #83 Customer payment flow testing - drew
+- [ ] #84 Driver payout (Stripe Connect) - drew
+- [ ] #85 70% earnings calculation verification - drew
 
 ### Milestone 4 Deliverables
 - [ ] Complete driver home screen with order notifications
