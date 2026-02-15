@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import VehicleCard from '../../order/VehicleCard';
 import { getVehicleRates } from '../../../services/PricingService';
 import { styles } from '../styles';
-import { colors } from '../../../styles/theme';
+import { colors, spacing } from '../../../styles/theme';
 
 const VehicleStep = ({ orderData, setOrderData }) => {
     const [vehicles, setVehicles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [expandedVehicleId, setExpandedVehicleId] = useState(null);
 
     useEffect(() => {
         const loadVehicles = async () => {
@@ -24,11 +24,18 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         loadVehicles();
     }, []);
 
+    // Auto-expand selected vehicle on mount
+    useEffect(() => {
+        if (orderData.selectedVehicle?.id) {
+            setExpandedVehicleId(orderData.selectedVehicle.id);
+        }
+    }, []);
+
     if (isLoading) {
         return (
             <View style={[styles.stepContent, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: colors.text.muted, marginTop: 12 }}>Loading vehicles...</Text>
+                <Text style={{ color: colors.text.muted, marginTop: spacing.md }}>Loading vehicles...</Text>
             </View>
         );
     }
@@ -42,23 +49,15 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                     key={vehicle.id}
                     vehicle={vehicle}
                     isSelected={orderData.selectedVehicle?.id === vehicle.id}
+                    isExpanded={expandedVehicleId === vehicle.id}
                     onSelect={(v) => setOrderData(prev => ({ ...prev, selectedVehicle: v }))}
+                    onToggleExpand={() => setExpandedVehicleId(
+                        expandedVehicleId === vehicle.id ? null : vehicle.id
+                    )}
                     distance={orderData.distance || 10}
                     duration={orderData.duration || 0}
                 />
             ))}
-
-            {orderData.selectedVehicle && (
-                <View style={styles.whatFitsSection}>
-                    <Text style={styles.whatFitsTitle}>What fits in a {orderData.selectedVehicle.type}:</Text>
-                    {orderData.selectedVehicle.items.map((item, index) => (
-                        <View key={index} style={styles.whatFitsItem}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                            <Text style={styles.whatFitsText}>{item}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
 
             <View style={{ height: 100 }} />
         </ScrollView>

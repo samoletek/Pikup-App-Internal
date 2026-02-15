@@ -6,14 +6,14 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // Vehicle image mapping (local assets)
 const VEHICLE_IMAGES = {
-    midsize_truck: require('../assets/pickup.png'),
-    fullsize_truck: require('../assets/pickup.png'),
-    cargo_van: require('../assets/van.png'),
-    box_truck: require('../assets/van.png'),
+    midsize_suv: require('../assets/suv.png'),
+    fullsize_pickup: require('../assets/pickup-truck.png'),
+    fullsize_truck: require('../assets/truck.png'),
+    cargo_truck: require('../assets/cargo-truck.png'),
 };
 
 // Vehicle display order
-const VEHICLE_ORDER = ['midsize_truck', 'fullsize_truck', 'cargo_van', 'box_truck'];
+const VEHICLE_ORDER = ['midsize_suv', 'fullsize_pickup', 'fullsize_truck', 'cargo_truck'];
 
 /**
  * Fetch all pricing config rows from Supabase and cache them.

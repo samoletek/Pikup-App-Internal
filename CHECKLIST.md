@@ -116,10 +116,10 @@
 - [x] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
 
 ### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
-- [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
+- [x] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
 - [x] #101 Show size/capacity ranges in cards
-- [ ] #102 Change price format to "starting at $X" - khan
-- [ ] #103 Make vehicles expandable cards (like items) - khan
+- [x] #102 Change price format to "starting at $X" - khan
+- [x] #103 Make vehicles expandable cards (like items) - khan
 - [ ] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
