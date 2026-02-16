@@ -261,6 +261,8 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [vehicleVerificationStatus, setVehicleVerificationStatus] = useState('idle');
   const [vehicleVerificationResult, setVehicleVerificationResult] = useState(null);
   const [vehicleVerificationError, setVehicleVerificationError] = useState(null);
+  const [showVinHint, setShowVinHint] = useState(false);
+  const [showPhotoHint, setShowPhotoHint] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const statePickerRef = useRef(null);
@@ -706,7 +708,7 @@ export default function DriverOnboardingScreen({ navigation }) {
         return (
           !!vinPhotoUri &&
           carPhotoUris.some(Boolean) &&
-          ['approved', 'manual_review', 'rejected'].includes(vehicleVerificationStatus) &&
+          vehicleVerificationStatus === 'approved' &&
           formData.vehicleInfo.make.length > 2 &&
           formData.vehicleInfo.model.length > 2 &&
           formData.vehicleInfo.year.length === 4 &&
@@ -894,12 +896,16 @@ export default function DriverOnboardingScreen({ navigation }) {
       const { vinPhotoUrl, carPhotoUrls } = await uploadVehiclePhotos(driverId, vinPhotoUri, carPhotoUris);
 
       setVehicleVerificationStatus('verifying');
+
+      // Refresh session to ensure JWT is valid before calling Edge Function
+      await supabase.auth.refreshSession();
+
       const result = await verifyVehicle(vinPhotoUrl, carPhotoUrls);
 
       setVehicleVerificationResult(result);
 
-      if (result.status === 'approved' || result.status === 'manual_review') {
-        setVehicleVerificationStatus(result.status);
+      if (result.status === 'approved') {
+        setVehicleVerificationStatus('approved');
 
         if (result.vinData) {
           setFormData(prev => ({
@@ -910,11 +916,25 @@ export default function DriverOnboardingScreen({ navigation }) {
               model: result.vinData.model || prev.vehicleInfo.model,
               year: result.vinData.year || prev.vehicleInfo.year,
               vin: result.extractedVin || prev.vehicleInfo.vin,
+              color: result.detectedColor || prev.vehicleInfo.color,
+              licensePlate: result.detectedLicensePlate || prev.vehicleInfo.licensePlate,
             },
           }));
         }
       } else {
         setVehicleVerificationStatus('rejected');
+        setFormData(prev => ({
+          ...prev,
+          vehicleInfo: {
+            ...prev.vehicleInfo,
+            make: '',
+            model: '',
+            year: '',
+            vin: '',
+            color: '',
+            licensePlate: '',
+          },
+        }));
       }
     } catch (error) {
       console.error('Vehicle verification error:', error);
@@ -1243,8 +1263,8 @@ export default function DriverOnboardingScreen({ navigation }) {
         {
           const hasAnyCarPhoto = carPhotoUris.some(Boolean);
           const isProcessing = vehicleVerificationStatus === 'uploading' || vehicleVerificationStatus === 'verifying';
-          const hasResult = ['approved', 'rejected', 'manual_review', 'error'].includes(vehicleVerificationStatus);
-          const showFields = hasResult || vehicleVerificationStatus === 'manual_review';
+          const hasResult = ['approved', 'rejected', 'error'].includes(vehicleVerificationStatus);
+          const showFields = hasResult;
           const isLocked = vehicleVerificationStatus === 'approved';
           const canVerify = vehicleVerificationStatus === 'idle' && vinPhotoUri && hasAnyCarPhoto;
 
@@ -1252,35 +1272,96 @@ export default function DriverOnboardingScreen({ navigation }) {
             <View style={styles.formContent}>
               {/* Photo Capture: VIN Plate */}
               <View style={styles.photoSection}>
-                <Text style={styles.sectionLabel}>Step 1: Photograph your VIN plate</Text>
+                <View style={styles.sectionLabelRow}>
+                  <Text style={styles.sectionLabel}>Step 1: Photograph your VIN plate</Text>
+                  <TouchableOpacity
+                    style={styles.infoButton}
+                    onPress={() => setShowVinHint(prev => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={showVinHint ? 'information-circle' : 'information-circle-outline'}
+                      size={20}
+                      color={showVinHint ? colors.primary : colors.text.subtle}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {showVinHint && (
+                  <View style={styles.hintPanel}>
+                    <Text style={styles.hintTitle}>Where to find the VIN plate</Text>
+                    <Text style={styles.hintText}>Driver-side door jamb — open the door and look for a sticker on the frame</Text>
+                    <Text style={styles.hintText}>Dashboard — look at the base of the windshield on the driver's side</Text>
+                    <Text style={styles.hintText}>Engine bay or vehicle registration documents</Text>
+                    <Text style={[styles.hintTitle, { marginTop: spacing.md }]}>Tips for a good photo</Text>
+                    <Text style={styles.hintText}>Make sure there is enough light — avoid shadows on the VIN</Text>
+                    <Text style={styles.hintText}>Hold the camera close so all 17 characters are clearly readable</Text>
+                    <Text style={styles.hintText}>Keep the camera steady — avoid blurry photos</Text>
+                  </View>
+                )}
                 <Text style={styles.sectionHint}>
                   Find the VIN plate on your driver-side door jamb or dashboard
                 </Text>
-                <TouchableOpacity
-                  style={[styles.photoCaptureSlot, vinPhotoUri && styles.photoCaptureSlotFilled]}
-                  onPress={takeVinPhoto}
-                  disabled={isProcessing}
-                >
-                  {vinPhotoUri ? (
-                    <Image source={{ uri: vinPhotoUri }} style={styles.photoCapturePreview} />
-                  ) : (
-                    <View style={styles.photoCaptureEmpty}>
-                      <Ionicons name="camera-outline" size={32} color={colors.text.subtle} />
-                      <Text style={styles.photoCaptureText}>Tap to photograph VIN plate</Text>
-                    </View>
+                <View style={styles.photoSlotWrapper}>
+                  <TouchableOpacity
+                    style={[styles.photoCaptureSlot, vinPhotoUri && styles.photoCaptureSlotFilled]}
+                    onPress={takeVinPhoto}
+                    disabled={isProcessing}
+                  >
+                    {vinPhotoUri ? (
+                      <Image source={{ uri: vinPhotoUri }} style={styles.photoCapturePreview} />
+                    ) : (
+                      <View style={styles.photoCaptureEmpty}>
+                        <Ionicons name="camera-outline" size={32} color={colors.text.subtle} />
+                        <Text style={styles.photoCaptureText}>Tap to photograph VIN plate</Text>
+                      </View>
+                    )}
+                    {vinPhotoUri && (
+                      <View style={styles.photoRetakeOverlay}>
+                        <Ionicons name="camera-reverse-outline" size={16} color={colors.white} />
+                        <Text style={styles.photoRetakeText}>Retake</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {vinPhotoUri && !isProcessing && (
+                    <TouchableOpacity
+                      style={styles.photoDeleteButton}
+                      onPress={() => {
+                        setVinPhotoUri(null);
+                        setVehicleVerificationStatus('idle');
+                        setVehicleVerificationResult(null);
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={24} color={colors.error} />
+                    </TouchableOpacity>
                   )}
-                  {vinPhotoUri && (
-                    <View style={styles.photoRetakeOverlay}>
-                      <Ionicons name="camera-reverse-outline" size={16} color={colors.white} />
-                      <Text style={styles.photoRetakeText}>Retake</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
+                </View>
               </View>
 
               {/* Photo Capture: Vehicle — multiple angles */}
               <View style={styles.photoSection}>
-                <Text style={styles.sectionLabel}>Step 2: Photograph your vehicle</Text>
+                <View style={styles.sectionLabelRow}>
+                  <Text style={styles.sectionLabel}>Step 2: Photograph your vehicle</Text>
+                  <TouchableOpacity
+                    style={styles.infoButton}
+                    onPress={() => setShowPhotoHint(prev => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={showPhotoHint ? 'information-circle' : 'information-circle-outline'}
+                      size={20}
+                      color={showPhotoHint ? colors.primary : colors.text.subtle}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {showPhotoHint && (
+                  <View style={styles.hintPanel}>
+                    <Text style={styles.hintTitle}>How to photograph your vehicle</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Front</Text> — Stand about 10 feet in front. Capture bumper, headlights, and license plate.</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Side</Text> — Stand to the side at a slight angle. The whole car should be visible from hood to trunk.</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Rear</Text> — Stand about 10 feet behind. Capture bumper, taillights, and license plate.</Text>
+                    <Text style={[styles.hintText, { marginTop: spacing.xs }]}>Photograph outdoors in daylight for the best results.</Text>
+                  </View>
+                )}
                 <Text style={styles.sectionHint}>
                   Take photos from different angles for better verification (at least 1 required)
                 </Text>
@@ -1305,6 +1386,22 @@ export default function DriverOnboardingScreen({ navigation }) {
                           </View>
                         )}
                       </TouchableOpacity>
+                      {carPhotoUris[index] && !isProcessing && (
+                        <TouchableOpacity
+                          style={styles.carPhotoDeleteButton}
+                          onPress={() => {
+                            setCarPhotoUris(prev => {
+                              const updated = [...prev];
+                              updated[index] = null;
+                              return updated;
+                            });
+                            setVehicleVerificationStatus('idle');
+                            setVehicleVerificationResult(null);
+                          }}
+                        >
+                          <Ionicons name="close-circle" size={20} color={colors.error} />
+                        </TouchableOpacity>
+                      )}
                       <Text style={styles.carPhotoLabel}>{label}</Text>
                     </View>
                   ))}
@@ -1352,20 +1449,17 @@ export default function DriverOnboardingScreen({ navigation }) {
                   </Text>
                 </View>
               )}
-              {vehicleVerificationStatus === 'manual_review' && (
-                <View style={[styles.autoFilledBanner, { backgroundColor: `${colors.warning}15` }]}>
-                  <Ionicons name="information-circle" size={18} color={colors.warning} />
-                  <Text style={[styles.autoFilledText, { color: colors.warning }]}>
-                    {vehicleVerificationResult?.reason || 'Please review and fill in the details manually.'}
-                  </Text>
-                </View>
-              )}
               {vehicleVerificationStatus === 'rejected' && (
                 <View style={[styles.autoFilledBanner, { backgroundColor: `${colors.secondary}15` }]}>
                   <Ionicons name="close-circle" size={18} color={colors.secondary} />
-                  <Text style={[styles.autoFilledText, { color: colors.secondary }]}>
-                    {vehicleVerificationResult?.reason || 'Verification failed. Please retake photos or enter details manually.'}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.autoFilledText, { color: colors.secondary }]}>
+                      {vehicleVerificationResult?.reason || 'Verification failed.'}
+                    </Text>
+                    <Text style={[styles.autoFilledText, { color: colors.text.tertiary, fontSize: typography.fontSize.xs, marginTop: spacing.xs }]}>
+                      Delete the photos using the X button and retake them to try again.
+                    </Text>
+                  </View>
                 </View>
               )}
 
@@ -2146,11 +2240,42 @@ const styles = StyleSheet.create({
   photoSection: {
     marginBottom: spacing.lg,
   },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
   sectionLabel: {
     color: colors.white,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
+    flex: 1,
+  },
+  infoButton: {
+    marginLeft: spacing.sm,
+    padding: spacing.xs,
+  },
+  hintPanel: {
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  hintTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  hintText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.sm,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+  hintBold: {
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
   },
   sectionHint: {
     color: colors.text.tertiary,
@@ -2203,6 +2328,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     marginLeft: spacing.xs,
   },
+  photoSlotWrapper: {
+    position: 'relative',
+  },
+  photoDeleteButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    zIndex: 10,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.full,
+  },
   carPhotosRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -2228,6 +2364,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontSize: typography.fontSize.xs,
     color: colors.text.tertiary,
+  },
+  carPhotoDeleteButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 10,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.full,
   },
   carPhotoRetakeOverlay: {
     position: 'absolute',

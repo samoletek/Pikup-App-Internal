@@ -42,7 +42,23 @@ export const verifyVehicle = async (vinPhotoUrl, carPhotoUrls) => {
         body: { vinPhotoUrl, carPhotoUrls },
     });
 
-    if (error) throw error;
+    if (error) {
+        let detail = error.message;
+        try {
+            // error.context is a Response object — body may not be consumed yet
+            if (error.context && typeof error.context.text === 'function') {
+                const raw = await error.context.text();
+                try {
+                    const parsed = JSON.parse(raw);
+                    detail = parsed?.error || parsed?.msg || parsed?.message || raw;
+                } catch (_) {
+                    detail = raw || detail;
+                }
+            }
+        } catch (_) { /* context already consumed — use error.message */ }
+        throw new Error(detail);
+    }
+
     if (data?.error) throw new Error(data.error);
 
     return data;

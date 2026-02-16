@@ -152,6 +152,16 @@ export const sizing = {
     statLabelFontSize: 11,
     statLabelMarginTop: 3,
     statLabelLetterSpacing: 0.5,
+    // Vehicle card
+    vehicleCardMinHeight: 110,
+    vehicleCardBorderWidth: 2,
+    vehicleImageWidth: 120,
+    vehicleImageHeight: 68,
+    badgeFontSize: 9,
+    badgeIconSize: 10,
+    badgeOffset: -8,
+    badgePaddingVertical: 1,
+    badgeTextMargin: 2,
 };
 
 // ============================================

@@ -8,7 +8,7 @@ import {
     ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+import { colors, borderRadius, spacing, typography, sizing } from '../../styles/theme';
 
 const VehicleCard = ({
     vehicle,
@@ -24,32 +24,32 @@ const VehicleCard = ({
             onPress={() => onSelect(vehicle)}
             activeOpacity={0.8}
         >
-            {/* AI Recommended Badge */}
-            {isRecommended && (
-                <View style={styles.recommendedBadge}>
-                    <Ionicons name="sparkles" size={14} color={colors.primary} />
-                    <Text style={styles.recommendedText}>AI Recommended</Text>
-                </View>
-            )}
+            {/* Price - top right */}
+            <View style={styles.priceContainer}>
+                {isLoadingPrice ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                ) : displayPrice != null ? (
+                    <Text style={styles.price}>${displayPrice.toFixed(2)}</Text>
+                ) : null}
+            </View>
 
             {/* Header Row */}
             <View style={styles.header}>
-                {/* Vehicle Image */}
-                <Image source={vehicle.image} style={styles.vehicleImage} />
+                {/* Vehicle Image + Badge */}
+                <View style={styles.imageColumn}>
+                    <Image source={vehicle.image} style={styles.vehicleImage} />
+                    {isRecommended && (
+                        <View style={styles.recommendedBadge}>
+                            <Ionicons name="sparkles" size={sizing.badgeIconSize} color={colors.primary} />
+                            <Text style={styles.recommendedText}>AI Recommended</Text>
+                        </View>
+                    )}
+                </View>
 
                 {/* Vehicle Info */}
                 <View style={styles.info}>
                     <Text style={styles.vehicleType}>{vehicle.type}</Text>
                     <Text style={styles.capacity}>{vehicle.capacity}</Text>
-                </View>
-
-                {/* Price */}
-                <View style={styles.priceContainer}>
-                    {isLoadingPrice ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                    ) : displayPrice != null ? (
-                        <Text style={styles.price}>${displayPrice.toFixed(2)}</Text>
-                    ) : null}
                 </View>
             </View>
         </TouchableOpacity>
@@ -62,40 +62,43 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.lg,
         padding: spacing.base,
         marginBottom: spacing.md,
-        borderWidth: 2,
+        borderWidth: sizing.vehicleCardBorderWidth,
         borderColor: colors.transparent,
-        minHeight: 88,
+        minHeight: sizing.vehicleCardMinHeight,
+        justifyContent: 'center',
     },
     cardSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.background.elevated
     },
-    recommendedBadge: {
-        position: 'absolute',
-        top: spacing.sm,
-        right: spacing.sm,
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.primaryLight,
-        borderRadius: borderRadius.sm,
-        paddingHorizontal: spacing.sm,
-        paddingVertical: spacing.xs,
-        zIndex: 1,
-    },
-    recommendedText: {
-        color: colors.primary,
-        fontSize: typography.fontSize.xs,
-        fontWeight: typography.fontWeight.semibold,
-        marginLeft: spacing.xs,
-    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
     },
+    imageColumn: {
+        alignItems: 'center',
+    },
     vehicleImage: {
-        width: 80,
-        height: 45,
+        width: sizing.vehicleImageWidth,
+        height: sizing.vehicleImageHeight,
         resizeMode: 'contain'
+    },
+    recommendedBadge: {
+        position: 'absolute',
+        bottom: sizing.badgeOffset,
+        alignSelf: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primaryLight,
+        borderRadius: borderRadius.xs,
+        paddingHorizontal: spacing.xs,
+        paddingVertical: sizing.badgePaddingVertical,
+    },
+    recommendedText: {
+        color: colors.primary,
+        fontSize: sizing.badgeFontSize,
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: sizing.badgeTextMargin,
     },
     info: {
         flex: 1,
@@ -112,12 +115,15 @@ const styles = StyleSheet.create({
         marginTop: spacing.xs
     },
     priceContainer: {
-        alignItems: 'flex-end',
+        position: 'absolute',
+        top: spacing.sm,
+        right: spacing.sm,
+        zIndex: 1,
     },
     price: {
         color: colors.primary,
-        fontSize: typography.fontSize.base,
-        fontWeight: typography.fontWeight.semibold
+        fontSize: typography.fontSize.xl,
+        fontWeight: typography.fontWeight.bold
     },
 });
 
