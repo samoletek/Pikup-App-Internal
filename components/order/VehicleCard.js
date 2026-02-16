@@ -5,46 +5,33 @@ import {
     StyleSheet,
     TouchableOpacity,
     Image,
-    ActivityIndicator,
-    LayoutAnimation,
-    Platform,
-    UIManager
+    ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
-import { calculateEstimate } from '../../services/PricingService';
-
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const VehicleCard = ({
     vehicle,
     isSelected,
     onSelect,
-    distance,
-    duration,
     isLoadingPrice = false,
-    isExpanded = false,
-    onToggleExpand
+    isRecommended = false,
+    displayPrice
 }) => {
-    const estimatedPrice = calculateEstimate(vehicle, distance, duration);
-
-    const handlePress = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        onSelect(vehicle);
-        if (onToggleExpand) {
-            onToggleExpand();
-        }
-    };
-
     return (
         <TouchableOpacity
             style={[styles.card, isSelected && styles.cardSelected]}
-            onPress={handlePress}
+            onPress={() => onSelect(vehicle)}
             activeOpacity={0.8}
         >
+            {/* AI Recommended Badge */}
+            {isRecommended && (
+                <View style={styles.recommendedBadge}>
+                    <Ionicons name="sparkles" size={14} color={colors.primary} />
+                    <Text style={styles.recommendedText}>AI Recommended</Text>
+                </View>
+            )}
+
             {/* Header Row */}
             <View style={styles.header}>
                 {/* Vehicle Image */}
@@ -56,39 +43,15 @@ const VehicleCard = ({
                     <Text style={styles.capacity}>{vehicle.capacity}</Text>
                 </View>
 
-                {/* Price + Chevron */}
-                <View style={styles.rightSection}>
-                    <View style={styles.priceContainer}>
-                        {isLoadingPrice ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                            <>
-                                <Text style={styles.priceLabel}>starting at</Text>
-                                <Text style={styles.price}>${estimatedPrice.toFixed(2)}</Text>
-                            </>
-                        )}
-                    </View>
-                    <Ionicons
-                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color={colors.text.muted}
-                        style={styles.chevron}
-                    />
+                {/* Price */}
+                <View style={styles.priceContainer}>
+                    {isLoadingPrice ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                    ) : displayPrice != null ? (
+                        <Text style={styles.price}>${displayPrice.toFixed(2)}</Text>
+                    ) : null}
                 </View>
             </View>
-
-            {/* Expanded Content */}
-            {isExpanded && vehicle.items && vehicle.items.length > 0 && (
-                <View style={styles.expandedContent}>
-                    <Text style={styles.whatFitsTitle}>What fits:</Text>
-                    {vehicle.items.map((item, index) => (
-                        <View key={index} style={styles.whatFitsItem}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                            <Text style={styles.whatFitsText}>{item}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
         </TouchableOpacity>
     );
 };
@@ -106,6 +69,24 @@ const styles = StyleSheet.create({
     cardSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.background.elevated
+    },
+    recommendedBadge: {
+        position: 'absolute',
+        top: spacing.sm,
+        right: spacing.sm,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primaryLight,
+        borderRadius: borderRadius.sm,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xs,
+        zIndex: 1,
+    },
+    recommendedText: {
+        color: colors.primary,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: spacing.xs,
     },
     header: {
         flexDirection: 'row',
@@ -130,9 +111,6 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize.sm,
         marginTop: spacing.xs
     },
-    rightSection: {
-        alignItems: 'flex-end',
-    },
     priceContainer: {
         alignItems: 'flex-end',
     },
@@ -140,36 +118,6 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontSize: typography.fontSize.base,
         fontWeight: typography.fontWeight.semibold
-    },
-    priceLabel: {
-        color: colors.text.placeholder,
-        fontSize: typography.fontSize.xs,
-        marginTop: 2
-    },
-    chevron: {
-        marginTop: spacing.xs,
-    },
-    expandedContent: {
-        marginTop: spacing.base,
-        paddingTop: spacing.base,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    whatFitsTitle: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.md,
-        fontWeight: typography.fontWeight.semibold,
-        marginBottom: spacing.md,
-    },
-    whatFitsItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.sm,
-    },
-    whatFitsText: {
-        color: colors.text.secondary,
-        fontSize: typography.fontSize.base,
-        marginLeft: spacing.sm,
     },
 });
 
