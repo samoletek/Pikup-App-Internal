@@ -17,7 +17,7 @@ import {
   Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -871,6 +871,11 @@ export default function DriverOnboardingScreen({ navigation }) {
   };
 
   const CAR_PHOTO_LABELS = ['Front', 'Side', 'Rear'];
+  const CAR_PHOTO_ICONS = [
+    { name: 'car', size: 32 },
+    { name: 'car-side', size: 40 },
+    { name: 'car-back', size: 32 },
+  ];
 
   const takeVinPhoto = () => pickPhoto(setVinPhotoUri);
   const takeCarPhoto = (index) => pickPhoto((uri) => {
@@ -1377,7 +1382,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                           <Image source={{ uri: carPhotoUris[index] }} style={styles.photoCapturePreview} />
                         ) : (
                           <View style={styles.photoCaptureEmpty}>
-                            <Ionicons name="camera-outline" size={24} color={colors.text.subtle} />
+                            <MaterialCommunityIcons name={CAR_PHOTO_ICONS[index].name} size={CAR_PHOTO_ICONS[index].size} color={colors.text.subtle} />
                           </View>
                         )}
                         {carPhotoUris[index] && (
