@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Image,
@@ -10,9 +11,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -56,6 +60,7 @@ export default function DriverProfileScreen({ navigation }) {
   });
   const [recentFeedback, setRecentFeedback] = useState([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     loadDriverProfile();
@@ -230,6 +235,83 @@ export default function DriverProfileScreen({ navigation }) {
     );
   };
 
+  const handleDownloadMyData = () => {
+    if (downloadingData) return;
+
+    Alert.alert(
+      "Download My Data",
+      "This will export all your personal data as a JSON file. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Download",
+          onPress: async () => {
+            setDownloadingData(true);
+            try {
+              const { data: sessionData, error: sessionError } =
+                await supabase.auth.getSession();
+              if (sessionError || !sessionData?.session?.access_token) {
+                throw new Error("Session expired. Please sign in again.");
+              }
+
+              const { data, error } = await supabase.functions.invoke(
+                "download-user-data",
+                {
+                  headers: {
+                    Authorization: `Bearer ${sessionData.session.access_token}`,
+                  },
+                  body: { role: "driver" },
+                }
+              );
+
+              if (error) {
+                let errorMessage = "Failed to download data.";
+                if (error?.context) {
+                  try {
+                    const errorBody = await error.context.clone().json();
+                    errorMessage =
+                      errorBody?.error || errorBody?.message || errorMessage;
+                  } catch (_) {}
+                }
+                throw new Error(errorMessage);
+              }
+
+              const fileName = `pikup-data-${Date.now()}.json`;
+              const fileUri = FileSystem.cacheDirectory + fileName;
+              await FileSystem.writeAsStringAsync(
+                fileUri,
+                JSON.stringify(data, null, 2)
+              );
+
+              const sharingAvailable = await Sharing.isAvailableAsync();
+              if (!sharingAvailable) {
+                Alert.alert(
+                  "Sharing Unavailable",
+                  "Sharing is not available on this device."
+                );
+                return;
+              }
+
+              await Sharing.shareAsync(fileUri, {
+                mimeType: "application/json",
+                dialogTitle: "Save Your Data",
+                UTI: "public.json",
+              });
+            } catch (err) {
+              console.error("Error downloading user data:", err);
+              Alert.alert(
+                "Error",
+                err?.message || "Failed to download your data. Please try again."
+              );
+            } finally {
+              setDownloadingData(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleProfilePhotoPress = () => {
     Alert.alert("Update Profile Picture", "Choose an option", [
       { text: "Cancel", style: "cancel" },
@@ -314,6 +396,14 @@ export default function DriverProfileScreen({ navigation }) {
       onPress: () => navigation.navigate("AboutScreen"),
       disabled: false,
     },
+    {
+      id: "downloadData",
+      title: "Download My Data",
+      icon: "download-outline",
+      onPress: handleDownloadMyData,
+      disabled: downloadingData,
+      loading: downloadingData,
+    },
   ];
 
   const getSnapOffset = (offsetY) => {
@@ -375,11 +465,15 @@ export default function DriverProfileScreen({ navigation }) {
           {item.title}
         </Text>
       </View>
-      <Ionicons
-        name={item.external ? "open-outline" : "chevron-forward"}
-        size={20}
-        color={colors.text.tertiary}
-      />
+      {item.loading ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <Ionicons
+          name={item.external ? "open-outline" : "chevron-forward"}
+          size={20}
+          color={colors.text.tertiary}
+        />
+      )}
     </TouchableOpacity>
   );
 
