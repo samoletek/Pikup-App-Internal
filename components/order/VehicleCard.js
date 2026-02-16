@@ -1,15 +1,32 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    Image,
-    ActivityIndicator
+    ActivityIndicator,
+    LayoutAnimation,
+    UIManager,
+    Platform,
 } from 'react-native';
-import Animated, { FadeInDown, FadeOutUp, LinearTransition } from 'react-native-reanimated';
+import Animated, {
+    Easing, useAnimatedStyle, useSharedValue, withTiming
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const COLLAPSED_W = 80;
+const COLLAPSED_H = 48;
+const EXPANDED_W = 160;
+const EXPANDED_H = 90;
+
+// Timing — match LayoutAnimation easeInEaseOut curve
+const ANIM_MS = 300;
+const EASING = Easing.inOut(Easing.ease);
 
 const VehicleCard = ({
     vehicle,
@@ -21,96 +38,101 @@ const VehicleCard = ({
     isRecommended = false,
     displayPrice
 }) => {
+    const imageW = useSharedValue(isExpanded ? EXPANDED_W : COLLAPSED_W);
+    const imageH = useSharedValue(isExpanded ? EXPANDED_H : COLLAPSED_H);
+    const priceOp = useSharedValue(isExpanded ? 1 : 0);
+    const shadowOp = useSharedValue(isSelected ? 0.85 : 0);
+    const shadowRad = useSharedValue(isSelected ? 18 : 2);
+
+    useEffect(() => {
+        LayoutAnimation.configureNext(
+            LayoutAnimation.create(ANIM_MS, 'easeInEaseOut', 'opacity')
+        );
+
+        const cfg = { duration: ANIM_MS, easing: EASING };
+        imageW.value = withTiming(isExpanded ? EXPANDED_W : COLLAPSED_W, cfg);
+        imageH.value = withTiming(isExpanded ? EXPANDED_H : COLLAPSED_H, cfg);
+        priceOp.value = withTiming(isExpanded ? 1 : 0, cfg);
+    }, [isExpanded]);
+
+    // Shadow grows smoothly on select, shrinks on deselect
+    useEffect(() => {
+        shadowOp.value = withTiming(isSelected ? 0.85 : 0, { duration: 300 });
+        shadowRad.value = withTiming(isSelected ? 18 : 2, { duration: 300 });
+    }, [isSelected]);
+
+    const imageAnimStyle = useAnimatedStyle(() => ({
+        width: imageW.value,
+        height: imageH.value,
+    }));
+    const priceStyle = useAnimatedStyle(() => ({ opacity: priceOp.value }));
+    const shadowStyle = useAnimatedStyle(() => ({
+        shadowOpacity: shadowOp.value,
+        shadowRadius: shadowRad.value,
+    }));
+
     return (
-        <Animated.View
-            layout={LinearTransition.duration(350)}
+        <TouchableOpacity
+            onPress={isExpanded ? undefined : () => { onToggleExpand(); onSelect(vehicle); }}
+            activeOpacity={isExpanded ? 1 : 0.7}
             style={[
                 styles.card,
                 isExpanded && styles.cardExpanded,
                 isSelected && styles.cardSelected,
             ]}
         >
-            <TouchableOpacity
-                onPress={isExpanded ? undefined : onToggleExpand}
-                activeOpacity={isExpanded ? 1 : 0.7}
-            >
-                {/* Header row — always visible */}
-                <Animated.View layout={LinearTransition.duration(350)} style={styles.headerRow}>
-                    <Image
-                        source={vehicle.image}
-                        style={isExpanded ? styles.expandedImage : styles.collapsedImage}
-                    />
+            {isRecommended && (
+                <View style={styles.aiBadge}>
+                    <Ionicons name="sparkles" size={10} color={colors.white} />
+                    <Text style={styles.aiBadgeText}>AI Pick</Text>
+                </View>
+            )}
+                {/* Header row */}
+                <View style={[styles.headerRow, isExpanded && styles.headerRowExpanded]}>
+                    <Animated.View style={[
+                        styles.imageWrap,
+                        isExpanded && styles.imageWrapExpanded,
+                        shadowStyle
+                    ]}>
+                        <Animated.Image
+                            source={vehicle.image}
+                            style={[styles.vehicleImage, imageAnimStyle]}
+                        />
+                    </Animated.View>
 
                     {!isExpanded ? (
                         <>
-                            <Text style={styles.collapsedName} numberOfLines={1}>{vehicle.type}</Text>
+                            <View style={styles.collapsedInfo}>
+                                <Text style={styles.collapsedName} numberOfLines={1}>{vehicle.type}</Text>
+                                {vehicle.capacity ? (
+                                    <Text style={styles.collapsedCapacity} numberOfLines={1}>{vehicle.capacity}</Text>
+                                ) : null}
+                            </View>
                             <View style={styles.collapsedRight}>
                                 {isLoadingPrice ? (
                                     <ActivityIndicator size="small" color={colors.primary} />
                                 ) : displayPrice != null ? (
                                     <Text style={styles.collapsedPrice}>${displayPrice.toFixed(2)}</Text>
                                 ) : null}
-                                <Ionicons name="chevron-down" size={16} color={colors.text.subtle} style={styles.chevron} />
                             </View>
                         </>
                     ) : (
-                        <>
-                            <View style={styles.expandedInfo}>
-                                <Text style={styles.expandedName}>{vehicle.type}</Text>
+                        <View style={styles.expandedRight}>
+                            <Text style={styles.expandedName}>{vehicle.type}</Text>
+                            {vehicle.capacity ? (
                                 <Text style={styles.expandedCapacity}>{vehicle.capacity}</Text>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.collapseButton}
-                                onPress={onToggleExpand}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            >
-                                <Ionicons name="chevron-up" size={18} color={colors.text.subtle} />
-                            </TouchableOpacity>
-                        </>
+                            ) : null}
+                            <Animated.View style={[styles.expandedPriceWrap, priceStyle]}>
+                                {isLoadingPrice ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : displayPrice != null ? (
+                                    <Text style={styles.expandedPrice}>${displayPrice.toFixed(2)}</Text>
+                                ) : null}
+                            </Animated.View>
+                        </View>
                     )}
-                </Animated.View>
-            </TouchableOpacity>
-
-            {/* Expanded content */}
-            {isExpanded && (
-                <Animated.View
-                    entering={FadeInDown.duration(300).delay(50)}
-                    exiting={FadeOutUp.duration(200)}
-                >
-                    {/* Price — large, centered */}
-                    <View style={styles.expandedPriceRow}>
-                        {isLoadingPrice ? (
-                            <ActivityIndicator size="small" color={colors.primary} />
-                        ) : displayPrice != null ? (
-                            <Text style={styles.expandedPrice}>${displayPrice.toFixed(2)}</Text>
-                        ) : null}
-                    </View>
-
-                    {/* Select / AI Recommended button */}
-                    <TouchableOpacity
-                        style={[
-                            styles.selectButton,
-                            isRecommended && !isSelected && styles.selectButtonRecommended,
-                            isSelected && styles.selectButtonActive,
-                        ]}
-                        onPress={() => onSelect(vehicle)}
-                        activeOpacity={0.7}
-                    >
-                        {isSelected ? (
-                            <Ionicons name="checkmark-circle" size={18} color={colors.white} style={{ marginRight: spacing.xs }} />
-                        ) : isRecommended ? (
-                            <Ionicons name="sparkles" size={16} color={colors.white} style={{ marginRight: spacing.xs }} />
-                        ) : null}
-                        <Text style={[
-                            styles.selectButtonText,
-                            (isSelected || isRecommended) && styles.selectButtonTextActive,
-                        ]}>
-                            {isSelected ? 'Selected' : isRecommended ? 'Select · AI Recommended' : 'Select'}
-                        </Text>
-                    </TouchableOpacity>
-                </Animated.View>
-            )}
-        </Animated.View>
+                </View>
+        </TouchableOpacity>
     );
 };
 
@@ -118,7 +140,7 @@ const styles = StyleSheet.create({
     card: {
         backgroundColor: colors.background.tertiary,
         borderRadius: borderRadius.md,
-        paddingVertical: spacing.sm + 2,
+        paddingVertical: spacing.base,
         paddingHorizontal: spacing.md,
         marginBottom: spacing.sm,
         borderWidth: 2,
@@ -127,35 +149,45 @@ const styles = StyleSheet.create({
     },
     cardExpanded: {
         borderRadius: borderRadius.lg,
-        paddingVertical: spacing.base,
-        paddingHorizontal: spacing.base,
     },
     cardSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.background.elevated,
     },
 
-    // ─── Header row ───
+    // --- Header row ---
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
     },
-    collapsedImage: {
-        width: 48,
-        height: 28,
+    headerRowExpanded: {
+        alignItems: 'flex-start',
+    },
+    imageWrap: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 12,
+    },
+    imageWrapExpanded: {
+        width: EXPANDED_W,
+        height: EXPANDED_H,
+    },
+    vehicleImage: {
         resizeMode: 'contain',
     },
-    expandedImage: {
-        width: 160,
-        height: 90,
-        resizeMode: 'contain',
+    collapsedInfo: {
+        flex: 1,
+        marginLeft: spacing.md,
     },
     collapsedName: {
         color: colors.text.primary,
-        fontSize: typography.fontSize.base,
+        fontSize: typography.fontSize.lg,
         fontWeight: typography.fontWeight.semibold,
-        flex: 1,
-        marginLeft: spacing.md,
+    },
+    collapsedCapacity: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        marginTop: 2,
     },
     collapsedRight: {
         flexDirection: 'row',
@@ -163,17 +195,14 @@ const styles = StyleSheet.create({
     },
     collapsedPrice: {
         color: colors.primary,
-        fontSize: typography.fontSize.base,
-        fontWeight: typography.fontWeight.bold,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
     },
-    chevron: {
-        marginLeft: spacing.sm,
-    },
-
-    // ─── Expanded ───
-    expandedInfo: {
+    // --- Expanded ---
+    expandedRight: {
         flex: 1,
         marginLeft: spacing.md,
+        justifyContent: 'center',
     },
     expandedName: {
         color: colors.text.primary,
@@ -185,44 +214,32 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize.sm,
         marginTop: spacing.xs,
     },
-    collapseButton: {
-        padding: spacing.xs,
-    },
-    expandedPriceRow: {
-        alignItems: 'center',
+    expandedPriceWrap: {
         marginTop: spacing.md,
+        alignItems: 'flex-end',
+    },
+    aiBadge: {
+        position: 'absolute',
+        top: spacing.xs,
+        right: spacing.xs,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.full,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        zIndex: 1,
+    },
+    aiBadgeText: {
+        color: colors.white,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: 3,
     },
     expandedPrice: {
         color: colors.primary,
         fontSize: typography.fontSize.xxl,
         fontWeight: typography.fontWeight.bold,
-    },
-    selectButton: {
-        marginTop: spacing.md,
-        backgroundColor: colors.background.elevated,
-        borderRadius: borderRadius.full,
-        paddingVertical: spacing.sm + 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        borderWidth: 1,
-        borderColor: colors.border.subtle,
-    },
-    selectButtonActive: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-    },
-    selectButtonRecommended: {
-        backgroundColor: colors.primary,
-        borderColor: colors.primary,
-    },
-    selectButtonText: {
-        color: colors.text.secondary,
-        fontSize: typography.fontSize.base,
-        fontWeight: typography.fontWeight.semibold,
-    },
-    selectButtonTextActive: {
-        color: colors.white,
     },
 });
 

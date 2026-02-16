@@ -36,14 +36,19 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         return fit ? fit.id : vehicles[vehicles.length - 1]?.id;
     }, [totalWeight, vehicles]);
 
-    // Auto-expand recommended or selected card once vehicles load
+    // Auto-expand & auto-select recommended (or first) vehicle once loaded
     useEffect(() => {
         if (vehicles.length === 0 || expandedId) return;
 
-        if (recommendedVehicleId) {
-            setExpandedId(recommendedVehicleId);
-        } else if (orderData.selectedVehicle?.id) {
-            setExpandedId(orderData.selectedVehicle.id);
+        const autoId = recommendedVehicleId || orderData.selectedVehicle?.id || vehicles[0]?.id;
+        if (!autoId) return;
+
+        setExpandedId(autoId);
+
+        // Also auto-select if nothing selected yet
+        if (!orderData.selectedVehicle) {
+            const v = vehicles.find(v => v.id === autoId);
+            if (v) setOrderData(prev => ({ ...prev, selectedVehicle: v }));
         }
     }, [vehicles, recommendedVehicleId]);
 
