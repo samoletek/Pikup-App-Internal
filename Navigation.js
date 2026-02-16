@@ -24,7 +24,7 @@ import CustomerActivityScreen from "./screens/customer/CustomerActivityScreen";
 import CustomerMessagesScreen from "./screens/customer/CustomerMessagesScreen";
 import CustomerClaimsScreen from "./screens/customer/CustomerClaimsScreen";
 import CustomerHelpScreen from "./screens/customer/CustomerHelpScreen";
-import CustomerWalletScreen from "./screens/customer/CustomerWalletScreen";
+import CustomerRewardsScreen from "./screens/customer/CustomerRewardsScreen";
 import CustomerSavedAddressesScreen from "./screens/customer/CustomerSavedAddressesScreen";
 import CustomerSafetyScreen from "./screens/customer/CustomerSafetyScreen";
 import CustomerSettingsScreen from "./screens/customer/CustomerSettingsScreen";
@@ -68,7 +68,7 @@ const CustomerStack = () => (
 
     {/* Customer Profile Screens */}
     <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />
-    <Stack.Screen name="CustomerWalletScreen" component={CustomerWalletScreen} />
+    <Stack.Screen name="CustomerRewardsScreen" component={CustomerRewardsScreen} />
     <Stack.Screen name="CustomerSavedAddressesScreen" component={CustomerSavedAddressesScreen} />
     <Stack.Screen name="PersonalInfoScreen" component={PersonalInfoScreen} />
     <Stack.Screen name="AboutScreen" component={AboutScreen} />

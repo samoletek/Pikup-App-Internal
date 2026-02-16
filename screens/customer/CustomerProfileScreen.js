@@ -393,16 +393,16 @@ export default function CustomerProfileScreen({ navigation }) {
 
           <TouchableOpacity
             style={styles.quickActionButton}
-            onPress={() => navigation.navigate("CustomerWalletScreen")}
+            onPress={() => navigation.navigate("CustomerRewardsScreen")}
           >
             <View style={styles.quickActionIcon}>
               <Ionicons
-                name="wallet-outline"
+                name="gift-outline"
                 size={24}
                 color={colors.primary}
               />
             </View>
-            <Text style={styles.quickActionLabel}>Wallet</Text>
+            <Text style={styles.quickActionLabel}>Rewards</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -434,6 +434,26 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
             <View style={styles.menuTextCol}>
               <Text style={styles.menuTitle}>My Addresses</Text>
+            </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.text.tertiary}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          {/* Payment Methods */}
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("PaymentMethodsScreen")}
+          >
+            <View style={styles.menuIcon}>
+              <Ionicons name="card-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.menuTextCol}>
+              <Text style={styles.menuTitle}>Payment Methods</Text>
             </View>
             <Ionicons
               name="chevron-forward"
