@@ -1316,7 +1316,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                       <Image source={{ uri: vinPhotoUri }} style={styles.photoCapturePreview} />
                     ) : (
                       <View style={styles.photoCaptureEmpty}>
-                        <Ionicons name="camera-outline" size={32} color={colors.text.subtle} />
+                        <MaterialCommunityIcons name="card-text-outline" size={36} color={colors.text.subtle} />
                         <Text style={styles.photoCaptureText}>Tap to photograph VIN plate</Text>
                       </View>
                     )}

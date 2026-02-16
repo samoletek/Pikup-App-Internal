@@ -176,7 +176,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
 
         } catch (error) {
             console.error('Batch analysis error:', error);
-            Alert.alert('Analysis Failed', 'Could not analyze images. Please try again.');
+            Alert.alert('Analysis Failed', error?.message || 'Could not analyze images. Please try again.');
         } finally {
             setIsAnalyzing(false);
         }
@@ -192,7 +192,8 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
             condition: 'used',
             hasInsurance: false,
             value: '',
-            invoicePhoto: null
+            invoicePhoto: null,
+            weightEstimate: 0,
         };
         setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
         setExpandedItemId(newItem.id);

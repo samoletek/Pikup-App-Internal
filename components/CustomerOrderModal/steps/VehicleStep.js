@@ -18,6 +18,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
     const [prices, setPrices] = useState({});
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingPrices, setIsLoadingPrices] = useState(false);
+    const [expandedId, setExpandedId] = useState(null);
 
     // Calculate total weight from AI-analyzed items
     const totalWeight = useMemo(() => {
@@ -34,6 +35,17 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         });
         return fit ? fit.id : vehicles[vehicles.length - 1]?.id;
     }, [totalWeight, vehicles]);
+
+    // Auto-expand recommended or selected card once vehicles load
+    useEffect(() => {
+        if (vehicles.length === 0 || expandedId) return;
+
+        if (recommendedVehicleId) {
+            setExpandedId(recommendedVehicleId);
+        } else if (orderData.selectedVehicle?.id) {
+            setExpandedId(orderData.selectedVehicle.id);
+        }
+    }, [vehicles, recommendedVehicleId]);
 
     // Load vehicles
     useEffect(() => {
@@ -76,6 +88,10 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         loadPrices();
     }, [vehicles, orderData.distance, orderData.duration]);
 
+    const handleToggleExpand = (vehicleId) => {
+        setExpandedId(prev => prev === vehicleId ? null : vehicleId);
+    };
+
     if (isLoading) {
         return (
             <View style={[styles.stepContent, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
@@ -94,10 +110,15 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                     key={vehicle.id}
                     vehicle={vehicle}
                     isSelected={orderData.selectedVehicle?.id === vehicle.id}
+                    isExpanded={expandedId === vehicle.id}
                     isRecommended={vehicle.id === recommendedVehicleId}
                     isLoadingPrice={isLoadingPrices}
                     displayPrice={prices[vehicle.id]}
-                    onSelect={(v) => setOrderData(prev => ({ ...prev, selectedVehicle: v }))}
+                    onSelect={(v) => setOrderData(prev => ({
+                        ...prev,
+                        selectedVehicle: prev.selectedVehicle?.id === v.id ? null : v,
+                    }))}
+                    onToggleExpand={() => handleToggleExpand(vehicle.id)}
                 />
             ))}
 
