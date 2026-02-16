@@ -120,7 +120,7 @@
 - [x] #101 Show size/capacity ranges in cards
 - [x] #102 Change price format to "starting at $X" - khan
 - [x] #103 Make vehicles expandable cards (like items) - khan
-- [ ] #104 AI recommendation badge on best vehicle - khan
+- [x] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
 - [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
