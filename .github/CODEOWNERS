@@ -1,0 +1,5 @@
+# Dependency governance ownership
+/package.json @samoletek
+/package-lock.json @samoletek
+/.gitignore @samoletek
+/.github/workflows/dependency-integrity.yml @samoletek
