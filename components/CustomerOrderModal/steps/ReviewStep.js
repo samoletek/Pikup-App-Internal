@@ -39,6 +39,39 @@ const ReviewStep = ({
         };
     }, [selectedPaymentMethod]);
 
+    const handlingEstimate = useMemo(() => {
+        const aiVehicleRecommendation = orderData.aiVehicleRecommendation || {};
+        const totalWeight = (orderData.items || []).reduce((sum, item) => sum + (Number(item.weightEstimate) || 0), 0);
+        const itemCount = Math.max(1, orderData.items?.length || 0);
+        const baseMinutes = Math.max(12, Math.round(itemCount * 6 + totalWeight / 90));
+        const fallbackLoading = `${baseMinutes}-${baseMinutes + 12} min`;
+        const fallbackUnloading = `${Math.max(10, baseMinutes - 3)}-${baseMinutes + 9} min`;
+
+        if (aiVehicleRecommendation.status === 'success') {
+            return {
+                loading: aiVehicleRecommendation.loadingEstimate || fallbackLoading,
+                unloading: aiVehicleRecommendation.unloadingEstimate || fallbackUnloading,
+                hint: aiVehicleRecommendation.step6Description
+                    || aiVehicleRecommendation.notes
+                    || 'AI estimate based on your item list.',
+            };
+        }
+
+        if (aiVehicleRecommendation.status === 'loading') {
+            return {
+                loading: 'Calculating...',
+                unloading: 'Calculating...',
+                hint: 'AI is estimating handling time in background.',
+            };
+        }
+
+        return {
+            loading: fallbackLoading,
+            unloading: fallbackUnloading,
+            hint: 'Preliminary estimate from item count and weight.',
+        };
+    }, [orderData.items, orderData.aiVehicleRecommendation]);
+
     return (
         <>
             <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
@@ -68,6 +101,18 @@ const ReviewStep = ({
                             </View>
                         </View>
                     ))}
+                    <View style={styles.handlingEstimateBox}>
+                        <Text style={styles.handlingEstimateTitle}>Estimated Loading & Unloading</Text>
+                        <View style={styles.handlingEstimateRow}>
+                            <Text style={styles.handlingEstimateLabel}>Loading</Text>
+                            <Text style={styles.handlingEstimateValue}>{handlingEstimate.loading}</Text>
+                        </View>
+                        <View style={styles.handlingEstimateRow}>
+                            <Text style={styles.handlingEstimateLabel}>Unloading</Text>
+                            <Text style={styles.handlingEstimateValue}>{handlingEstimate.unloading}</Text>
+                        </View>
+                        <Text style={styles.handlingEstimateHint}>{handlingEstimate.hint}</Text>
+                    </View>
                 </TouchableOpacity>
 
                 {/* Vehicle */}

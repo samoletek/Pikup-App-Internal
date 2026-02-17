@@ -1,5 +1,6 @@
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const VEHICLE_IDS = ['midsize_suv', 'fullsize_pickup', 'fullsize_truck', 'cargo_truck'];
 
 const SYSTEM_PROMPT = `
 Role: You are an expert Moving & Delivery Estimator for a US-based logistics app. Your task is to analyze a BATCH of customer photos and produce a single, deduplicated inventory of items to be transported.
@@ -51,6 +52,197 @@ Output MUST be a valid JSON object. No markdown.
 RETURN ONLY THE JSON OBJECT.
 `;
 
+const VEHICLE_RECOMMENDATION_PROMPT = `
+Role: You are a logistics load-planning assistant for a US moving app.
+
+Task:
+Given a JSON payload with:
+1) vehicle options
+2) item summary
+3) item list
+
+Return a strict JSON recommendation for which vehicle should be selected.
+
+Rules:
+1) Choose ONE recommended vehicle id from this allowed set:
+["midsize_suv","fullsize_pickup","fullsize_truck","cargo_truck"]
+2) Mark each vehicle as fits true/false.
+3) If a vehicle is false, provide a short concrete reason.
+4) Prefer the smallest vehicle that safely fits all items.
+5) Consider quantity, bulk, fragility stacking limits, and rough weight.
+6) Output ONLY valid JSON, no markdown.
+
+Output schema:
+{
+  "recommended_vehicle_id": "midsize_suv|fullsize_pickup|fullsize_truck|cargo_truck",
+  "fit_by_vehicle": {
+    "midsize_suv": { "fits": true, "reason": "..." },
+    "fullsize_pickup": { "fits": true, "reason": "..." },
+    "fullsize_truck": { "fits": true, "reason": "..." },
+    "cargo_truck": { "fits": true, "reason": "..." }
+  }
+}
+`;
+
+const HANDLING_TIME_PROMPT = `
+Role: You are a moving operations planner.
+
+Task:
+Estimate loading and unloading time ranges for this move.
+
+Rules:
+1) Use concise ranges in minutes.
+2) Include people count in parentheses.
+3) Consider item quantity, total weight, fragility, and recommended vehicle.
+4) Be practical and conservative.
+5) Output ONLY valid JSON, no markdown.
+
+Output schema:
+{
+  "loading_estimate": "e.g. 25-40 min (2 people)",
+  "unloading_estimate": "e.g. 20-35 min (2 people)"
+}
+`;
+
+const STEP6_DESCRIPTION_PROMPT = `
+Role: You are a customer-facing assistant for a moving app review screen.
+
+Task:
+Write one short, clear descriptor sentence for Step 6 ("Review & Confirm").
+
+Rules:
+1) Mention that estimate is based on items and selected/recommended vehicle.
+2) Keep it calm and practical.
+3) Max 120 characters.
+4) Output ONLY valid JSON, no markdown.
+
+Output schema:
+{
+  "step6_description": "e.g. AI estimate based on your items and selected vehicle."
+}
+`;
+
+const parseGeminiJson = (textResponse) => {
+    if (!textResponse) {
+        throw new Error('No analysis result received');
+    }
+
+    try {
+        return JSON.parse(textResponse);
+    } catch (e) {
+        // Remove markdown fences
+        let cleaned = textResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        throw new Error('Could not parse AI response as JSON');
+    }
+};
+
+const callGeminiJson = async ({ prompt, input, temperature = 0.2 }) => {
+    const response = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            contents: [
+                {
+                    parts: [{
+                        text: [
+                            prompt.trim(),
+                            '',
+                            'INPUT_JSON:',
+                            JSON.stringify(input || {}),
+                        ].join('\n'),
+                    }],
+                },
+            ],
+            generationConfig: {
+                response_mime_type: 'application/json',
+                temperature,
+            },
+        }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+        console.error('Gemini JSON call error:', data);
+        throw new Error(data.error?.message || 'Failed AI JSON call');
+    }
+
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return parseGeminiJson(textResponse);
+};
+
+const normalizeVehicleFitRecommendation = (parsed) => {
+    const fitByVehicle = {};
+    VEHICLE_IDS.forEach((id, idx) => {
+        const raw = parsed?.fit_by_vehicle?.[id];
+        const fits = typeof raw?.fits === 'boolean' ? raw.fits : idx === VEHICLE_IDS.length - 1;
+        fitByVehicle[id] = {
+            fits,
+            reason: typeof raw?.reason === 'string' ? raw.reason : '',
+        };
+    });
+
+    let recommendedVehicleId = parsed?.recommended_vehicle_id;
+    if (!VEHICLE_IDS.includes(recommendedVehicleId)) {
+        const firstFit = VEHICLE_IDS.find(id => fitByVehicle[id].fits);
+        recommendedVehicleId = firstFit || VEHICLE_IDS[VEHICLE_IDS.length - 1];
+    }
+
+    return {
+        recommendedVehicleId,
+        fitByVehicle,
+    };
+};
+
+const normalizeHandlingEstimates = (parsed) => {
+    return {
+        loadingEstimate: typeof parsed?.loading_estimate === 'string' ? parsed.loading_estimate : '',
+        unloadingEstimate: typeof parsed?.unloading_estimate === 'string' ? parsed.unloading_estimate : '',
+    };
+};
+
+const normalizeStep6Descriptor = (parsed) => {
+    if (typeof parsed?.step6_description === 'string') {
+        return parsed.step6_description.trim();
+    }
+    return '';
+};
+
+const requestVehicleRecommendation = async (input) => {
+    const parsed = await callGeminiJson({
+        prompt: VEHICLE_RECOMMENDATION_PROMPT,
+        input,
+        temperature: 0.2,
+    });
+
+    return normalizeVehicleFitRecommendation(parsed);
+};
+
+const requestHandlingEstimate = async (input) => {
+    const parsed = await callGeminiJson({
+        prompt: HANDLING_TIME_PROMPT,
+        input,
+        temperature: 0.2,
+    });
+
+    return normalizeHandlingEstimates(parsed);
+};
+
+const requestStep6Description = async (input) => {
+    const parsed = await callGeminiJson({
+        prompt: STEP6_DESCRIPTION_PROMPT,
+        input,
+        temperature: 0.2,
+    });
+
+    return normalizeStep6Descriptor(parsed);
+};
+
 export const analyzeImages = async (base64Images) => {
     try {
         // Prepare parts: 1 text prompt + N images
@@ -94,34 +286,71 @@ export const analyzeImages = async (base64Images) => {
         const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
         console.log('Gemini raw response (first 500 chars):', textResponse?.substring(0, 500));
 
-        if (!textResponse) {
-            throw new Error('No analysis result received');
-        }
-
-        // Try direct parse first
-        try {
-            return JSON.parse(textResponse);
-        } catch (e) {
-            console.warn('Direct JSON parse failed, attempting extraction...');
-            // Remove markdown fences
-            let cleaned = textResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-
-            // Try to extract JSON object from surrounding text
-            const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    return JSON.parse(jsonMatch[0]);
-                } catch (e2) {
-                    console.error('Extracted JSON also failed to parse:', jsonMatch[0].substring(0, 200));
-                }
-            }
-
-            console.error('Failed to parse Gemini response:', cleaned.substring(0, 300));
-            throw new Error('Could not parse AI response as JSON');
-        }
+        return parseGeminiJson(textResponse);
 
     } catch (error) {
         console.error('AIService Error:', error);
         throw error;
     }
+};
+
+export const recommendVehicleForItems = async ({ itemSummary, items = [], vehicles = [] }) => {
+    if (!GEMINI_API_KEY) {
+        throw new Error('Missing EXPO_PUBLIC_GEMINI_API_KEY');
+    }
+
+    const vehiclePayload = vehicles.map(vehicle => ({
+        id: vehicle.id,
+        type: vehicle.type,
+        capacity: vehicle.capacity || null,
+        maxWeight: vehicle.maxWeight || null,
+        itemGuidance: vehicle.items || null,
+    }));
+
+    const itemPayload = (items || []).map(item => ({
+        name: item.name || '',
+        description: item.description || '',
+        condition: item.condition || 'used',
+        fragile: !!item.isFragile,
+        insured: !!item.hasInsurance,
+        estimatedWeightLbs: Number(item.weightEstimate) || 0,
+    }));
+
+    const baseInput = {
+        summary: itemSummary || '',
+        vehicles: vehiclePayload,
+        items: itemPayload,
+    };
+
+    // 1) Vehicle fit + recommendation
+    const fitRecommendation = await requestVehicleRecommendation(baseInput);
+
+    const followUpInput = {
+        ...baseInput,
+        recommended_vehicle_id: fitRecommendation.recommendedVehicleId,
+        fit_by_vehicle: fitRecommendation.fitByVehicle,
+    };
+
+    // 2) Handling time + 3) Step 6 descriptor
+    const [handlingResult, descriptorResult] = await Promise.allSettled([
+        requestHandlingEstimate(followUpInput),
+        requestStep6Description(followUpInput),
+    ]);
+
+    const handling = handlingResult.status === 'fulfilled'
+        ? handlingResult.value
+        : { loadingEstimate: '', unloadingEstimate: '' };
+
+    const step6Description = descriptorResult.status === 'fulfilled'
+        ? descriptorResult.value
+        : '';
+
+    return {
+        ...fitRecommendation,
+        loadingEstimate: handling.loadingEstimate,
+        unloadingEstimate: handling.unloadingEstimate,
+        step6Description,
+        // Keep notes for backwards compatibility while screens migrate.
+        notes: step6Description,
+    };
 };

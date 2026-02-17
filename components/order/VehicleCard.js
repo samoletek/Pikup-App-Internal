@@ -13,7 +13,7 @@ import Animated, {
     Easing, useAnimatedStyle, useSharedValue, withTiming
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+import { colors, borderRadius, spacing, typography, sizing } from '../../styles/theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -36,7 +36,9 @@ const VehicleCard = ({
     onToggleExpand,
     isLoadingPrice = false,
     isRecommended = false,
-    displayPrice
+    displayPrice,
+    isDisabled = false,
+    disabledReason = '',
 }) => {
     const imageW = useSharedValue(isExpanded ? EXPANDED_W : COLLAPSED_W);
     const imageH = useSharedValue(isExpanded ? EXPANDED_H : COLLAPSED_H);
@@ -73,18 +75,26 @@ const VehicleCard = ({
 
     return (
         <TouchableOpacity
-            onPress={isExpanded ? undefined : () => { onToggleExpand(); onSelect(vehicle); }}
-            activeOpacity={isExpanded ? 1 : 0.7}
+            onPress={isExpanded || isDisabled ? undefined : () => { onToggleExpand(); onSelect(vehicle); }}
+            activeOpacity={isExpanded || isDisabled ? 1 : 0.7}
+            disabled={isDisabled}
             style={[
                 styles.card,
                 isExpanded && styles.cardExpanded,
                 isSelected && styles.cardSelected,
+                isDisabled && styles.cardDisabled,
             ]}
         >
             {isRecommended && (
                 <View style={styles.aiBadge}>
                     <Ionicons name="sparkles" size={10} color={colors.white} />
                     <Text style={styles.aiBadgeText}>AI Pick</Text>
+                </View>
+            )}
+            {isDisabled && (
+                <View style={styles.unfitBadge}>
+                    <Ionicons name="close-circle" size={sizing.badgeIconSize} color={colors.white} />
+                    <Text style={styles.unfitBadgeText}>Won't Fit</Text>
                 </View>
             )}
                 {/* Header row */}
@@ -107,6 +117,9 @@ const VehicleCard = ({
                                 {vehicle.capacity ? (
                                     <Text style={styles.collapsedCapacity} numberOfLines={1}>{vehicle.capacity}</Text>
                                 ) : null}
+                                {isDisabled && !!disabledReason ? (
+                                    <Text style={styles.unfitReason} numberOfLines={2}>{disabledReason}</Text>
+                                ) : null}
                             </View>
                             <View style={styles.collapsedRight}>
                                 {isLoadingPrice ? (
@@ -122,6 +135,9 @@ const VehicleCard = ({
                             {vehicle.capacity ? (
                                 <Text style={styles.expandedCapacity}>{vehicle.capacity}</Text>
                             ) : null}
+                            {isDisabled && !!disabledReason && (
+                                <Text style={styles.unfitReason} numberOfLines={2}>{disabledReason}</Text>
+                            )}
                             <Animated.View style={[styles.expandedPriceWrap, priceStyle]}>
                                 {isLoadingPrice ? (
                                     <ActivityIndicator size="small" color={colors.primary} />
@@ -153,6 +169,9 @@ const styles = StyleSheet.create({
     cardSelected: {
         borderColor: colors.primary,
         backgroundColor: colors.background.elevated,
+    },
+    cardDisabled: {
+        opacity: 0.45,
     },
 
     // --- Header row ---
@@ -235,6 +254,29 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize.xs,
         fontWeight: typography.fontWeight.semibold,
         marginLeft: 3,
+    },
+    unfitBadge: {
+        position: 'absolute',
+        top: spacing.xs,
+        right: spacing.xs,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.error,
+        borderRadius: borderRadius.full,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: sizing.badgePaddingVertical,
+        zIndex: 1,
+    },
+    unfitBadgeText: {
+        color: colors.white,
+        fontSize: typography.fontSize.xs,
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: sizing.badgeTextMargin,
+    },
+    unfitReason: {
+        marginTop: spacing.xs,
+        color: colors.error,
+        fontSize: typography.fontSize.xs,
     },
     expandedPrice: {
         color: colors.primary,

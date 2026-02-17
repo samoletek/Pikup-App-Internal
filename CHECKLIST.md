@@ -123,12 +123,12 @@
 - [x] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
-- [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
-- [ ] #73 Each item: photo + frame + AI description + new/used - adrei
+- [-] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
+- [x] #73 Each item: photo + frame + AI description + new/used - adrei
 - [x] #74 Receipt photo for new items (insurance)
-- [ ] #75 Confirmation dialog: verify description and count - adrei
-- [ ] #78 AI - adjustable frame for photo selection - adrei
-- [ ] #79 AI - simplify system prompt for concise descriptions - adrei
+- [x] #75 Confirmation dialog: verify description and count - adrei
+- [x] #78 AI - adjustable frame for photo selection - adrei
+- [x] #79 AI - simplify system prompt for concise descriptions - adrei
 
 ### Authentication Flow Improvements *
 - [x] #105 Email flow: check if exists → show password OR signup form
@@ -149,7 +149,7 @@
 - [x] #52 Terms/Privacy as website links
 - [x] #53 Full Account UI rebuild (cascade menu)
 - [x] #54 Separate Settings from profile editing
-- [ ] #55 Data Usage/Download - implement or remove
+- [x] #55 Data Usage/Download - implement or remove
 - [x] #56 Remove Clear app data option
 
 ### Customer Flow - Activity Screen
