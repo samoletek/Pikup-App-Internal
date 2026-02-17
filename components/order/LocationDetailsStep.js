@@ -36,7 +36,8 @@ const LocationDetailsStep = ({
     const locationType = normalizeLocationType(details.locationType);
     const isStore = locationType === 'store';
     const isApartment = locationType === 'apartment';
-    const unitFloorValue = details.unitFloor ?? details.unitNumber ?? '';
+    const unitNumberValue = details.unitNumber ?? '';
+    const floorValue = details.floor ?? '';
 
     const updateDetails = (patch) => {
         onUpdate({ ...details, ...patch });
@@ -46,8 +47,8 @@ const LocationDetailsStep = ({
         updateDetails({
             locationType: nextType,
             hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
-            unitFloor: nextType === 'apartment' ? unitFloorValue : '',
-            unitNumber: nextType === 'apartment' ? unitFloorValue : '',
+            unitNumber: nextType === 'apartment' ? unitNumberValue : '',
+            floor: nextType === 'apartment' ? floorValue : '',
         });
     };
 
@@ -133,14 +134,25 @@ const LocationDetailsStep = ({
                     </View>
 
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Unit / Floor *</Text>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="e.g. Apt 4B / Floor 3"
-                            placeholderTextColor={colors.text.placeholder}
-                            value={unitFloorValue}
-                            onChangeText={(text) => updateDetails({ unitFloor: text, unitNumber: text })}
-                        />
+                        <Text style={styles.fieldLabel}>Unit & Floor *</Text>
+                        <View style={styles.toggleRow}>
+                            <TextInput
+                                style={[styles.textInput, { flex: 1 }]}
+                                placeholder="e.g. Apt 4B"
+                                placeholderTextColor={colors.text.placeholder}
+                                value={unitNumberValue}
+                                onChangeText={(text) => updateDetails({ unitNumber: text })}
+                            />
+                            <TextInput
+                                style={[styles.textInput, { flex: 1 }]}
+                                placeholder="e.g. Floor 3"
+                                placeholderTextColor={colors.text.placeholder}
+                                value={floorValue}
+                                onChangeText={(text) => updateDetails({ floor: text.replace(/[^0-9]/g, '') })}
+                                keyboardType="number-pad"
+                                maxLength={3}
+                            />
+                        </View>
                     </View>
 
                     <View style={styles.field}>
@@ -286,7 +298,7 @@ const styles = StyleSheet.create({
     field: {
         marginBottom: spacing.xl
     },
-    locationTypeRow: {
+locationTypeRow: {
         flexDirection: 'row',
         gap: spacing.sm,
     },

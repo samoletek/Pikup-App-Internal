@@ -95,8 +95,18 @@ const ReviewStep = ({
 
                     {pricing?.laborFee > 0 && (
                         <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Labor ({pricing?.duration || 0} min)</Text>
+                            <Text style={styles.priceLabel}>
+                                Labor ({pricing.laborMinutes} min @ ${pricing.laborPerMin?.toFixed(2)}/min)
+                            </Text>
                             <Text style={styles.priceValue}>${pricing.laborFee.toFixed(2)}</Text>
+                        </View>
+                    )}
+
+                    {pricing?.laborBufferMinutes > 0 && (
+                        <View style={styles.priceRow}>
+                            <Text style={[styles.priceLabel, { fontSize: 11, color: colors.text.muted }]}>
+                                Includes {pricing.laborBufferMinutes} min buffer
+                            </Text>
                         </View>
                     )}
 

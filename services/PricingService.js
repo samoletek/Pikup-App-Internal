@@ -110,12 +110,61 @@ const isPeakTime = (surgeConfig) => {
 };
 
 /**
+ * Estimate labor time in minutes based on order details.
+ *
+ * @param {Object} laborOptions
+ * @param {Array}  laborOptions.items - Order items with weightEstimate
+ * @param {Object} laborOptions.pickupDetails - { driverHelpsLoading, hasElevator, floor }
+ * @param {Object} laborOptions.dropoffDetails - { driverHelpsUnloading, hasElevator, floor }
+ * @returns {{ totalMinutes: number, pickupMinutes: number, dropoffMinutes: number, bufferMinutes: number }}
+ */
+export const estimateLaborMinutes = (laborOptions = {}) => {
+    const { items = [], pickupDetails = {}, dropoffDetails = {} } = laborOptions;
+
+    const needsPickupLabor = pickupDetails.driverHelpsLoading === true;
+    const needsDropoffLabor = dropoffDetails.driverHelpsUnloading === true;
+
+    if (!needsPickupLabor && !needsDropoffLabor) {
+        return { totalMinutes: 0, pickupMinutes: 0, dropoffMinutes: 0, bufferMinutes: 0 };
+    }
+
+    const BASE_PER_ITEM = 5;       // min per item
+    const HEAVY_THRESHOLD = 50;     // lbs
+    const HEAVY_EXTRA = 3;          // extra min per heavy item
+    const STAIRS_PER_FLOOR = 2;     // extra min per floor without elevator
+    const BUFFER = 10;              // buffer min
+
+    // Per-item time
+    let itemMinutes = 0;
+    items.forEach(item => {
+        itemMinutes += BASE_PER_ITEM;
+        if ((item.weightEstimate || 0) > HEAVY_THRESHOLD) {
+            itemMinutes += HEAVY_EXTRA;
+        }
+    });
+
+    // Stairs penalty per location
+    const stairsPenalty = (details) => {
+        if (details.hasElevator || details.hasElevator === null) return 0;
+        const floor = parseInt(details.floor, 10) || 0;
+        return floor > 1 ? (floor - 1) * STAIRS_PER_FLOOR : 0;
+    };
+
+    const pickupMinutes = needsPickupLabor ? itemMinutes + stairsPenalty(pickupDetails) : 0;
+    const dropoffMinutes = needsDropoffLabor ? itemMinutes + stairsPenalty(dropoffDetails) : 0;
+    const bufferMinutes = (pickupMinutes + dropoffMinutes) > 0 ? BUFFER : 0;
+    const totalMinutes = pickupMinutes + dropoffMinutes + bufferMinutes;
+
+    return { totalMinutes, pickupMinutes, dropoffMinutes, bufferMinutes };
+};
+
+/**
  * Full pricing calculation.
  *
  * @param {Object} vehicleRate - Vehicle rate object from getVehicleRates()
  * @param {number} distance - Distance in miles
- * @param {number} duration - Duration in minutes
- * @param {Object} options - { isTraffic, isWeather }
+ * @param {number} duration - Duration in minutes (route time, not used for labor)
+ * @param {Object} options - { isTraffic, isWeather, laborOptions }
  * @returns {Object} Full pricing breakdown
  */
 export const calculatePrice = async (vehicleRate, distance, duration, options = {}) => {
@@ -124,7 +173,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const platformFees = config.platform_fees || {};
 
     const dist = distance || 0;
-    const dur = duration || 0;
     const threshold = platformFees.mileageThreshold || 10;
 
     // Tiered mileage
@@ -132,8 +180,11 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const after10Miles = Math.max(0, dist - threshold);
     const mileageFee = (first10Miles * vehicleRate.mileageFirst10) + (after10Miles * vehicleRate.mileageAfter10);
 
-    // Labor
-    const laborFee = dur * vehicleRate.laborPerMin;
+    // Labor time — based on items & location details, not route duration
+    const labor = options.laborOptions
+        ? estimateLaborMinutes(options.laborOptions)
+        : { totalMinutes: 0, pickupMinutes: 0, dropoffMinutes: 0, bufferMinutes: 0 };
+    const laborFee = labor.totalMinutes * vehicleRate.laborPerMin;
 
     // Gross fare (base + mileage + labor)
     const baseFare = vehicleRate.baseFare;
@@ -182,6 +233,11 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         baseFare: round2(baseFare),
         mileageFee: round2(mileageFee),
         laborFee: round2(laborFee),
+        laborMinutes: labor.totalMinutes,
+        laborPickupMinutes: labor.pickupMinutes,
+        laborDropoffMinutes: labor.dropoffMinutes,
+        laborBufferMinutes: labor.bufferMinutes,
+        laborPerMin: vehicleRate.laborPerMin,
         grossFare: round2(grossFare),
         surgeFee: round2(surgeFee),
         surgeLabel,
@@ -190,7 +246,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         total: round2(total),
         driverPayout: round2(driverPayout),
         distance: dist,
-        duration: dur,
     };
 };
 
