@@ -225,10 +225,12 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         }
         Alert.alert('Cancel Order?', 'Your progress will be lost.', [
             { text: 'Keep Editing', style: 'cancel' },
-            { text: 'Cancel Order', style: 'destructive', onPress: () => {
-                resetState();
-                onClose();
-            }}
+            {
+                text: 'Cancel Order', style: 'destructive', onPress: () => {
+                    resetState();
+                    onClose();
+                }
+            }
         ]);
     };
 
@@ -335,6 +337,25 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         Keyboard.dismiss();
         if (isSubmitting) return;
         if (!validateStep()) return;
+
+        // Show AI review prompt when leaving step 2 with AI-detected items
+        if (currentStep === 2 && orderData.items.some(item => item.addedByAI)) {
+            Alert.alert(
+                'Review AI Results',
+                'We recommend reviewing the items detected by AI before continuing.',
+                [
+                    {
+                        text: 'Review',
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Continue',
+                        onPress: () => goToStep(currentStep + 1, 'forward'),
+                    }
+                ]
+            );
+            return;
+        }
 
         if (currentStep < 6) {
             // Pre-compute pricing when entering Review step
