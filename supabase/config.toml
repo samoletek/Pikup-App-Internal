@@ -79,3 +79,8 @@ entrypoint = "./functions/submit-feedback/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/create-verification-session/index.ts"
+
+[functions.download-user-data]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/download-user-data/index.ts"

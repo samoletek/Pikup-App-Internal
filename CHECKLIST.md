@@ -143,12 +143,12 @@
 ### Customer Flow - Account Screen - erema
 - [x] #47 Account deletion (App Store requirement)
 - [x] #48 Remove Driver toggle - separate accounts
-- [ ] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses)
-- [ ] #50 Remove duplicate buttons in account screen (already in tab bar)
-- [ ] #51 Move Promo banner to Home screen (if exists)
+- [x] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses)
+- [x] #50 Remove duplicate buttons in account screen (already in tab bar)
+- [x] #51 Move Promo banner to Home screen (if exists)
 - [x] #52 Terms/Privacy as website links
-- [ ] #53 Full Account UI rebuild (cascade menu)
-- [ ] #54 Separate Settings from profile editing
+- [x] #53 Full Account UI rebuild (cascade menu)
+- [x] #54 Separate Settings from profile editing
 - [ ] #55 Data Usage/Download - implement or remove
 - [x] #56 Remove Clear app data option
 
