@@ -1,15 +1,58 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import VehicleCard from '../../order/VehicleCard';
-import { getVehicleRates } from '../../../services/PricingService';
+import { getVehicleRates, calculatePrice } from '../../../services/PricingService';
 import { styles } from '../styles';
-import { colors } from '../../../styles/theme';
+import { colors, spacing } from '../../../styles/theme';
+
+// Fallback weight limits (lbs) if not set in Supabase
+const DEFAULT_MAX_WEIGHT = {
+    midsize_suv: 400,
+    fullsize_pickup: 1500,
+    fullsize_truck: 3000,
+    cargo_truck: 5000,
+};
 
 const VehicleStep = ({ orderData, setOrderData }) => {
     const [vehicles, setVehicles] = useState([]);
+    const [prices, setPrices] = useState({});
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingPrices, setIsLoadingPrices] = useState(false);
+    const [expandedId, setExpandedId] = useState(null);
 
+    // Calculate total weight from AI-analyzed items
+    const totalWeight = useMemo(() => {
+        if (!orderData.items?.length) return 0;
+        return orderData.items.reduce((sum, item) => sum + (item.weightEstimate || 0), 0);
+    }, [orderData.items]);
+
+    // Determine AI-recommended vehicle (smallest that fits the total weight)
+    const recommendedVehicleId = useMemo(() => {
+        if (totalWeight === 0 || vehicles.length === 0) return null;
+        const fit = vehicles.find(v => {
+            const maxWeight = v.maxWeight || DEFAULT_MAX_WEIGHT[v.id] || Infinity;
+            return totalWeight <= maxWeight;
+        });
+        return fit ? fit.id : vehicles[vehicles.length - 1]?.id;
+    }, [totalWeight, vehicles]);
+
+    // Auto-expand & auto-select recommended (or first) vehicle once loaded
+    useEffect(() => {
+        if (vehicles.length === 0 || expandedId) return;
+
+        const autoId = recommendedVehicleId || orderData.selectedVehicle?.id || vehicles[0]?.id;
+        if (!autoId) return;
+
+        setExpandedId(autoId);
+
+        // Also auto-select if nothing selected yet
+        if (!orderData.selectedVehicle) {
+            const v = vehicles.find(v => v.id === autoId);
+            if (v) setOrderData(prev => ({ ...prev, selectedVehicle: v }));
+        }
+    }, [vehicles, recommendedVehicleId]);
+
+    // Load vehicles
     useEffect(() => {
         const loadVehicles = async () => {
             try {
@@ -24,11 +67,41 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         loadVehicles();
     }, []);
 
+    // Calculate full prices for all vehicles
+    useEffect(() => {
+        if (vehicles.length === 0) return;
+
+        const loadPrices = async () => {
+            setIsLoadingPrices(true);
+            try {
+                const dist = orderData.distance || 10;
+                const dur = orderData.duration || 0;
+                const priceMap = {};
+
+                await Promise.all(vehicles.map(async (vehicle) => {
+                    const result = await calculatePrice(vehicle, dist, dur);
+                    priceMap[vehicle.id] = result.total;
+                }));
+
+                setPrices(priceMap);
+            } catch (error) {
+                console.error('Failed to calculate prices:', error);
+            } finally {
+                setIsLoadingPrices(false);
+            }
+        };
+        loadPrices();
+    }, [vehicles, orderData.distance, orderData.duration]);
+
+    const handleToggleExpand = (vehicleId) => {
+        setExpandedId(prev => prev === vehicleId ? null : vehicleId);
+    };
+
     if (isLoading) {
         return (
             <View style={[styles.stepContent, { justifyContent: 'center', alignItems: 'center', flex: 1 }]}>
                 <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={{ color: colors.text.muted, marginTop: 12 }}>Loading vehicles...</Text>
+                <Text style={{ color: colors.text.muted, marginTop: spacing.md }}>Loading vehicles...</Text>
             </View>
         );
     }
@@ -42,23 +115,17 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                     key={vehicle.id}
                     vehicle={vehicle}
                     isSelected={orderData.selectedVehicle?.id === vehicle.id}
-                    onSelect={(v) => setOrderData(prev => ({ ...prev, selectedVehicle: v }))}
-                    distance={orderData.distance || 10}
-                    duration={orderData.duration || 0}
+                    isExpanded={expandedId === vehicle.id}
+                    isRecommended={vehicle.id === recommendedVehicleId}
+                    isLoadingPrice={isLoadingPrices}
+                    displayPrice={prices[vehicle.id]}
+                    onSelect={(v) => setOrderData(prev => ({
+                        ...prev,
+                        selectedVehicle: prev.selectedVehicle?.id === v.id ? null : v,
+                    }))}
+                    onToggleExpand={() => handleToggleExpand(vehicle.id)}
                 />
             ))}
-
-            {orderData.selectedVehicle && (
-                <View style={styles.whatFitsSection}>
-                    <Text style={styles.whatFitsTitle}>What fits in a {orderData.selectedVehicle.type}:</Text>
-                    {orderData.selectedVehicle.items.map((item, index) => (
-                        <View key={index} style={styles.whatFitsItem}>
-                            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                            <Text style={styles.whatFitsText}>{item}</Text>
-                        </View>
-                    ))}
-                </View>
-            )}
 
             <View style={{ height: 100 }} />
         </ScrollView>

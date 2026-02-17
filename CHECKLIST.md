@@ -116,11 +116,11 @@
 - [x] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
 
 ### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
-- [ ] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
+- [x] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
 - [x] #101 Show size/capacity ranges in cards
-- [ ] #102 Change price format to "starting at $X" - khan
-- [ ] #103 Make vehicles expandable cards (like items) - khan
-- [ ] #104 AI recommendation badge on best vehicle - khan
+- [x] #102 Change price format to "starting at $X" - khan
+- [x] #103 Make vehicles expandable cards (like items) - khan
+- [x] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
 - [ ] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
@@ -165,9 +165,9 @@
 ### Driver Flow - Onboarding
 - [x] #58 Phone verification (SMS) - prevent fake numbers
 - [x] #59 Driver address autocomplete
-- [ ] #60 Cascading vehicle picker [CHANGED: AI car analysis] - khan
+- [x] #60 Cascading vehicle picker [CHANGED: AI car analysis] - khan
 - [x] #61 Convert to multi-step onboarding form
-- [ ] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) * - khan
+- [x] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) * - khan
 - [ ] #112 [DISCUSSION] Vehicle age limit (15 vs 30 years - postponed) *
 
 ### Driver UI Enhancements *

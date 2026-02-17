@@ -1,51 +1,137 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     TouchableOpacity,
-    Image,
-    ActivityIndicator
+    ActivityIndicator,
+    LayoutAnimation,
+    UIManager,
+    Platform,
 } from 'react-native';
+import Animated, {
+    Easing, useAnimatedStyle, useSharedValue, withTiming
+} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, borderRadius, spacing, typography } from '../../styles/theme';
-import { calculateEstimate } from '../../services/PricingService';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const COLLAPSED_W = 80;
+const COLLAPSED_H = 48;
+const EXPANDED_W = 160;
+const EXPANDED_H = 90;
+
+// Timing — match LayoutAnimation easeInEaseOut curve
+const ANIM_MS = 300;
+const EASING = Easing.inOut(Easing.ease);
 
 const VehicleCard = ({
     vehicle,
     isSelected,
+    isExpanded,
     onSelect,
-    distance,
-    duration,
-    isLoadingPrice = false
+    onToggleExpand,
+    isLoadingPrice = false,
+    isRecommended = false,
+    displayPrice
 }) => {
-    const estimatedPrice = calculateEstimate(vehicle, distance, duration);
+    const imageW = useSharedValue(isExpanded ? EXPANDED_W : COLLAPSED_W);
+    const imageH = useSharedValue(isExpanded ? EXPANDED_H : COLLAPSED_H);
+    const priceOp = useSharedValue(isExpanded ? 1 : 0);
+    const shadowOp = useSharedValue(isSelected ? 0.85 : 0);
+    const shadowRad = useSharedValue(isSelected ? 18 : 2);
+
+    useEffect(() => {
+        LayoutAnimation.configureNext(
+            LayoutAnimation.create(ANIM_MS, 'easeInEaseOut', 'opacity')
+        );
+
+        const cfg = { duration: ANIM_MS, easing: EASING };
+        imageW.value = withTiming(isExpanded ? EXPANDED_W : COLLAPSED_W, cfg);
+        imageH.value = withTiming(isExpanded ? EXPANDED_H : COLLAPSED_H, cfg);
+        priceOp.value = withTiming(isExpanded ? 1 : 0, cfg);
+    }, [isExpanded]);
+
+    // Shadow grows smoothly on select, shrinks on deselect
+    useEffect(() => {
+        shadowOp.value = withTiming(isSelected ? 0.85 : 0, { duration: 300 });
+        shadowRad.value = withTiming(isSelected ? 18 : 2, { duration: 300 });
+    }, [isSelected]);
+
+    const imageAnimStyle = useAnimatedStyle(() => ({
+        width: imageW.value,
+        height: imageH.value,
+    }));
+    const priceStyle = useAnimatedStyle(() => ({ opacity: priceOp.value }));
+    const shadowStyle = useAnimatedStyle(() => ({
+        shadowOpacity: shadowOp.value,
+        shadowRadius: shadowRad.value,
+    }));
 
     return (
         <TouchableOpacity
-            style={[styles.card, isSelected && styles.cardSelected]}
-            onPress={() => onSelect(vehicle)}
-            activeOpacity={0.8}
+            onPress={isExpanded ? undefined : () => { onToggleExpand(); onSelect(vehicle); }}
+            activeOpacity={isExpanded ? 1 : 0.7}
+            style={[
+                styles.card,
+                isExpanded && styles.cardExpanded,
+                isSelected && styles.cardSelected,
+            ]}
         >
-            {/* Vehicle Image */}
-            <Image source={vehicle.image} style={styles.vehicleImage} />
+            {isRecommended && (
+                <View style={styles.aiBadge}>
+                    <Ionicons name="sparkles" size={10} color={colors.white} />
+                    <Text style={styles.aiBadgeText}>AI Pick</Text>
+                </View>
+            )}
+                {/* Header row */}
+                <View style={[styles.headerRow, isExpanded && styles.headerRowExpanded]}>
+                    <Animated.View style={[
+                        styles.imageWrap,
+                        isExpanded && styles.imageWrapExpanded,
+                        shadowStyle
+                    ]}>
+                        <Animated.Image
+                            source={vehicle.image}
+                            style={[styles.vehicleImage, imageAnimStyle]}
+                        />
+                    </Animated.View>
 
-            {/* Vehicle Info */}
-            <View style={styles.info}>
-                <Text style={styles.vehicleType}>{vehicle.type}</Text>
-                <Text style={styles.capacity}>{vehicle.capacity}</Text>
-            </View>
-
-            {/* Price */}
-            <View style={styles.priceContainer}>
-                {isLoadingPrice ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                    <>
-                        <Text style={styles.price}>${estimatedPrice.toFixed(2)}</Text>
-                        <Text style={styles.priceLabel}>estimated</Text>
-                    </>
-                )}
-            </View>
+                    {!isExpanded ? (
+                        <>
+                            <View style={styles.collapsedInfo}>
+                                <Text style={styles.collapsedName} numberOfLines={1}>{vehicle.type}</Text>
+                                {vehicle.capacity ? (
+                                    <Text style={styles.collapsedCapacity} numberOfLines={1}>{vehicle.capacity}</Text>
+                                ) : null}
+                            </View>
+                            <View style={styles.collapsedRight}>
+                                {isLoadingPrice ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : displayPrice != null ? (
+                                    <Text style={styles.collapsedPrice}>${displayPrice.toFixed(2)}</Text>
+                                ) : null}
+                            </View>
+                        </>
+                    ) : (
+                        <View style={styles.expandedRight}>
+                            <Text style={styles.expandedName}>{vehicle.type}</Text>
+                            {vehicle.capacity ? (
+                                <Text style={styles.expandedCapacity}>{vehicle.capacity}</Text>
+                            ) : null}
+                            <Animated.View style={[styles.expandedPriceWrap, priceStyle]}>
+                                {isLoadingPrice ? (
+                                    <ActivityIndicator size="small" color={colors.primary} />
+                                ) : displayPrice != null ? (
+                                    <Text style={styles.expandedPrice}>${displayPrice.toFixed(2)}</Text>
+                                ) : null}
+                            </Animated.View>
+                        </View>
+                    )}
+                </View>
         </TouchableOpacity>
     );
 };
@@ -53,50 +139,108 @@ const VehicleCard = ({
 const styles = StyleSheet.create({
     card: {
         backgroundColor: colors.background.tertiary,
-        borderRadius: borderRadius.lg,
-        padding: spacing.base,
-        marginBottom: spacing.md,
-        flexDirection: 'row',
-        alignItems: 'center',
+        borderRadius: borderRadius.md,
+        paddingVertical: spacing.base,
+        paddingHorizontal: spacing.md,
+        marginBottom: spacing.sm,
         borderWidth: 2,
-        borderColor: colors.transparent
+        borderColor: colors.transparent,
+        overflow: 'hidden',
+    },
+    cardExpanded: {
+        borderRadius: borderRadius.lg,
     },
     cardSelected: {
         borderColor: colors.primary,
-        backgroundColor: colors.background.elevated
+        backgroundColor: colors.background.elevated,
+    },
+
+    // --- Header row ---
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    headerRowExpanded: {
+        alignItems: 'flex-start',
+    },
+    imageWrap: {
+        shadowColor: colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 12,
+    },
+    imageWrapExpanded: {
+        width: EXPANDED_W,
+        height: EXPANDED_H,
     },
     vehicleImage: {
-        width: 80,
-        height: 45,
-        resizeMode: 'contain'
+        resizeMode: 'contain',
     },
-    info: {
+    collapsedInfo: {
         flex: 1,
-        marginLeft: spacing.base
+        marginLeft: spacing.md,
     },
-    vehicleType: {
+    collapsedName: {
         color: colors.text.primary,
         fontSize: typography.fontSize.lg,
-        fontWeight: typography.fontWeight.bold
+        fontWeight: typography.fontWeight.semibold,
     },
-    capacity: {
+    collapsedCapacity: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        marginTop: 2,
+    },
+    collapsedRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    collapsedPrice: {
+        color: colors.primary,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
+    },
+    // --- Expanded ---
+    expandedRight: {
+        flex: 1,
+        marginLeft: spacing.md,
+        justifyContent: 'center',
+    },
+    expandedName: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.lg,
+        fontWeight: typography.fontWeight.bold,
+    },
+    expandedCapacity: {
         color: colors.text.muted,
         fontSize: typography.fontSize.sm,
-        marginTop: spacing.xs
+        marginTop: spacing.xs,
     },
-    priceContainer: {
-        alignItems: 'flex-end'
+    expandedPriceWrap: {
+        marginTop: spacing.md,
+        alignItems: 'flex-end',
     },
-    price: {
-        color: colors.primary,
-        fontSize: typography.fontSize.xl,
-        fontWeight: typography.fontWeight.bold
+    aiBadge: {
+        position: 'absolute',
+        top: spacing.xs,
+        right: spacing.xs,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.full,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        zIndex: 1,
     },
-    priceLabel: {
-        color: colors.text.placeholder,
+    aiBadgeText: {
+        color: colors.white,
         fontSize: typography.fontSize.xs,
-        marginTop: 2
-    }
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: 3,
+    },
+    expandedPrice: {
+        color: colors.primary,
+        fontSize: typography.fontSize.xxl,
+        fontWeight: typography.fontWeight.bold,
+    },
 });
 
 export default VehicleCard;

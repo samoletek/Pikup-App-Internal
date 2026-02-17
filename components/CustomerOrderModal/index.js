@@ -9,6 +9,7 @@ import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 import { usePayment } from '../../contexts/PaymentContext';
 import { calculatePrice } from '../../services/PricingService';
+import MapboxLocationService from '../../services/MapboxLocationService';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -126,6 +127,36 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             return { ...prev, selectedPaymentMethodId: fallbackMethodId };
         });
     }, [visible, paymentMethods, defaultPaymentMethod]);
+
+    // ============================================
+    // ROUTE CALCULATION
+    // ============================================
+    useEffect(() => {
+        const pickupCoords = orderData.pickup?.coordinates;
+        const dropoffCoords = orderData.dropoff?.coordinates;
+
+        if (!pickupCoords || !dropoffCoords) return;
+
+        let cancelled = false;
+
+        const fetchRoute = async () => {
+            try {
+                const route = await MapboxLocationService.getRoute(pickupCoords, dropoffCoords);
+                if (cancelled) return;
+
+                const miles = parseFloat((route.distance.value / 1609.34).toFixed(1));
+                const minutes = Math.round(route.duration.value / 60);
+
+                setOrderData(prev => ({ ...prev, distance: miles, duration: minutes }));
+            } catch (error) {
+                console.error('Failed to calculate route:', error);
+            }
+        };
+
+        fetchRoute();
+
+        return () => { cancelled = true; };
+    }, [orderData.pickup?.coordinates, orderData.dropoff?.coordinates]);
 
     // ============================================
     // RECENT ADDRESSES

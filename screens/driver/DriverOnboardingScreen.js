@@ -14,22 +14,32 @@ import {
   useWindowDimensions,
   Platform,
   Keyboard,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../config/supabase';
 import {
+  animation,
   borderRadius,
   colors,
   layout,
+  shadows,
   spacing,
   typography,
+  zIndex,
 } from '../../styles/theme';
+import * as ImagePicker from 'expo-image-picker';
 import BaseModal from '../../components/BaseModal';
 import MapboxLocationService from '../../services/MapboxLocationService';
+import {
+  uploadVehiclePhotos,
+  verifyVehicle,
+  saveVehicleData,
+} from '../../services/VehicleVerificationService';
 
 const steps = [
   {
@@ -58,7 +68,7 @@ const steps = [
   },
   {
     title: 'Vehicle Info',
-    subtitle: 'What will you be driving?',
+    subtitle: 'Verify your vehicle with photos',
     icon: 'car',
     color: colors.info,
   },
@@ -177,6 +187,7 @@ const initialFormData = {
     year: '',
     licensePlate: '',
     color: '',
+    vin: '',
   },
 };
 
@@ -243,6 +254,15 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
+
+  // Vehicle verification state
+  const [vinPhotoUri, setVinPhotoUri] = useState(null);
+  const [carPhotoUris, setCarPhotoUris] = useState([null, null, null]); // [front, side, rear]
+  const [vehicleVerificationStatus, setVehicleVerificationStatus] = useState('idle');
+  const [vehicleVerificationResult, setVehicleVerificationResult] = useState(null);
+  const [vehicleVerificationError, setVehicleVerificationError] = useState(null);
+  const [showVinHint, setShowVinHint] = useState(false);
+  const [showPhotoHint, setShowPhotoHint] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const statePickerRef = useRef(null);
@@ -485,6 +505,9 @@ export default function DriverOnboardingScreen({ navigation }) {
     currentStep: normalizeStep(currentStep),
     verificationStatus: normalizeVerificationStatus(verificationStatus),
     verificationDataPopulated,
+    vehicleVerificationStatus,
+    vinPhotoUri,
+    carPhotoUris,
     formData: {
       ...mergeFormDataWithDefaults(formData),
       // Do not persist SSN in local/remote onboarding drafts.
@@ -545,6 +568,17 @@ export default function DriverOnboardingScreen({ navigation }) {
         if (latestDraft.verificationDataPopulated) {
           setVerificationDataPopulated(true);
         }
+        if (latestDraft.vehicleVerificationStatus && latestDraft.vehicleVerificationStatus !== 'idle') {
+          // Don't restore transient states — reset to idle so user isn't stuck on a spinner
+          const transientStatuses = ['uploading', 'verifying'];
+          const restoredVehicleStatus = transientStatuses.includes(latestDraft.vehicleVerificationStatus)
+            ? 'idle'
+            : latestDraft.vehicleVerificationStatus;
+          setVehicleVerificationStatus(restoredVehicleStatus);
+        }
+        if (latestDraft.vinPhotoUri) setVinPhotoUri(latestDraft.vinPhotoUri);
+        if (latestDraft.carPhotoUris) setCarPhotoUris(latestDraft.carPhotoUris);
+        else if (latestDraft.carPhotoUri) setCarPhotoUris([latestDraft.carPhotoUri, null, null]);
         progressAnim.setValue(restoredStep / (steps.length - 1));
 
         lastSavedDraftRef.current = JSON.stringify({
@@ -631,6 +665,9 @@ export default function DriverOnboardingScreen({ navigation }) {
     isDraftHydrated,
     userId,
     updateDriverPaymentProfile,
+    vehicleVerificationStatus,
+    vinPhotoUri,
+    carPhotoUris,
   ]);
 
   const updateFormData = (field, value) => {
@@ -667,8 +704,11 @@ export default function DriverOnboardingScreen({ navigation }) {
           formData.address.state &&
           formData.address.postalCode.length === 5
         );
-      case 4: // Vehicle Info
+      case 4: // Vehicle Info — photos + verification required
         return (
+          !!vinPhotoUri &&
+          carPhotoUris.some(Boolean) &&
+          vehicleVerificationStatus === 'approved' &&
           formData.vehicleInfo.make.length > 2 &&
           formData.vehicleInfo.model.length > 2 &&
           formData.vehicleInfo.year.length === 4 &&
@@ -685,13 +725,26 @@ export default function DriverOnboardingScreen({ navigation }) {
       return;
     }
 
+    // Save user-editable vehicle fields when leaving Step 4
+    // NOTE: vehicle_verified is set ONLY server-side by the verify-vehicle Edge Function
+    if (currentStep === 4) {
+      try {
+        const driverId = currentUser?.uid || currentUser?.id;
+        await saveVehicleData(driverId, {
+          color: formData.vehicleInfo.color,
+          licensePlate: formData.vehicleInfo.licensePlate,
+        });
+      } catch (error) {
+        console.error('Error saving vehicle data:', error);
+      }
+    }
+
     if (currentStep === steps.length - 1) {
       await handleCreateConnectAccount();
     } else {
-      // Animate progress
       Animated.timing(progressAnim, {
         toValue: (currentStep + 1) / (steps.length - 1),
-        duration: 300,
+        duration: animation.normal,
         useNativeDriver: false,
       }).start();
 
@@ -704,7 +757,7 @@ export default function DriverOnboardingScreen({ navigation }) {
       // Animate progress
       Animated.timing(progressAnim, {
         toValue: (currentStep - 1) / (steps.length - 1),
-        duration: 300,
+        duration: animation.normal,
         useNativeDriver: false,
       }).start();
 
@@ -735,6 +788,163 @@ export default function DriverOnboardingScreen({ navigation }) {
       console.error('Error in onboarding:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ============================================
+  // VEHICLE PHOTO VERIFICATION
+  // ============================================
+  const requestCameraPermission = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Camera Permission',
+        'We need camera permission to photograph your vehicle.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const pickPhoto = async (setter) => {
+    const launchCamera = async () => {
+      const hasPermission = await requestCameraPermission();
+      if (!hasPermission) return;
+      try {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+          exif: false,
+        });
+        if (!result.canceled && result.assets[0]) {
+          setter(result.assets[0].uri);
+          setVehicleVerificationStatus('idle');
+          setVehicleVerificationResult(null);
+          setVehicleVerificationError(null);
+        }
+      } catch (error) {
+        console.error('Camera error:', error);
+        Alert.alert('Camera Unavailable', 'Could not open camera. Try choosing from gallery instead.');
+      }
+    };
+
+    const launchGallery = async () => {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please grant photo library access.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ]);
+        return;
+      }
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+          exif: false,
+        });
+        if (!result.canceled && result.assets[0]) {
+          setter(result.assets[0].uri);
+          setVehicleVerificationStatus('idle');
+          setVehicleVerificationResult(null);
+          setVehicleVerificationError(null);
+        }
+      } catch (error) {
+        console.error('Gallery error:', error);
+        Alert.alert('Error', 'Failed to pick photo. Please try again.');
+      }
+    };
+
+    Alert.alert('Add Photo', 'Choose a source', [
+      { text: 'Camera', onPress: launchCamera },
+      { text: 'Photo Library', onPress: launchGallery },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const CAR_PHOTO_LABELS = ['Front', 'Side', 'Rear'];
+  const CAR_PHOTO_ICONS = [
+    { name: 'car', size: 32 },
+    { name: 'car-side', size: 40 },
+    { name: 'car-back', size: 32 },
+  ];
+
+  const takeVinPhoto = () => pickPhoto(setVinPhotoUri);
+  const takeCarPhoto = (index) => pickPhoto((uri) => {
+    setCarPhotoUris(prev => {
+      const updated = [...prev];
+      updated[index] = uri;
+      return updated;
+    });
+  });
+
+  const handleVerifyVehicle = async () => {
+    const validCarPhotos = carPhotoUris.filter(Boolean);
+    if (!vinPhotoUri || validCarPhotos.length === 0) {
+      Alert.alert('Photos Required', 'Please take a VIN plate photo and at least one vehicle photo.');
+      return;
+    }
+
+    try {
+      setVehicleVerificationStatus('uploading');
+      setVehicleVerificationError(null);
+
+      const driverId = currentUser?.uid || currentUser?.id;
+      const { vinPhotoUrl, carPhotoUrls } = await uploadVehiclePhotos(driverId, vinPhotoUri, carPhotoUris);
+
+      setVehicleVerificationStatus('verifying');
+
+      // Refresh session to ensure JWT is valid before calling Edge Function
+      await supabase.auth.refreshSession();
+
+      const result = await verifyVehicle(vinPhotoUrl, carPhotoUrls);
+
+      setVehicleVerificationResult(result);
+
+      if (result.status === 'approved') {
+        setVehicleVerificationStatus('approved');
+
+        if (result.vinData) {
+          setFormData(prev => ({
+            ...prev,
+            vehicleInfo: {
+              ...prev.vehicleInfo,
+              make: result.vinData.make || prev.vehicleInfo.make,
+              model: result.vinData.model || prev.vehicleInfo.model,
+              year: result.vinData.year || prev.vehicleInfo.year,
+              vin: result.extractedVin || prev.vehicleInfo.vin,
+              color: result.detectedColor || prev.vehicleInfo.color,
+              licensePlate: result.detectedLicensePlate || prev.vehicleInfo.licensePlate,
+            },
+          }));
+        }
+      } else {
+        setVehicleVerificationStatus('rejected');
+        setFormData(prev => ({
+          ...prev,
+          vehicleInfo: {
+            ...prev.vehicleInfo,
+            make: '',
+            model: '',
+            year: '',
+            vin: '',
+            color: '',
+            licensePlate: '',
+          },
+        }));
+      }
+    } catch (error) {
+      console.error('Vehicle verification error:', error);
+      setVehicleVerificationStatus('error');
+      setVehicleVerificationError(error.message || 'Verification failed. Please try again.');
     }
   };
 
@@ -813,12 +1023,12 @@ export default function DriverOnboardingScreen({ navigation }) {
               {identityLoading ? (
                 <View style={styles.buttonLoadingContainer}>
                   <ActivityIndicator size="small" color={colors.white} />
-                  <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Preparing verification...</Text>
+                  <Text style={[styles.verifyButtonText, { marginLeft: spacing.sm }]}>Preparing verification...</Text>
                 </View>
               ) : verificationStatus === 'completed' ? (
                 <View style={styles.buttonLoadingContainer}>
                   <Ionicons name="checkmark-circle" size={20} color={colors.white} />
-                  <Text style={[styles.verifyButtonText, { marginLeft: 8 }]}>Identity verified successfully!</Text>
+                  <Text style={[styles.verifyButtonText, { marginLeft: spacing.sm }]}>Identity verified successfully!</Text>
                 </View>
               ) : (
                 <Text style={styles.verifyButtonText}>Start Verification</Text>
@@ -845,7 +1055,7 @@ export default function DriverOnboardingScreen({ navigation }) {
               </View>
             )}
             <View style={styles.inputRow}>
-              <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+              <View style={[styles.inputContainer, { flex: 1, marginRight: spacing.sm }]}>
                 <Text style={styles.inputLabel}>First Name *</Text>
                 <TextInput
                   style={[
@@ -863,7 +1073,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   <Text style={styles.inputHint}>Min 2 characters</Text>
                 )}
               </View>
-              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+              <View style={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}>
                 <Text style={styles.inputLabel}>Last Name *</Text>
                 <TextInput
                   style={[
@@ -950,7 +1160,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                       style={styles.suggestionItem}
                       onPress={() => handleAddressSelect(feature)}
                     >
-                      <Ionicons name="location-outline" size={18} color={colors.text.subtle} style={{ marginRight: 10 }} />
+                      <Ionicons name="location-outline" size={18} color={colors.text.subtle} style={{ marginRight: spacing.sm }} />
                       <Text style={styles.suggestionText} numberOfLines={2}>
                         {feature.place_name}
                       </Text>
@@ -961,7 +1171,7 @@ export default function DriverOnboardingScreen({ navigation }) {
             </View>
 
             <View style={styles.inputRow}>
-              <View style={[styles.inputContainer, { flex: 2, marginRight: 8 }]}>
+              <View style={[styles.inputContainer, { flex: 2, marginRight: spacing.sm }]}>
                 <Text style={styles.inputLabel}>City *</Text>
                 <TextInput
                   style={styles.textInput}
@@ -972,7 +1182,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                   autoCapitalize="words"
                 />
               </View>
-              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+              <View style={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}>
                 <Text style={styles.inputLabel}>State *</Text>
                 <TouchableOpacity
                   style={styles.pickerButton}
@@ -1013,7 +1223,7 @@ export default function DriverOnboardingScreen({ navigation }) {
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerTitle}>Select State</Text>
               </View>
-              <ScrollView style={styles.pickerList} contentContainerStyle={{ paddingBottom: 40 }}>
+              <ScrollView style={styles.pickerList} contentContainerStyle={{ paddingBottom: spacing.xxxl }}>
                 {formData.address.state ? (
                   <TouchableOpacity
                     style={styles.pickerItem}
@@ -1055,76 +1265,314 @@ export default function DriverOnboardingScreen({ navigation }) {
         );
 
       case 4: // Vehicle Info
-        return (
-          <View style={styles.formContent}>
-            <View style={styles.inputRow}>
-              <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.inputLabel}>Make *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.vehicleInfo.make}
-                  onChangeText={(value) => updateFormData('vehicleInfo.make', value)}
-                  placeholder="Toyota"
-                  placeholderTextColor={colors.text.placeholder}
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.inputLabel}>Model *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.vehicleInfo.model}
-                  onChangeText={(value) => updateFormData('vehicleInfo.model', value)}
-                  placeholder="Camry"
-                  placeholderTextColor={colors.text.placeholder}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
+        {
+          const hasAnyCarPhoto = carPhotoUris.some(Boolean);
+          const isProcessing = vehicleVerificationStatus === 'uploading' || vehicleVerificationStatus === 'verifying';
+          const hasResult = ['approved', 'rejected', 'error'].includes(vehicleVerificationStatus);
+          const showFields = hasResult;
+          const isLocked = vehicleVerificationStatus === 'approved';
+          const canVerify = vehicleVerificationStatus === 'idle' && vinPhotoUri && hasAnyCarPhoto;
 
-            <View style={styles.inputRow}>
-              <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.inputLabel}>Year *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.vehicleInfo.year}
-                  onChangeText={(value) => updateFormData('vehicleInfo.year', formatYear(value))}
-                  placeholder="2020"
-                  placeholderTextColor={colors.text.placeholder}
-                  keyboardType="numeric"
-                  maxLength={4}
-                />
+          return (
+            <View style={styles.formContent}>
+              {/* Photo Capture: VIN Plate */}
+              <View style={styles.photoSection}>
+                <View style={styles.sectionLabelRow}>
+                  <Text style={styles.sectionLabel}>Step 1: Photograph your VIN plate</Text>
+                  <TouchableOpacity
+                    style={styles.infoButton}
+                    onPress={() => setShowVinHint(prev => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={showVinHint ? 'information-circle' : 'information-circle-outline'}
+                      size={20}
+                      color={showVinHint ? colors.primary : colors.text.subtle}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {showVinHint && (
+                  <View style={styles.hintPanel}>
+                    <Text style={styles.hintTitle}>Where to find the VIN plate</Text>
+                    <Text style={styles.hintText}>Driver-side door jamb — open the door and look for a sticker on the frame</Text>
+                    <Text style={styles.hintText}>Dashboard — look at the base of the windshield on the driver's side</Text>
+                    <Text style={styles.hintText}>Engine bay or vehicle registration documents</Text>
+                    <Text style={[styles.hintTitle, { marginTop: spacing.md }]}>Tips for a good photo</Text>
+                    <Text style={styles.hintText}>Make sure there is enough light — avoid shadows on the VIN</Text>
+                    <Text style={styles.hintText}>Hold the camera close so all 17 characters are clearly readable</Text>
+                    <Text style={styles.hintText}>Keep the camera steady — avoid blurry photos</Text>
+                  </View>
+                )}
+                <Text style={styles.sectionHint}>
+                  Find the VIN plate on your driver-side door jamb or dashboard
+                </Text>
+                <View style={styles.photoSlotWrapper}>
+                  <TouchableOpacity
+                    style={[styles.photoCaptureSlot, vinPhotoUri && styles.photoCaptureSlotFilled]}
+                    onPress={takeVinPhoto}
+                    disabled={isProcessing}
+                  >
+                    {vinPhotoUri ? (
+                      <Image source={{ uri: vinPhotoUri }} style={styles.photoCapturePreview} />
+                    ) : (
+                      <View style={styles.photoCaptureEmpty}>
+                        <MaterialCommunityIcons name="card-text-outline" size={36} color={colors.text.subtle} />
+                        <Text style={styles.photoCaptureText}>Tap to photograph VIN plate</Text>
+                      </View>
+                    )}
+                    {vinPhotoUri && (
+                      <View style={styles.photoRetakeOverlay}>
+                        <Ionicons name="camera-reverse-outline" size={16} color={colors.white} />
+                        <Text style={styles.photoRetakeText}>Retake</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  {vinPhotoUri && !isProcessing && (
+                    <TouchableOpacity
+                      style={styles.photoDeleteButton}
+                      onPress={() => {
+                        setVinPhotoUri(null);
+                        setVehicleVerificationStatus('idle');
+                        setVehicleVerificationResult(null);
+                      }}
+                    >
+                      <Ionicons name="close-circle" size={24} color={colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-              <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.inputLabel}>Color</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={formData.vehicleInfo.color}
-                  onChangeText={(value) => updateFormData('vehicleInfo.color', value)}
-                  placeholder="White"
-                  placeholderTextColor={colors.text.placeholder}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>License Plate *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.vehicleInfo.licensePlate}
-                onChangeText={(value) => updateFormData('vehicleInfo.licensePlate', formatLicensePlate(value))}
-                placeholder="ABC123"
-                placeholderTextColor={colors.text.placeholder}
-                autoCapitalize="characters"
-                maxLength={8}
-              />
-              {formData.vehicleInfo.licensePlate.length > 0 && formData.vehicleInfo.licensePlate.length < 2 && (
-                <Text style={styles.inputHint}>Min 2 characters</Text>
+              {/* Photo Capture: Vehicle — multiple angles */}
+              <View style={styles.photoSection}>
+                <View style={styles.sectionLabelRow}>
+                  <Text style={styles.sectionLabel}>Step 2: Photograph your vehicle</Text>
+                  <TouchableOpacity
+                    style={styles.infoButton}
+                    onPress={() => setShowPhotoHint(prev => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons
+                      name={showPhotoHint ? 'information-circle' : 'information-circle-outline'}
+                      size={20}
+                      color={showPhotoHint ? colors.primary : colors.text.subtle}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {showPhotoHint && (
+                  <View style={styles.hintPanel}>
+                    <Text style={styles.hintTitle}>How to photograph your vehicle</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Front</Text> — Stand about 10 feet in front. Capture bumper, headlights, and license plate.</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Side</Text> — Stand to the side at a slight angle. The whole car should be visible from hood to trunk.</Text>
+                    <Text style={styles.hintText}><Text style={styles.hintBold}>Rear</Text> — Stand about 10 feet behind. Capture bumper, taillights, and license plate.</Text>
+                    <Text style={[styles.hintText, { marginTop: spacing.xs }]}>Photograph outdoors in daylight for the best results.</Text>
+                  </View>
+                )}
+                <Text style={styles.sectionHint}>
+                  Take photos from different angles for better verification (at least 1 required)
+                </Text>
+                <View style={styles.carPhotosRow}>
+                  {CAR_PHOTO_LABELS.map((label, index) => (
+                    <View key={label} style={styles.carPhotoSlotContainer}>
+                      <TouchableOpacity
+                        style={[styles.carPhotoSlot, carPhotoUris[index] && styles.photoCaptureSlotFilled]}
+                        onPress={() => takeCarPhoto(index)}
+                        disabled={isProcessing}
+                      >
+                        {carPhotoUris[index] ? (
+                          <Image source={{ uri: carPhotoUris[index] }} style={styles.photoCapturePreview} />
+                        ) : (
+                          <View style={styles.photoCaptureEmpty}>
+                            <MaterialCommunityIcons name={CAR_PHOTO_ICONS[index].name} size={CAR_PHOTO_ICONS[index].size} color={colors.text.subtle} />
+                          </View>
+                        )}
+                        {carPhotoUris[index] && (
+                          <View style={styles.carPhotoRetakeOverlay}>
+                            <Ionicons name="camera-reverse-outline" size={12} color={colors.white} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      {carPhotoUris[index] && !isProcessing && (
+                        <TouchableOpacity
+                          style={styles.carPhotoDeleteButton}
+                          onPress={() => {
+                            setCarPhotoUris(prev => {
+                              const updated = [...prev];
+                              updated[index] = null;
+                              return updated;
+                            });
+                            setVehicleVerificationStatus('idle');
+                            setVehicleVerificationResult(null);
+                          }}
+                        >
+                          <Ionicons name="close-circle" size={20} color={colors.error} />
+                        </TouchableOpacity>
+                      )}
+                      <Text style={styles.carPhotoLabel}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Verify Button */}
+              {canVerify && (
+                <TouchableOpacity style={styles.verifyVehicleButton} onPress={handleVerifyVehicle}>
+                  <Ionicons name="scan-outline" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
+                  <Text style={styles.verifyButtonText}>Verify Vehicle</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Loading States */}
+              {isProcessing && (
+                <View style={styles.vehicleVerificationLoading}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.vehicleVerificationLoadingText}>
+                    {vehicleVerificationStatus === 'uploading' ? 'Uploading photos...' : 'Analyzing vehicle...'}
+                  </Text>
+                  <Text style={styles.vehicleVerificationSubtext}>This may take a few seconds</Text>
+                </View>
+              )}
+
+              {/* Error State */}
+              {vehicleVerificationStatus === 'error' && (
+                <View style={styles.vehicleVerificationErrorBanner}>
+                  <Ionicons name="alert-circle" size={18} color={colors.secondary} />
+                  <Text style={styles.vehicleVerificationErrorText}>
+                    {vehicleVerificationError || 'Verification failed'}
+                  </Text>
+                  <TouchableOpacity onPress={handleVerifyVehicle}>
+                    <Text style={styles.retryLink}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Verification Result Banners */}
+              {vehicleVerificationStatus === 'approved' && (
+                <View style={styles.autoFilledBanner}>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                  <Text style={styles.autoFilledText}>
+                    Vehicle verified! Review the details below.
+                  </Text>
+                </View>
+              )}
+              {vehicleVerificationStatus === 'rejected' && (
+                <View style={[styles.autoFilledBanner, { backgroundColor: `${colors.secondary}15` }]}>
+                  <Ionicons name="close-circle" size={18} color={colors.secondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.autoFilledText, { color: colors.secondary }]}>
+                      {vehicleVerificationResult?.reason || 'Verification failed.'}
+                    </Text>
+                    <Text style={[styles.autoFilledText, { color: colors.text.tertiary, fontSize: typography.fontSize.xs, marginTop: spacing.xs }]}>
+                      Delete the photos using the X button and retake them to try again.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Editable Vehicle Fields */}
+              {showFields && !isProcessing && (
+                <>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>VIN{isLocked ? ' (verified)' : ''}</Text>
+                    <TextInput
+                      style={[styles.textInput, isLocked && styles.lockedInput]}
+                      value={formData.vehicleInfo.vin}
+                      onChangeText={(value) => updateFormData('vehicleInfo.vin', value.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '').slice(0, 17))}
+                      placeholder="17-character VIN"
+                      placeholderTextColor={colors.text.placeholder}
+                      autoCapitalize="characters"
+                      maxLength={17}
+                      editable={!isLocked}
+                    />
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <View style={[styles.inputContainer, { flex: 1, marginRight: spacing.sm }]}>
+                      <Text style={styles.inputLabel}>Make *</Text>
+                      <TextInput
+                        style={[styles.textInput, isLocked && styles.lockedInput]}
+                        value={formData.vehicleInfo.make}
+                        onChangeText={(value) => updateFormData('vehicleInfo.make', value)}
+                        placeholder="Toyota"
+                        placeholderTextColor={colors.text.placeholder}
+                        autoCapitalize="words"
+                        editable={!isLocked}
+                      />
+                    </View>
+                    <View style={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}>
+                      <Text style={styles.inputLabel}>Model *</Text>
+                      <TextInput
+                        style={[styles.textInput, isLocked && styles.lockedInput]}
+                        value={formData.vehicleInfo.model}
+                        onChangeText={(value) => updateFormData('vehicleInfo.model', value)}
+                        placeholder="Camry"
+                        placeholderTextColor={colors.text.placeholder}
+                        autoCapitalize="words"
+                        editable={!isLocked}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputRow}>
+                    <View style={[styles.inputContainer, { flex: 1, marginRight: spacing.sm }]}>
+                      <Text style={styles.inputLabel}>Year *</Text>
+                      <TextInput
+                        style={[styles.textInput, isLocked && styles.lockedInput]}
+                        value={formData.vehicleInfo.year}
+                        onChangeText={(value) => updateFormData('vehicleInfo.year', formatYear(value))}
+                        placeholder="2020"
+                        placeholderTextColor={colors.text.placeholder}
+                        keyboardType="numeric"
+                        maxLength={4}
+                        editable={!isLocked}
+                      />
+                    </View>
+                    <View style={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}>
+                      <Text style={styles.inputLabel}>Color</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={formData.vehicleInfo.color}
+                        onChangeText={(value) => updateFormData('vehicleInfo.color', value)}
+                        placeholder="White"
+                        placeholderTextColor={colors.text.placeholder}
+                        autoCapitalize="words"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>License Plate *</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={formData.vehicleInfo.licensePlate}
+                      onChangeText={(value) => updateFormData('vehicleInfo.licensePlate', formatLicensePlate(value))}
+                      placeholder="ABC123"
+                      placeholderTextColor={colors.text.placeholder}
+                      autoCapitalize="characters"
+                      maxLength={8}
+                    />
+                    {formData.vehicleInfo.licensePlate.length > 0 && formData.vehicleInfo.licensePlate.length < 2 && (
+                      <Text style={styles.inputHint}>Min 2 characters</Text>
+                    )}
+                  </View>
+                </>
+              )}
+
+              {/* Prompt to take remaining photos */}
+              {vehicleVerificationStatus === 'idle' && !canVerify && (
+                <View style={styles.manualEntryNote}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.text.tertiary} />
+                  <Text style={styles.manualEntryNoteText}>
+                    {!vinPhotoUri && !hasAnyCarPhoto
+                      ? 'Take a VIN plate photo and at least one vehicle photo to proceed.'
+                      : !vinPhotoUri
+                        ? 'Now take a photo of your VIN plate to verify.'
+                        : 'Now take at least one vehicle photo to verify.'}
+                  </Text>
+                </View>
               )}
             </View>
-          </View>
-        );
+          );
+        }
 
       case 5: // Payment Setup
         return (
@@ -1333,7 +1781,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.strong,
     borderRadius: 2,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   progressFill: {
     height: '100%',
@@ -1365,7 +1813,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   stepTitle: {
     fontSize: typography.fontSize.xxl,
@@ -1379,7 +1827,7 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
     marginBottom: spacing.xl + spacing.sm,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: typography.fontSize.md * typography.lineHeight.normal,
   },
 
   // Welcome content
@@ -1394,22 +1842,22 @@ const styles = StyleSheet.create({
     borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.xxxl - spacing.xs,
+    fontWeight: typography.fontWeight.bold,
     color: colors.white,
-    marginBottom: 16,
+    marginBottom: spacing.base,
     textAlign: 'center',
   },
   welcomeDescription: {
-    fontSize: 16,
+    fontSize: typography.fontSize.md,
     color: colors.text.tertiary,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-    paddingHorizontal: 20,
+    lineHeight: typography.fontSize.md * typography.lineHeight.normal,
+    marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   benefitsList: {
     width: '100%',
@@ -1419,19 +1867,17 @@ const styles = StyleSheet.create({
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.secondary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
+    backgroundColor: colors.background.tertiary,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
   },
   benefitText: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '500',
-    marginLeft: 12,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.md,
   },
 
   // Form content
@@ -1440,11 +1886,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   formDescription: {
-    fontSize: 16,
+    fontSize: typography.fontSize.md,
     color: colors.text.tertiary,
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
+    marginBottom: spacing.xxl,
+    lineHeight: typography.fontSize.md * typography.lineHeight.normal,
   },
   inputContainer: {
     marginBottom: spacing.lg,
@@ -1455,19 +1901,25 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: spacing.sm,
   },
   textInput: {
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.input,
     borderWidth: 1,
-    borderColor: colors.border.strong,
-    borderRadius: borderRadius.md,
+    borderColor: colors.border.default,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing.base,
     paddingHorizontal: spacing.base,
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
+  },
+  lockedInput: {
+    backgroundColor: colors.background.tertiary,
+    borderColor: colors.border.strong,
+    color: colors.text.tertiary,
+    opacity: 0.7,
   },
 
   // Final content
@@ -1483,37 +1935,35 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   finalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.xxl,
+    fontWeight: typography.fontWeight.bold,
     color: colors.white,
-    marginBottom: 16,
+    marginBottom: spacing.base,
     textAlign: 'center',
   },
   finalDescription: {
-    fontSize: 16,
+    fontSize: typography.fontSize.md,
     color: colors.text.tertiary,
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
-    paddingHorizontal: 20,
+    lineHeight: typography.fontSize.md * typography.lineHeight.normal,
+    marginBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   securityFeatures: {
     width: '100%',
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
   },
   securityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.secondary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
+    backgroundColor: colors.background.tertiary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
   },
   securityText: {
     color: colors.text.primary,
@@ -1522,39 +1972,37 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
   },
   finalNote: {
-    backgroundColor: colors.background.elevated,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
+    backgroundColor: colors.background.tertiary,
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
     width: '100%',
   },
   finalNoteText: {
     color: colors.text.tertiary,
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
   },
 
   // Verification styles
   verificationFeatures: {
-    marginTop: 24,
-    marginBottom: 32,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   verificationItem: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: spacing.xl,
     alignItems: 'flex-start',
   },
   verificationIcon: {
-    width: 48,
-    height: 48,
+    width: spacing.xxxl,
+    height: spacing.xxxl,
     backgroundColor: colors.successLight,
-    borderRadius: 24,
+    borderRadius: spacing.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: spacing.base,
   },
   verificationContent: {
     flex: 1,
@@ -1563,19 +2011,19 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   verificationText: {
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     color: colors.text.tertiary,
-    lineHeight: 20,
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
   },
   verifyButton: {
     backgroundColor: colors.success,
-    paddingVertical: 16,
-    borderRadius: 25,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: spacing.lg,
   },
   verifyButtonDisabled: {
     backgroundColor: colors.text.subtle,
@@ -1595,20 +2043,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.successLight,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
+    padding: spacing.base,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
   },
   verificationSuccessText: {
     color: colors.success,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   loadingText: {
     color: colors.text.tertiary,
-    fontSize: 14,
-    marginTop: 8,
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.sm,
   },
 
   // Bottom actions
@@ -1623,12 +2071,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 10,
-    gap: 12,
+    gap: spacing.md,
   },
   backActionButton: {
     flex: 1,
     backgroundColor: colors.border.strong,
-    paddingVertical: spacing.base,
+    height: 56,
+    justifyContent: 'center',
     borderRadius: borderRadius.full,
     alignItems: 'center',
   },
@@ -1640,14 +2089,11 @@ const styles = StyleSheet.create({
   nextButton: {
     flex: 2,
     backgroundColor: colors.primary,
-    paddingVertical: spacing.base,
+    height: 56,
+    justifyContent: 'center',
     borderRadius: borderRadius.full,
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    ...shadows.primary,
   },
   nextButtonFull: {
     flex: 1,
@@ -1659,8 +2105,8 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -1681,16 +2127,16 @@ const styles = StyleSheet.create({
   },
   inputHint: {
     color: colors.secondary,
-    fontSize: typography.fontSize.sm - 1,
+    fontSize: typography.fontSize.xs,
     marginTop: spacing.xs,
   },
 
   // State Picker styles
   pickerButton: {
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.input,
     borderWidth: 1,
-    borderColor: colors.border.strong,
-    borderRadius: borderRadius.md,
+    borderColor: colors.border.default,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing.base,
     paddingHorizontal: spacing.base,
     flexDirection: 'row',
@@ -1725,7 +2171,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md + 2,
+    paddingVertical: spacing.base,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.strong,
   },
@@ -1748,20 +2194,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: colors.border.strong,
-    marginTop: 4,
+    borderColor: colors.border.default,
+    marginTop: spacing.xs,
     maxHeight: 200,
-    zIndex: 10,
+    zIndex: zIndex.dropdown,
     elevation: 10,
     overflow: 'hidden',
   },
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.strong,
   },
@@ -1769,11 +2215,11 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.white,
     fontSize: typography.fontSize.sm,
-    lineHeight: 18,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
   addressLoadingIndicator: {
     position: 'absolute',
-    right: 14,
+    right: spacing.md,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
@@ -1782,16 +2228,220 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.successLight,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
     marginBottom: spacing.lg,
   },
   autoFilledText: {
     color: colors.success,
     fontSize: typography.fontSize.sm,
-    marginLeft: 8,
+    marginLeft: spacing.sm,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+
+  // Vehicle verification styles
+  photoSection: {
+    marginBottom: spacing.lg,
+  },
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  sectionLabel: {
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    flex: 1,
+  },
+  infoButton: {
+    marginLeft: spacing.sm,
+    padding: spacing.xs,
+  },
+  hintPanel: {
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  hintTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  hintText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.sm,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+  hintBold: {
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  sectionHint: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
+  },
+  photoCaptureSlot: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.lg,
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  photoCaptureSlotFilled: {
+    borderStyle: 'solid',
+    borderColor: colors.success,
+  },
+  photoCaptureEmpty: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoCaptureText: {
+    color: colors.text.subtle,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.sm,
+  },
+  photoCapturePreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoRetakeOverlay: {
+    position: 'absolute',
+    bottom: spacing.sm,
+    right: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  photoRetakeText: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.xs,
+  },
+  photoSlotWrapper: {
+    position: 'relative',
+  },
+  photoDeleteButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    zIndex: 10,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.full,
+  },
+  carPhotosRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  carPhotoSlotContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  carPhotoSlot: {
+    width: '100%',
+    height: 110,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 2,
+    borderColor: colors.border.default,
+    borderStyle: 'dashed',
+    borderRadius: borderRadius.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  carPhotoLabel: {
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs,
+    color: colors.text.tertiary,
+  },
+  carPhotoDeleteButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 10,
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.full,
+  },
+  carPhotoRetakeOverlay: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    right: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  verifyVehicleButton: {
+    backgroundColor: colors.info,
+    paddingVertical: spacing.base,
+    borderRadius: borderRadius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    marginBottom: spacing.lg,
+  },
+  vehicleVerificationLoading: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  vehicleVerificationLoadingText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    marginTop: spacing.md,
+  },
+  vehicleVerificationSubtext: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+  },
+  vehicleVerificationErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${colors.secondary}15`,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+  },
+  vehicleVerificationErrorText: {
+    color: colors.secondary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flex: 1,
+  },
+  retryLink: {
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
+  },
+  manualEntryNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  manualEntryNoteText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flex: 1,
+    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
 });

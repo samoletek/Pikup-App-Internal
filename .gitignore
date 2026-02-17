@@ -70,3 +70,4 @@ server-updates.js
 # Claude local context
 cloud.md
 .claude/
+CLAUDE.md
