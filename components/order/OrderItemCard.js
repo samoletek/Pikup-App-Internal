@@ -219,6 +219,25 @@ const OrderItemCard = ({
                         />
                     </View>
 
+                    {/* Approx. Weight (manual items without AI estimate) */}
+                    {!item.category && (
+                        <View style={styles.field}>
+                            <Text style={styles.fieldLabel}>Approx. Weight (lbs)</Text>
+                            <TextInput
+                                style={styles.textInput}
+                                placeholder="e.g. 50"
+                                placeholderTextColor={colors.text.placeholder}
+                                value={item.weightEstimate ? String(item.weightEstimate) : ''}
+                                onChangeText={(text) => {
+                                    const num = parseInt(text.replace(/[^0-9]/g, ''), 10) || 0;
+                                    onUpdate({ ...item, weightEstimate: num });
+                                }}
+                                keyboardType="number-pad"
+                                maxLength={5}
+                            />
+                        </View>
+                    )}
+
                     {/* Condition Toggle (New / Used) */}
                     <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Condition</Text>

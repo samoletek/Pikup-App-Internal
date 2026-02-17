@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles';
-import { colors } from '../../../styles/theme';
+import { colors, typography } from '../../../styles/theme';
 import PaymentMethodsScreen from '../../../screens/customer/PaymentMethodsScreen';
 
 const ReviewStep = ({
@@ -104,7 +104,7 @@ const ReviewStep = ({
 
                     {pricing?.laborBufferMinutes > 0 && (
                         <View style={styles.priceRow}>
-                            <Text style={[styles.priceLabel, { fontSize: 11, color: colors.text.muted }]}>
+                            <Text style={[styles.priceLabel, { fontSize: typography.fontSize.xs, color: colors.text.muted }]}>
                                 Includes {pricing.laborBufferMinutes} min buffer
                             </Text>
                         </View>
