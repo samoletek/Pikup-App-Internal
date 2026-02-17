@@ -32,10 +32,19 @@ export const createPickupRequest = async (requestData, currentUser) => {
     try {
         console.log('Creating pickup request in Supabase...');
 
+        const pricingData = requestData.pricing || null;
+
         const tripData = {
             customer_id: currentUser.uid || currentUser.id,
-            pickup_location: requestData.pickup,
-            dropoff_location: requestData.dropoff,
+            pickup_location: {
+                ...requestData.pickup,
+                details: requestData.pickupDetails || {},
+                pricing: pricingData,
+            },
+            dropoff_location: {
+                ...requestData.dropoff,
+                details: requestData.dropoffDetails || {},
+            },
             vehicle_type: requestData.vehicle?.type || 'Standard',
             price: parseFloat(requestData.pricing?.total || 0),
             distance_miles: parseFloat(requestData.pricing?.distance || 0),
@@ -103,24 +112,54 @@ export const getAvailableRequests = async (currentUser) => {
 
         if (error) throw error;
 
-        return data
-            .map(mapTripFromDb)
-            .map((trip) => ({
-                id: trip.id,
-                price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
-                type: 'Moves',
-                vehicle: { type: trip.vehicleType || 'Standard' },
-                pickup: {
-                    address: trip.pickupAddress || 'Unknown',
-                    coordinates: trip.pickup?.coordinates || null
-                },
-                dropoff: {
-                    address: trip.dropoffAddress || '',
-                    coordinates: trip.dropoff?.coordinates || null
-                },
-                photos: trip.pickupPhotos || [],
-                originalData: trip
-            }))
+        const trips = data.map(mapTripFromDb);
+
+        // Fetch customer names for all trips
+        const customerIds = [...new Set(trips.map(t => t.customerId).filter(Boolean))];
+        let customerMap = {};
+        if (customerIds.length > 0) {
+            const { data: customers } = await supabase
+                .from('customers')
+                .select('id, first_name, last_name, email')
+                .in('id', customerIds);
+            if (customers) {
+                customers.forEach(c => {
+                    customerMap[c.id] = {
+                        name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email?.split('@')[0] || 'Customer',
+                        email: c.email,
+                    };
+                });
+            }
+        }
+
+        return trips
+            .map((trip) => {
+                const customer = customerMap[trip.customerId] || {};
+                return {
+                    id: trip.id,
+                    price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
+                    pricing: trip.pricing || {},
+                    type: 'Moves',
+                    vehicle: { type: trip.vehicleType || 'Standard' },
+                    pickup: {
+                        address: trip.pickupAddress || 'Unknown',
+                        coordinates: trip.pickup?.coordinates || null,
+                        details: trip.pickup?.details || {},
+                    },
+                    dropoff: {
+                        address: trip.dropoffAddress || '',
+                        coordinates: trip.dropoff?.coordinates || null,
+                        details: trip.dropoff?.details || {},
+                    },
+                    items: trip.items || [],
+                    item: trip.item || null,
+                    photos: trip.pickupPhotos || [],
+                    scheduledTime: trip.scheduledTime || null,
+                    customerName: customer.name || 'Customer',
+                    customerEmail: customer.email || null,
+                    originalData: trip,
+                };
+            })
             .sort((a, b) => new Date(b.originalData.createdAt || 0) - new Date(a.originalData.createdAt || 0));
 
     } catch (error) {

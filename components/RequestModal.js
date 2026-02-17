@@ -18,24 +18,25 @@ import MapboxMap from './mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius } from '../styles/theme';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
-const CARD_HEIGHT = height * 0.35; // Increased for photos
+const CARD_HEIGHT = height * 0.35;
+const TIMER_DEFAULT = '4:00';
 
-export default function RequestModal({ 
-  visible, 
-  requests = [], 
+export default function RequestModal({
+  visible,
+  requests = [],
   selectedRequest,
   currentLocation,
   loading = false,
-  error = null, 
-  onClose, 
-  onAccept, 
+  error = null,
+  onClose,
+  onAccept,
   onViewDetails,
   onMessage,
-  onRefresh 
+  onRefresh
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [timers, setTimers] = useState({});
@@ -47,7 +48,6 @@ export default function RequestModal({
 
   useEffect(() => {
     if (visible) {
-      // Slide up animation
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -55,7 +55,6 @@ export default function RequestModal({
         friction: 8,
       }).start();
     } else {
-      // Slide down animation
       Animated.timing(slideAnim, {
         toValue: height,
         duration: 300,
@@ -71,8 +70,8 @@ export default function RequestModal({
         setSelectedIndex(index);
         if (flatListRef.current) {
           setTimeout(() => {
-            flatListRef.current.scrollToIndex({ 
-              index, 
+            flatListRef.current.scrollToIndex({
+              index,
               animated: true,
               viewPosition: 0.5
             });
@@ -82,7 +81,6 @@ export default function RequestModal({
     }
   }, [selectedRequest, requests]);
 
-  // Animate map to selected request when carousel changes
   useEffect(() => {
     if (showMap && requests.length > 0 && mapRef.current) {
       const currentRequest = requests[selectedIndex];
@@ -99,18 +97,13 @@ export default function RequestModal({
     }
   }, [selectedIndex, showMap, requests]);
 
-  // Timer management
   useEffect(() => {
     if (visible && requests.length > 0) {
-      // Start timer interval
       timerInterval.current = setInterval(() => {
         updateTimers();
       }, 1000);
-
-      // Initial timer calculation
       updateTimers();
     } else {
-      // Clear timer when modal is hidden
       if (timerInterval.current) {
         clearInterval(timerInterval.current);
         timerInterval.current = null;
@@ -133,7 +126,7 @@ export default function RequestModal({
       if (request.expiresAt) {
         const expiryTime = new Date(request.expiresAt);
         const timeLeft = Math.max(0, expiryTime - now);
-        
+
         if (timeLeft > 0) {
           const minutes = Math.floor(timeLeft / (1000 * 60));
           const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
@@ -142,7 +135,7 @@ export default function RequestModal({
           newTimers[request.id] = 'Expired';
         }
       } else {
-        newTimers[request.id] = '4:00'; // Default 4 minutes
+        newTimers[request.id] = TIMER_DEFAULT;
       }
     });
 
@@ -151,27 +144,39 @@ export default function RequestModal({
 
   const handleScroll = (event) => {
     const scrollPosition = event.nativeEvent.contentOffset.x;
-    const index = Math.round(scrollPosition / (CARD_WIDTH + 20));
+    const index = Math.round(scrollPosition / (CARD_WIDTH + spacing.lg));
     setSelectedIndex(index);
+  };
+
+  const getDisplayPhotos = (item) => {
+    if (Array.isArray(item.photos)) return item.photos;
+    if (Array.isArray(item.item?.photos)) return item.item.photos;
+    return [];
   };
 
   const renderRequestCard = ({ item, index }) => {
     const isSelected = index === selectedIndex;
-    
+    const displayPhotos = getDisplayPhotos(item);
+    const earnings = item.driverPayout || item.earnings || item.price || '$0.00';
+
     return (
       <Animated.View style={[
         styles.card,
         isSelected && styles.selectedCard
       ]}>
         <LinearGradient
-          colors={['rgba(26, 26, 46, 0.98)', 'rgba(30, 30, 56, 0.98)']}
+          colors={[colors.background.elevated, colors.background.panel]}
           style={styles.cardGradient}
         >
           {/* Header with Price and Timer */}
           <View style={styles.cardHeader}>
             <View style={styles.priceContainer}>
-              <Text style={styles.price}>{item.price}</Text>
-              <Text style={styles.timeDistance}>{item.time} • {item.distance}</Text>
+              <Text style={styles.price}>{earnings}</Text>
+              {(item.time || item.distance) && (
+                <Text style={styles.timeDistance}>
+                  {[item.time, item.distance].filter(Boolean).join(' · ')}
+                </Text>
+              )}
               {item.vehicle?.type && (
                 <View style={styles.vehicleTag}>
                   <Ionicons name="car-outline" size={14} color={colors.warning} />
@@ -185,24 +190,28 @@ export default function RequestModal({
                 styles.timerText,
                 timers[item.id] === 'Expired' && styles.expiredTimer
               ]}>
-                {timers[item.id] || '4:00'}
+                {timers[item.id] || TIMER_DEFAULT}
               </Text>
             </View>
           </View>
 
           {/* Item Type Badge */}
-          <View style={styles.typeContainer}>
-            <View style={styles.typeTag}>
-              <Ionicons name="cube-outline" size={14} color={colors.primary} />
-              <Text style={styles.itemType}>{item.item.type}</Text>
+          {(item.item?.type || item.item?.needsHelp) && (
+            <View style={styles.typeContainer}>
+              {item.item?.type && (
+                <View style={styles.typeTag}>
+                  <Ionicons name="cube-outline" size={14} color={colors.primary} />
+                  <Text style={styles.itemType}>{item.item.type}</Text>
+                </View>
+              )}
+              {item.item?.needsHelp && (
+                <View style={styles.helpBadge}>
+                  <Ionicons name="hand-left-outline" size={12} color={colors.white} />
+                  <Text style={styles.helpText}>Help Needed</Text>
+                </View>
+              )}
             </View>
-            {item.item.needsHelp && (
-              <View style={styles.helpBadge}>
-                <Ionicons name="hand-left-outline" size={12} color={colors.white} />
-                <Text style={styles.helpText}>Help Needed</Text>
-              </View>
-            )}
-          </View>
+          )}
 
           {/* Route Information */}
           <View style={styles.routeContainer}>
@@ -212,19 +221,19 @@ export default function RequestModal({
                 <View style={styles.routePointContent}>
                   <Text style={styles.pointLabel}>Pickup</Text>
                   <Text style={styles.pointAddress} numberOfLines={1}>
-                    {item.pickup.address}
+                    {item.pickup?.address || 'Pickup location'}
                   </Text>
                 </View>
               </View>
-              
+
               <View style={styles.routeLine} />
-              
+
               <View style={styles.routePoint}>
                 <View style={styles.dropoffDot} />
                 <View style={styles.routePointContent}>
                   <Text style={styles.pointLabel}>Drop-off</Text>
                   <Text style={styles.pointAddress} numberOfLines={1}>
-                    {item.dropoff.address}
+                    {item.dropoff?.address || 'Dropoff location'}
                   </Text>
                 </View>
               </View>
@@ -232,26 +241,35 @@ export default function RequestModal({
           </View>
 
           {/* Customer Photos */}
-          {item.photos && item.photos.length > 0 && (
+          {displayPhotos.length > 0 && (
             <View style={styles.photosContainer}>
               <Text style={styles.photosLabel}>Customer Photos</Text>
               <FlatList
-                data={item.photos}
+                data={displayPhotos}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                keyExtractor={(photo, index) => photo.id || index.toString()}
-                renderItem={({ item: photo }) => (
-                  <TouchableOpacity
-                    style={styles.photoContainer}
-                    onPress={() => {/* Could add full screen view later */}}
-                  >
-                    <Image 
-                      source={{ uri: photo.url }} 
-                      style={styles.customerOrderPhoto}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                )}
+                keyExtractor={(photo, idx) => photo.id || idx.toString()}
+                renderItem={({ item: photo }) => {
+                  const src = typeof photo === 'string'
+                    ? { uri: photo }
+                    : photo?.url
+                      ? { uri: photo.url }
+                      : photo?.uri
+                        ? { uri: photo.uri }
+                        : null;
+
+                  if (!src) return null;
+
+                  return (
+                    <View style={styles.photoContainer}>
+                      <Image
+                        source={src}
+                        style={styles.customerOrderPhoto}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  );
+                }}
                 contentContainerStyle={styles.photosList}
               />
             </View>
@@ -260,12 +278,21 @@ export default function RequestModal({
           {/* Customer Info */}
           <View style={styles.customerSection}>
             <View style={styles.customerInfo}>
-              <Image source={item.customer.photo} style={styles.customerPhoto} />
+              <Image
+                source={
+                  item.customer?.photo
+                    ? { uri: typeof item.customer.photo === 'string' ? item.customer.photo : item.customer.photo.uri }
+                    : require('../assets/profile.png')
+                }
+                style={styles.customerPhoto}
+              />
               <View>
-                <Text style={styles.customerName}>{item.customer.name}</Text>
+                <Text style={styles.customerName}>
+                  {item.customer?.name || item.customerName || 'Customer'}
+                </Text>
                 <View style={styles.ratingContainer}>
                   <Ionicons name="star" size={12} color={colors.gold} />
-                  <Text style={styles.rating}>{item.customer.rating}</Text>
+                  <Text style={styles.rating}>{item.customer?.rating || '5.0'}</Text>
                 </View>
               </View>
             </View>
@@ -273,31 +300,31 @@ export default function RequestModal({
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.messageButton}
               onPress={() => onMessage && onMessage(item)}
+              activeOpacity={0.8}
             >
               <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
               <Text style={styles.messageButtonText}>Message</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.detailsButton}
               onPress={() => onViewDetails && onViewDetails(item)}
+              activeOpacity={0.8}
             >
               <Text style={styles.detailsButtonText}>View Details</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.acceptButton}
               onPress={() => onAccept && onAccept(item)}
+              activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={[colors.success, colors.success]}
-                style={styles.acceptButtonGradient}
-              >
+              <View style={styles.acceptButtonInner}>
                 <Text style={styles.acceptButtonText}>Accept</Text>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
           </View>
         </LinearGradient>
@@ -315,9 +342,9 @@ export default function RequestModal({
       onRequestClose={onClose}
     >
       <StatusBar barStyle="light-content" />
-      
+
       {/* Backdrop */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.backdrop}
         activeOpacity={1}
         onPress={onClose}
@@ -326,7 +353,7 @@ export default function RequestModal({
       </TouchableOpacity>
 
       {/* Modal Content */}
-      <Animated.View 
+      <Animated.View
         style={[
           styles.modalContainer,
           {
@@ -343,7 +370,7 @@ export default function RequestModal({
               <Ionicons name="close" size={24} color={colors.white} />
             </TouchableOpacity>
           </View>
-          
+
           {/* Request Count */}
           <View style={styles.countContainer}>
             <Text style={styles.countText}>
@@ -376,7 +403,7 @@ export default function RequestModal({
                   </View>
                 </Mapbox.PointAnnotation>
               )}
-              
+
               {/* Request markers */}
               {requests.map((request, index) => (
                 <Mapbox.PointAnnotation
@@ -386,8 +413,8 @@ export default function RequestModal({
                   onSelected={() => {
                     setSelectedIndex(index);
                     if (flatListRef.current) {
-                      flatListRef.current.scrollToIndex({ 
-                        index, 
+                      flatListRef.current.scrollToIndex({
+                        index,
                         animated: true,
                         viewPosition: 0.5
                       });
@@ -404,9 +431,9 @@ export default function RequestModal({
                 </Mapbox.PointAnnotation>
               ))}
             </MapboxMap>
-            
+
             {/* Map toggle button */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.mapToggle}
               onPress={() => setShowMap(!showMap)}
             >
@@ -417,7 +444,7 @@ export default function RequestModal({
 
         {/* Map toggle button when map is hidden */}
         {!showMap && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.showMapButton}
             onPress={() => setShowMap(true)}
           >
@@ -448,7 +475,7 @@ export default function RequestModal({
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              snapToInterval={CARD_WIDTH + 20}
+              snapToInterval={CARD_WIDTH + spacing.lg}
               snapToAlignment="center"
               decelerationRate="fast"
               contentContainerStyle={styles.cardsList}
@@ -493,11 +520,11 @@ export default function RequestModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlayDark,
   },
   backdropOverlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.transparent,
   },
   modalContainer: {
     position: 'absolute',
@@ -505,10 +532,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.background.primary,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     maxHeight: height * 0.8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
   },
   modalHandle: {
     width: 40,
@@ -516,58 +543,58 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.default,
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 16,
+    marginTop: spacing.md,
+    marginBottom: spacing.base,
   },
   modalHeader: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    paddingBottom: 16,
+    borderBottomColor: colors.border.strong,
+    paddingBottom: spacing.base,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   modalTitle: {
     color: colors.white,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: spacing.xxl,
+    height: spacing.xxl,
+    borderRadius: spacing.base,
+    backgroundColor: colors.overlayPrimarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
   countContainer: {
-    backgroundColor: 'rgba(0, 212, 170, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
     alignSelf: 'flex-start',
   },
   countText: {
     color: colors.success,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   cardsContainer: {
     flex: 1,
-    paddingVertical: 20,
+    paddingVertical: spacing.lg,
   },
   cardsList: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    marginRight: 20,
-    borderRadius: 20,
+    marginRight: spacing.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
   },
   selectedCard: {
@@ -575,56 +602,56 @@ const styles = StyleSheet.create({
   },
   cardGradient: {
     flex: 1,
-    padding: 20,
+    padding: spacing.lg,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   priceContainer: {
     flex: 1,
   },
   price: {
     color: colors.white,
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: typography.fontSize.xxl + 4,
+    fontWeight: typography.fontWeight.bold,
   },
   timeDistance: {
     color: colors.text.muted,
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.xs,
   },
   vehicleTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 184, 0, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginTop: 8,
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.sm,
     alignSelf: 'flex-start',
   },
   vehicleType: {
     color: colors.warning,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs,
   },
   timerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 212, 170, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
   },
   timerText: {
     color: colors.success,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs,
   },
   expiredTimer: {
     color: colors.secondary,
@@ -632,40 +659,40 @@ const styles = StyleSheet.create({
   typeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   typeTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginRight: 8,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.sm,
   },
   itemType: {
     color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs,
   },
   helpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   helpText: {
     color: colors.white,
-    fontSize: 10,
-    fontWeight: '600',
-    marginLeft: 3,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs - 1,
   },
   routeContainer: {
     flex: 1,
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   routePoints: {
     flex: 1,
@@ -680,27 +707,27 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.primary,
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   dropoffDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.success,
-    marginRight: 12,
+    marginRight: spacing.md,
   },
   routePointContent: {
     flex: 1,
   },
   pointLabel: {
     color: colors.text.muted,
-    fontSize: 12,
+    fontSize: typography.fontSize.sm,
     marginBottom: 2,
   },
   pointAddress: {
     color: colors.white,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   routeLine: {
     position: 'absolute',
@@ -711,7 +738,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.light,
   },
   customerSection: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   customerInfo: {
     flexDirection: 'row',
@@ -721,14 +748,15 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    marginRight: 12,
+    marginRight: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.overlayPrimarySoft,
+    backgroundColor: colors.background.input,
   },
   customerName: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
     marginBottom: 2,
   },
   ratingContainer: {
@@ -737,9 +765,9 @@ const styles = StyleSheet.create({
   },
   rating: {
     color: colors.gold,
-    fontSize: 14,
-    marginLeft: 4,
-    fontWeight: '600',
+    fontSize: typography.fontSize.base,
+    marginLeft: spacing.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -749,57 +777,59 @@ const styles = StyleSheet.create({
   messageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
   messageButtonText: {
     color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   detailsButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
+    backgroundColor: colors.overlayPrimarySoft,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
   },
   detailsButtonText: {
     color: colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   acceptButton: {
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     overflow: 'hidden',
   },
-  acceptButtonGradient: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  acceptButtonInner: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
   },
   acceptButtonText: {
     color: colors.white,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: spacing.xxxl,
   },
   emptyStateTitle: {
     color: colors.white,
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.base,
+    marginBottom: spacing.sm,
   },
   emptyStateSubtitle: {
     color: colors.text.muted,
-    fontSize: 14,
+    fontSize: typography.fontSize.base,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -807,25 +837,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: spacing.base,
   },
   pageIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 4,
+    width: spacing.sm,
+    height: spacing.sm,
+    borderRadius: spacing.xs,
+    backgroundColor: colors.overlayPrimarySoft,
+    marginHorizontal: spacing.xs,
   },
   activePageIndicator: {
     backgroundColor: colors.success,
-    width: 20,
+    width: spacing.lg,
   },
   // Map styles
   mapContainer: {
     height: 200,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    borderRadius: 16,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -835,33 +865,33 @@ const styles = StyleSheet.create({
   },
   mapToggle: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 8,
-    borderRadius: 20,
+    bottom: spacing.sm + 2,
+    right: spacing.sm + 2,
+    backgroundColor: colors.overlayDark,
+    padding: spacing.sm,
+    borderRadius: borderRadius.xl,
   },
   showMapButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.2)',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: colors.primaryLight,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
   },
   showMapText: {
     color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
   // Marker styles
   markerContainer: {
     backgroundColor: colors.background.tertiary,
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: borderRadius.sm,
+    padding: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border.default,
   },
@@ -872,8 +902,8 @@ const styles = StyleSheet.create({
   },
   markerPrice: {
     color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 12,
+    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.sm,
   },
   markerArrow: {
     position: 'absolute',
@@ -882,20 +912,20 @@ const styles = StyleSheet.create({
     marginLeft: -8,
     width: 0,
     height: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.transparent,
     borderStyle: 'solid',
     borderLeftWidth: 8,
     borderRightWidth: 8,
     borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+    borderLeftColor: colors.transparent,
+    borderRightColor: colors.transparent,
     borderTopColor: colors.background.tertiary,
   },
   currentLocationMarker: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: spacing.xl,
+    height: spacing.xl,
+    borderRadius: spacing.md,
+    backgroundColor: colors.overlayPrimarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -909,62 +939,62 @@ const styles = StyleSheet.create({
   },
   // Photos styles
   photosContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   photosLabel: {
     color: colors.primary,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 8,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
   },
   photosList: {
-    paddingRight: 16,
+    paddingRight: spacing.base,
   },
   photoContainer: {
-    marginRight: 8,
-    borderRadius: 8,
+    marginRight: spacing.sm,
+    borderRadius: borderRadius.sm,
     overflow: 'hidden',
   },
   customerOrderPhoto: {
     width: 60,
     height: 60,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
   },
   // Loading and error styles
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: spacing.xxxl,
   },
   loadingText: {
     color: colors.white,
-    marginTop: 15,
-    fontSize: 16,
+    marginTop: spacing.base,
+    fontSize: typography.fontSize.md,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    paddingVertical: spacing.xxxl,
+    paddingHorizontal: spacing.lg,
   },
   errorText: {
     color: colors.white,
     textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-    fontSize: 16,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    fontSize: typography.fontSize.md,
   },
   retryButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.full,
   },
   retryButtonText: {
     color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
 });

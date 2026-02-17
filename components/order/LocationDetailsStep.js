@@ -37,7 +37,6 @@ const LocationDetailsStep = ({
     const isStore = locationType === 'store';
     const isApartment = locationType === 'apartment';
     const unitNumberValue = details.unitNumber ?? '';
-    const floorValue = details.floor ?? '';
 
     const updateDetails = (patch) => {
         onUpdate({ ...details, ...patch });
@@ -48,7 +47,7 @@ const LocationDetailsStep = ({
             locationType: nextType,
             hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
             unitNumber: nextType === 'apartment' ? unitNumberValue : '',
-            floor: nextType === 'apartment' ? floorValue : '',
+            floor: nextType === 'apartment' ? (details.floor ?? '') : '',
         });
     };
 
@@ -135,24 +134,20 @@ const LocationDetailsStep = ({
 
                     <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Unit & Floor *</Text>
-                        <View style={styles.toggleRow}>
-                            <TextInput
-                                style={[styles.textInput, { flex: 1 }]}
-                                placeholder="e.g. Apt 4B"
-                                placeholderTextColor={colors.text.placeholder}
-                                value={unitNumberValue}
-                                onChangeText={(text) => updateDetails({ unitNumber: text })}
-                            />
-                            <TextInput
-                                style={[styles.textInput, { flex: 1 }]}
-                                placeholder="e.g. Floor 3"
-                                placeholderTextColor={colors.text.placeholder}
-                                value={floorValue}
-                                onChangeText={(text) => updateDetails({ floor: text.replace(/[^0-9]/g, '') })}
-                                keyboardType="number-pad"
-                                maxLength={3}
-                            />
-                        </View>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. Apt 4B, Floor 3"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={unitNumberValue}
+                            onChangeText={(text) => {
+                                const patch = { unitNumber: text };
+                                const floorMatch = text.match(/(?:floor|fl\.?|flr\.?)\s*(\d{1,3})/i);
+                                if (floorMatch) {
+                                    patch.floor = floorMatch[1];
+                                }
+                                updateDetails(patch);
+                            }}
+                        />
                     </View>
 
                     <View style={styles.field}>

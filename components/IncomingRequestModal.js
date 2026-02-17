@@ -1,605 +1,961 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Image,
   ScrollView,
+  FlatList,
   Dimensions,
+  Animated,
+  PanResponder,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import BaseModal from './BaseModal';
-import { colors } from '../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, typography, spacing, borderRadius } from '../styles/theme';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const FULL_HEIGHT = SCREEN_HEIGHT * 0.92;
+const HALF_HEIGHT = SCREEN_HEIGHT * 0.55;
+
+const SNAP_FULL = 0;
+const SNAP_HALF = FULL_HEIGHT - HALF_HEIGHT;
+const SNAP_HIDDEN = FULL_HEIGHT + 50;
+const SNAP_POINTS = [SNAP_FULL, SNAP_HALF];
 
 export default function IncomingRequestModal({
   visible,
   request,
+  timeRemaining = 0,
+  timerTotal = 180,
   onAccept,
   onDecline,
-  onMessage
+  onMinimize,
+  onSnapChange,
 }) {
-  const [timeRemaining, setTimeRemaining] = useState(120); // 2 minutes
-  const timerRef = useRef(null);
+  const insets = useSafeAreaInsets();
+  const [currentSnap, setCurrentSnap] = useState(1);
+  const translateY = useRef(new Animated.Value(SNAP_HIDDEN)).current;
+  const snapIndexRef = useRef(1);
+  const onMinimizeRef = useRef(onMinimize);
+  const onDeclineRef = useRef(onDecline);
 
+  useEffect(() => { onMinimizeRef.current = onMinimize; }, [onMinimize]);
+  useEffect(() => { onDeclineRef.current = onDecline; }, [onDecline]);
+
+  // Entry animation
   useEffect(() => {
     if (visible && request) {
-      // Start countdown timer
-      setTimeRemaining(120);
-      timerRef.current = setInterval(() => {
-        setTimeRemaining(prev => {
-          if (prev <= 1) {
-            // Auto-decline when timer reaches 0
-            console.log('Auto-declining request due to timeout');
-            handleDecline();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      // Clear timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      snapIndexRef.current = 1;
+      setCurrentSnap(1);
+      translateY.setValue(SNAP_HIDDEN);
+      Animated.spring(translateY, {
+        toValue: SNAP_HALF,
+        useNativeDriver: true,
+        tension: 80,
+        friction: 12,
+      }).start();
+      onSnapChange?.(1);
     }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
   }, [visible, request]);
 
-  const handleAccept = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
+  const handleAccept = useCallback(() => {
     onAccept(request);
+  }, [request, onAccept]);
+
+  const dismiss = useCallback(() => {
+    Animated.timing(translateY, {
+      toValue: SNAP_HIDDEN,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => onDeclineRef.current?.());
+  }, []);
+
+  const minimize = useCallback(() => {
+    Animated.timing(translateY, {
+      toValue: SNAP_HIDDEN,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => onMinimizeRef.current?.());
+  }, []);
+
+  // PanResponder
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dy) > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderGrant: () => {
+        translateY.setOffset(translateY._value);
+        translateY.setValue(0);
+      },
+      onPanResponderMove: (_, gs) => {
+        translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        translateY.flattenOffset();
+        const currentY = translateY._value;
+        const velocity = gs.vy;
+        const idx = snapIndexRef.current;
+
+        // Fast swipe down from half → minimize
+        if (velocity > 1.5 && idx >= 1) {
+          Animated.timing(translateY, {
+            toValue: SNAP_HIDDEN, duration: 250, useNativeDriver: true,
+          }).start(() => onMinimizeRef.current?.());
+          return;
+        }
+
+        // Dragged far below half → minimize
+        if (currentY > SNAP_HALF + (SNAP_HIDDEN - SNAP_HALF) * 0.3) {
+          Animated.timing(translateY, {
+            toValue: SNAP_HIDDEN, duration: 250, useNativeDriver: true,
+          }).start(() => onMinimizeRef.current?.());
+          return;
+        }
+
+        let target;
+        if (velocity > 1.5) {
+          target = Math.min(idx + 1, SNAP_POINTS.length - 1);
+        } else if (velocity < -1.5) {
+          target = Math.max(idx - 1, 0);
+        } else {
+          let minDist = Infinity;
+          target = 1;
+          SNAP_POINTS.forEach((pt, i) => {
+            const d = Math.abs(currentY - pt);
+            if (d < minDist) { minDist = d; target = i; }
+          });
+        }
+
+        snapIndexRef.current = target;
+        setCurrentSnap(target);
+        Animated.spring(translateY, {
+          toValue: SNAP_POINTS[target],
+          useNativeDriver: true,
+          tension: 100,
+          friction: 14,
+        }).start();
+        onSnapChange?.(target);
+      },
+    })
+  ).current;
+
+  // Backdrop opacity
+  const backdropOpacity = translateY.interpolate({
+    inputRange: [SNAP_FULL, SNAP_HALF, SNAP_HIDDEN],
+    outputRange: [0.6, 0.4, 0],
+    extrapolate: 'clamp',
+  });
+
+  const formatTime = (s) => {
+    const sec = Math.max(0, s);
+    return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
   };
 
-  const handleDecline = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    // onClose prop in BaseModal maps to onDecline here essentially, 
-    // but BaseModal calls onClose when backdrop pressed.
-    // We should decide if backdrop press declines. Usually yes for incoming requests?
-    // Actually, usually incoming requests are modal and require explicit action. 
-    // BaseModal's onClose will be called on drag down or backdrop.
-    onDecline();
-  };
+  // Photo viewer state (must be before early return to satisfy Rules of Hooks)
+  const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
+  const [photoViewerPhotos, setPhotoViewerPhotos] = useState([]);
+  const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins} min${mins !== 1 ? 's' : ''} remaining`;
-  };
+  const openPhotoViewer = useCallback((photos, index) => {
+    const resolved = photos.map(p => {
+      if (typeof p === 'string') return p;
+      if (p?.url) return p.url;
+      if (p?.uri) return p.uri;
+      return null;
+    }).filter(Boolean);
+    if (resolved.length === 0) return;
+    setPhotoViewerPhotos(resolved);
+    setPhotoViewerIndex(Math.min(index, resolved.length - 1));
+    setPhotoViewerVisible(true);
+  }, []);
 
-  const getItemTypeIcon = (type) => {
-    switch (type?.toLowerCase()) {
-      case 'furniture':
-        return 'bed-outline';
-      case 'package':
-        return 'cube-outline';
-      case 'groceries':
-        return 'cart-outline';
-      case 'electronics':
-        return 'laptop-outline';
-      default:
-        return 'cube-outline';
-    }
-  };
+  const closePhotoViewer = useCallback(() => {
+    setPhotoViewerVisible(false);
+  }, []);
 
   if (!request) return null;
 
-  // Fix: Look for photos in the correct location and handle different formats
-  const displayPhotos = Array.isArray(request?.photos)
-    ? request.photos
-    : Array.isArray(request?.item?.photos)
-      ? request.item.photos
-      : [];
+  // --- Data extraction ---
+  const allItems = Array.isArray(request.items) && request.items.length > 0
+    ? request.items
+    : request.item ? [request.item] : [];
+  const allPhotos = allItems.flatMap(i => Array.isArray(i.photos) ? i.photos : []);
+  const displayPhotos = allPhotos.length > 0 ? allPhotos : Array.isArray(request.photos) ? request.photos : [];
+  const earnings = request.driverPayout || request.earnings || request.price || '$0.00';
+  const pricing = request.pricing || {};
+  const vehicleType = request.vehicle?.type || 'Standard';
+  const scheduledTime = request.scheduledTime;
+  const pickupDetails = request.pickup?.details || {};
+  const dropoffDetails = request.dropoff?.details || {};
+  const needsHelp = pickupDetails.driverHelpsLoading || dropoffDetails.driverHelpsUnloading;
+  const helpText = pickupDetails.driverHelpsLoading && dropoffDetails.driverHelpsUnloading
+    ? 'Loading & Unloading'
+    : pickupDetails.driverHelpsLoading ? 'Loading' : 'Unloading';
+  const timerColor = timeRemaining <= 30 ? colors.error : colors.primary;
+  const timerPercent = timerTotal > 0 ? (Math.max(0, timeRemaining) / timerTotal) * 100 : 0;
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.title}>Incoming Request</Text>
+  // --- Render helpers ---
+  const renderPhotoSource = (photo) => {
+    if (typeof photo === 'string') return { uri: photo };
+    if (photo?.url) return { uri: photo.url };
+    if (photo?.uri) return { uri: photo.uri };
+    return null;
+  };
+
+  const renderLocationDetail = (label, value) => {
+    if (!value) return null;
+    return <Text style={styles.locDetailText}>{label}: {value}</Text>;
+  };
+
+  const renderItemCard = (item, index, photoOffset = 0) => {
+    const photos = Array.isArray(item.photos) ? item.photos : [];
+    return (
+      <View key={index} style={styles.itemCard}>
+        <View style={styles.itemCardHeader}>
+          <Text style={styles.itemName} numberOfLines={1}>
+            {item.description || item.name || item.type || `Item ${index + 1}`}
+          </Text>
+          {item.weightEstimate > 0 && (
+            <Text style={styles.itemWeight}>{item.weightEstimate} lbs</Text>
+          )}
+        </View>
+        {item.dimensions && <Text style={styles.itemDims}>{item.dimensions}</Text>}
+        {photos.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }}>
+            {photos.map((p, i) => {
+              const src = renderPhotoSource(p);
+              if (!src) return null;
+              return (
+                <TouchableOpacity key={i} onPress={() => openPhotoViewer(allPhotos, photoOffset + i)} activeOpacity={0.8}>
+                  <Image source={src} style={styles.itemPhoto} />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
+    );
+  };
+
+  const renderLocationCard = (label, location, details, dotColor) => (
+    <View style={styles.locCard}>
+      <View style={styles.locCardHeader}>
+        <View style={[styles.locDot, { backgroundColor: dotColor }]} />
+        <Text style={styles.locLabel}>{label}</Text>
+      </View>
+      <Text style={styles.locAddress} numberOfLines={2}>
+        {location?.address || `${label} location`}
+      </Text>
+      {(details.locationType || details.floor || details.unitNumber) && (
+        <View style={styles.locDetailsRow}>
+          {renderLocationDetail('Type', details.locationType)}
+          {renderLocationDetail('Unit', details.unitNumber)}
+          {renderLocationDetail('Floor', details.floor)}
+          {details.hasElevator === true && <Text style={styles.locDetailText}>Elevator: Yes</Text>}
+          {details.hasElevator === false && (
+            <Text style={[styles.locDetailText, { color: colors.warning }]}>No elevator</Text>
+          )}
+        </View>
+      )}
+      {details.notes && (
+        <Text style={styles.locNotes} numberOfLines={2}>Note: {details.notes}</Text>
+      )}
     </View>
   );
 
   return (
-    <BaseModal
-      visible={visible}
-      onClose={handleDecline} // Identify backdrop/drag down as decline/dismiss
-      height={SCREEN_HEIGHT * 0.9}
-      backgroundColor={colors.background.secondary}
-      renderHeader={renderHeader}
-      showHandle={true}
-      handleStyle={{ backgroundColor: colors.border.strong }}
-    >
-      {() => (
-        <View style={styles.content}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
-            {/* Earnings and Category Row */}
-            <View style={styles.earningsRow}>
-              <Text style={styles.earningsAmount}>{request.price || '$0.00'}</Text>
-              <View style={styles.categoryBadge}>
-                <Ionicons
-                  name={getItemTypeIcon(request.item?.type)}
-                  size={14}
-                  color={colors.primary}
-                  style={styles.categoryIcon}
-                />
-                <Text style={styles.categoryText}>{request.item?.type || 'Item'}</Text>
-              </View>
-            </View>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
+      {/* Backdrop */}
+      <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]} />
 
-            {/* Timer with Progress Indicator */}
-            <View style={styles.timerContainer}>
-              <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-              <View style={styles.timerBar}>
-                <View
-                  style={[
-                    styles.timerProgress,
-                    { width: `${(timeRemaining / 120) * 100}%` }
-                  ]}
-                />
-              </View>
-            </View>
+      {/* Sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          {
+            height: FULL_HEIGHT,
+            top: SCREEN_HEIGHT - FULL_HEIGHT,
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        {/* ===== DRAG AREA ===== */}
+        <View {...panResponder.panHandlers}>
+          <View style={styles.handleArea}>
+            <View style={styles.handleBar} />
+          </View>
 
-            {/* Locations with Enhanced Design */}
-            <View style={styles.locationsContainer}>
-              {/* Pickup */}
-              <View style={styles.locationCard}>
-                <View style={styles.locationRow}>
-                  <View style={styles.locationIconContainer}>
-                    <View style={styles.pickupDot} />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <View style={styles.locationHeader}>
-                      <Text style={styles.locationTime}>{request.pickup?.time || request.time || '7 min'}</Text>
-                      <Text style={styles.locationDot}>•</Text>
-                      <Text style={styles.locationDistance}>{request.pickup?.distance || request.distance || '2 mi'}</Text>
-                    </View>
-                    <Text style={styles.locationAddress} numberOfLines={2}>
-                      {request.pickup?.address || 'Pickup location'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Connecting Line */}
-              <View style={styles.connectionLine} />
-
-              {/* Dropoff */}
-              <View style={styles.locationCard}>
-                <View style={styles.locationRow}>
-                  <View style={styles.locationIconContainer}>
-                    <View style={styles.dropoffDot} />
-                  </View>
-                  <View style={styles.locationInfo}>
-                    <View style={styles.locationHeader}>
-                      <Text style={styles.locationTime}>{request.dropoff?.time || '11 min'}</Text>
-                      <Text style={styles.locationDot}>•</Text>
-                      <Text style={styles.locationDistance}>{request.dropoff?.distance || request.distance || '4.4 mi'}</Text>
-                    </View>
-                    <Text style={styles.locationAddress} numberOfLines={2}>
-                      {request.dropoff?.address || 'Dropoff location'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Item Description */}
-            <View style={styles.descriptionContainer}>
-              <Text style={styles.descriptionText} numberOfLines={2}>
-                {request.item?.description || 'No description provided'}
+          {/* Timer */}
+          <View style={styles.timerSection}>
+            <View style={styles.timerRow}>
+              <Ionicons name="timer-outline" size={22} color={timerColor} />
+              <Text style={[styles.timerText, { color: timerColor }]}>
+                {formatTime(timeRemaining)}
               </Text>
             </View>
+            <View style={styles.timerBar}>
+              <View style={[styles.timerFill, {
+                width: `${timerPercent}%`,
+                backgroundColor: timerColor,
+              }]} />
+            </View>
+          </View>
 
-            {/* Item Photos */}
-            {displayPhotos.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photosContainer}
-              >
-                {displayPhotos.map((photo, index) => {
-                  // Handle different photo formats
-                  const src = typeof photo === 'string'
-                    ? { uri: photo }
-                    : photo?.url
-                      ? { uri: photo.url }
-                      : photo?.uri
-                        ? { uri: photo.uri }
-                        : null;
-
-                  if (!src) return null;
-
-                  return (
-                    <View key={index} style={styles.photoWrapper}>
-                      <Image source={src} style={styles.itemPhoto} />
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            ) : (
-              // Mock photos for demonstration
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.photosContainer}
-              >
-                {[1, 2, 3].map((_, index) => (
-                  <View key={index} style={styles.photoWrapper}>
-                    <View style={styles.mockPhoto}>
-                      <Ionicons name="image-outline" size={24} color={colors.text.placeholder} />
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Customer Info */}
-            <View style={styles.customerContainer}>
-              <View style={styles.customerLeft}>
-                <View style={styles.customerPhotoContainer}>
-                  <Image
-                    source={
-                      request.customer?.photo
-                        ? { uri: request.customer.photo }
-                        : require('../assets/profile.png')
-                    }
-                    style={styles.customerPhoto}
-                  />
-                </View>
-                <View style={styles.customerInfo}>
-                  <Text style={styles.customerName}>
-                    {request.customerName || (request.customerEmail ? request.customerEmail.split('@')[0] : 'Customer')}
-                  </Text>
-                  <View style={styles.ratingContainer}>
-                    {[...Array(5)].map((_, i) => (
-                      <Ionicons
-                        key={i}
-                        name="star"
-                        size={12}
-                        color={i < Math.floor(request.customer?.rating || 5) ? colors.gold : colors.border.default}
-                      />
-                    ))}
-                    <Text style={styles.ratingText}>
-                      {request.customer?.rating || '5.0'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.customerRight}>
-                <Text style={styles.requestCount}>
-                  Driver Assistance Requested
+          {/* Earnings + Vehicle */}
+          <View style={styles.earningsRow}>
+            <View>
+              <Text style={styles.earningsAmount}>{earnings}</Text>
+              {pricing.laborFee > 0 && (
+                <Text style={styles.earningsNote}>
+                  incl. ${Number(pricing.laborFee).toFixed(2)} labor
                 </Text>
+              )}
+            </View>
+            <View style={styles.vehicleBadge}>
+              <Ionicons name="car-outline" size={16} color={colors.warning} />
+              <Text style={styles.vehicleText}>{vehicleType}</Text>
+            </View>
+          </View>
+
+          {/* Addresses (compact) */}
+          <View style={styles.addressesSection}>
+            <View style={styles.addressRow}>
+              <View style={[styles.addressDot, { backgroundColor: colors.primary }]} />
+              <Text style={styles.addressText} numberOfLines={1}>
+                {request.pickup?.address || 'Pickup location'}
+              </Text>
+            </View>
+            <View style={styles.addressConnector} />
+            <View style={styles.addressRow}>
+              <View style={[styles.addressDot, { backgroundColor: colors.success }]} />
+              <Text style={styles.addressText} numberOfLines={1}>
+                {request.dropoff?.address || 'Dropoff location'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Driver help */}
+          {needsHelp && (
+            <View style={styles.helpBadge}>
+              <Ionicons name="hand-left-outline" size={16} color={colors.warning} />
+              <Text style={styles.helpText}>Help needed: {helpText}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ===== BUTTONS ===== */}
+        <View style={styles.buttonsRow}>
+          <TouchableOpacity style={styles.declineBtn} onPress={dismiss} activeOpacity={0.8}>
+            <Text style={styles.declineTxt}>Decline</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[colors.primary, colors.primaryDark]}
+              style={styles.acceptGrad}
+            >
+              <Text style={styles.acceptTxt}>Accept</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* ===== SCROLLABLE DETAILS (visible at full) ===== */}
+        <ScrollView
+          style={styles.detailsScroll}
+          contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxl }}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={currentSnap === 0}
+          nestedScrollEnabled={true}
+        >
+          <View style={styles.detailsHint}>
+            <View style={styles.hintLine} />
+            <Text style={styles.hintText}>Order Details</Text>
+            <View style={styles.hintLine} />
+          </View>
+
+          {scheduledTime && (
+            <View style={styles.scheduledBadge}>
+              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+              <Text style={styles.scheduledText}>
+                {new Date(scheduledTime).toLocaleString('en-US', {
+                  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                })}
+              </Text>
+            </View>
+          )}
+
+          {renderLocationCard('Pickup', request.pickup, pickupDetails, colors.primary)}
+          {renderLocationCard('Drop-off', request.dropoff, dropoffDetails, colors.success)}
+
+          {allItems.length > 0 && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailTitle}>Items ({allItems.length})</Text>
+              {allItems.map((item, idx) => {
+                const offset = allItems.slice(0, idx).reduce(
+                  (sum, prev) => sum + (Array.isArray(prev.photos) ? prev.photos.length : 0), 0
+                );
+                return renderItemCard(item, idx, offset);
+              })}
+            </View>
+          )}
+
+          {allPhotos.length === 0 && displayPhotos.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.base }}>
+              {displayPhotos.map((p, i) => {
+                const src = renderPhotoSource(p);
+                if (!src) return null;
+                return (
+                  <TouchableOpacity key={i} onPress={() => openPhotoViewer(displayPhotos, i)} activeOpacity={0.8}>
+                    <Image source={src} style={styles.fallbackPhoto} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          <View style={styles.customerCard}>
+            <Image
+              source={
+                request.customer?.photo
+                  ? { uri: request.customer.photo }
+                  : require('../assets/profile.png')
+              }
+              style={styles.customerPhoto}
+            />
+            <View style={styles.customerInfo}>
+              <Text style={styles.customerName}>
+                {request.customerName || (request.customerEmail ? request.customerEmail.split('@')[0] : 'Customer')}
+              </Text>
+              <View style={styles.ratingRow}>
+                {[...Array(5)].map((_, i) => (
+                  <Ionicons
+                    key={i}
+                    name="star"
+                    size={12}
+                    color={i < Math.floor(request.customer?.rating || 5) ? colors.gold : colors.border.default}
+                  />
+                ))}
+                <Text style={styles.ratingText}>{request.customer?.rating || '5.0'}</Text>
               </View>
             </View>
+          </View>
 
-            {/* Action Buttons */}
-            <View style={styles.actionsContainer}>
-              {/* Message Button */}
-              <TouchableOpacity
-                style={styles.messageButton}
-                onPress={() => onMessage(request)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="paper-plane-outline" size={24} color={colors.primary} />
-              </TouchableOpacity>
-
-              {/* Decline Button */}
-              <TouchableOpacity
-                style={styles.declineButton}
-                onPress={handleDecline}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.declineText}>Decline</Text>
-              </TouchableOpacity>
-
-              {/* Accept Button */}
-              <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={handleAccept}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={[colors.primary, colors.primaryDark]}
-                  style={styles.acceptGradient}
-                >
-                  <Text style={styles.acceptText}>Accept</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+          {(pricing.basePrice || pricing.serviceFee || pricing.tax) && (
+            <View style={styles.priceCard}>
+              <Text style={styles.detailTitle}>Price Breakdown</Text>
+              {pricing.basePrice > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Base price</Text>
+                  <Text style={styles.priceVal}>${Number(pricing.basePrice).toFixed(2)}</Text>
+                </View>
+              )}
+              {pricing.laborFee > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Labor fee</Text>
+                  <Text style={styles.priceVal}>${Number(pricing.laborFee).toFixed(2)}</Text>
+                </View>
+              )}
+              {pricing.serviceFee > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Service fee</Text>
+                  <Text style={styles.priceVal}>${Number(pricing.serviceFee).toFixed(2)}</Text>
+                </View>
+              )}
+              {pricing.tax > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Tax</Text>
+                  <Text style={styles.priceVal}>${Number(pricing.tax).toFixed(2)}</Text>
+                </View>
+              )}
+              <View style={[styles.priceRow, styles.priceTotalRow]}>
+                <Text style={styles.priceTotalLabel}>Total</Text>
+                <Text style={styles.priceTotalVal}>{earnings}</Text>
+              </View>
             </View>
-          </ScrollView>
-        </View>
+          )}
+        </ScrollView>
+      </Animated.View>
+
+      {/* Full-screen photo viewer */}
+      {photoViewerVisible && (
+        <TouchableWithoutFeedback onPress={closePhotoViewer}>
+          <View style={styles.photoViewerOverlay}>
+            <FlatList
+              data={photoViewerPhotos}
+              horizontal
+              pagingEnabled
+              initialScrollIndex={photoViewerIndex}
+              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setPhotoViewerIndex(page);
+              }}
+              keyExtractor={(_, i) => i.toString()}
+              renderItem={({ item }) => (
+                <TouchableWithoutFeedback onPress={closePhotoViewer}>
+                  <View style={styles.photoViewerPage}>
+                    <TouchableWithoutFeedback>
+                      <Image source={{ uri: item }} style={styles.photoViewerImage} resizeMode="contain" />
+                    </TouchableWithoutFeedback>
+                  </View>
+                </TouchableWithoutFeedback>
+              )}
+            />
+            {photoViewerPhotos.length > 1 && (
+              <View style={styles.photoViewerDots}>
+                {photoViewerPhotos.map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.photoViewerDot,
+                      i === photoViewerIndex && styles.photoViewerDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+            <TouchableOpacity style={styles.photoViewerClose} onPress={closePhotoViewer}>
+              <Ionicons name="close" size={28} color={colors.white} />
+            </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
       )}
-    </BaseModal>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.black,
+  },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background.secondary,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  handleArea: {
+    paddingTop: 14,
+    paddingBottom: 10,
     alignItems: 'center',
-    marginBottom: 8,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text.primary,
-    letterSpacing: 0.5,
+  handleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border.inverse,
   },
-  content: {
-    paddingHorizontal: 20,
-    flex: 1,
+  timerSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  timerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  timerText: {
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
+    marginLeft: spacing.sm,
+    letterSpacing: 1,
+  },
+  timerBar: {
+    height: 6,
+    backgroundColor: colors.background.input,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  timerFill: {
+    height: '100%',
+    borderRadius: 3,
   },
   earningsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.base,
   },
   earningsAmount: {
-    fontSize: 36,
-    fontWeight: '700',
+    fontSize: typography.fontSize.xxxl + 4,
+    fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     letterSpacing: -1,
   },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
-  },
-  categoryIcon: {
-    marginRight: 6,
-  },
-  categoryText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  timerContainer: {
-    marginBottom: 20,
-  },
-  timerText: {
+  earningsNote: {
+    fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
-    fontSize: 14,
-    marginBottom: 8,
+    marginTop: 2,
   },
-  timerBar: {
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  timerProgress: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-  },
-  locationsContainer: {
-    marginBottom: 20,
-  },
-  locationCard: {
-    backgroundColor: colors.background.input,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  locationRow: {
+  vehicleBadge: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  locationIconContainer: {
-    width: 32,
     alignItems: 'center',
-    paddingTop: 2,
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.xl,
   },
-  pickupDot: {
+  vehicleText: {
+    color: colors.warning,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs,
+  },
+  addressesSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  addressDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+    marginRight: spacing.md,
   },
-  dropoffDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.success,
-    borderWidth: 2,
-    borderColor: 'rgba(0, 212, 170, 0.3)',
-  },
-  connectionLine: {
-    width: 2,
-    height: 20,
-    backgroundColor: 'rgba(139, 92, 246, 0.4)',
-    marginLeft: 17,
-    marginVertical: 8,
-    borderRadius: 1,
-  },
-  locationInfo: {
+  addressText: {
     flex: 1,
-    paddingLeft: 12,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.text.primary,
   },
-  locationHeader: {
+  addressConnector: {
+    width: 2,
+    height: 16,
+    backgroundColor: colors.border.strong,
+    marginLeft: 5,
+  },
+  helpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  locationTime: {
-    color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
+  helpText: {
+    color: colors.warning,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
   },
-  locationDot: {
-    color: colors.text.placeholder,
-    fontSize: 14,
-    marginHorizontal: 8,
+  buttonsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
-  locationDistance: {
-    color: colors.text.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  locationAddress: {
-    color: colors.text.secondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  descriptionContainer: {
-    backgroundColor: colors.background.input,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  descriptionText: {
-    color: colors.text.primary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  photosContainer: {
-    marginBottom: 16,
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  photoWrapper: {
-    marginRight: 8,
-  },
-  itemPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  mockPhoto: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  declineBtn: {
+    flex: 1,
+    height: 64,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.background.elevated,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderStyle: 'dashed',
+    borderColor: colors.border.strong,
   },
-  customerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background.input,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
+  declineTxt: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  acceptBtn: {
+    flex: 1,
+    height: 64,
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: colors.primary,
   },
-  customerLeft: {
-    flexDirection: 'row',
+  acceptGrad: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  acceptTxt: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  detailsScroll: {
     flex: 1,
   },
-  customerPhotoContainer: {
-    borderRadius: 22,
-    borderWidth: 2,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+  detailsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  hintLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border.strong,
+  },
+  hintText: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    marginHorizontal: spacing.md,
+  },
+  scheduledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  scheduledText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.sm,
+  },
+  locCard: {
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  locCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  locDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: spacing.sm,
+  },
+  locLabel: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  locAddress: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    lineHeight: 22,
+    marginBottom: spacing.xs,
+  },
+  locDetailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  locDetailText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+  },
+  locNotes: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
+  detailSection: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+  },
+  detailTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.md,
+  },
+  itemCard: {
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  itemCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemName: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    flex: 1,
+  },
+  itemWeight: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+  },
+  itemDims: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+  },
+  itemPhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: borderRadius.sm,
+    marginRight: spacing.sm,
+    backgroundColor: colors.background.elevated,
+  },
+  fallbackPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.sm,
+    marginLeft: spacing.lg,
+    backgroundColor: colors.background.input,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  customerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.input,
+    padding: spacing.base,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
   customerPhoto: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: colors.background.elevated,
   },
   customerInfo: {
-    marginLeft: 12,
+    marginLeft: spacing.md,
   },
   customerName: {
     color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
     marginBottom: 2,
   },
-  ratingContainer: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   ratingText: {
     color: colors.text.tertiary,
-    fontSize: 12,
-    marginLeft: 4,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.xs,
   },
-  customerRight: {
-    alignItems: 'flex-end',
+  priceCard: {
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
-  requestCount: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  actionsContainer: {
+  priceRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
-  messageButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 30,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.3)',
+  priceLabel: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
   },
-  declineButton: {
-    flex: 1,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.background.elevated,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+  priceVal: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
   },
-  declineText: {
+  priceTotalRow: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+    paddingTop: spacing.sm,
+    marginBottom: 0,
+  },
+  priceTotalLabel: {
     color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
   },
-  acceptButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 30,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.5)',
+  priceTotalVal: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
   },
-  acceptGradient: {
-    flex: 1,
+  photoViewerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    zIndex: 1000,
+    justifyContent: 'center',
+  },
+  photoViewerPage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  acceptText: {
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
+  photoViewerImage: {
+    width: SCREEN_WIDTH - spacing.xxl * 2,
+    height: SCREEN_HEIGHT * 0.65,
+    borderRadius: borderRadius.md,
+  },
+  photoViewerDots: {
+    position: 'absolute',
+    bottom: spacing.xxxl + spacing.xxl,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  photoViewerDot: {
+    width: spacing.sm,
+    height: spacing.sm,
+    borderRadius: borderRadius.xs,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  photoViewerDotActive: {
+    backgroundColor: colors.white,
+    width: spacing.xl,
+  },
+  photoViewerClose: {
+    position: 'absolute',
+    top: spacing.xxxl + spacing.md,
+    right: spacing.lg,
+    width: spacing.xxxl + spacing.sm,
+    height: spacing.xxxl + spacing.sm,
+    borderRadius: borderRadius.xl,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

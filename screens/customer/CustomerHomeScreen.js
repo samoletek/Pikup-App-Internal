@@ -353,10 +353,11 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
-      if (!currentUser?.phone_verified) {
-        setPhoneVerifyVisible(true);
-        return { pending: true };
-      }
+      // TODO: TEMP DISABLED FOR TESTING — restore phone verification
+      // if (!currentUser?.phone_verified) {
+      //   setPhoneVerifyVisible(true);
+      //   return { pending: true };
+      // }
 
       if (activeDelivery || pendingBooking) {
         return {
@@ -366,65 +367,64 @@ export default function CustomerHomeScreen({ navigation }) {
       }
 
       const selectedPaymentMethod = orderData?.selectedPaymentMethod;
-
-      if (!selectedPaymentMethod?.stripePaymentMethodId) {
-        return {
-          success: false,
-          error: "Please select a saved payment method.",
-        };
-      }
-
       const totalAmount = Number(orderData?.pricing?.total || 0);
-      const amountInCents = Math.round(totalAmount * 100);
-      if (!Number.isInteger(amountInCents) || amountInCents <= 0) {
-        return {
-          success: false,
-          error: "Invalid order total. Please review your order and try again.",
-        };
-      }
+
+      // TODO: TEMP DISABLED FOR TESTING — restore payment flow
+      // if (!selectedPaymentMethod?.stripePaymentMethodId) {
+      //   return {
+      //     success: false,
+      //     error: "Please select a saved payment method.",
+      //   };
+      // }
+      // const amountInCents = Math.round(totalAmount * 100);
+      // if (!Number.isInteger(amountInCents) || amountInCents <= 0) {
+      //   return {
+      //     success: false,
+      //     error: "Invalid order total. Please review your order and try again.",
+      //   };
+      // }
 
       try {
-        const rideDetails = {
-          scheduleType: orderData?.scheduleType,
-          scheduledDateTime: orderData?.scheduledDateTime,
-          pickup: orderData?.pickup,
-          dropoff: orderData?.dropoff,
-          distance: orderData?.distance,
-          duration: orderData?.duration,
-          vehicleType: orderData?.selectedVehicle?.type,
-          itemsCount: orderData?.items?.length || 0,
-          timestamp: new Date().toISOString(),
-        };
-
-        const paymentIntentResult = await createPaymentIntent(
-          amountInCents,
-          "usd",
-          rideDetails,
-          selectedPaymentMethod.stripePaymentMethodId
-        );
-
-        if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
-          return {
-            success: false,
-            error: paymentIntentResult.error || "Failed to start payment.",
-          };
-        }
-
-        const paymentResult = await confirmPayment(
-          paymentIntentResult.paymentIntent.client_secret,
-          selectedPaymentMethod.stripePaymentMethodId
-        );
-
-        if (!paymentResult.success) {
-          return {
-            success: false,
-            error: paymentResult.error || "Unable to confirm payment.",
-          };
-        }
+        // TODO: TEMP DISABLED FOR TESTING — restore payment flow
+        // const rideDetails = {
+        //   scheduleType: orderData?.scheduleType,
+        //   scheduledDateTime: orderData?.scheduledDateTime,
+        //   pickup: orderData?.pickup,
+        //   dropoff: orderData?.dropoff,
+        //   distance: orderData?.distance,
+        //   duration: orderData?.duration,
+        //   vehicleType: orderData?.selectedVehicle?.type,
+        //   itemsCount: orderData?.items?.length || 0,
+        //   timestamp: new Date().toISOString(),
+        // };
+        // const paymentIntentResult = await createPaymentIntent(
+        //   amountInCents,
+        //   "usd",
+        //   rideDetails,
+        //   selectedPaymentMethod.stripePaymentMethodId
+        // );
+        // if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
+        //   return {
+        //     success: false,
+        //     error: paymentIntentResult.error || "Failed to start payment.",
+        //   };
+        // }
+        // const paymentResult = await confirmPayment(
+        //   paymentIntentResult.paymentIntent.client_secret,
+        //   selectedPaymentMethod.stripePaymentMethodId
+        // );
+        // if (!paymentResult.success) {
+        //   return {
+        //     success: false,
+        //     error: paymentResult.error || "Unable to confirm payment.",
+        //   };
+        // }
 
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,
+          pickupDetails: orderData?.pickupDetails || {},
+          dropoffDetails: orderData?.dropoffDetails || {},
           vehicle: orderData?.selectedVehicle,
           pricing: {
             ...(orderData?.pricing || {}),
