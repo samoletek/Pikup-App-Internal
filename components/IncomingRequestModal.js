@@ -546,19 +546,19 @@ const styles = StyleSheet.create({
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowRadius: spacing.md,
     elevation: 10,
     overflow: 'hidden',
   },
   handleArea: {
-    paddingTop: 14,
-    paddingBottom: 10,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.sm,
     alignItems: 'center',
   },
   handleBar: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+    width: spacing.xxxl - spacing.sm,
+    height: spacing.xs,
+    borderRadius: borderRadius.xs,
     backgroundColor: colors.border.inverse,
   },
   timerSection: {
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: spacing.sm,
   },
   timerText: {
     fontSize: typography.fontSize.xxxl,
@@ -577,14 +577,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   timerBar: {
-    height: 6,
+    height: spacing.sm - 2,
     backgroundColor: colors.background.input,
-    borderRadius: 3,
+    borderRadius: borderRadius.xs,
     overflow: 'hidden',
   },
   timerFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: borderRadius.xs,
   },
   earningsRow: {
     flexDirection: 'row',
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   earningsNote: {
     fontSize: typography.fontSize.sm,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: spacing.xs / 2,
   },
   vehicleBadge: {
     flexDirection: 'row',
@@ -625,12 +625,12 @@ const styles = StyleSheet.create({
   addressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: spacing.sm - 2,
   },
   addressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: spacing.md,
+    height: spacing.md,
+    borderRadius: spacing.md / 2,
     marginRight: spacing.md,
   },
   addressText: {
@@ -641,9 +641,9 @@ const styles = StyleSheet.create({
   },
   addressConnector: {
     width: 2,
-    height: 16,
+    height: spacing.base,
     backgroundColor: colors.border.strong,
-    marginLeft: 5,
+    marginLeft: spacing.xs + 1,
   },
   helpBadge: {
     flexDirection: 'row',
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
   },
   declineBtn: {
     flex: 1,
-    height: 64,
+    height: spacing.xxxl + spacing.base,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.elevated,
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     flex: 1,
-    height: 64,
+    height: spacing.xxxl + spacing.base,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
     borderWidth: 1,
@@ -824,15 +824,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   itemPhoto: {
-    width: 60,
-    height: 60,
+    width: spacing.xxxl + spacing.md,
+    height: spacing.xxxl + spacing.md,
     borderRadius: borderRadius.sm,
     marginRight: spacing.sm,
     backgroundColor: colors.background.elevated,
   },
   fallbackPhoto: {
-    width: 72,
-    height: 72,
+    width: spacing.xxxl + spacing.xl,
+    height: spacing.xxxl + spacing.xl,
     borderRadius: borderRadius.md,
     marginRight: spacing.sm,
     marginLeft: spacing.lg,
@@ -852,9 +852,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border.strong,
   },
   customerPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: spacing.xxxl - spacing.sm,
+    height: spacing.xxxl - spacing.sm,
+    borderRadius: (spacing.xxxl - spacing.sm) / 2,
     backgroundColor: colors.background.elevated,
   },
   customerInfo: {
