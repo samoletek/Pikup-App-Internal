@@ -185,52 +185,66 @@ const LocationDetailsStep = ({
                 </>
             )}
 
-            {/* Static Global Fields */}
-            <View style={styles.field}>
-                <Text style={styles.fieldLabel}>{helpText}</Text>
-                <View style={styles.toggleRow}>
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, details[helpKey] && styles.toggleBtnActive]}
-                        onPress={() => updateDetails({ [helpKey]: true })}
-                    >
-                        <Ionicons
-                            name="people"
-                            size={20}
-                            color={details[helpKey] ? colors.text.primary : colors.text.muted}
-                        />
-                        <Text style={[styles.toggleText, details[helpKey] && styles.toggleTextActive]}>
-                            Yes, please help
-                        </Text>
-                    </TouchableOpacity>
+            {/* Driver help — global question, only on pickup */}
+            {isPickup && (
+                <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Driver helps with loading/unloading?</Text>
+                    <View style={styles.toggleRow}>
+                        <TouchableOpacity
+                            style={[styles.toggleBtn, details.driverHelp && styles.toggleBtnActive]}
+                            onPress={() => updateDetails({ driverHelp: true })}
+                        >
+                            <Ionicons
+                                name="people"
+                                size={20}
+                                color={details.driverHelp ? colors.text.primary : colors.text.muted}
+                            />
+                            <Text style={[styles.toggleText, details.driverHelp && styles.toggleTextActive]}>
+                                Yes, please help
+                            </Text>
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={[styles.toggleBtn, !details[helpKey] && styles.toggleBtnActive]}
-                        onPress={() => updateDetails({ [helpKey]: false })}
-                    >
-                        <Ionicons
-                            name="person"
-                            size={20}
-                            color={!details[helpKey] ? colors.text.primary : colors.text.muted}
-                        />
-                        <Text style={[styles.toggleText, !details[helpKey] && styles.toggleTextActive]}>
-                            I'll handle it
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-                {details[helpKey] && (
-                    <View style={styles.helpNote}>
-                        <Ionicons name="information-circle" size={16} color={colors.primary} />
-                        <Text style={styles.helpNoteText}>
-                            Additional fee may apply for loading/unloading.
-                        </Text>
+                        <TouchableOpacity
+                            style={[styles.toggleBtn, details.driverHelp === false && styles.toggleBtnActive]}
+                            onPress={() => updateDetails({ driverHelp: false })}
+                        >
+                            <Ionicons
+                                name="person"
+                                size={20}
+                                color={details.driverHelp === false ? colors.text.primary : colors.text.muted}
+                            />
+                            <Text style={[styles.toggleText, details.driverHelp === false && styles.toggleTextActive]}>
+                                I'll handle it
+                            </Text>
+                        </TouchableOpacity>
                     </View>
-                )}
+                    {details.driverHelp && (
+                        <View style={styles.helpNote}>
+                            <Ionicons name="information-circle" size={16} color={colors.primary} />
+                            <Text style={styles.helpNoteText}>
+                                Additional fee may apply for loading/unloading.
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
+            {/* Reminders */}
+            <View style={styles.field}>
                 <View style={styles.helpNote}>
                     <Ionicons name="time-outline" size={16} color={colors.secondary} />
                     <Text style={styles.helpNoteText}>
                         Please be at the {isPickup ? 'pickup' : 'dropoff'} location ~5 min before the driver arrives.
                     </Text>
                 </View>
+                {!isPickup && (
+                    <View style={styles.helpNote}>
+                        <Ionicons name="information-circle" size={16} color={colors.primary} />
+                        <Text style={styles.helpNoteText}>
+                            If you need driver assistance with unloading, please mention it in Additional Notes.
+                        </Text>
+                    </View>
+                )}
             </View>
 
             <View style={styles.field}>

@@ -97,7 +97,7 @@
 - [x] #87 Cascading questions by location type (Store/Apartment/House/Other)
 - [x] #88 Remove "Order Confirmation Number" field
 - [x] #107 Store vs Marketplace selection (optional, not critical)
-- [ ] #108 Global "Driver help" question (applies to both pickup & dropoff) *
+- [x] #108 Global "Driver help" question (applies to both pickup & dropoff) *
 
 ### Customer Flow - Step 6: Review & Payment (REDESIGN) *
 - [x] #89 Remove intermediate summary screen
