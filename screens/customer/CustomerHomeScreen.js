@@ -353,10 +353,11 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
-      if (!currentUser?.phone_verified) {
-        setPhoneVerifyVisible(true);
-        return { pending: true };
-      }
+      // TODO: TEMP DISABLED for testing - restore phone verification
+      // if (!currentUser?.phone_verified) {
+      //   setPhoneVerifyVisible(true);
+      //   return { pending: true };
+      // }
 
       if (activeDelivery || pendingBooking) {
         return {

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import Mapbox from '@rnmapbox/maps';
@@ -76,6 +76,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const requestTimerRef = useRef(null);
   const handleDeclineRef = useRef(null);
   const miniBarPulse = useRef(new Animated.Value(0)).current;
+  const onlineDriverPulse = useRef(new Animated.Value(0)).current;
 
   // State for tracking available requests
   const [availableRequests, setAvailableRequests] = useState([]);
@@ -123,6 +124,28 @@ export default function DriverHomeScreen({ navigation, route }) {
   // Modal animation
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  const onlineDriverMarkerCoordinate = useMemo(() => {
+    if (!driverLocation?.longitude || !driverLocation?.latitude) {
+      return null;
+    }
+
+    return [driverLocation.longitude, driverLocation.latitude];
+  }, [driverLocation?.longitude, driverLocation?.latitude]);
+
+  const shouldShowOnlineDriverMarker = Boolean(
+    isOnline && !acceptedRequestId && onlineDriverMarkerCoordinate
+  );
+
+  const onlineDriverPulseSize = onlineDriverPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [24, 94],
+  });
+
+  const onlineDriverPulseOpacity = onlineDriverPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.45, 0.05],
+  });
+
   // Monitor order status for accepted requests
   useOrderStatusMonitor(acceptedRequestId, navigation, {
     currentScreen: 'DriverHomeScreen',
@@ -145,6 +168,38 @@ export default function DriverHomeScreen({ navigation, route }) {
       clearAutoRefresh();
     };
   }, []);
+
+  useEffect(() => {
+    if (!shouldShowOnlineDriverMarker) {
+      onlineDriverPulse.stopAnimation();
+      onlineDriverPulse.setValue(0);
+      return;
+    }
+
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(onlineDriverPulse, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(onlineDriverPulse, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+
+    pulseAnimation.start();
+
+    return () => {
+      pulseAnimation.stop();
+      onlineDriverPulse.stopAnimation();
+      onlineDriverPulse.setValue(0);
+    };
+  }, [onlineDriverPulse, shouldShowOnlineDriverMarker]);
 
   // Handle route parameters for navigation from other screens
   useEffect(() => {
@@ -751,9 +806,40 @@ export default function DriverHomeScreen({ navigation, route }) {
 
           {/* Show user location */}
           <Mapbox.UserLocation
-            visible={true}
-            showsUserHeadingIndicator={isOnline}
+            visible={!shouldShowOnlineDriverMarker}
+            showsUserHeadingIndicator={isOnline && !shouldShowOnlineDriverMarker}
           />
+
+          {/* Pulsing driver marker while online and waiting for order acceptance */}
+          {shouldShowOnlineDriverMarker && onlineDriverMarkerCoordinate && (
+            <Mapbox.MarkerView
+              id="online-driver-marker"
+              coordinate={onlineDriverMarkerCoordinate}
+              anchor={{ x: 0.5, y: 0.5 }}
+              allowOverlap
+              allowOverlapWithPuck
+            >
+              <View style={styles.onlineDriverMarkerContainer}>
+                <Animated.View
+                  style={[
+                    styles.onlineDriverMarkerPulse,
+                    {
+                      opacity: onlineDriverPulseOpacity,
+                      width: onlineDriverPulseSize,
+                      height: onlineDriverPulseSize,
+                    },
+                  ]}
+                />
+                <View style={styles.onlineDriverMarkerCore}>
+                  <Image
+                    source={require('../../assets/pickup-truck.png')}
+                    style={styles.onlineDriverMarkerIcon}
+                    resizeMode="contain"
+                  />
+                </View>
+              </View>
+            </Mapbox.MarkerView>
+          )}
 
           {/* Show available pickup request markers (hide when incoming is active) */}
           {isOnline && !showIncomingModal && !isMinimized && availableRequests.map((request) => {
@@ -765,25 +851,25 @@ export default function DriverHomeScreen({ navigation, route }) {
             const isSelected = selectedRequest && selectedRequest.id === request.id;
 
             return (
-              <Mapbox.PointAnnotation
+              <Mapbox.MarkerView
                 key={request.id}
                 id={`request-${request.id}`}
                 coordinate={[request.pickup.coordinates.longitude, request.pickup.coordinates.latitude]}
-                onSelected={() => handleRequestMarkerPress(request)}
+                anchor={{ x: 0.5, y: 1 }}
+                allowOverlap
               >
-                <View style={[
-                  styles.requestMarker,
-                  isSelected && styles.selectedMarker
-                ]}>
-                  <Text style={styles.requestMarkerPrice}>{request.price}</Text>
-                  <View
-                    style={[
-                      styles.requestMarkerArrow,
-                      isSelected && styles.selectedMarkerArrow,
-                    ]}
-                  />
-                </View>
-              </Mapbox.PointAnnotation>
+                <TouchableOpacity
+                  onPress={() => handleRequestMarkerPress(request)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.requestMarkerCircle,
+                    isSelected && styles.selectedMarker
+                  ]}>
+                    <Ionicons name="cash-outline" size={16} color={colors.white} />
+                  </View>
+                </TouchableOpacity>
+              </Mapbox.MarkerView>
             );
           })}
 
@@ -830,28 +916,26 @@ export default function DriverHomeScreen({ navigation, route }) {
 
           {/* Incoming request pickup marker */}
           {incomingMarkers?.pickup && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="incoming-pickup"
               coordinate={incomingMarkers.pickup}
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
             >
-              <View style={styles.routeMarker}>
-                <View style={[styles.routeMarkerDot, { backgroundColor: colors.primary }]} />
-                <Text style={styles.routeMarkerLabel}>P</Text>
-              </View>
-            </Mapbox.PointAnnotation>
+              <View style={[styles.routeMarker, { backgroundColor: colors.primaryDark }]} />
+            </Mapbox.MarkerView>
           )}
 
           {/* Incoming request dropoff marker */}
           {incomingMarkers?.dropoff && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="incoming-dropoff"
               coordinate={incomingMarkers.dropoff}
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
             >
-              <View style={styles.routeMarker}>
-                <View style={[styles.routeMarkerDot, { backgroundColor: colors.success }]} />
-                <Text style={styles.routeMarkerLabel}>D</Text>
-              </View>
-            </Mapbox.PointAnnotation>
+              <View style={[styles.routeMarker, { backgroundColor: colors.primary }]} />
+            </Mapbox.MarkerView>
           )}
         </Mapbox.MapView>
       )}
@@ -1226,6 +1310,21 @@ const styles = StyleSheet.create({
     elevation: 4,
     alignItems: 'center',
   },
+  requestMarkerCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primaryDark,
+    borderWidth: 2,
+    borderColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   selectedMarker: {
     backgroundColor: colors.primary,
     borderColor: colors.white,
@@ -1240,6 +1339,38 @@ const styles = StyleSheet.create({
   },
   requestMarkerArrow: {
     display: 'none',
+  },
+  onlineDriverMarkerContainer: {
+    width: 136,
+    height: 136,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineDriverMarkerPulse: {
+    backgroundColor: colors.transparent,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: 999,
+  },
+  onlineDriverMarkerCore: {
+    position: 'absolute',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primaryDark,
+    borderWidth: 2,
+    borderColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  onlineDriverMarkerIcon: {
+    width: 24,
+    height: 14,
   },
   routeMarker: {
     alignItems: 'center',
