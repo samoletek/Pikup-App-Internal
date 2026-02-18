@@ -8,8 +8,9 @@ import LocationDetailsStep from '../order/LocationDetailsStep';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 import { usePayment } from '../../contexts/PaymentContext';
-import { calculatePrice } from '../../services/PricingService';
+import { calculatePrice, getVehicleRates } from '../../services/PricingService';
 import MapboxLocationService from '../../services/MapboxLocationService';
+import { recommendVehicleForItems } from '../../services/AIService';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -45,6 +46,93 @@ const createLocationDetailsDefaults = () => ({
     notes: '',
 });
 
+const createAiVehicleRecommendationDefaults = () => ({
+    status: 'idle',
+    requestFingerprint: null,
+    requestedAt: null,
+    completedAt: null,
+    summary: '',
+    recommendedVehicleId: null,
+    fitByVehicle: {},
+    loadingEstimate: '',
+    unloadingEstimate: '',
+    step6Description: '',
+    notes: '',
+    error: null,
+});
+
+const normalizeItemText = (value) => (value || '').trim().toLowerCase();
+
+const buildItemsFingerprint = (items = []) => {
+    const normalized = (items || []).map(item => ({
+        name: normalizeItemText(item.name),
+        description: normalizeItemText(item.description),
+        condition: normalizeItemText(item.condition || 'used'),
+        fragile: !!item.isFragile,
+        insured: !!item.hasInsurance,
+        weight: Number(item.weightEstimate) || 0,
+    })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
+    return JSON.stringify(normalized);
+};
+
+const buildItemsSummary = (items = []) => {
+    const grouped = new Map();
+    let totalWeight = 0;
+
+    (items || []).forEach(item => {
+        const name = (item.name || 'Unnamed item').trim();
+        const description = (item.description || '').trim();
+        const condition = (item.condition || 'used').trim();
+        const fragile = !!item.isFragile;
+        const insured = !!item.hasInsurance;
+        const weight = Number(item.weightEstimate) || 0;
+        totalWeight += weight;
+
+        const key = `${name}|${description}|${condition}|${fragile}|${insured}`;
+        if (!grouped.has(key)) {
+            grouped.set(key, {
+                name,
+                description,
+                condition,
+                fragile,
+                insured,
+                count: 0,
+                weight: 0,
+            });
+        }
+
+        const entry = grouped.get(key);
+        entry.count += 1;
+        entry.weight += weight;
+    });
+
+    const lines = Array.from(grouped.values()).map((entry, index) => {
+        const attributes = [
+            `${entry.count}x`,
+            entry.name,
+            `condition: ${entry.condition}`,
+            `fragile: ${entry.fragile ? 'yes' : 'no'}`,
+            `insured: ${entry.insured ? 'yes' : 'no'}`,
+            `est weight total: ${entry.weight} lbs`,
+        ];
+
+        if (entry.description) {
+            attributes.push(`description: ${entry.description}`);
+        }
+
+        return `${index + 1}. ${attributes.join('; ')}`;
+    });
+
+    return [
+        `Total distinct lines: ${grouped.size}`,
+        `Total items count: ${items.length}`,
+        `Estimated total weight: ${totalWeight} lbs`,
+        'Items:',
+        ...lines,
+    ].join('\n');
+};
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -68,7 +156,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         selectedPaymentMethodId: null,
         distance: null,
         duration: null,
-        pricing: null
+        pricing: null,
+        aiVehicleRecommendation: createAiVehicleRecommendationDefaults(),
     });
 
     // Recent addresses (for Step 1)
@@ -103,7 +192,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             selectedPaymentMethodId: null,
             distance: null,
             duration: null,
-            pricing: null
+            pricing: null,
+            aiVehicleRecommendation: createAiVehicleRecommendationDefaults(),
         });
         setExpandedItemId(null);
         setPreviewPricing(null);
@@ -225,10 +315,12 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         }
         Alert.alert('Cancel Order?', 'Your progress will be lost.', [
             { text: 'Keep Editing', style: 'cancel' },
-            { text: 'Cancel Order', style: 'destructive', onPress: () => {
-                resetState();
-                onClose();
-            }}
+            {
+                text: 'Cancel Order', style: 'destructive', onPress: () => {
+                    resetState();
+                    onClose();
+                }
+            }
         ]);
     };
 
@@ -335,6 +427,126 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         Keyboard.dismiss();
         if (isSubmitting) return;
         if (!validateStep()) return;
+
+        const triggerVehicleRecommendation = async (itemsSnapshot) => {
+            const validItems = (itemsSnapshot || []).filter(item => item?.name?.trim());
+            if (validItems.length === 0) return;
+
+            const requestFingerprint = buildItemsFingerprint(validItems);
+            const summary = buildItemsSummary(validItems);
+
+            setOrderData(prev => {
+                const currentAi = prev.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
+                if (
+                    currentAi.requestFingerprint === requestFingerprint &&
+                    (currentAi.status === 'loading' || currentAi.status === 'success')
+                ) {
+                    return prev;
+                }
+
+                return {
+                    ...prev,
+                    aiVehicleRecommendation: {
+                        ...currentAi,
+                        status: 'loading',
+                        requestFingerprint,
+                        requestedAt: new Date().toISOString(),
+                        completedAt: null,
+                        summary,
+                        loadingEstimate: '',
+                        unloadingEstimate: '',
+                        step6Description: '',
+                        notes: '',
+                        error: null,
+                    },
+                };
+            });
+
+            try {
+                const vehicles = await getVehicleRates();
+                const recommendation = await recommendVehicleForItems({
+                    itemSummary: summary,
+                    items: validItems,
+                    vehicles,
+                });
+
+                setOrderData(prev => {
+                    const currentAi = prev.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
+                    if (currentAi.requestFingerprint !== requestFingerprint) {
+                        return prev;
+                    }
+
+                    const selectedVehicleId = prev.selectedVehicle?.id;
+                    const selectedIsTooSmall = selectedVehicleId
+                        ? recommendation?.fitByVehicle?.[selectedVehicleId]?.fits === false
+                        : false;
+
+                    return {
+                        ...prev,
+                        selectedVehicle: selectedIsTooSmall ? null : prev.selectedVehicle,
+                        aiVehicleRecommendation: {
+                            ...currentAi,
+                            status: 'success',
+                            completedAt: new Date().toISOString(),
+                            recommendedVehicleId: recommendation.recommendedVehicleId || null,
+                            fitByVehicle: recommendation.fitByVehicle || {},
+                            loadingEstimate: recommendation.loadingEstimate || '',
+                            unloadingEstimate: recommendation.unloadingEstimate || '',
+                            step6Description: recommendation.step6Description || '',
+                            notes: recommendation.notes || recommendation.step6Description || '',
+                            error: null,
+                        },
+                    };
+                });
+            } catch (error) {
+                setOrderData(prev => {
+                    const currentAi = prev.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
+                    if (currentAi.requestFingerprint !== requestFingerprint) {
+                        return prev;
+                    }
+
+                    return {
+                        ...prev,
+                        aiVehicleRecommendation: {
+                            ...currentAi,
+                            status: 'error',
+                            completedAt: new Date().toISOString(),
+                            error: error?.message || 'Vehicle recommendation failed',
+                        },
+                    };
+                });
+            }
+        };
+
+        const continueAfterStepTwo = () => {
+            const itemsSnapshot = [...orderData.items];
+            triggerVehicleRecommendation(itemsSnapshot);
+            goToStep(currentStep + 1, 'forward');
+        };
+
+        // Show AI review prompt when leaving step 2 with AI-detected items
+        if (currentStep === 2 && orderData.items.some(item => item.addedByAI)) {
+            Alert.alert(
+                'Review AI Results',
+                'We recommend reviewing the items detected by AI before continuing.',
+                [
+                    {
+                        text: 'Review',
+                        style: 'cancel',
+                    },
+                    {
+                        text: 'Continue',
+                        onPress: continueAfterStepTwo,
+                    }
+                ]
+            );
+            return;
+        }
+
+        if (currentStep === 2) {
+            continueAfterStepTwo();
+            return;
+        }
 
         if (currentStep < 6) {
             // Pre-compute pricing when entering Review step

@@ -156,7 +156,8 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
                             value: '',
                             invoicePhoto: null,
                             category: aiItem.category || 'Other',
-                            weightEstimate: aiItem.estimated_weight_lbs
+                            weightEstimate: aiItem.estimated_weight_lbs,
+                            addedByAI: true
                         };
 
                         newItems.push(newItem);

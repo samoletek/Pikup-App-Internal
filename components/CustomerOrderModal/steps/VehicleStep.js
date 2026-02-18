@@ -12,6 +12,7 @@ const DEFAULT_MAX_WEIGHT = {
     fullsize_truck: 3000,
     cargo_truck: 5000,
 };
+const TOO_SMALL_REASON = 'Too small for your items.';
 
 const VehicleStep = ({ orderData, setOrderData }) => {
     const [vehicles, setVehicles] = useState([]);
@@ -19,6 +20,9 @@ const VehicleStep = ({ orderData, setOrderData }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingPrices, setIsLoadingPrices] = useState(false);
     const [expandedId, setExpandedId] = useState(null);
+    const aiRecommendation = orderData.aiVehicleRecommendation || {};
+    const aiStatus = aiRecommendation.status || 'idle';
+    const aiFitByVehicle = aiRecommendation.fitByVehicle || {};
 
     // Calculate total weight from AI-analyzed items
     const totalWeight = useMemo(() => {
@@ -26,8 +30,41 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         return orderData.items.reduce((sum, item) => sum + (item.weightEstimate || 0), 0);
     }, [orderData.items]);
 
-    // Determine AI-recommended vehicle (smallest that fits the total weight)
-    const recommendedVehicleId = useMemo(() => {
+    const fitMetaByVehicle = useMemo(() => {
+        const meta = {};
+
+        vehicles.forEach(vehicle => {
+            const maxWeight = vehicle.maxWeight || DEFAULT_MAX_WEIGHT[vehicle.id] || Infinity;
+            const overweight = totalWeight > 0 && Number.isFinite(maxWeight) && totalWeight > maxWeight;
+            const aiFit = aiStatus === 'success' ? aiFitByVehicle[vehicle.id] : null;
+
+            if (aiFit && aiFit.fits === false) {
+                meta[vehicle.id] = {
+                    disabled: true,
+                    reason: TOO_SMALL_REASON,
+                };
+                return;
+            }
+
+            if (overweight) {
+                meta[vehicle.id] = {
+                    disabled: true,
+                    reason: TOO_SMALL_REASON,
+                };
+                return;
+            }
+
+            meta[vehicle.id] = {
+                disabled: false,
+                reason: '',
+            };
+        });
+
+        return meta;
+    }, [vehicles, totalWeight, aiStatus, aiFitByVehicle]);
+
+    // Fallback recommendation (smallest by weight fit)
+    const fallbackRecommendedVehicleId = useMemo(() => {
         if (totalWeight === 0 || vehicles.length === 0) return null;
         const fit = vehicles.find(v => {
             const maxWeight = v.maxWeight || DEFAULT_MAX_WEIGHT[v.id] || Infinity;
@@ -36,21 +73,39 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         return fit ? fit.id : vehicles[vehicles.length - 1]?.id;
     }, [totalWeight, vehicles]);
 
+    // AI recommendation (if available and valid), otherwise fallback
+    const recommendedVehicleId = useMemo(() => {
+        const aiRecommended = aiStatus === 'success' ? aiRecommendation.recommendedVehicleId : null;
+        if (aiRecommended && !fitMetaByVehicle[aiRecommended]?.disabled) {
+            return aiRecommended;
+        }
+        return fallbackRecommendedVehicleId;
+    }, [aiStatus, aiRecommendation.recommendedVehicleId, fitMetaByVehicle, fallbackRecommendedVehicleId]);
+
     // Auto-expand & auto-select recommended (or first) vehicle once loaded
     useEffect(() => {
-        if (vehicles.length === 0 || expandedId) return;
+        if (vehicles.length === 0) return;
 
-        const autoId = recommendedVehicleId || orderData.selectedVehicle?.id || vehicles[0]?.id;
+        const firstEnabledVehicle = vehicles.find(v => !fitMetaByVehicle[v.id]?.disabled);
+        const selectedVehicleId = orderData.selectedVehicle?.id;
+        const selectedVehicleIsValid = selectedVehicleId && !fitMetaByVehicle[selectedVehicleId]?.disabled;
+        if (expandedId && selectedVehicleIsValid) return;
+
+        const autoId = [recommendedVehicleId, selectedVehicleId, firstEnabledVehicle?.id, vehicles[0]?.id]
+            .find(id => id && !fitMetaByVehicle[id]?.disabled) || firstEnabledVehicle?.id || vehicles[0]?.id;
+
         if (!autoId) return;
 
         setExpandedId(autoId);
 
-        // Also auto-select if nothing selected yet
-        if (!orderData.selectedVehicle) {
+        // Also auto-select if nothing selected yet (or selected became invalid)
+        if (!orderData.selectedVehicle || fitMetaByVehicle[selectedVehicleId]?.disabled) {
             const v = vehicles.find(v => v.id === autoId);
-            if (v) setOrderData(prev => ({ ...prev, selectedVehicle: v }));
+            if (v) {
+                setOrderData(prev => ({ ...prev, selectedVehicle: v }));
+            }
         }
-    }, [vehicles, recommendedVehicleId]);
+    }, [vehicles, recommendedVehicleId, expandedId, orderData.selectedVehicle, fitMetaByVehicle, setOrderData]);
 
     // Load vehicles
     useEffect(() => {
@@ -94,6 +149,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
     }, [vehicles, orderData.distance, orderData.duration]);
 
     const handleToggleExpand = (vehicleId) => {
+        if (fitMetaByVehicle[vehicleId]?.disabled) return;
         setExpandedId(prev => prev === vehicleId ? null : vehicleId);
     };
 
@@ -108,7 +164,15 @@ const VehicleStep = ({ orderData, setOrderData }) => {
 
     return (
         <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.vehicleHint}>Choose the vehicle that fits your items</Text>
+            <Text style={styles.vehicleHint}>
+                {aiStatus === 'loading'
+                    ? 'Analyzing your items for best vehicle fit...'
+                    : aiStatus === 'success'
+                        ? 'AI recommendation ready. Vehicles that will not fit are disabled.'
+                        : aiStatus === 'error'
+                            ? 'AI recommendation unavailable. Showing best estimate.'
+                            : 'Choose the vehicle that fits your items'}
+            </Text>
 
             {vehicles.map(vehicle => (
                 <VehicleCard
@@ -117,6 +181,8 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                     isSelected={orderData.selectedVehicle?.id === vehicle.id}
                     isExpanded={expandedId === vehicle.id}
                     isRecommended={vehicle.id === recommendedVehicleId}
+                    isDisabled={!!fitMetaByVehicle[vehicle.id]?.disabled}
+                    disabledReason={fitMetaByVehicle[vehicle.id]?.reason || ''}
                     isLoadingPrice={isLoadingPrices}
                     displayPrice={prices[vehicle.id]}
                     onSelect={(v) => setOrderData(prev => ({

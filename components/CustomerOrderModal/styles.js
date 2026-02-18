@@ -335,6 +335,37 @@ export const styles = StyleSheet.create({
     itemSummaryBadges: { flexDirection: 'row' },
     fragileTag: { backgroundColor: colors.secondaryLight, color: colors.secondary, fontSize: typography.fontSize.xs, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.xs, marginLeft: 6 },
     insuredTag: { backgroundColor: colors.primaryLight, color: colors.primary, fontSize: typography.fontSize.xs, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.xs, marginLeft: 6 },
+    handlingEstimateBox: {
+        marginTop: spacing.sm,
+        paddingTop: spacing.base,
+        borderTopWidth: 1,
+        borderTopColor: colors.border.default,
+    },
+    handlingEstimateTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.bold,
+        marginBottom: spacing.sm,
+    },
+    handlingEstimateRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xs,
+    },
+    handlingEstimateLabel: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.base,
+    },
+    handlingEstimateValue: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.base,
+        fontWeight: typography.fontWeight.semibold,
+    },
+    handlingEstimateHint: {
+        marginTop: spacing.xs,
+        color: colors.text.placeholder,
+        fontSize: typography.fontSize.xs,
+    },
     vehicleSummary: { flexDirection: 'row', alignItems: 'center' },
     vehicleSummaryImg: { width: 60, height: 35, resizeMode: 'contain', marginRight: spacing.md },
     vehicleSummaryName: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
