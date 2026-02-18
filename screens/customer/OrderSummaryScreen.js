@@ -80,21 +80,20 @@ export default function OrderSummaryScreen({ navigation, route }) {
   };
 
   const handleSchedule = async () => {
-    // TODO: TEMP DISABLED for testing - restore phone verification
-    // if (!currentUser?.phone_verified) {
-    //   Alert.alert(
-    //     'Phone Verification Required',
-    //     'Please verify your phone number before requesting a pickup.',
-    //     [
-    //       { text: 'Cancel', style: 'cancel' },
-    //       {
-    //         text: 'Verify Now',
-    //         onPress: () => setPhoneVerifyVisible(true),
-    //       },
-    //     ]
-    //   );
-    //   return;
-    // }
+    if (!currentUser?.phone_verified) {
+      Alert.alert(
+        'Phone Verification Required',
+        'Please verify your phone number before requesting a pickup.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Verify Now',
+            onPress: () => setPhoneVerifyVisible(true),
+          },
+        ]
+      );
+      return;
+    }
 
     if (!defaultPaymentMethod && paymentMethods.length === 0) {
       Alert.alert(
