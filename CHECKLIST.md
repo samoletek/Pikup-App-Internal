@@ -174,7 +174,7 @@
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
 - [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.) - adrei
 - [x] #115 "Go Online" flow: ask "Solo or Team today?" - adrei
-- [ ] #116 Order notification card: full design with photos, timer - khan
+- [x] #116 Order notification card: full design with photos, timer - khan
 - [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
 
 ### Backend / Infrastructure
@@ -204,7 +204,7 @@
 - [ ] #57 Referral program with deep links
 
 ### Driver Flow - Home Screen
-- [ ] #62 Large buttons for driver (use while driving) - khan
+- [x] #62 Large buttons for driver (use while driving) - khan
 - [ ] #63 Evaluate Map + Online toggle for scheduled moving - TBD
 - [ ] #64 Add button to open recent trips modal - erema
 
@@ -213,15 +213,15 @@
 - [ ] #66 Realtime sync with Supabase - erema
 
 ### Driver Flow - Order Notification
-- [ ] #67 Popup modal for incoming orders with timer - khan
-- [ ] #68 Show: pickup location, earnings, accept/decline time - khan
+- [x] #67 Popup modal for incoming orders with timer - khan
+- [x] #68 Show: pickup location, earnings, accept/decline time - khan
 
 ### Backend / Infrastructure
 - [ ] #69 Order matching algorithm (nearest driver + preferences) - adrei and drew
 
 ### Summary Screen (Labor Time) *
-- [ ] #117 Add Labor Time calculation display - khan
-- [ ] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)" - khan
+- [x] #117 Add Labor Time calculation display - khan
+- [x] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)" - khan
 
 ### Insurance API
 - [ ] #81 Verify Redkik quote flow - erema
