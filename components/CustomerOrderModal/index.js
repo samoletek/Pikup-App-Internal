@@ -38,8 +38,8 @@ const createLocationDetailsDefaults = () => ({
     storeName: '',
     orderConfirmationNumber: '',
     buildingName: '',
-    unitFloor: '',
     unitNumber: '',
+    floor: '',
     hasElevator: null,
     driverHelpsLoading: false,
     driverHelpsUnloading: false,
@@ -343,9 +343,12 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 return `Please enter the building name/number for ${label}.`;
             }
 
-            const unitFloor = locationDetails.unitFloor ?? locationDetails.unitNumber;
-            if (!unitFloor?.trim()) {
-                return `Please enter the unit/floor for ${label}.`;
+            if (!locationDetails.unitNumber?.trim()) {
+                return `Please enter the unit number for ${label}.`;
+            }
+
+            if (!locationDetails.floor?.trim()) {
+                return `Please enter the floor number for ${label}.`;
             }
 
             if (locationDetails.hasElevator !== true && locationDetails.hasElevator !== false) {
@@ -588,7 +591,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         const distance = orderData.distance || 10;
         const duration = orderData.duration || 0;
 
-        return calculatePrice(vehicle, distance, duration);
+        return calculatePrice(vehicle, distance, duration, {
+            laborOptions: {
+                items: orderData.items || [],
+                pickupDetails: orderData.pickupDetails || {},
+                dropoffDetails: orderData.dropoffDetails || {},
+            },
+        });
     };
 
     // ============================================

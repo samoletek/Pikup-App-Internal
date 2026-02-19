@@ -38,7 +38,7 @@ export const mapTripFromDb = (trip) => {
   const status = normalizeTripStatus(trip.status);
   const pickupPhotos = toArray(trip.pickup_photos || trip.pickupPhotos);
   const dropoffPhotos = toArray(trip.dropoff_photos || trip.dropoffPhotos);
-  const pricing = trip.pricing || {
+  const pricing = trip.pricing || pickup?.pricing || {
     total: toNumber(trip.price),
     distance: toNumber(trip.distance_miles)
   };

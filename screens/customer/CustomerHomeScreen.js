@@ -366,6 +366,7 @@ export default function CustomerHomeScreen({ navigation }) {
       }
 
       const selectedPaymentMethod = orderData?.selectedPaymentMethod;
+      const totalAmount = Number(orderData?.pricing?.total || 0);
 
       if (!selectedPaymentMethod?.stripePaymentMethodId) {
         return {
@@ -373,8 +374,6 @@ export default function CustomerHomeScreen({ navigation }) {
           error: "Please select a saved payment method.",
         };
       }
-
-      const totalAmount = Number(orderData?.pricing?.total || 0);
       const amountInCents = Math.round(totalAmount * 100);
       if (!Number.isInteger(amountInCents) || amountInCents <= 0) {
         return {
@@ -395,26 +394,22 @@ export default function CustomerHomeScreen({ navigation }) {
           itemsCount: orderData?.items?.length || 0,
           timestamp: new Date().toISOString(),
         };
-
         const paymentIntentResult = await createPaymentIntent(
           amountInCents,
           "usd",
           rideDetails,
           selectedPaymentMethod.stripePaymentMethodId
         );
-
         if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
           return {
             success: false,
             error: paymentIntentResult.error || "Failed to start payment.",
           };
         }
-
         const paymentResult = await confirmPayment(
           paymentIntentResult.paymentIntent.client_secret,
           selectedPaymentMethod.stripePaymentMethodId
         );
-
         if (!paymentResult.success) {
           return {
             success: false,
@@ -425,6 +420,8 @@ export default function CustomerHomeScreen({ navigation }) {
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,
+          pickupDetails: orderData?.pickupDetails || {},
+          dropoffDetails: orderData?.dropoffDetails || {},
           vehicle: orderData?.selectedVehicle,
           pricing: {
             ...(orderData?.pricing || {}),
