@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
+import { DRIVER_RATING_BADGES } from "../../constants/ratingBadges";
 import {
   borderRadius,
   colors,
@@ -337,6 +338,16 @@ export default function DriverProfileScreen({ navigation }) {
     ? `${driverProfile?.acceptanceRate || 98}%`
     : "--";
   const ratingValue = isReadyToEarn ? String(driverProfile?.rating || "5.0") : "--";
+  const topDriverBadges = useMemo(() => {
+    const badgeStats = driverProfile?.badge_stats || {};
+    return DRIVER_RATING_BADGES.map((badge) => ({
+      ...badge,
+      count: Number(badgeStats?.[badge.id] || 0),
+    }))
+      .filter((badge) => badge.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+  }, [driverProfile]);
   const statusConfig = isReadyToEarn
     ? {
         title: "Ready to Earn",
@@ -580,6 +591,23 @@ export default function DriverProfileScreen({ navigation }) {
               <Text style={styles.statLabel}>RATING</Text>
             </View>
           </View>
+
+          {topDriverBadges.length > 0 && (
+            <View style={styles.badgesSummary}>
+              <Text style={styles.badgesSummaryTitle}>Top feedback badges</Text>
+              <View style={styles.badgesSummaryRow}>
+                {topDriverBadges.map((badge) => (
+                  <View key={badge.id} style={styles.badgeChip}>
+                    <Ionicons name={badge.icon} size={14} color={badge.activeColor} />
+                    <Text style={styles.badgeChipText}>{badge.label}</Text>
+                    <View style={styles.badgeChipCount}>
+                      <Text style={styles.badgeChipCountText}>{badge.count}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -855,6 +883,52 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: colors.border.strong,
     marginVertical: spacing.sm,
+  },
+  badgesSummary: {
+    marginTop: spacing.base,
+  },
+  badgesSummaryTitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.sm,
+  },
+  badgesSummaryRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  badgeChip: {
+    flex: 1,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    gap: spacing.xs,
+  },
+  badgeChipText: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xs + 1,
+    fontWeight: typography.fontWeight.medium,
+  },
+  badgeChipCount: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeChipCountText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
   },
   statusCard: {
     marginBottom: spacing.base,

@@ -8,6 +8,145 @@ import { getPlatformFees } from './PricingService';
 
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
+const NETWORK_TIMEOUT_MS = 8000;
+
+const authFetchWithTimeout = async (authFetch, url, options = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await authFetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
+const getMissingColumnFromError = (error) => {
+    const message = String(error?.message || '');
+    let match = message.match(/Could not find the '([^']+)' column/i);
+    if (match?.[1]) return match[1];
+
+    match = message.match(/column\s+([a-zA-Z0-9_.]+)\s+does not exist/i);
+    if (match?.[1]) {
+        return match[1].split('.').pop();
+    }
+
+    return null;
+};
+
+const applyDriverColumnUpdateWithFallback = async (driverId, columnUpdates = {}) => {
+    const updates = { ...columnUpdates };
+
+    while (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+            .from('drivers')
+            .update(updates)
+            .eq('id', driverId);
+
+        if (!error) {
+            return true;
+        }
+
+        const missingColumn = getMissingColumnFromError(error);
+        if (missingColumn && Object.prototype.hasOwnProperty.call(updates, missingColumn)) {
+            console.warn(`Drivers table is missing "${missingColumn}". Retrying without it.`);
+            delete updates[missingColumn];
+            continue;
+        }
+
+        throw error;
+    }
+
+    return false;
+};
+
+const updateDriverMetadata = async (driverId, patch = {}) => {
+    const { data: profile } = await supabase
+        .from('drivers')
+        .select('metadata')
+        .eq('id', driverId)
+        .maybeSingle();
+
+    const currentMeta = profile?.metadata || {};
+    const nextMeta = {
+        ...currentMeta,
+        ...patch,
+    };
+
+    const { error } = await supabase
+        .from('drivers')
+        .update({ metadata: nextMeta })
+        .eq('id', driverId);
+
+    if (error) throw error;
+};
+
+const fallbackSetDriverOnline = async (driverId, location) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            is_online: true,
+            current_mode: location.mode || 'SOLO',
+            last_location: `POINT(${location.longitude} ${location.latitude})`,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct online update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        isOnline: true,
+        mode: location.mode || 'SOLO',
+        lastLocation: location,
+        lastSeen: new Date().toISOString()
+    });
+};
+
+const fallbackSetDriverOffline = async (driverId) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            is_online: false,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct offline update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        isOnline: false,
+        lastSeen: new Date().toISOString()
+    });
+};
+
+const fallbackHeartbeat = async (driverId, location) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            last_location: `POINT(${location.longitude} ${location.latitude})`,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct heartbeat update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        lastLocation: location,
+        lastSeen: new Date().toISOString()
+    });
+};
 
 /**
  * Calculate driver earnings from platform config
@@ -245,9 +384,9 @@ export const setDriverOnline = async (driverId, location, authFetch) => {
     try {
         console.log('Setting driver online:', driverId, 'at location:', location);
 
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/online`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/online`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId,
@@ -256,45 +395,19 @@ export const setDriverOnline = async (driverId, location, authFetch) => {
                     mode: location.mode || 'SOLO'
                 })
             });
-        } catch (netError) {
-            console.warn('Network request failed, falling back to Supabase direct update:', netError);
-            // Fallback: Update driver status directly in Supabase
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    is_online: true,
-                    current_mode: location.mode || 'SOLO',
-                    last_location: `POINT(${location.longitude} ${location.latitude})`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
-            if (error) {
-                console.warn('Supabase fallback update failed, trying metadata only:', error);
-                // Fallback level 2: Update metadata if columns don't exist
-                await supabase
-                    .from('drivers')
-                    .update({
-                        metadata: {
-                            isOnline: true,
-                            mode: location.mode || 'SOLO',
-                            lastLocation: location,
-                            lastSeen: new Date().toISOString()
-                        }
-                    })
-                    .eq('id', driverId);
+            if (!response.ok) {
+                throw new Error(`Failed to set driver online: ${response.statusText}`);
             }
-
+        } catch (networkError) {
+            console.warn('Online API unavailable/timeout, falling back to Supabase:', networkError);
+            await fallbackSetDriverOnline(driverId, location);
             return `local_session_${Date.now()}`;
         }
 
-        if (!response.ok) {
-            throw new Error(`Failed to set driver online: ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         console.log('Driver set online successfully with session:', result.sessionId);
-        return result.sessionId;
+        return result.sessionId || `remote_session_${Date.now()}`;
     } catch (error) {
         console.error('Error setting driver online:', error);
         throw error;
@@ -311,47 +424,25 @@ export const setDriverOffline = async (driverId, authFetch) => {
     try {
         console.log('Setting driver offline:', driverId);
 
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/offline`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/offline`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId
                 })
             });
-        } catch (netError) {
-            console.warn('Network request failed, falling back to Supabase direct update:', netError);
-            // Fallback: Update driver status directly in Supabase
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    is_online: false,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
-            if (error) {
-                console.warn('Supabase fallback update failed, trying metadata only:', error);
-                // Fallback level 2: Update metadata
-                await supabase
-                    .from('drivers')
-                    .update({
-                        metadata: {
-                            isOnline: false,
-                            lastSeen: new Date().toISOString()
-                        }
-                    })
-                    .eq('id', driverId);
+            if (!response.ok) {
+                throw new Error(`Failed to set driver offline: ${response.statusText}`);
             }
-
+        } catch (networkError) {
+            console.warn('Offline API unavailable/timeout, falling back to Supabase:', networkError);
+            await fallbackSetDriverOffline(driverId);
             return true;
         }
 
-        if (!response.ok) {
-            throw new Error(`Failed to set driver offline: ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         console.log('Driver set offline successfully. Session duration:', result.onlineMinutes, 'minutes');
         return true;
     } catch (error) {
@@ -369,9 +460,9 @@ export const setDriverOffline = async (driverId, authFetch) => {
  */
 export const updateDriverHeartbeat = async (driverId, location, authFetch) => {
     try {
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/heartbeat`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/heartbeat`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId,
@@ -379,21 +470,13 @@ export const updateDriverHeartbeat = async (driverId, location, authFetch) => {
                     longitude: location.longitude
                 })
             });
-        } catch (netError) {
-            // Fallback: Update driver location directly in Supabase
-            await supabase
-                .from('drivers')
-                .update({
-                    last_location: `POINT(${location.longitude} ${location.latitude})`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
+            if (!response.ok) {
+                throw new Error(`Failed to update heartbeat: ${response.statusText}`);
+            }
+        } catch (networkError) {
+            await fallbackHeartbeat(driverId, location);
             return true;
-        }
-
-        if (!response.ok) {
-            throw new Error(`Failed to update heartbeat: ${response.statusText}`);
         }
 
         return true;

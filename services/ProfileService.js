@@ -49,6 +49,37 @@ const normalizeProfile = (profile, fallbackEmail = null) => {
     };
 };
 
+const PROFILE_TABLE_BY_TYPE = Object.freeze({
+    driver: 'drivers',
+    customer: 'customers',
+});
+
+const FEEDBACK_ROLE_BY_TYPE = Object.freeze({
+    driver: 'driver',
+    customer: 'customer',
+});
+
+const normalizeUserType = (value, fallback = 'customer') => {
+    if (value === 'driver' || value === 'customer') return value;
+    return fallback;
+};
+
+const toBadgeStats = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+    return { ...value };
+};
+
+const hasMissingColumnError = (error, columnName) => {
+    const text = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+    return (
+        text.includes('does not exist') &&
+        text.includes('column') &&
+        text.includes(String(columnName || '').toLowerCase())
+    );
+};
+
 /**
  * Update user profile in database
  * @param {Object} updates - Profile fields to update
@@ -300,6 +331,205 @@ export const updateUserRating = async (userId, newRating, profileType = 'driverP
     } catch (error) {
         console.error('Error updating user rating:', error);
     }
+};
+
+/**
+ * Submit trip rating with optional badges and aggregate updates.
+ * @param {Object} ratingData
+ * @param {Object} currentUser
+ * @returns {Promise<Object>} Result
+ */
+export const submitTripRating = async (ratingData = {}, currentUser) => {
+    if (!currentUser) throw new Error('User not authenticated');
+
+    const {
+        requestId,
+        toUserId,
+        toUserType = 'driver',
+        rating = 5,
+        badges = [],
+        comment = null,
+    } = ratingData;
+
+    if (!requestId) throw new Error('Request ID is required');
+    if (!toUserId) throw new Error('Target user is required');
+
+    const sourceUserId = currentUser.uid || currentUser.id;
+    const normalizedTargetType = normalizeUserType(toUserType, 'driver');
+    const normalizedSourceType = normalizeUserType(
+        currentUser?.user_type || currentUser?.userType,
+        normalizedTargetType === 'driver' ? 'customer' : 'driver'
+    );
+    const tableName = PROFILE_TABLE_BY_TYPE[normalizedTargetType];
+    const parsedRating = Number(rating);
+    const normalizedRating = Math.min(5, Math.max(1, Number.isFinite(parsedRating) ? parsedRating : 5));
+    const uniqueBadges = Array.from(
+        new Set((Array.isArray(badges) ? badges : []).map((badge) => String(badge).trim()).filter(Boolean))
+    );
+
+    const { data: edgeFunctionData, error: edgeFunctionError } = await supabase.functions.invoke(
+        'submit-feedback',
+        {
+            body: {
+                requestId,
+                rating: normalizedRating,
+                driverId: normalizedTargetType === 'driver' ? toUserId : null,
+                toUserId,
+                toUserType: normalizedTargetType,
+                sourceRole: FEEDBACK_ROLE_BY_TYPE[normalizedSourceType],
+                badges: uniqueBadges,
+                feedback: comment,
+            },
+        }
+    );
+
+    if (!edgeFunctionError) {
+        return {
+            success: true,
+            ...(edgeFunctionData || {}),
+        };
+    }
+
+    console.warn('submit-feedback edge function failed, falling back to client-side update:', edgeFunctionError);
+
+    const { data: existingFeedbackRows, error: existingFeedbackError } = await supabase
+        .from('feedbacks')
+        .select('id')
+        .eq('request_id', requestId)
+        .eq('user_id', sourceUserId)
+        .limit(1);
+
+    if (existingFeedbackError) {
+        throw existingFeedbackError;
+    }
+
+    if (Array.isArray(existingFeedbackRows) && existingFeedbackRows.length > 0) {
+        return { success: true, alreadySubmitted: true };
+    }
+
+    const { data: targetProfile, error: targetProfileError } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq('id', toUserId)
+        .maybeSingle();
+
+    if (targetProfileError && !isNoRowsError(targetProfileError)) {
+        throw targetProfileError;
+    }
+
+    const currentRating = Number(targetProfile?.rating) || 5;
+    const currentCount = Number(targetProfile?.rating_count) || 0;
+    const nextCount = currentCount + 1;
+    const nextAverage = Number((((currentRating * currentCount) + normalizedRating) / nextCount).toFixed(2));
+    const currentBadgeStats = toBadgeStats(targetProfile?.badge_stats);
+    const nextBadgeStats = { ...currentBadgeStats };
+
+    uniqueBadges.forEach((badgeId) => {
+        nextBadgeStats[badgeId] = (Number(nextBadgeStats[badgeId]) || 0) + 1;
+    });
+
+    const timestamp = new Date().toISOString();
+    const fullProfileUpdates = {
+        rating: nextAverage,
+        rating_count: nextCount,
+        badge_stats: nextBadgeStats,
+        updated_at: timestamp,
+    };
+
+    const { error: fullUpdateError } = await supabase
+        .from(tableName)
+        .update(fullProfileUpdates)
+        .eq('id', toUserId);
+
+    if (fullUpdateError) {
+        const optionalColumnMissing =
+            hasMissingColumnError(fullUpdateError, 'rating_count') ||
+            hasMissingColumnError(fullUpdateError, 'badge_stats');
+
+        if (!optionalColumnMissing) {
+            throw fullUpdateError;
+        }
+
+        const fallbackUpdates = {
+            rating: nextAverage,
+            updated_at: timestamp,
+        };
+
+        if (!hasMissingColumnError(fullUpdateError, 'rating_count')) {
+            fallbackUpdates.rating_count = nextCount;
+        }
+        if (!hasMissingColumnError(fullUpdateError, 'badge_stats')) {
+            fallbackUpdates.badge_stats = nextBadgeStats;
+        }
+
+        const { error: fallbackUpdateError } = await supabase
+            .from(tableName)
+            .update(fallbackUpdates)
+            .eq('id', toUserId);
+
+        if (fallbackUpdateError) {
+            throw fallbackUpdateError;
+        }
+    }
+
+    const feedbackPayload = {
+        request_id: requestId,
+        user_id: sourceUserId,
+        driver_id: normalizedTargetType === 'driver' ? toUserId : null,
+        rating: normalizedRating,
+        tip_amount: 0,
+        comment,
+        source_role: FEEDBACK_ROLE_BY_TYPE[normalizedSourceType],
+        target_role: FEEDBACK_ROLE_BY_TYPE[normalizedTargetType],
+        target_user_id: toUserId,
+        badges: uniqueBadges,
+        created_at: timestamp,
+        updated_at: timestamp,
+    };
+
+    const { error: feedbackInsertError } = await supabase
+        .from('feedbacks')
+        .insert(feedbackPayload);
+
+    if (feedbackInsertError) {
+        const extendedColumnsMissing =
+            hasMissingColumnError(feedbackInsertError, 'source_role') ||
+            hasMissingColumnError(feedbackInsertError, 'target_role') ||
+            hasMissingColumnError(feedbackInsertError, 'target_user_id') ||
+            hasMissingColumnError(feedbackInsertError, 'badges');
+
+        if (!extendedColumnsMissing) {
+            throw feedbackInsertError;
+        }
+
+        const fallbackFeedbackPayload = {
+            request_id: requestId,
+            user_id: sourceUserId,
+            driver_id: normalizedTargetType === 'driver' ? toUserId : null,
+            rating: normalizedRating,
+            tip_amount: 0,
+            comment:
+                comment ||
+                (uniqueBadges.length > 0 ? `Badges: ${uniqueBadges.join(', ')}` : null),
+            created_at: timestamp,
+            updated_at: timestamp,
+        };
+
+        const { error: fallbackFeedbackError } = await supabase
+            .from('feedbacks')
+            .insert(fallbackFeedbackPayload);
+
+        if (fallbackFeedbackError) {
+            throw fallbackFeedbackError;
+        }
+    }
+
+    return {
+        success: true,
+        rating: nextAverage,
+        ratingCount: nextCount,
+        badgeStats: nextBadgeStats,
+    };
 };
 
 /**

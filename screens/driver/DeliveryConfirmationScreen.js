@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenHeader from '../../components/ScreenHeader';
+import TripRatingModal from '../../components/TripRatingModal';
 import {
   borderRadius,
   colors,
@@ -28,7 +29,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { request, pickupPhotos, driverLocation } = route.params;
-  const { finishDelivery } = useAuth();
+  const { finishDelivery, submitTripRating, refreshProfile } = useAuth();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   
   const [deliveryPhotos, setDeliveryPhotos] = useState([]);
@@ -36,6 +37,8 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   
   const scrollViewRef = useRef(null);
 
@@ -214,24 +217,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       setIsUploadingPhotos(false);
       
       console.log('Delivery completed successfully');
-      
-      // Show success message
-      Alert.alert(
-        'Delivery Complete! 🎉',
-        `Thank you for completing this delivery. Customer rating: ${customerRating} stars.`,
-        [
-          {
-            text: 'Continue',
-            onPress: () => {
-              // Navigate back to driver tabs (which contains the home screen)
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'DriverTabs' }],
-              });
-            }
-          }
-        ]
-      );
+      setIsRatingModalVisible(true);
       
     } catch (error) {
       console.error('Error completing delivery:', error);
@@ -243,6 +229,48 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       );
     } finally {
       setIsCompleting(false);
+    }
+  };
+
+  const navigateToDriverTabs = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'DriverTabs' }],
+    });
+  };
+
+  const closeRatingModal = () => {
+    setIsRatingModalVisible(false);
+    navigateToDriverTabs();
+  };
+
+  const handleSubmitCustomerRating = async ({ rating, badges }) => {
+    const customerId = request?.customerId || request?.customer_id || null;
+
+    if (!customerId) {
+      Alert.alert('Customer not found', 'Rating could not be saved for this trip.');
+      closeRatingModal();
+      return;
+    }
+
+    try {
+      setIsSubmittingRating(true);
+      await submitTripRating({
+        requestId: request?.id,
+        toUserId: customerId,
+        toUserType: 'customer',
+        rating,
+        badges,
+      });
+      await refreshProfile?.();
+      Alert.alert('Thank you!', 'Your customer rating has been saved.', [
+        { text: 'Continue', onPress: closeRatingModal },
+      ]);
+    } catch (error) {
+      console.error('Error submitting driver trip rating:', error);
+      Alert.alert('Error', 'Failed to save customer rating. Please try again.');
+    } finally {
+      setIsSubmittingRating(false);
     }
   };
 
@@ -425,6 +453,18 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           <Text style={styles.warningText}>⚠️ At least 1 delivery photo required</Text>
         )}
       </View>
+
+      <TripRatingModal
+        visible={isRatingModalVisible}
+        targetRole="customer"
+        targetName={customerName}
+        title="Rate your customer"
+        subtitle={`How was your delivery with ${customerName}?`}
+        submitLabel="Submit rating"
+        submitting={isSubmittingRating}
+        onClose={closeRatingModal}
+        onSubmit={handleSubmitCustomerRating}
+      />
     </View>
   );
 }
