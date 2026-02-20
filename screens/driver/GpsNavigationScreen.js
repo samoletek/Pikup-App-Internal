@@ -10,7 +10,6 @@ import {
   Platform,
   Linking,
   Animated,
-  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,23 +25,25 @@ import { PICKUP_PHASE_STATUSES, DROPOFF_PHASE_STATUSES, TRIP_STATUS } from '../.
 import {
   borderRadius,
   colors,
-  layout,
   spacing,
   typography,
 } from '../../styles/theme';
 
 export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { 
     startDriving, 
     arriveAtPickup, 
     getRequestById, 
+    getConversations,
     updateDriverStatus,
     createConversation,
-    currentUser
+    currentUser,
+    userType,
+    subscribeToConversations,
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
   
   const [driverLocation, setDriverLocation] = useState(null);
   const [customerLocation, setCustomerLocation] = useState(null);
@@ -57,6 +58,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const [currentHeading, setCurrentHeading] = useState(0); // Direction in degrees
   const [isCreatingChat, setIsCreatingChat] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   
   // Turn-by-turn navigation states
   const [routeSteps, setRouteSteps] = useState([]);
@@ -64,8 +66,29 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const [nextInstruction, setNextInstruction] = useState(null);
   const [distanceToTurn, setDistanceToTurn] = useState(null);
   const [currentStreet, setCurrentStreet] = useState('');
-  const cardMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const cardGradientColors = [colors.background.primary, colors.background.secondary];
+  const activeRequestId =
+    requestData?.id || request?.id || requestData?.requestId || request?.requestId || null;
+  const conversationUserType =
+    userType === 'customer' || isCustomerView ? 'customer' : 'driver';
+  const activeRequestCustomerId = String(
+    requestData?.customerId ||
+    requestData?.customer_id ||
+    request?.customerId ||
+    request?.customer_id ||
+    requestData?.originalData?.customerId ||
+    requestData?.originalData?.customer_id ||
+    ""
+  );
+  const activeRequestDriverId = String(
+    requestData?.assignedDriverId ||
+    requestData?.driverId ||
+    requestData?.driver_id ||
+    request?.assignedDriverId ||
+    request?.driverId ||
+    request?.driver_id ||
+    ""
+  );
   
   // Update navigation camera with Apple Maps style
   const updateNavigationCamera = (location, speed, distanceToNextTurn) => {
@@ -221,6 +244,75 @@ export default function GpsNavigationScreen({ route, navigation }) {
       fetchRequestData();
     }
   }, [request?.id]);
+
+  useEffect(() => {
+    if (!currentUserId || typeof subscribeToConversations !== 'function') {
+      setHasUnreadChat(false);
+      return undefined;
+    }
+
+    let isDisposed = false;
+    const requestIdString = activeRequestId ? String(activeRequestId) : '';
+    const unreadKey = conversationUserType === 'customer' ? 'unreadByCustomer' : 'unreadByDriver';
+    const peerId =
+      conversationUserType === 'customer'
+        ? activeRequestDriverId
+        : activeRequestCustomerId;
+    const peerField = conversationUserType === 'customer' ? 'driverId' : 'customerId';
+
+    const updateUnreadState = (userConversations = []) => {
+      if (isDisposed) {
+        return;
+      }
+
+      const unreadConversations = userConversations.filter(
+        (conversation) => Number(conversation?.[unreadKey] || 0) > 0
+      );
+
+      const hasTripMatchUnread = unreadConversations.some(
+        (conversation) =>
+          (
+            (requestIdString && String(conversation?.requestId || '') === requestIdString) ||
+            (peerId && String(conversation?.[peerField] || '') === peerId)
+          )
+      );
+
+      // Fallback for legacy rows with weak trip linkage.
+      setHasUnreadChat(hasTripMatchUnread || unreadConversations.length > 0);
+    };
+
+    const refreshUnread = async () => {
+      if (isDisposed || typeof getConversations !== 'function') {
+        return;
+      }
+
+      const conversations = await getConversations(currentUserId, conversationUserType);
+      updateUnreadState(Array.isArray(conversations) ? conversations : []);
+    };
+
+    refreshUnread();
+    const pollInterval = setInterval(refreshUnread, 2500);
+
+    const unsubscribe = subscribeToConversations(
+      currentUserId,
+      conversationUserType,
+      updateUnreadState
+    );
+
+    return () => {
+      isDisposed = true;
+      clearInterval(pollInterval);
+      unsubscribe?.();
+    };
+  }, [
+    activeRequestCustomerId,
+    activeRequestDriverId,
+    activeRequestId,
+    conversationUserType,
+    currentUserId,
+    getConversations,
+    subscribeToConversations,
+  ]);
 
   const fetchRequestData = async () => {
     try {
@@ -802,12 +894,43 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const openChat = async () => {
     if (isCreatingChat) return;
     setIsCreatingChat(true);
+    setHasUnreadChat(false);
     try {
-      const currentUserId = currentUser?.uid || currentUser?.id;
       const req = requestData || route.params?.request || {};
-      const requestId = req.id || req.requestId;
-      const customerId = req.customerId || req.customerUid || req.customer?.uid || req.userId;
-      const customerEmail = req.customerEmail || req.customer?.email || '';
+      const requestId = req.id || req.requestId || req.originalData?.id;
+      let customerId =
+        req.customerId ||
+        req.customer_id ||
+        req.originalData?.customerId ||
+        req.originalData?.customer_id ||
+        req.customerUid ||
+        req.customer?.uid ||
+        req.customer?.id ||
+        req.userId;
+      let customerEmail =
+        req.customerEmail ||
+        req.customer_email ||
+        req.originalData?.customerEmail ||
+        req.originalData?.customer_email ||
+        req.customer?.email ||
+        '';
+
+      if (requestId && !customerId) {
+        try {
+          const latestRequest = await getRequestById(requestId);
+          customerId =
+            latestRequest?.customerId ||
+            latestRequest?.customer_id ||
+            customerId;
+          customerEmail =
+            latestRequest?.customerEmail ||
+            latestRequest?.customer_email ||
+            customerEmail;
+        } catch (fetchError) {
+          console.warn('Failed to fetch latest request before opening chat:', fetchError);
+        }
+      }
+
       const customerName =
         req.customerName ||
         req.customer?.name ||
@@ -865,27 +988,29 @@ export default function GpsNavigationScreen({ route, navigation }) {
           followUserMode="course"
         >
           {driverLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="driver"
               coordinate={[driverLocation.longitude, driverLocation.latitude]}
-              title="Driver"
+              anchor={{ x: 0.5, y: 0.5 }}
+              allowOverlap
             >
               <View style={styles.driverMarker}>
                 <Ionicons name="car" size={18} color={colors.white} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {customerLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="customer"
               coordinate={[customerLocation.longitude, customerLocation.latitude]}
-              title={locationTitle}
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
             >
               <View style={styles.destinationMarker}>
                 <Ionicons name="location" size={24} color={colors.primary} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {routeCoordinates.length > 0 && (
@@ -931,7 +1056,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
             styles.customerInfoCard, 
             {
               transform: [{ translateY: cardTranslateY }],
-              maxWidth: cardMaxWidth,
             }
           ]}
         >
@@ -969,6 +1093,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
                 disabled={isCreatingChat}
               >
                 <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+                {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
               </TouchableOpacity>
             </View>
             
@@ -1018,7 +1143,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
               styles.floatingBottomCard, 
               {
                 transform: [{ translateY: cardTranslateY }],
-                maxWidth: cardMaxWidth,
               }
             ]}
           >
@@ -1062,6 +1186,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
                   disabled={isCreatingChat}
                 >
                   <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+                  {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
                 </TouchableOpacity>
               </View>
               
@@ -1095,27 +1220,29 @@ export default function GpsNavigationScreen({ route, navigation }) {
           followUserMode="course"
         >
           {driverLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="driverLocation"
               coordinate={[driverLocation.longitude, driverLocation.latitude]}
-              title="Your Location"
+              anchor={{ x: 0.5, y: 0.5 }}
+              allowOverlap
             >
               <View style={styles.driverMarker}>
                 <Ionicons name="car" size={18} color={colors.white} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {customerLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="pickupLocation"
               coordinate={[customerLocation.longitude, customerLocation.latitude]}
-              title="Pickup Location"
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
             >
               <View style={styles.destinationMarker}>
                 <Ionicons name="location" size={24} color={colors.primary} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {routeCoordinates.length > 0 && (
@@ -1172,7 +1299,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
             styles.driverInfoCard, 
             {
               transform: [{ translateY: cardTranslateY }],
-              maxWidth: cardMaxWidth,
             }
           ]}
         >
@@ -1218,6 +1344,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
                 disabled={isCreatingChat}
               >
                 <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+                {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
               </TouchableOpacity>
             </View>
             
@@ -1414,9 +1541,21 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
+    position: 'relative',
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  callButtonUnreadDot: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 9,
+    height: 9,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.warning,
+    borderWidth: 1,
+    borderColor: colors.background.secondary,
   },
   statusContainer: {
     flexDirection: 'row',

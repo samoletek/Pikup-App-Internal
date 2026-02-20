@@ -40,7 +40,13 @@ const ARCHIVE_STATUSES = new Set([
 export default function DriverMessagesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { currentUser, getConversations, getUserProfile } = useAuth();
+  const {
+    currentUser,
+    getConversations,
+    getUserProfile,
+    subscribeToConversations,
+    markMessageAsRead,
+  } = useAuth();
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -55,6 +61,34 @@ export default function DriverMessagesScreen({ navigation, route }) {
   useEffect(() => {
     loadConversations();
   }, [currentUser]);
+
+  useEffect(() => {
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (!currentUserId || !subscribeToConversations) {
+      return undefined;
+    }
+
+    const unsubscribe = subscribeToConversations(
+      currentUserId,
+      "driver",
+      (userConversations) => {
+        const validConversations = (Array.isArray(userConversations) ? userConversations : []).filter(
+          (conversation) =>
+            conversation.customerId &&
+            conversation.driverId &&
+            conversation.requestId &&
+            conversation.customerId !== "support" &&
+            conversation.driverId !== conversation.customerId
+        );
+        setConversations(validConversations);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [currentUser?.uid, currentUser?.id, subscribeToConversations]);
 
   useEffect(() => {
     loadPeerProfiles();
@@ -286,7 +320,7 @@ export default function DriverMessagesScreen({ navigation, route }) {
       avatarInitial = getAvatarInitial(customerName);
     }
 
-    const isUnread = (conversation.unreadByDriver || 0) > 0;
+    const isUnread = Number(conversation.unreadByDriver || 0) > 0;
     const isArchived = isArchivedConversation(conversation);
     const metaIconName = isArchived ? "archive-outline" : "cube-outline";
     const metaColor = isArchived ? colors.text.tertiary : colors.primary;
@@ -295,14 +329,22 @@ export default function DriverMessagesScreen({ navigation, route }) {
       <TouchableOpacity
         key={conversation.id}
         style={styles.messageItem}
-        onPress={() =>
+        onPress={() => {
+          setConversations((prevConversations) =>
+            prevConversations.map((item) =>
+              item.id === conversation.id
+                ? { ...item, unreadByDriver: 0 }
+                : item
+            )
+          );
+          markMessageAsRead?.(conversation.id, "driver");
           navigation.navigate("MessageScreen", {
             conversationId: conversation.id,
             customerId: conversation.customerId,
             customerName,
             requestId: conversation.requestId,
-          })
-        }
+          });
+        }}
       >
         <View style={styles.avatarContainer}>
           {avatarUrl ? (
@@ -679,10 +721,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.warning,
+    alignSelf: "center",
     marginLeft: spacing.sm,
   },
   emptyState: {

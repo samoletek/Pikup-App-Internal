@@ -21,6 +21,42 @@ const ensureAuthenticatedUserId = async () => {
     return null;
 };
 
+const selectCanonicalConversationId = (rows = []) => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+
+    const sorted = [...rows].sort((a, b) => {
+        const aTime = new Date(a?.updated_at || a?.created_at || 0).getTime();
+        const bTime = new Date(b?.updated_at || b?.created_at || 0).getTime();
+        if (aTime !== bTime) return bTime - aTime;
+        return String(b?.id || '').localeCompare(String(a?.id || ''));
+    });
+
+    return sorted[0]?.id || null;
+};
+
+const dedupeConversationsByRequest = (rows = []) => {
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+
+    const seenRequestIds = new Set();
+    const deduped = [];
+
+    for (const row of rows) {
+        if (!row?.request_id) {
+            deduped.push(row);
+            continue;
+        }
+
+        if (seenRequestIds.has(row.request_id)) {
+            continue;
+        }
+
+        seenRequestIds.add(row.request_id);
+        deduped.push(row);
+    }
+
+    return deduped;
+};
+
 /**
  * Create a new conversation or return existing one
  * @param {string} requestId - Trip/request ID
@@ -44,30 +80,68 @@ export const createConversation = async (
             throw new Error('Session expired. Please sign in again.');
         }
 
-        const effectiveCustomerId = customerId || authUid;
-        const effectiveDriverId = driverId || authUid;
+        let effectiveCustomerId = customerId || null;
+        let effectiveDriverId = driverId || null;
+
+        // For trip-linked chats, resolve missing participants from the trip itself.
+        // This avoids accidentally creating self-conversations when request payload is partial.
+        if (requestId && (!effectiveCustomerId || !effectiveDriverId)) {
+            const { data: tripParticipants, error: tripLookupError } = await supabase
+                .from('trips')
+                .select('customer_id, driver_id')
+                .eq('id', requestId)
+                .maybeSingle();
+
+            if (tripLookupError) {
+                console.warn('Could not resolve trip participants for conversation creation:', tripLookupError);
+            }
+
+            if (tripParticipants) {
+                effectiveCustomerId = effectiveCustomerId || tripParticipants.customer_id || null;
+                effectiveDriverId = effectiveDriverId || tripParticipants.driver_id || null;
+            }
+        }
+
+        if (requestId && (!effectiveCustomerId || !effectiveDriverId)) {
+            throw new Error('Cannot create conversation: request participants are missing.');
+        }
+
+        effectiveCustomerId = effectiveCustomerId || authUid;
+        effectiveDriverId = effectiveDriverId || authUid;
+
         if (authUid !== effectiveCustomerId && authUid !== effectiveDriverId) {
             throw new Error('Cannot create conversation: authenticated user is not a participant.');
         }
 
-        // Build query to check if conversation exists
-        let query = supabase
-            .from('conversations')
-            .select('id')
-            .eq('customer_id', effectiveCustomerId)
-            .eq('driver_id', effectiveDriverId);
+        const fetchExistingConversations = async () => {
+            let existingQuery = supabase
+                .from('conversations')
+                .select('id, created_at, updated_at')
+                .eq('customer_id', effectiveCustomerId)
+                .eq('driver_id', effectiveDriverId);
 
-        if (requestId) {
-            query = query.eq('request_id', requestId);
-        } else {
-            query = query.is('request_id', null);
+            if (requestId) {
+                existingQuery = existingQuery.eq('request_id', requestId);
+            } else {
+                existingQuery = existingQuery.is('request_id', null);
+            }
+
+            return existingQuery
+                .order('updated_at', { ascending: false })
+                .order('created_at', { ascending: false })
+                .limit(50);
+        };
+
+        const { data: existingRows, error: fetchError } = await fetchExistingConversations();
+
+        if (fetchError) {
+            throw fetchError;
         }
 
-        const { data: existing, error: fetchError } = await query.maybeSingle();
-
-        if (fetchError) console.error("Error fetching existing conversation:", fetchError);
-
-        if (existing) return existing.id;
+        const existingConversationId = selectCanonicalConversationId(existingRows);
+        if (existingConversationId) {
+            return existingConversationId;
+        }
 
         const { data, error } = await supabase
             .from('conversations')
@@ -81,7 +155,44 @@ export const createConversation = async (
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            // Another client may have created the same request chat concurrently.
+            if (requestId && error?.code === '23505') {
+                const { data: raceRows, error: raceFetchError } = await fetchExistingConversations();
+
+                if (!raceFetchError) {
+                    const raceConversationId = selectCanonicalConversationId(raceRows);
+                    if (raceConversationId) {
+                        return raceConversationId;
+                    }
+                }
+
+                // Fallback: if legacy data has wrong participants but same request_id,
+                // return canonical request conversation so user still enters chat.
+                const { data: requestScopedRows, error: requestScopedError } = await supabase
+                    .from('conversations')
+                    .select('id, customer_id, driver_id, created_at, updated_at')
+                    .eq('request_id', requestId)
+                    .order('updated_at', { ascending: false })
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+
+                if (!requestScopedError) {
+                    const participantRows = (requestScopedRows || []).filter((row) =>
+                        row?.customer_id === authUid || row?.driver_id === authUid
+                    );
+                    const requestScopedId = selectCanonicalConversationId(
+                        participantRows.length > 0 ? participantRows : requestScopedRows
+                    );
+                    if (requestScopedId) {
+                        return requestScopedId;
+                    }
+                }
+            }
+
+            throw error;
+        }
+
         return data.id;
     } catch (error) {
         if (!options?.suppressLog) {
@@ -119,7 +230,9 @@ export const getConversations = async (userId, userType) => {
 
         if (error) throw error;
 
-        return data.map(conv => ({
+        const dedupedConversations = dedupeConversationsByRequest(data || []);
+
+        return dedupedConversations.map(conv => ({
             id: conv.id,
             requestId: conv.request_id,
             customerId: conv.customer_id,
@@ -135,6 +248,138 @@ export const getConversations = async (userId, userType) => {
         console.error('Error fetching conversations:', error);
         return [];
     }
+};
+
+/**
+ * Subscribe to conversation list changes for a user.
+ * Triggers callback with freshly fetched conversations whenever relevant rows change.
+ *
+ * @param {string} userId - User ID
+ * @param {string} userType - 'customer' or 'driver'
+ * @param {Function} callback - Callback receiving mapped conversations array
+ * @returns {Function} Cleanup function
+ */
+export const subscribeToConversations = (userId, userType, callback) => {
+    if (!userId || typeof callback !== 'function') {
+        return () => {};
+    }
+
+    let isDisposed = false;
+    let refreshTimer = null;
+    let followUpRefreshTimer = null;
+
+    const refreshConversations = async () => {
+        if (isDisposed) return;
+        const conversations = await getConversations(userId, userType);
+        if (isDisposed) return;
+        callback(conversations);
+    };
+
+    const scheduleRefresh = (delayMs = 120) => {
+        if (isDisposed) return;
+
+        if (refreshTimer) {
+            clearTimeout(refreshTimer);
+        }
+
+        // Debounce bursty realtime events (insert + update sequences).
+        refreshTimer = setTimeout(() => {
+            refreshTimer = null;
+            refreshConversations();
+        }, delayMs);
+    };
+
+    const scheduleMessageRefresh = () => {
+        if (isDisposed) return;
+
+        // Primary refresh shortly after insert.
+        scheduleRefresh(220);
+
+        // Secondary refresh to catch delayed unread counter updates.
+        if (followUpRefreshTimer) {
+            clearTimeout(followUpRefreshTimer);
+        }
+
+        followUpRefreshTimer = setTimeout(() => {
+            followUpRefreshTimer = null;
+            refreshConversations();
+        }, 900);
+    };
+
+    // Initial load
+    refreshConversations();
+
+    const channelSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const conversationsChannel = supabase.channel(
+        `public:conversations:${userType}:${userId}:${channelSuffix}`
+    );
+    const messagesChannel = supabase.channel(
+        `public:messages:${userType}:${userId}:${channelSuffix}`
+    );
+
+    if (userType === 'driver') {
+        conversationsChannel
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'conversations',
+                    filter: `driver_id=eq.${userId}`
+                },
+                () => scheduleRefresh(80)
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'conversations',
+                    filter: `customer_id=eq.${userId}`
+                },
+                () => scheduleRefresh(80)
+            );
+    } else {
+        conversationsChannel.on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'conversations',
+                filter: `customer_id=eq.${userId}`
+            },
+            () => scheduleRefresh(80)
+        );
+    }
+
+    // Fallback realtime source: conversation row may not always emit on message changes
+    // in some environments; message insert events keep unread indicators in sync.
+    messagesChannel.on(
+        'postgres_changes',
+        {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+        },
+        scheduleMessageRefresh
+    );
+
+    conversationsChannel.subscribe();
+    messagesChannel.subscribe();
+
+    return () => {
+        isDisposed = true;
+        if (refreshTimer) {
+            clearTimeout(refreshTimer);
+            refreshTimer = null;
+        }
+        if (followUpRefreshTimer) {
+            clearTimeout(followUpRefreshTimer);
+            followUpRefreshTimer = null;
+        }
+        supabase.removeChannel(conversationsChannel);
+        supabase.removeChannel(messagesChannel);
+    };
 };
 
 /**
@@ -172,7 +417,16 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
         };
 
         // Increment unread count based on who sent the message (support chat compatibility)
-        const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single();
+        const { data: conv, error: convFetchError } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('id', conversationId)
+            .maybeSingle();
+
+        if (convFetchError) {
+            console.warn('Could not fetch conversation before unread update:', convFetchError);
+        }
+
         if (conv) {
             if (senderId === conv.customer_id) {
                 // Sender is the customer (or driver acting as customer in support chat)
@@ -188,7 +442,15 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
                     updates.unread_by_customer = (conv.unread_by_customer || 0) + 1;
                 }
             }
-            await supabase.from('conversations').update(updates).eq('id', conversationId);
+        }
+
+        const { error: convUpdateError } = await supabase
+            .from('conversations')
+            .update(updates)
+            .eq('id', conversationId);
+
+        if (convUpdateError) {
+            console.warn('Could not update conversation message preview/unread counters:', convUpdateError);
         }
 
         return {

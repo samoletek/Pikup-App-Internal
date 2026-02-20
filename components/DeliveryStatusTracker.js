@@ -1,26 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
+  PanResponder,
+  ScrollView,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import DeliveryPhotosModal from './DeliveryPhotosModal';
 import { TRIP_STATUS } from '../constants/tripStatus';
-import { colors } from '../styles/theme';
-
-const { width } = Dimensions.get('window');
+import {
+  borderRadius,
+  colors,
+  shadows,
+  spacing,
+  typography,
+} from '../styles/theme';
 
 export default function DeliveryStatusTracker({
   requestId,
   onDeliveryComplete,
   onViewFullTracker,
-  expanded = false
+  expanded = false,
+  maxExpandedHeight = 460,
+  onExpandedChange,
+  onOpenChat,
+  hasUnreadChat = false,
+  variant = 'floating',
+  bottomInset = 0,
 }) {
   const { getRequestById } = useAuth();
 
@@ -28,9 +40,55 @@ export default function DeliveryStatusTracker({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(null);
   const [activePhotoType, setActivePhotoType] = useState('pickup');
   const [isExpanded, setIsExpanded] = useState(expanded);
+  const refreshIntervalRef = useRef(null);
+  const isSheetVariant = variant === 'sheet';
+  const DRAG_THRESHOLD = 28;
+  const DEFAULT_COLLAPSED_HEIGHT = 76;
+  const [collapsedSheetHeight, setCollapsedSheetHeight] = useState(DEFAULT_COLLAPSED_HEIGHT);
+  const [isSheetClosing, setIsSheetClosing] = useState(false);
+  const isExpandedRef = useRef(Boolean(expanded));
+  const sheetAnimationRef = useRef(null);
+  const sheetHeightAnim = useRef(
+    new Animated.Value(Boolean(expanded) ? maxExpandedHeight : DEFAULT_COLLAPSED_HEIGHT)
+  ).current;
+
+  const animateSheetHeight = useCallback((toValue, options = {}) => {
+    const { type = 'expand', onComplete } = options;
+
+    if (!isSheetVariant) {
+      onComplete?.(true);
+      return;
+    }
+
+    if (sheetAnimationRef.current) {
+      sheetAnimationRef.current.stop();
+    }
+
+    const animation =
+      type === 'collapse'
+        ? Animated.timing(sheetHeightAnim, {
+            toValue,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false,
+          })
+        : Animated.spring(sheetHeightAnim, {
+            toValue,
+            useNativeDriver: false,
+            tension: 100,
+            friction: 12,
+          });
+
+    sheetAnimationRef.current = animation;
+    animation.start(({ finished }) => {
+      if (sheetAnimationRef.current === animation) {
+        sheetAnimationRef.current = null;
+      }
+      onComplete?.(finished);
+    });
+  }, [isSheetVariant, sheetHeightAnim]);
 
   // Status steps in order with modern labels
   const statusSteps = [
@@ -52,15 +110,131 @@ export default function DeliveryStatusTracker({
         fetchRequestData(false); // Don't show loading indicator for refreshes
       }, 15000);
 
-      setRefreshInterval(interval);
+      refreshIntervalRef.current = interval;
     }
 
     return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
       }
     };
   }, [requestId]);
+
+  useEffect(() => {
+    const normalizedExpanded = Boolean(expanded);
+    if (normalizedExpanded === isExpanded) {
+      return;
+    }
+
+    if (normalizedExpanded) {
+      setIsSheetClosing(false);
+    } else if (isSheetVariant) {
+      setIsSheetClosing(true);
+    }
+    setIsExpanded(normalizedExpanded);
+  }, [expanded, isExpanded, isSheetVariant, requestId]);
+
+  useEffect(() => {
+    isExpandedRef.current = Boolean(isExpanded);
+  }, [isExpanded]);
+
+  useEffect(() => {
+    if (!isSheetVariant) {
+      return undefined;
+    }
+
+    const expandedHeight = Math.max(maxExpandedHeight, collapsedSheetHeight);
+
+    if (isExpanded) {
+      setIsSheetClosing(false);
+      animateSheetHeight(expandedHeight, { type: 'expand' });
+      return undefined;
+    }
+
+    setIsSheetClosing(true);
+    animateSheetHeight(collapsedSheetHeight, {
+      type: 'collapse',
+      onComplete: (finished) => {
+        if (!finished) return;
+        if (!isExpandedRef.current) {
+          setIsSheetClosing(false);
+        }
+      },
+    });
+
+    return undefined;
+  }, [
+    animateSheetHeight,
+    collapsedSheetHeight,
+    isExpanded,
+    isSheetVariant,
+    maxExpandedHeight,
+  ]);
+
+  useEffect(() => {
+    if (!isSheetVariant) {
+      return undefined;
+    }
+
+    return () => {
+      if (sheetAnimationRef.current) {
+        sheetAnimationRef.current.stop();
+        sheetAnimationRef.current = null;
+      }
+    };
+  }, [isSheetVariant]);
+
+  const setExpandedState = useCallback((nextExpanded) => {
+    const normalizedValue = Boolean(nextExpanded);
+    if (normalizedValue === isExpanded) {
+      return;
+    }
+
+    if (normalizedValue) {
+      setIsSheetClosing(false);
+    } else if (isSheetVariant) {
+      setIsSheetClosing(true);
+    }
+    setIsExpanded(normalizedValue);
+    if (typeof onExpandedChange === 'function') {
+      onExpandedChange(normalizedValue);
+    }
+  }, [isExpanded, isSheetVariant, onExpandedChange]);
+
+  const toggleExpanded = useCallback(() => {
+    if (onViewFullTracker) {
+      onViewFullTracker();
+      return;
+    }
+    setExpandedState(!isExpanded);
+  }, [isExpanded, onViewFullTracker, setExpandedState]);
+
+  const handleCollapse = useCallback(() => {
+    setExpandedState(false);
+  }, [setExpandedState]);
+
+  const sheetPanHandlers = useMemo(() => {
+    if (!isSheetVariant) {
+      return {};
+    }
+
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dy) > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy <= -DRAG_THRESHOLD) {
+          setExpandedState(true);
+          return;
+        }
+
+        if (gestureState.dy >= DRAG_THRESHOLD) {
+          setExpandedState(false);
+        }
+      },
+    }).panHandlers;
+  }, [isSheetVariant, setExpandedState]);
 
   // When delivery is completed, notify parent component
   useEffect(() => {
@@ -68,11 +242,12 @@ export default function DeliveryStatusTracker({
       onDeliveryComplete(requestData);
 
       // Stop polling when delivery is complete
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
       }
     }
-  }, [requestData]);
+  }, [requestData, onDeliveryComplete]);
 
   const fetchRequestData = async (showLoader = true) => {
     if (showLoader) {
@@ -108,10 +283,6 @@ export default function DeliveryStatusTracker({
     return index >= 0 ? index : 0;
   };
 
-  const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
-  };
-
   const formatETA = () => {
     if (!requestData) return '-- min';
 
@@ -132,9 +303,78 @@ export default function DeliveryStatusTracker({
 
     const currentIndex = getCurrentStatusIndex();
     const currentStep = statusSteps[currentIndex] || statusSteps[0];
+    const shortDeliveryLabel = requestData.item?.description || requestData.vehicleType || 'Delivery in progress';
+
+    if (isSheetVariant) {
+      const handleCompactLayout = (event) => {
+        const measuredHeight = Math.ceil(event?.nativeEvent?.layout?.height || 0);
+        if (!measuredHeight || measuredHeight === collapsedSheetHeight) {
+          return;
+        }
+
+        setCollapsedSheetHeight(measuredHeight);
+        if (!isExpanded && !isSheetClosing) {
+          sheetHeightAnim.setValue(measuredHeight);
+        }
+      };
+
+      return (
+        <Animated.View
+          style={[
+            styles.sheetAnimatedWrapper,
+            styles.sheetAnimatedWrapperCompact,
+            isSheetClosing ? styles.sheetAnimatedWrapperClosing : null,
+            { height: sheetHeightAnim },
+          ]}
+        >
+          <View
+            style={styles.sheetCompactContainer}
+            onLayout={handleCompactLayout}
+            {...sheetPanHandlers}
+          >
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetCompactRow}>
+              <TouchableOpacity
+                style={styles.sheetCompactMain}
+                onPress={onViewFullTracker || toggleExpanded}
+                activeOpacity={0.9}
+              >
+                <View style={styles.compactContent}>
+                  <View style={styles.compactIconContainer}>
+                    <Ionicons name={currentStep.icon} size={16} color={colors.white} />
+                  </View>
+                  <View style={[styles.compactTextContainer, styles.sheetCompactTextContainer]}>
+                    <Text style={styles.compactStatus}>{currentStep.label}</Text>
+                    <Text style={styles.compactInfo}>
+                      {shortDeliveryLabel} • ETA: {formatETA()}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+
+              {typeof onOpenChat === 'function' && (
+                <TouchableOpacity
+                  style={styles.chatActionButton}
+                  onPress={() => onOpenChat(requestData)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={16} color={colors.primary} />
+                  {hasUnreadChat ? <View style={styles.chatUnreadDotCompact} /> : null}
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.tapIndicator} onPress={toggleExpanded} activeOpacity={0.85}>
+                <Ionicons name="chevron-up" size={16} color={colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      );
+    }
 
     return (
-      <TouchableOpacity style={styles.compactContainer} onPress={onViewFullTracker || toggleExpanded}>
+      <TouchableOpacity style={styles.compactContainer} onPress={onViewFullTracker || toggleExpanded} activeOpacity={0.9}>
         <View style={styles.compactContent}>
           <View style={styles.compactIconContainer}>
             <Ionicons name={currentStep.icon} size={16} color={colors.white} />
@@ -142,12 +382,12 @@ export default function DeliveryStatusTracker({
           <View style={styles.compactTextContainer}>
             <Text style={styles.compactStatus}>{currentStep.label}</Text>
             <Text style={styles.compactInfo}>
-              {requestData.item?.description || 'Your delivery'} • ETA: {formatETA()}
+              {shortDeliveryLabel} • ETA: {formatETA()}
             </Text>
           </View>
         </View>
         <View style={styles.tapIndicator}>
-          <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
+          <Ionicons name="chevron-up" size={16} color={colors.text.secondary} />
         </View>
       </TouchableOpacity>
     );
@@ -282,28 +522,58 @@ export default function DeliveryStatusTracker({
     return renderCompactView();
   }
 
-  return (
-    <View style={styles.container}>
+  const expandedContent = (
+    <View
+      style={[
+        styles.container,
+        isSheetVariant ? styles.sheetContainer : null,
+        {
+          maxHeight: isSheetVariant ? undefined : maxExpandedHeight,
+          height: isSheetVariant ? '100%' : undefined,
+          paddingBottom: isSheetVariant
+            ? Math.max(spacing.base, bottomInset + spacing.sm)
+            : spacing.base,
+        },
+      ]}
+      {...sheetPanHandlers}
+    >
+      {isSheetVariant && <View style={styles.sheetHandle} />}
+
       <View style={styles.header}>
         <Text style={styles.title}>Delivery Status</Text>
         <View style={styles.headerButtons}>
+          {typeof onOpenChat === 'function' && (
+            <TouchableOpacity
+              style={styles.chatHeaderButton}
+              onPress={() => onOpenChat(requestData)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="chatbubble-ellipses" size={18} color={colors.primary} />
+              {hasUnreadChat ? <View style={styles.chatUnreadDot} /> : null}
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh}>
             <Ionicons name="refresh" size={18} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.collapseButton} onPress={toggleExpanded}>
-            <Ionicons name="chevron-up" size={18} color={colors.primary} />
+          <TouchableOpacity style={styles.collapseButton} onPress={handleCollapse}>
+            <Ionicons name="chevron-down" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {renderDriverInfo()}
+      <ScrollView
+        style={styles.bodyScroll}
+        contentContainerStyle={styles.bodyContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {renderDriverInfo()}
 
-      <View style={styles.statusContainer}>
-        {statusSteps.map(renderStatusStep)}
-      </View>
+        <View style={styles.statusContainer}>
+          {statusSteps.map(renderStatusStep)}
+        </View>
 
-
-      {renderPhotoButtons()}
+        {renderPhotoButtons()}
+      </ScrollView>
 
       {requestData && (
         <DeliveryPhotosModal
@@ -317,38 +587,90 @@ export default function DeliveryStatusTracker({
       )}
     </View>
   );
+
+  if (isSheetVariant) {
+    return (
+      <Animated.View style={[styles.sheetAnimatedWrapper, { height: sheetHeightAnim }]}>
+        {expandedContent}
+      </Animated.View>
+    );
+  }
+
+  return expandedContent;
 }
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.background.secondary,
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 10,
+    borderRadius: borderRadius.xl,
+    paddingTop: spacing.base,
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.base,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    ...shadows.lg,
   },
   compactContainer: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: 25,
-    padding: 10,
-    marginVertical: 10,
-    marginHorizontal: 10,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.full,
+    minHeight: 56,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border.strong,
+    borderColor: colors.navigation.tabBarBorder,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-    elevation: 3,
+    ...shadows.lg,
+  },
+  sheetCompactContainer: {
+    backgroundColor: colors.background.secondary,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    width: '100%',
+    alignSelf: 'stretch',
+    marginHorizontal: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.base,
+    ...shadows.lg,
+  },
+  sheetAnimatedWrapper: {
+    width: '100%',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
+  },
+  sheetAnimatedWrapperCompact: {
+    justifyContent: 'flex-end',
+  },
+  sheetAnimatedWrapperClosing: {
+    backgroundColor: colors.background.secondary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+  },
+  sheetCompactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sheetCompactMain: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.border.strong,
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
   },
   compactContent: {
     flexDirection: 'row',
@@ -362,56 +684,118 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm + 2,
   },
   compactTextContainer: {
     flex: 1,
   },
+  sheetCompactTextContainer: {
+    marginTop: 5,
+  },
   compactStatus: {
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 14,
+    color: colors.text.primary,
+    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.base,
   },
   compactInfo: {
-    color: colors.text.tertiary,
-    fontSize: 12,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginTop: 2,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   headerButtons: {
     flexDirection: 'row',
   },
+  chatHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    position: 'relative',
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  chatActionButton: {
+    width: 30,
+    height: 30,
+    borderRadius: borderRadius.full,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    backgroundColor: colors.background.secondary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  chatUnreadDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 9,
+    height: 9,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.warning,
+    borderWidth: 1,
+    borderColor: colors.background.secondary,
+  },
+  chatUnreadDotCompact: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 8,
+    height: 8,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.warning,
+    borderWidth: 1,
+    borderColor: colors.background.secondary,
+  },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.white,
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
   },
   refreshButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   collapseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  bodyScroll: {
+    flexGrow: 0,
+  },
+  bodyContent: {
+    paddingBottom: spacing.xs,
   },
   driverInfoContainer: {
     backgroundColor: colors.background.panel,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
   },
   driverInfo: {
     flexDirection: 'row',
@@ -420,7 +804,7 @@ const styles = StyleSheet.create({
   driverAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: borderRadius.circle,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -430,12 +814,12 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   driverName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
   },
   vehicleInfo: {
-    fontSize: 12,
+    fontSize: typography.fontSize.sm,
     color: colors.text.secondary,
   },
   driverRating: {
@@ -455,26 +839,45 @@ const styles = StyleSheet.create({
   tapIndicator: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingRight: 8,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    width: 30,
+    height: 30,
+  },
+  sheetContainer: {
+    width: '100%',
+    alignSelf: 'stretch',
+    marginHorizontal: 0,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderWidth: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.18,
   },
   statusContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   statusStep: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: spacing.base,
   },
   statusIconContainer: {
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: spacing.base,
   },
   statusDot: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: borderRadius.circle,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   activeDot: {
     backgroundColor: colors.primary,
@@ -490,22 +893,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusLabel: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   activeLabel: {
-    color: colors.white,
+    color: colors.text.primary,
   },
   inactiveLabel: {
     color: colors.text.subtle,
   },
   currentLabel: {
-    fontWeight: 'bold',
+    fontWeight: typography.fontWeight.bold,
   },
   statusDescription: {
-    color: colors.text.tertiary,
-    fontSize: 12,
-    marginTop: 2,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
   },
   statusLine: {
     width: 2,
@@ -517,70 +920,63 @@ const styles = StyleSheet.create({
   inactiveLine: {
     backgroundColor: colors.border.strong,
   },
-  liveTrackingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginBottom: 16,
-  },
-  liveTrackingText: {
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 14,
-    marginLeft: 8,
-  },
   photoButtonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   photoButton: {
+    flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(167, 123, 255, 0.1)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  photoButtonText: {
-    color: colors.primary,
-    marginLeft: 6,
-    fontSize: 14,
-  },
-  loadingContainer: {
-    padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background.secondary,
-    borderRadius: 25,
+    backgroundColor: colors.background.elevated,
     borderWidth: 1,
     borderColor: colors.border.strong,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderRadius: borderRadius.full,
+  },
+  photoButtonText: {
+    color: colors.text.primary,
+    marginLeft: spacing.xs,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  loadingContainer: {
+    minHeight: 56,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
     flexDirection: 'row',
-    marginHorizontal: 10,
-    marginVertical: 10,
+    ...shadows.lg,
   },
   loadingText: {
     color: colors.text.secondary,
-    marginLeft: 10,
-    fontSize: 14,
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.base,
   },
   errorContainer: {
-    padding: 10,
+    minHeight: 56,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background.secondary,
-    borderRadius: 25,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: colors.border.strong,
+    borderColor: colors.navigation.tabBarBorder,
     flexDirection: 'row',
-    marginHorizontal: 10,
-    marginVertical: 10,
+    ...shadows.lg,
   },
   errorText: {
     color: colors.error,
-    marginLeft: 10,
-    fontSize: 14,
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.base,
   },
-}); 
+});

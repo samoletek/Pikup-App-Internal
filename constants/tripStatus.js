@@ -10,6 +10,18 @@ export const TRIP_STATUS = Object.freeze({
   CANCELLED: 'cancelled'
 });
 
+const STATUS_TO_DB_MAP = Object.freeze({
+  [TRIP_STATUS.PENDING]: 'pending',
+  [TRIP_STATUS.ACCEPTED]: 'accepted',
+  [TRIP_STATUS.IN_PROGRESS]: 'in_progress',
+  [TRIP_STATUS.ARRIVED_AT_PICKUP]: 'arrived_at_pickup',
+  [TRIP_STATUS.PICKED_UP]: 'picked_up',
+  [TRIP_STATUS.EN_ROUTE_TO_DROPOFF]: 'en_route_to_dropoff',
+  [TRIP_STATUS.ARRIVED_AT_DROPOFF]: 'arrived_at_dropoff',
+  [TRIP_STATUS.COMPLETED]: 'completed',
+  [TRIP_STATUS.CANCELLED]: 'cancelled',
+});
+
 const STATUS_ALIAS_MAP = Object.freeze({
   pending: TRIP_STATUS.PENDING,
   accepted: TRIP_STATUS.ACCEPTED,
@@ -59,6 +71,11 @@ export const normalizeTripStatus = (status) => {
   }
 
   return STATUS_ALIAS_MAP[normalized] || STATUS_ALIAS_MAP[normalized.toLowerCase()] || normalized;
+};
+
+export const toDbTripStatus = (status) => {
+  const normalized = normalizeTripStatus(status);
+  return STATUS_TO_DB_MAP[normalized] || normalized;
 };
 
 export const isActiveTripStatus = (status) => {
