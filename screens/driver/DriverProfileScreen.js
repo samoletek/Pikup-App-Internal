@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Image,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,19 +11,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as FileSystem from "expo-file-system/legacy";
-import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
-import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
 import {
   borderRadius,
   colors,
-  sizing,
   spacing,
   typography,
 } from "../../styles/theme";
@@ -41,10 +36,7 @@ export default function DriverProfileScreen({ navigation }) {
     profileImage,
     getProfileImage,
     getDriverFeedback,
-    uploadProfileImage,
-    deleteProfileImage,
   } = useAuth();
-  const currentUserId = currentUser?.uid || currentUser?.id;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -60,7 +52,6 @@ export default function DriverProfileScreen({ navigation }) {
   });
   const [recentFeedback, setRecentFeedback] = useState([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
-  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     loadDriverProfile();
@@ -68,7 +59,7 @@ export default function DriverProfileScreen({ navigation }) {
 
   const loadDriverProfile = async () => {
     try {
-      const profile = await getDriverProfile?.(currentUserId);
+      const profile = await getDriverProfile?.(currentUser?.uid);
       setDriverProfile(profile);
 
       const user = await getUserProfile?.();
@@ -104,13 +95,13 @@ export default function DriverProfileScreen({ navigation }) {
   };
 
   const loadDriverFeedback = async () => {
-    if (!currentUserId) {
+    if (!currentUser?.uid) {
       return;
     }
 
     setLoadingFeedback(true);
     try {
-      const feedback = await getDriverFeedback(currentUserId, 5);
+      const feedback = await getDriverFeedback(currentUser.uid, 5);
       setRecentFeedback(feedback);
     } catch (error) {
       console.error("Error loading feedback:", error);
@@ -157,168 +148,6 @@ export default function DriverProfileScreen({ navigation }) {
       return;
     }
     navigation.navigate("DriverEarningsScreen");
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Camera permission is required to take photos.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    try {
-      await uploadProfileImage?.(result.assets[0].uri);
-      Alert.alert("Success", "Profile picture updated successfully.");
-      await getProfileImage?.();
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload profile picture.");
-    }
-  };
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Photo library permission is required to choose photos.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    try {
-      await uploadProfileImage?.(result.assets[0].uri);
-      Alert.alert("Success", "Profile picture updated successfully.");
-      await getProfileImage?.();
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload profile picture.");
-    }
-  };
-
-  const removePhoto = () => {
-    Alert.alert(
-      "Remove Photo",
-      "Are you sure you want to remove your profile photo?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteProfileImage?.();
-              Alert.alert("Success", "Profile picture removed.");
-            } catch (error) {
-              Alert.alert("Error", "Failed to remove profile picture.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDownloadMyData = () => {
-    if (downloadingData) return;
-
-    Alert.alert(
-      "Download My Data",
-      "This will export all your personal data as a JSON file. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Download",
-          onPress: async () => {
-            setDownloadingData(true);
-            try {
-              const { data: sessionData, error: sessionError } =
-                await supabase.auth.getSession();
-              if (sessionError || !sessionData?.session?.access_token) {
-                throw new Error("Session expired. Please sign in again.");
-              }
-
-              const { data, error } = await supabase.functions.invoke(
-                "download-user-data",
-                {
-                  headers: {
-                    Authorization: `Bearer ${sessionData.session.access_token}`,
-                  },
-                  body: { role: "driver" },
-                }
-              );
-
-              if (error) {
-                let errorMessage = "Failed to download data.";
-                if (error?.context) {
-                  try {
-                    const errorBody = await error.context.clone().json();
-                    errorMessage =
-                      errorBody?.error || errorBody?.message || errorMessage;
-                  } catch (_) {}
-                }
-                throw new Error(errorMessage);
-              }
-
-              const fileName = `pikup-data-${Date.now()}.json`;
-              const fileUri = FileSystem.cacheDirectory + fileName;
-              await FileSystem.writeAsStringAsync(
-                fileUri,
-                JSON.stringify(data, null, 2)
-              );
-
-              const sharingAvailable = await Sharing.isAvailableAsync();
-              if (!sharingAvailable) {
-                Alert.alert(
-                  "Sharing Unavailable",
-                  "Sharing is not available on this device."
-                );
-                return;
-              }
-
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/json",
-                dialogTitle: "Save Your Data",
-                UTI: "public.json",
-              });
-            } catch (err) {
-              console.error("Error downloading user data:", err);
-              Alert.alert(
-                "Error",
-                err?.message || "Failed to download your data. Please try again."
-              );
-            } finally {
-              setDownloadingData(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleProfilePhotoPress = () => {
-    Alert.alert("Update Profile Picture", "Choose an option", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Take Photo", onPress: takePhoto },
-      { text: "Choose from Library", onPress: pickImage },
-      { text: "Remove Photo", style: "destructive", onPress: removePhoto },
-    ]);
   };
 
   const initials = displayName
@@ -390,19 +219,19 @@ export default function DriverProfileScreen({ navigation }) {
       disabled: false,
     },
     {
-      id: "about",
-      title: "About",
-      icon: "information-circle-outline",
-      onPress: () => navigation.navigate("AboutScreen"),
+      id: "safety",
+      title: "Safety",
+      icon: "shield-checkmark-outline",
+      onPress: () => navigation.navigate("CustomerSafetyScreen"),
       disabled: false,
     },
     {
-      id: "downloadData",
-      title: "Download My Data",
-      icon: "download-outline",
-      onPress: handleDownloadMyData,
-      disabled: downloadingData,
-      loading: downloadingData,
+      id: "terms",
+      title: "Terms and Privacy",
+      icon: "document-text-outline",
+      onPress: () => Linking.openURL("https://pikup-app.com/"),
+      disabled: false,
+      external: true,
     },
   ];
 
@@ -465,15 +294,11 @@ export default function DriverProfileScreen({ navigation }) {
           {item.title}
         </Text>
       </View>
-      {item.loading ? (
-        <ActivityIndicator size="small" color={colors.primary} />
-      ) : (
-        <Ionicons
-          name={item.external ? "open-outline" : "chevron-forward"}
-          size={20}
-          color={colors.text.tertiary}
-        />
-      )}
+      <Ionicons
+        name={item.external ? "open-outline" : "chevron-forward"}
+        size={20}
+        color={colors.text.tertiary}
+      />
     </TouchableOpacity>
   );
 
@@ -515,7 +340,7 @@ export default function DriverProfileScreen({ navigation }) {
           <View style={styles.profileTopRow}>
             <TouchableOpacity
               style={styles.avatarContainer}
-              onPress={handleProfilePhotoPress}
+              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
             >
               {profileImage ? (
                 <Image source={{ uri: profileImage }} style={styles.avatarImage} />
@@ -533,7 +358,7 @@ export default function DriverProfileScreen({ navigation }) {
                   !isReadyToEarn && styles.verifiedBadgePending,
                 ]}
               >
-                <Ionicons name="checkmark" size={10} color={colors.white} />
+                <Ionicons name="checkmark" size={10} color="#fff" />
               </View>
             </TouchableOpacity>
 
@@ -556,7 +381,7 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
               <TouchableOpacity
                 style={styles.editProfileButton}
-                onPress={() => navigation.navigate("PersonalInfoScreen")}
+                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
               >
                 <Ionicons name="create-outline" size={14} color={colors.primary} />
                 <Text style={styles.editProfileText}>Edit profile</Text>
@@ -755,33 +580,33 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   avatarImage: {
-    width: sizing.avatarLg,
-    height: sizing.avatarLg,
+    width: 80,
+    height: 80,
     borderRadius: borderRadius.xl,
   },
   avatarGradient: {
-    width: sizing.avatarLg,
-    height: sizing.avatarLg,
+    width: 80,
+    height: 80,
     borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarInitials: {
-    color: colors.white,
-    fontSize: sizing.avatarInitialsFontSize,
+    color: "#fff",
+    fontSize: 32,
     fontWeight: typography.fontWeight.bold,
   },
   verifiedBadge: {
     position: "absolute",
-    bottom: -sizing.verificationBadgeOffset,
-    right: -sizing.verificationBadgeOffset,
-    width: sizing.verificationBadgeSize,
-    height: sizing.verificationBadgeSize,
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
     borderRadius: borderRadius.circle,
     backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: sizing.verificationBadgeBorderWidth,
+    borderWidth: 3,
     borderColor: colors.background.secondary,
   },
   verifiedBadgePending: {
@@ -791,7 +616,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: sizing.profileNameFontSize,
+    fontSize: 22,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     textTransform: "capitalize",
@@ -815,9 +640,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: sizing.compactGap,
+    gap: 6,
     paddingHorizontal: spacing.md,
-    paddingVertical: sizing.compactButtonVerticalPadding,
+    paddingVertical: spacing.xs + 2,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.strong,
@@ -845,11 +670,11 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statLabel: {
-    fontSize: sizing.statLabelFontSize,
+    fontSize: 11,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.muted,
-    marginTop: sizing.statLabelMarginTop,
-    letterSpacing: sizing.statLabelLetterSpacing,
+    marginTop: 3,
+    letterSpacing: 0.5,
   },
   statDividerVertical: {
     width: 1,
