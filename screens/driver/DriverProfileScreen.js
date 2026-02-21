@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +20,7 @@ import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
+import { DRIVER_RATING_BADGES } from "../../constants/ratingBadges";
 import {
   borderRadius,
   colors,
@@ -37,10 +38,10 @@ export default function DriverProfileScreen({ navigation }) {
     currentUser,
     logout,
     getDriverProfile,
+    getDriverStats,
     getUserProfile,
     profileImage,
     getProfileImage,
-    getDriverFeedback,
     uploadProfileImage,
     deleteProfileImage,
   } = useAuth();
@@ -58,8 +59,10 @@ export default function DriverProfileScreen({ navigation }) {
     documentsVerified: false,
     canReceivePayments: false,
   });
-  const [recentFeedback, setRecentFeedback] = useState([]);
-  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [driverStats, setDriverStats] = useState({
+    totalTrips: 0,
+    acceptanceRate: 0,
+  });
   const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
@@ -95,27 +98,38 @@ export default function DriverProfileScreen({ navigation }) {
         canReceivePayments: profile.canReceivePayments || false,
       });
 
-      if (profile.canReceivePayments || profile.onboardingComplete) {
-        loadDriverFeedback();
-      }
+      await loadDriverStats();
     } catch (error) {
       console.error("Error loading driver profile:", error);
     }
   };
 
-  const loadDriverFeedback = async () => {
+  const loadDriverStats = async () => {
     if (!currentUserId) {
       return;
     }
 
-    setLoadingFeedback(true);
     try {
-      const feedback = await getDriverFeedback(currentUserId, 5);
-      setRecentFeedback(feedback);
+      const stats = await getDriverStats?.(currentUserId);
+      const parsedTotalTrips = Number(stats?.totalTrips);
+      const parsedAcceptanceRate = Number(stats?.acceptanceRate);
+
+      setDriverStats({
+        totalTrips:
+          Number.isFinite(parsedTotalTrips) && parsedTotalTrips > 0
+            ? parsedTotalTrips
+            : 0,
+        acceptanceRate:
+          Number.isFinite(parsedAcceptanceRate) && parsedAcceptanceRate > 0
+            ? Math.round(parsedAcceptanceRate)
+            : 0,
+      });
     } catch (error) {
-      console.error("Error loading feedback:", error);
-    } finally {
-      setLoadingFeedback(false);
+      console.error("Error loading driver stats:", error);
+      setDriverStats({
+        totalTrips: 0,
+        acceptanceRate: 0,
+      });
     }
   };
 
@@ -330,13 +344,25 @@ export default function DriverProfileScreen({ navigation }) {
     .toUpperCase();
 
   const isReadyToEarn = onboardingStatus.canReceivePayments;
-  const completedTrips = isReadyToEarn
-    ? String(driverProfile?.totalTrips || 156)
-    : "--";
-  const acceptanceRate = isReadyToEarn
-    ? `${driverProfile?.acceptanceRate || 98}%`
-    : "--";
-  const ratingValue = isReadyToEarn ? String(driverProfile?.rating || "5.0") : "--";
+  const completedTrips = String(Number(driverStats.totalTrips) || 0);
+  const acceptanceRate = `${Number(driverStats.acceptanceRate) || 0}%`;
+  const ratingCount = Number(
+    driverProfile?.rating_count ?? driverProfile?.driverProfile?.rating_count ?? 0
+  );
+  const parsedRating = Number(
+    driverProfile?.rating ?? driverProfile?.driverProfile?.rating ?? 0
+  );
+  const ratingValue =
+    ratingCount > 0 && Number.isFinite(parsedRating)
+      ? parsedRating.toFixed(1)
+      : "0";
+  const driverBadges = useMemo(() => {
+    const badgeStats = driverProfile?.badge_stats || {};
+    return DRIVER_RATING_BADGES.map((badge) => ({
+      ...badge,
+      count: Number(badgeStats?.[badge.id] || 0),
+    }));
+  }, [driverProfile]);
   const statusConfig = isReadyToEarn
     ? {
         title: "Ready to Earn",
@@ -371,8 +397,6 @@ export default function DriverProfileScreen({ navigation }) {
           ctaLabel: "Start",
           onPress: handleStartOnboarding,
         };
-
-  const feedbackToRender = recentFeedback.slice(0, 3);
 
   const menuItems = [
     {
@@ -580,6 +604,23 @@ export default function DriverProfileScreen({ navigation }) {
               <Text style={styles.statLabel}>RATING</Text>
             </View>
           </View>
+
+          <View style={styles.badgesBar}>
+            {driverBadges.map((badge, index) => (
+              <React.Fragment key={badge.id}>
+                {index > 0 ? <View style={styles.badgeDividerVertical} /> : null}
+                <View style={styles.badgeItem}>
+                  <View style={styles.badgeInfo}>
+                    <Ionicons name={badge.icon} size={14} color={badge.activeColor} />
+                    <Text style={styles.badgeLabel}>{badge.label}</Text>
+                  </View>
+                  <View style={styles.badgeChipCount}>
+                    <Text style={styles.badgeChipCountText}>{badge.count}</Text>
+                  </View>
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
         </View>
 
         <TouchableOpacity
@@ -647,60 +688,6 @@ export default function DriverProfileScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
         </View>
-
-        {isReadyToEarn ? (
-          <View style={styles.feedbackCard}>
-            <View style={styles.feedbackHeader}>
-              <Text style={styles.feedbackTitle}>Recent Feedback</Text>
-              {feedbackToRender.length > 0 ? (
-                <Text style={styles.feedbackCount}>{feedbackToRender.length} reviews</Text>
-              ) : null}
-            </View>
-
-            {loadingFeedback ? (
-              <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
-            ) : feedbackToRender.length > 0 ? (
-              feedbackToRender.map((feedback, index) => (
-                <View
-                  key={`${feedback.timestamp || "feedback"}-${index}`}
-                  style={styles.feedbackItem}
-                >
-                  <View style={styles.feedbackStars}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Ionicons
-                        key={star}
-                        name={star <= (feedback.rating || 5) ? "star" : "star-outline"}
-                        size={14}
-                        color={
-                          star <= (feedback.rating || 5)
-                            ? colors.gold
-                            : colors.border.light
-                        }
-                      />
-                    ))}
-                    <Text style={styles.feedbackDate}>
-                      {feedback.timestamp
-                        ? new Date(feedback.timestamp).toLocaleDateString()
-                        : ""}
-                    </Text>
-                  </View>
-                  <Text style={styles.feedbackComment} numberOfLines={2}>
-                    {feedback.comment ? `"${feedback.comment}"` : "No comment provided"}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <View style={styles.feedbackEmpty}>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={24}
-                  color={colors.text.muted}
-                />
-                <Text style={styles.feedbackEmptyText}>No feedback yet</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
 
         <View style={styles.menuSections}>
           {menuItems.map((item, index) =>
@@ -856,6 +843,53 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.strong,
     marginVertical: spacing.sm,
   },
+  badgesBar: {
+    flexDirection: "row",
+    marginTop: spacing.base,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+  },
+  badgeItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm + 1,
+  },
+  badgeDividerVertical: {
+    width: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
+  },
+  badgeInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  badgeLabel: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xs + 1,
+    fontWeight: typography.fontWeight.medium,
+  },
+  badgeChipCount: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeChipCountText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
   statusCard: {
     marginBottom: spacing.base,
     borderRadius: borderRadius.lg,
@@ -926,64 +960,6 @@ const styles = StyleSheet.create({
   },
   quickActionLabelDisabled: {
     color: colors.text.muted,
-  },
-  feedbackCard: {
-    backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: spacing.base,
-  },
-  feedbackHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  feedbackTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  feedbackCount: {
-    color: colors.text.link,
-    fontSize: typography.fontSize.base,
-  },
-  feedbackLoadingText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-  },
-  feedbackItem: {
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border.strong,
-  },
-  feedbackStars: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  feedbackDate: {
-    marginLeft: spacing.sm,
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.xs,
-  },
-  feedbackComment: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    lineHeight: 18,
-  },
-  feedbackEmpty: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
-  },
-  feedbackEmptyText: {
-    marginLeft: spacing.sm,
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
   },
   menuSections: {
     backgroundColor: colors.background.secondary,

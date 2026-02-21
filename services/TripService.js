@@ -4,7 +4,7 @@
 import { supabase } from '../config/supabase';
 import { uploadToSupabase } from './StorageService';
 import { createConversation } from './MessagingService';
-import { TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
+import { TRIP_STATUS, normalizeTripStatus, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 
 // Payment service URL
@@ -19,6 +19,114 @@ const STATUS_TIMESTAMP_FIELDS = Object.freeze({
     [TRIP_STATUS.COMPLETED]: 'completed_at',
     [TRIP_STATUS.CANCELLED]: 'cancelled_at'
 });
+
+let hasTripExpiresAtColumn = true;
+
+const isMissingColumnError = (error, columnName) => {
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+    const target = String(columnName || '').toLowerCase();
+
+    return (
+        (message.includes('does not exist') || details.includes('does not exist')) &&
+        (message.includes(target) || details.includes(target))
+    );
+};
+
+const isTripStatusConstraintError = (error) => {
+    if (error?.code !== '23514') return false;
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+    return message.includes('trips_status_check') || details.includes('trips_status_check');
+};
+
+const getAlternateTripStatusFormat = (status) => {
+    if (typeof status !== 'string' || !status.trim()) return null;
+
+    const normalizedStatus = normalizeTripStatus(status);
+    const dbStatus = toDbTripStatus(normalizedStatus);
+
+    // If we already send DB-format status, fallback to app-normalized format.
+    if (status === dbStatus) {
+        return normalizedStatus;
+    }
+
+    // If we send app format, fallback to DB-format status.
+    if (status === normalizedStatus) {
+        return dbStatus;
+    }
+
+    // Best effort fallback for unknown variants.
+    return status.includes('_') ? normalizedStatus : dbStatus;
+};
+
+const getMissingColumnFromError = (error) => {
+    const message = String(error?.message || '');
+    let match = message.match(/Could not find the '([^']+)' column/i);
+    if (match?.[1]) return match[1];
+
+    match = message.match(/column\s+([a-zA-Z0-9_.]+)\s+does not exist/i);
+    if (match?.[1]) {
+        return match[1].split('.').pop();
+    }
+
+    return null;
+};
+
+const isMissingRpcFunctionError = (error, functionName) => {
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+    const target = String(functionName || '').toLowerCase();
+
+    return (
+        error?.code === 'PGRST202' ||
+        message.includes('could not find the function') ||
+        details.includes('could not find the function') ||
+        (target && (message.includes(target) || details.includes(target)))
+    );
+};
+
+const applyTripUpdateWithColumnFallback = async (requestId, rawUpdates = {}) => {
+    const updates = { ...rawUpdates };
+    const attemptedStatuses = new Set();
+
+    while (Object.keys(updates).length > 0) {
+        if (typeof updates.status === 'string' && updates.status) {
+            attemptedStatuses.add(updates.status);
+        }
+
+        const { error } = await supabase
+            .from('trips')
+            .update(updates)
+            .eq('id', requestId);
+
+        if (!error) {
+            return updates;
+        }
+
+        const missingColumn = getMissingColumnFromError(error);
+        if (missingColumn && Object.prototype.hasOwnProperty.call(updates, missingColumn)) {
+            console.warn(`Trips table is missing "${missingColumn}". Retrying without it.`);
+            delete updates[missingColumn];
+            continue;
+        }
+
+        if (isTripStatusConstraintError(error) && typeof updates.status === 'string') {
+            const alternateStatus = getAlternateTripStatusFormat(updates.status);
+            if (alternateStatus && !attemptedStatuses.has(alternateStatus)) {
+                console.warn(
+                    `Trips status constraint rejected "${updates.status}". Retrying with "${alternateStatus}".`
+                );
+                updates.status = alternateStatus;
+                continue;
+            }
+        }
+
+        throw error;
+    }
+
+    return {};
+};
 
 /**
  * Create a new pickup request
@@ -50,7 +158,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
             distance_miles: parseFloat(requestData.pricing?.distance || 0),
             items: requestData.items || [],
             scheduled_time: requestData.scheduledTime || null,
-            status: TRIP_STATUS.PENDING,
+            status: toDbTripStatus(TRIP_STATUS.PENDING),
             created_at: new Date().toISOString(),
         };
 
@@ -108,7 +216,7 @@ export const getAvailableRequests = async (currentUser) => {
         const { data, error } = await supabase
             .from('trips')
             .select('*')
-            .eq('status', TRIP_STATUS.PENDING);
+            .eq('status', toDbTripStatus(TRIP_STATUS.PENDING));
 
         if (error) throw error;
 
@@ -178,47 +286,161 @@ export const acceptRequest = async (requestId, currentUser) => {
     if (!currentUser) throw new Error('User not authenticated');
 
     try {
-        const { data: result, error } = await supabase
+        const driverId = currentUser.uid || currentUser.id;
+        const { data: requestSnapshot, error: snapshotError } = await supabase
             .from('trips')
-            .update({
-                status: TRIP_STATUS.ACCEPTED,
-                driver_id: currentUser.uid || currentUser.id,
-                updated_at: new Date().toISOString()
-            })
+            .select('*')
             .eq('id', requestId)
-            .select()
-            .single();
+            .maybeSingle();
 
-        if (error) throw error;
+        if (snapshotError) throw snapshotError;
+        if (!requestSnapshot) {
+            throw new Error('Request is no longer available');
+        }
 
-        console.log('Request accepted successfully:', result);
+        const normalizedStatus = normalizeTripStatus(requestSnapshot.status);
+        if (normalizedStatus === TRIP_STATUS.ACCEPTED && requestSnapshot.driver_id === driverId) {
+            return mapTripFromDb(requestSnapshot);
+        }
+        if (normalizedStatus !== TRIP_STATUS.PENDING) {
+            throw new Error('Request is no longer pending');
+        }
+
+        if (requestSnapshot.driver_id && requestSnapshot.driver_id !== driverId) {
+            throw new Error('Request already accepted by another driver');
+        }
+
+        const acceptedAt = new Date().toISOString();
+        let acceptedRequest = null;
+        let rpcAccepted = false;
+
+        // Primary path: RPC with SECURITY DEFINER to bypass restrictive RLS during accept race.
+        const { data: rpcAcceptedRows, error: rpcAcceptError } = await supabase.rpc('accept_trip_request', {
+            p_trip_id: requestId,
+            p_driver_id: driverId
+        });
+
+        if (rpcAcceptError) {
+            if (isMissingRpcFunctionError(rpcAcceptError, 'accept_trip_request')) {
+                console.warn('accept_trip_request RPC is missing. Falling back to direct trips update.');
+            } else {
+                throw rpcAcceptError;
+            }
+        } else {
+            rpcAccepted = true;
+            if (Array.isArray(rpcAcceptedRows) && rpcAcceptedRows.length > 0) {
+                acceptedRequest = rpcAcceptedRows[0];
+            }
+        }
+
+        if (!acceptedRequest && rpcAccepted) {
+            const { data: latestTrip, error: latestTripError } = await supabase
+                .from('trips')
+                .select('*')
+                .eq('id', requestId)
+                .maybeSingle();
+
+            if (latestTripError) {
+                throw latestTripError;
+            }
+
+            if (!latestTrip) {
+                throw new Error('Request is no longer available');
+            }
+
+            const latestStatus = normalizeTripStatus(latestTrip.status);
+            if (latestStatus === TRIP_STATUS.ACCEPTED && latestTrip.driver_id === driverId) {
+                acceptedRequest = latestTrip;
+            } else {
+                throw new Error('Request is no longer pending');
+            }
+        }
+
+        if (!acceptedRequest && !rpcAccepted) {
+            const acceptedStatus = toDbTripStatus(TRIP_STATUS.ACCEPTED);
+            const updates = {
+                status: acceptedStatus,
+                driver_id: driverId,
+                updated_at: acceptedAt
+            };
+
+            const driverMatchOrNull = `driver_id.is.null,driver_id.eq.${driverId}`;
+            const { error: updateError } = await supabase
+                .from('trips')
+                .update(updates)
+                .eq('id', requestId)
+                .eq('status', toDbTripStatus(TRIP_STATUS.PENDING))
+                .or(driverMatchOrNull);
+
+            if (updateError) throw updateError;
+
+            acceptedRequest = {
+                ...requestSnapshot,
+                ...updates
+            };
+
+            const { data: refetchedRequest, error: refetchError } = await supabase
+                .from('trips')
+                .select('*')
+                .eq('id', requestId)
+                .maybeSingle();
+
+            if (refetchError) {
+                console.warn('Could not re-fetch accepted request after direct update:', refetchError);
+            } else if (refetchedRequest) {
+                acceptedRequest = refetchedRequest;
+            }
+        }
+
+        if (
+            normalizeTripStatus(acceptedRequest?.status) !== TRIP_STATUS.ACCEPTED ||
+            acceptedRequest?.driver_id !== driverId
+        ) {
+            throw new Error('Request acceptance was not persisted. Please apply the latest Supabase migration and try again.');
+        }
+
+        console.log('Request accepted successfully:', requestId);
 
         // Create conversation
         try {
-            const customerId = result.customer_id;
+            const customerId =
+                requestSnapshot.customer_id ||
+                acceptedRequest?.customer_id ||
+                acceptedRequest?.customerId ||
+                null;
 
             if (customerId) {
                 let customerName = 'Customer';
                 let driverName = 'Driver';
 
-                const { data: customerProfile } = await supabase.from('customers').select('first_name, last_name, email').eq('id', customerId).single();
+                const { data: customerProfile } = await supabase
+                    .from('customers')
+                    .select('first_name, last_name, email')
+                    .eq('id', customerId)
+                    .maybeSingle();
                 if (customerProfile) {
                     customerName = customerProfile.first_name || customerProfile.email?.split('@')[0] || 'Customer';
                 }
 
-                const { data: driverProfile } = await supabase.from('drivers').select('first_name, last_name, email').eq('id', currentUser.uid || currentUser.id).single();
+                const { data: driverProfile } = await supabase
+                    .from('drivers')
+                    .select('first_name, last_name, email')
+                    .eq('id', driverId)
+                    .maybeSingle();
                 if (driverProfile) {
                     driverName = driverProfile.first_name || driverProfile.email?.split('@')[0] || 'Driver';
                 }
 
-                await createConversation(requestId, customerId, currentUser.uid || currentUser.id, customerName, driverName);
+                await createConversation(requestId, customerId, driverId, customerName, driverName);
                 console.log('Conversation created for request:', requestId);
+            } else {
+                console.warn('Skipping conversation creation: missing customer id for request', requestId);
             }
         } catch (convError) {
             console.error('Error creating conversation:', convError);
         }
 
-        return mapTripFromDb(result);
+        return mapTripFromDb(acceptedRequest);
 
     } catch (error) {
         console.error('Error accepting request:', error);
@@ -236,20 +458,28 @@ export const acceptRequest = async (requestId, currentUser) => {
 export const updateRequestStatus = async (requestId, newStatus, additionalData = {}) => {
     try {
         const normalizedStatus = normalizeTripStatus(newStatus);
-        const updates = {
-            status: normalizedStatus,
+        const requestedUpdates = {
+            ...additionalData,
+            status: toDbTripStatus(normalizedStatus),
             updated_at: new Date().toISOString(),
-            ...additionalData
         };
+
+        const appliedUpdates = await applyTripUpdateWithColumnFallback(requestId, requestedUpdates);
 
         const { data, error } = await supabase
             .from('trips')
-            .update(updates)
+            .select('*')
             .eq('id', requestId)
-            .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+            return mapTripFromDb({
+                id: requestId,
+                ...requestedUpdates,
+                ...appliedUpdates,
+            });
+        }
         return mapTripFromDb(data);
     } catch (error) {
         console.error('Error updating request status:', error);
@@ -269,24 +499,32 @@ export const updateDriverStatus = async (requestId, status, location = null, add
     try {
         const normalizedStatus = normalizeTripStatus(status);
         const statusTimestampField = STATUS_TIMESTAMP_FIELDS[normalizedStatus] || `${normalizedStatus}_at`;
-        const updates = {
-            status: normalizedStatus,
+        const requestedUpdates = {
+            ...additionalData,
+            status: toDbTripStatus(normalizedStatus),
             [statusTimestampField]: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            ...additionalData
         };
         if (location) {
-            updates.driver_location = location;
+            requestedUpdates.driver_location = location;
         }
+
+        const appliedUpdates = await applyTripUpdateWithColumnFallback(requestId, requestedUpdates);
 
         const { data, error } = await supabase
             .from('trips')
-            .update(updates)
+            .select('*')
             .eq('id', requestId)
-            .select()
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+            return mapTripFromDb({
+                id: requestId,
+                ...requestedUpdates,
+                ...appliedUpdates,
+            });
+        }
         return mapTripFromDb(data);
     } catch (error) {
         console.error('Error updating driver status:', error);
@@ -446,23 +684,38 @@ export const arriveAtDropoff = (requestId, driverLocation) =>
 
 // Timer and request management
 export const checkExpiredRequests = async () => {
+    if (!hasTripExpiresAtColumn) {
+        return 0;
+    }
+
     try {
         const now = new Date().toISOString();
 
         const { data: expiredRequests, error } = await supabase
             .from('trips')
             .select('*')
-            .eq('status', TRIP_STATUS.PENDING)
+            .eq('status', toDbTripStatus(TRIP_STATUS.PENDING))
             .lt('expires_at', now);
 
-        if (error) throw error;
+        if (error) {
+            if (isMissingColumnError(error, 'expires_at')) {
+                hasTripExpiresAtColumn = false;
+                console.warn('Skipping expired request checks: trips.expires_at column is missing.');
+                return 0;
+            }
+            throw error;
+        }
         if (!expiredRequests) return 0;
 
+        let resetCount = 0;
         for (const request of expiredRequests) {
-            await resetExpiredRequest(request.id);
+            const didReset = await resetExpiredRequest(request.id);
+            if (didReset) {
+                resetCount += 1;
+            }
         }
 
-        return expiredRequests.length;
+        return resetCount;
     } catch (error) {
         console.error('Error checking expired requests:', error);
         return 0;
@@ -471,16 +724,47 @@ export const checkExpiredRequests = async () => {
 
 export const resetExpiredRequest = async (requestId) => {
     try {
-        const { error } = await supabase
-            .from('trips')
-            .update({
-                status: TRIP_STATUS.PENDING,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', requestId);
+        const nextExpiry = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+        const baseUpdates = {
+            status: toDbTripStatus(TRIP_STATUS.PENDING),
+            updated_at: new Date().toISOString(),
+            viewing_driver_id: null,
+        };
 
-        if (error) throw error;
-        console.log(`Reset expired request ${requestId}`);
+        let updates = { ...baseUpdates, expires_at: nextExpiry };
+        let wasUpdated = false;
+
+        while (Object.keys(updates).length > 0) {
+            const { data, error } = await supabase
+                .from('trips')
+                .update(updates)
+                .eq('id', requestId)
+                .eq('status', toDbTripStatus(TRIP_STATUS.PENDING))
+                .is('driver_id', null)
+                .select('id');
+
+            if (!error) {
+                wasUpdated = Array.isArray(data) && data.length > 0;
+                break;
+            }
+
+            const missingColumn = getMissingColumnFromError(error);
+            if (missingColumn && Object.prototype.hasOwnProperty.call(updates, missingColumn)) {
+                console.warn(`Trips table is missing "${missingColumn}" during expiry reset. Retrying without it.`);
+                delete updates[missingColumn];
+                continue;
+            }
+
+            throw error;
+        }
+
+        if (wasUpdated) {
+            console.log(`Reset expired request ${requestId}`);
+            return true;
+        } else {
+            console.log(`Skipped expired reset for ${requestId} (already accepted or unavailable).`);
+            return false;
+        }
     } catch (error) {
         console.error('Error resetting expired request:', error);
         throw error;
@@ -488,15 +772,33 @@ export const resetExpiredRequest = async (requestId) => {
 };
 
 export const extendRequestTimer = async (requestId, additionalMinutes = 2) => {
+    if (!hasTripExpiresAtColumn) {
+        return null;
+    }
+
     try {
         const { data: request, error: fetchError } = await supabase.from('trips').select('expires_at').eq('id', requestId).single();
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+            if (isMissingColumnError(fetchError, 'expires_at')) {
+                hasTripExpiresAtColumn = false;
+                console.warn('Skipping request timer extension: trips.expires_at column is missing.');
+                return null;
+            }
+            throw fetchError;
+        }
 
         const currentExpiry = new Date(request.expires_at || new Date());
         const newExpiry = new Date(currentExpiry.getTime() + additionalMinutes * 60 * 1000);
 
         const { error } = await supabase.from('trips').update({ expires_at: newExpiry.toISOString() }).eq('id', requestId);
-        if (error) throw error;
+        if (error) {
+            if (isMissingColumnError(error, 'expires_at')) {
+                hasTripExpiresAtColumn = false;
+                console.warn('Skipping request timer extension: trips.expires_at column is missing.');
+                return null;
+            }
+            throw error;
+        }
 
         return newExpiry.toISOString();
     } catch (error) {
@@ -566,7 +868,7 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
         }
 
         const cancellationUpdates = {
-            status: TRIP_STATUS.CANCELLED,
+            status: toDbTripStatus(TRIP_STATUS.CANCELLED),
             cancelled_at: new Date().toISOString(),
             cancelled_by: customerId || null,
             cancellation_reason: reason,

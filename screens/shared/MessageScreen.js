@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   StyleSheet,
   Text,
@@ -51,6 +51,16 @@ export default function MessageScreen({ navigation, route }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerImageUri, setViewerImageUri] = useState(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const messageListRef = useRef(null);
+  const hasInitialScrollRef = useRef(false);
+  const isKeyboardVisible = keyboardHeight > 0;
+
+  const scrollToLatest = useCallback((animated = true) => {
+    requestAnimationFrame(() => {
+      messageListRef.current?.scrollToEnd?.({ animated });
+    });
+  }, []);
 
   useEffect(() => {
     if (!conversationId || !currentUserId) {
@@ -76,6 +86,47 @@ export default function MessageScreen({ navigation, route }) {
     markMessageAsRead(conversationId, userType);
     return unsubscribe;
   }, [conversationId, currentUserId, subscribeToMessages, markMessageAsRead, userType]);
+
+  useEffect(() => {
+    hasInitialScrollRef.current = false;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const shouldAnimate = hasInitialScrollRef.current;
+    scrollToLatest(shouldAnimate && !isKeyboardVisible);
+    hasInitialScrollRef.current = true;
+  }, [isKeyboardVisible, loading, messages.length, scrollToLatest]);
+
+  useEffect(() => {
+    const handleKeyboardChange = (event) => {
+      const nextKeyboardHeight = Number(event?.endCoordinates?.height || 0);
+      setKeyboardHeight(nextKeyboardHeight);
+      scrollToLatest(false);
+    };
+
+    const handleKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const subscriptions =
+      Platform.OS === "ios"
+        ? [
+            Keyboard.addListener("keyboardWillChangeFrame", handleKeyboardChange),
+            Keyboard.addListener("keyboardWillHide", handleKeyboardHide),
+          ]
+        : [
+            Keyboard.addListener("keyboardDidShow", handleKeyboardChange),
+            Keyboard.addListener("keyboardDidHide", handleKeyboardHide),
+          ];
+
+    return () => {
+      subscriptions.forEach((subscription) => subscription.remove());
+    };
+  }, [scrollToLatest]);
 
   const handleSend = async () => {
     if (!messageText.trim() || sending || !currentUserId) {
@@ -355,11 +406,7 @@ export default function MessageScreen({ navigation, route }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + spacing.sm : 0}
-    >
+    <View style={styles.container}>
       <ScreenHeader
         title={title}
         onBack={() => navigation.goBack()}
@@ -374,15 +421,32 @@ export default function MessageScreen({ navigation, route }) {
           </View>
         ) : (
           <FlatList
+            ref={messageListRef}
             data={messages}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => String(item.id)}
             renderItem={renderMessage}
+            style={styles.messageListContainer}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onLayout={() => scrollToLatest(false)}
+            onContentSizeChange={() => {
+              if (!hasInitialScrollRef.current) return;
+              scrollToLatest(false);
+            }}
           />
         )}
 
-        <View style={[styles.inputContainer, { marginBottom: insets.bottom + spacing.base }]}>
+        <View
+          style={[
+            styles.inputContainer,
+            {
+              marginBottom: isKeyboardVisible
+                ? keyboardHeight + spacing.sm
+                : insets.bottom + spacing.base,
+            },
+          ]}
+        >
           {/* Paperclip/Attach Button */}
           <TouchableOpacity
             style={[styles.attachButton, uploadingImage && styles.attachButtonDisabled]}
@@ -434,7 +498,7 @@ export default function MessageScreen({ navigation, route }) {
         imageUri={viewerImageUri}
         onClose={closeImageViewer}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -448,9 +512,12 @@ const styles = StyleSheet.create({
     width: "100%",
     alignSelf: "center",
   },
+  messageListContainer: {
+    flex: 1,
+  },
   messageList: {
     padding: spacing.base,
-    paddingBottom: 100,
+    paddingBottom: spacing.sm,
   },
   systemBox: {
     backgroundColor: colors.background.tertiary,
@@ -520,7 +587,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     marginHorizontal: spacing.xs,
-    marginTop: spacing.base,
+    marginTop: spacing.sm,
   },
   attachButton: {
     width: 40,

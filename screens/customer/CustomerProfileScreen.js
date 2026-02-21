@@ -54,7 +54,7 @@ export default function CustomerProfileScreen({ navigation }) {
   const [accountStats, setAccountStats] = useState({
     totalTrips: 0,
     totalSpent: 0,
-    avgRating: 5,
+    avgRating: 0,
   });
   const [memberSince, setMemberSince] = useState("New on Pikup");
   const [downloadingData, setDownloadingData] = useState(false);
@@ -111,12 +111,20 @@ export default function CustomerProfileScreen({ navigation }) {
         const amount = Number(trip.pricing?.total ?? trip.price ?? 0) || 0;
         return sum + amount;
       }, 0);
+      const ratingCount = Number(
+        customerProfile?.rating_count ||
+          customerProfile?.customerProfile?.rating_count ||
+          0
+      );
+      const rawRating = Number(
+        customerProfile?.rating ||
+          customerProfile?.customerProfile?.rating ||
+          0
+      );
       const rating =
-        Number(
-          customerProfile?.rating ||
-            customerProfile?.customerProfile?.rating ||
-            5
-        ) || 5;
+        ratingCount > 0 && Number.isFinite(rawRating)
+          ? rawRating
+          : 0;
 
       setAccountStats({
         totalTrips: completedTrips.length,
@@ -316,7 +324,17 @@ export default function CustomerProfileScreen({ navigation }) {
     .toUpperCase();
 
   const totalTrips = String(accountStats.totalTrips || 0);
-  const ratingValue = (accountStats.avgRating || 5).toFixed(1);
+  const reviewsCount = String(
+    Number(
+      customerProfile?.rating_count ||
+        customerProfile?.customerProfile?.rating_count ||
+        0
+    ) || 0
+  );
+  const ratingValue =
+    Number(accountStats.avgRating) > 0
+      ? Number(accountStats.avgRating).toFixed(1)
+      : "0";
 
   /* ── Scroll snap (same pattern as Activity/Messages) ── */
   const titleLockCompensation = scrollY.interpolate({
@@ -446,7 +464,7 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
             <View style={styles.statDividerVertical} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{totalTrips}</Text>
+              <Text style={styles.statNumber}>{reviewsCount}</Text>
               <Text style={styles.statLabel}>REVIEWS</Text>
             </View>
             <View style={styles.statDividerVertical} />
@@ -455,6 +473,7 @@ export default function CustomerProfileScreen({ navigation }) {
               <Text style={styles.statLabel}>RATING</Text>
             </View>
           </View>
+
         </View>
 
         {/* Quick Actions */}
@@ -817,7 +836,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.strong,
     marginVertical: spacing.sm,
   },
-
   /* Quick Actions */
   quickActions: {
     flexDirection: "row",

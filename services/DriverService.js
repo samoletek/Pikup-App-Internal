@@ -2,12 +2,177 @@
 // Extracted from AuthContext.js - Driver profile, stats, and online/offline management
 
 import { supabase } from '../config/supabase';
+import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 import { getPlatformFees } from './PricingService';
 
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
+const NETWORK_TIMEOUT_MS = 8000;
+const DEFAULT_DRIVER_BADGE_STATS = Object.freeze(
+    DRIVER_RATING_BADGES.reduce((acc, badge) => {
+        acc[badge.id] = 0;
+        return acc;
+    }, {})
+);
+
+const normalizeDriverBadgeStats = (value) => {
+    const safeValue =
+        value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : {};
+    const normalized = {
+        ...DEFAULT_DRIVER_BADGE_STATS,
+    };
+
+    Object.entries(safeValue).forEach(([badgeId, badgeCount]) => {
+        const parsedCount = Number(badgeCount);
+        normalized[badgeId] = Number.isFinite(parsedCount) && parsedCount >= 0
+            ? parsedCount
+            : 0;
+    });
+
+    return normalized;
+};
+
+const authFetchWithTimeout = async (authFetch, url, options = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await authFetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
+const getMissingColumnFromError = (error) => {
+    const message = String(error?.message || '');
+    let match = message.match(/Could not find the '([^']+)' column/i);
+    if (match?.[1]) return match[1];
+
+    match = message.match(/column\s+([a-zA-Z0-9_.]+)\s+does not exist/i);
+    if (match?.[1]) {
+        return match[1].split('.').pop();
+    }
+
+    return null;
+};
+
+const applyDriverColumnUpdateWithFallback = async (driverId, columnUpdates = {}) => {
+    const updates = { ...columnUpdates };
+
+    while (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+            .from('drivers')
+            .update(updates)
+            .eq('id', driverId);
+
+        if (!error) {
+            return true;
+        }
+
+        const missingColumn = getMissingColumnFromError(error);
+        if (missingColumn && Object.prototype.hasOwnProperty.call(updates, missingColumn)) {
+            console.warn(`Drivers table is missing "${missingColumn}". Retrying without it.`);
+            delete updates[missingColumn];
+            continue;
+        }
+
+        throw error;
+    }
+
+    return false;
+};
+
+const updateDriverMetadata = async (driverId, patch = {}) => {
+    const { data: profile } = await supabase
+        .from('drivers')
+        .select('metadata')
+        .eq('id', driverId)
+        .maybeSingle();
+
+    const currentMeta = profile?.metadata || {};
+    const nextMeta = {
+        ...currentMeta,
+        ...patch,
+    };
+
+    const { error } = await supabase
+        .from('drivers')
+        .update({ metadata: nextMeta })
+        .eq('id', driverId);
+
+    if (error) throw error;
+};
+
+const fallbackSetDriverOnline = async (driverId, location) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            is_online: true,
+            current_mode: location.mode || 'SOLO',
+            last_location: `POINT(${location.longitude} ${location.latitude})`,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct online update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        isOnline: true,
+        mode: location.mode || 'SOLO',
+        lastLocation: location,
+        lastSeen: new Date().toISOString()
+    });
+};
+
+const fallbackSetDriverOffline = async (driverId) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            is_online: false,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct offline update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        isOnline: false,
+        lastSeen: new Date().toISOString()
+    });
+};
+
+const fallbackHeartbeat = async (driverId, location) => {
+    try {
+        const updatedByColumns = await applyDriverColumnUpdateWithFallback(driverId, {
+            last_location: `POINT(${location.longitude} ${location.latitude})`,
+            updated_at: new Date().toISOString()
+        });
+
+        if (updatedByColumns) {
+            return;
+        }
+    } catch (error) {
+        console.warn('Supabase direct heartbeat update failed, using metadata fallback:', error);
+    }
+
+    await updateDriverMetadata(driverId, {
+        lastLocation: location,
+        lastSeen: new Date().toISOString()
+    });
+};
 
 /**
  * Calculate driver earnings from platform config
@@ -68,7 +233,20 @@ export const getDriverStats = async (driverId) => {
     try {
         console.log('Getting driver stats for:', driverId);
 
-        const trips = await getDriverTrips(driverId);
+        const completedTrips = await getDriverTrips(driverId);
+        let totalAssignedTrips = completedTrips.length;
+
+        try {
+            const { data: assignedTrips, error: assignedTripsError } = await supabase
+                .from('trips')
+                .select('id')
+                .eq('driver_id', driverId);
+
+            if (assignedTripsError) throw assignedTripsError;
+            totalAssignedTrips = Array.isArray(assignedTrips) ? assignedTrips.length : 0;
+        } catch (assignedTripsError) {
+            console.warn('Could not load assigned trips for acceptance rate, falling back to completed trips:', assignedTripsError);
+        }
 
         // Calculate current week (Monday to Sunday)
         const now = new Date();
@@ -79,7 +257,7 @@ export const getDriverStats = async (driverId) => {
         mondayDate.setHours(0, 0, 0, 0);
 
         // Filter this week's trips
-        const thisWeekTrips = trips.filter(trip => {
+        const thisWeekTrips = completedTrips.filter(trip => {
             const tripDate = new Date(trip.created_at);
             return tripDate >= mondayDate;
         });
@@ -88,8 +266,11 @@ export const getDriverStats = async (driverId) => {
         const currentWeekTrips = thisWeekTrips.length;
         const weeklyEarnings = thisWeekTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
 
-        const totalTrips = trips.length;
-        const totalEarnings = trips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+        const totalTrips = completedTrips.length;
+        const totalEarnings = completedTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+        const acceptanceRate = totalAssignedTrips > 0
+            ? Math.round((totalTrips / totalAssignedTrips) * 100)
+            : 0;
 
         // Get driver profile data
         let driverProfile = {};
@@ -102,15 +283,20 @@ export const getDriverStats = async (driverId) => {
             console.log('No driver profile found, using defaults');
         }
 
+        const parsedRatingCount = Number(driverProfile.rating_count);
+        const ratingCount = Number.isFinite(parsedRatingCount) ? parsedRatingCount : 0;
+        const parsedRating = Number(driverProfile.rating);
+        const rating = ratingCount > 0 && Number.isFinite(parsedRating) ? parsedRating : 0;
+
         const stats = {
             currentWeekTrips,
             weeklyEarnings,
             totalTrips,
             totalEarnings,
             availableBalance: driverProfile.availableBalance || totalEarnings,
-            rating: driverProfile.rating || 4.9,
-            acceptanceRate: driverProfile.acceptanceRate || 98,
-            lastTripCompletedAt: trips.length > 0 ? trips[0].created_at : null
+            rating,
+            acceptanceRate,
+            lastTripCompletedAt: completedTrips.length > 0 ? completedTrips[0].created_at : null
         };
 
         console.log('Driver stats calculated:', stats);
@@ -124,8 +310,8 @@ export const getDriverStats = async (driverId) => {
             totalTrips: 0,
             totalEarnings: 0,
             availableBalance: 0,
-            rating: 4.9,
-            acceptanceRate: 98,
+            rating: 0,
+            acceptanceRate: 0,
             lastTripCompletedAt: null
         };
     }
@@ -211,16 +397,26 @@ export const getDriverProfile = async (driverId) => {
         const documentsVerified =
             metadata?.documentsVerified ??
             false;
+        const badgeStats = normalizeDriverBadgeStats(
+            data?.badge_stats || metadata?.badge_stats
+        );
+        const ratingCount = Number.isFinite(Number(data?.rating_count))
+            ? Number(data.rating_count)
+            : 0;
 
         return {
             ...data,
             metadata,
+            badge_stats: badgeStats,
+            rating_count: ratingCount,
             onboardingComplete,
             canReceivePayments,
             connectAccountId,
             documentsVerified,
             driverProfile: {
                 ...metadata,
+                badge_stats: badgeStats,
+                rating_count: ratingCount,
                 onboardingComplete,
                 canReceivePayments,
                 connectAccountId,
@@ -245,9 +441,9 @@ export const setDriverOnline = async (driverId, location, authFetch) => {
     try {
         console.log('Setting driver online:', driverId, 'at location:', location);
 
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/online`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/online`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId,
@@ -256,45 +452,19 @@ export const setDriverOnline = async (driverId, location, authFetch) => {
                     mode: location.mode || 'SOLO'
                 })
             });
-        } catch (netError) {
-            console.warn('Network request failed, falling back to Supabase direct update:', netError);
-            // Fallback: Update driver status directly in Supabase
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    is_online: true,
-                    current_mode: location.mode || 'SOLO',
-                    last_location: `POINT(${location.longitude} ${location.latitude})`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
-            if (error) {
-                console.warn('Supabase fallback update failed, trying metadata only:', error);
-                // Fallback level 2: Update metadata if columns don't exist
-                await supabase
-                    .from('drivers')
-                    .update({
-                        metadata: {
-                            isOnline: true,
-                            mode: location.mode || 'SOLO',
-                            lastLocation: location,
-                            lastSeen: new Date().toISOString()
-                        }
-                    })
-                    .eq('id', driverId);
+            if (!response.ok) {
+                throw new Error(`Failed to set driver online: ${response.statusText}`);
             }
-
+        } catch (networkError) {
+            console.warn('Online API unavailable/timeout, falling back to Supabase:', networkError);
+            await fallbackSetDriverOnline(driverId, location);
             return `local_session_${Date.now()}`;
         }
 
-        if (!response.ok) {
-            throw new Error(`Failed to set driver online: ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         console.log('Driver set online successfully with session:', result.sessionId);
-        return result.sessionId;
+        return result.sessionId || `remote_session_${Date.now()}`;
     } catch (error) {
         console.error('Error setting driver online:', error);
         throw error;
@@ -311,47 +481,25 @@ export const setDriverOffline = async (driverId, authFetch) => {
     try {
         console.log('Setting driver offline:', driverId);
 
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/offline`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/offline`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId
                 })
             });
-        } catch (netError) {
-            console.warn('Network request failed, falling back to Supabase direct update:', netError);
-            // Fallback: Update driver status directly in Supabase
-            const { error } = await supabase
-                .from('drivers')
-                .update({
-                    is_online: false,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
-            if (error) {
-                console.warn('Supabase fallback update failed, trying metadata only:', error);
-                // Fallback level 2: Update metadata
-                await supabase
-                    .from('drivers')
-                    .update({
-                        metadata: {
-                            isOnline: false,
-                            lastSeen: new Date().toISOString()
-                        }
-                    })
-                    .eq('id', driverId);
+            if (!response.ok) {
+                throw new Error(`Failed to set driver offline: ${response.statusText}`);
             }
-
+        } catch (networkError) {
+            console.warn('Offline API unavailable/timeout, falling back to Supabase:', networkError);
+            await fallbackSetDriverOffline(driverId);
             return true;
         }
 
-        if (!response.ok) {
-            throw new Error(`Failed to set driver offline: ${response.statusText}`);
-        }
-
-        const result = await response.json();
+        const result = await response.json().catch(() => ({}));
         console.log('Driver set offline successfully. Session duration:', result.onlineMinutes, 'minutes');
         return true;
     } catch (error) {
@@ -369,9 +517,9 @@ export const setDriverOffline = async (driverId, authFetch) => {
  */
 export const updateDriverHeartbeat = async (driverId, location, authFetch) => {
     try {
-        let response;
+        let response = null;
         try {
-            response = await authFetch(`${PAYMENT_SERVICE_URL}/driver/heartbeat`, {
+            response = await authFetchWithTimeout(authFetch, `${PAYMENT_SERVICE_URL}/driver/heartbeat`, {
                 method: 'POST',
                 body: JSON.stringify({
                     driverId,
@@ -379,21 +527,13 @@ export const updateDriverHeartbeat = async (driverId, location, authFetch) => {
                     longitude: location.longitude
                 })
             });
-        } catch (netError) {
-            // Fallback: Update driver location directly in Supabase
-            await supabase
-                .from('drivers')
-                .update({
-                    last_location: `POINT(${location.longitude} ${location.latitude})`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', driverId);
 
+            if (!response.ok) {
+                throw new Error(`Failed to update heartbeat: ${response.statusText}`);
+            }
+        } catch (networkError) {
+            await fallbackHeartbeat(driverId, location);
             return true;
-        }
-
-        if (!response.ok) {
-            throw new Error(`Failed to update heartbeat: ${response.statusText}`);
         }
 
         return true;
