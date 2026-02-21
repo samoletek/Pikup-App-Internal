@@ -337,12 +337,6 @@ export default function DriverPreferencesScreen({ navigation }) {
                 </View>
 
                 <View style={styles.card}>
-                  {/* Section intro */}
-                  <View style={styles.sectionIntro}>
-                    <Text style={styles.sectionTitle}>{section.title}</Text>
-                    <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
-                  </View>
-
                   {/* Mode picker for team section */}
                   {section.hasModePicker && (
                     <View style={styles.modePickerContainer}>
@@ -486,24 +480,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.strong,
     overflow: "hidden",
-  },
-  sectionIntro: {
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border.strong,
-  },
-  sectionTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  sectionSubtitle: {
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
-    lineHeight: typography.fontSize.base * 1.35,
   },
 
   /* Toggle row with icon */

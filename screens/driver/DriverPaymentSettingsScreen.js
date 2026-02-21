@@ -122,17 +122,6 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     );
   };
 
-  const handleContactSupport = () => {
-    Alert.alert(
-      'Payment Support',
-      'Need help with payments? Contact our support team.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Contact Support', onPress: () => console.log('Open support') }
-      ]
-    );
-  };
-
   const renderEarningsCard = () => (
     <View style={styles.earningsCard}>
       <LinearGradient
@@ -310,14 +299,6 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         onBack={() => navigation.goBack()}
         topInset={insets.top}
         showBack
-        rightContent={(
-          <TouchableOpacity
-            style={styles.helpHeaderButton}
-            onPress={handleContactSupport}
-          >
-            <Ionicons name="help-circle-outline" size={20} color={colors.primary} />
-          </TouchableOpacity>
-        )}
       />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -347,16 +328,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
     paddingTop: spacing.base,
-  },
-  helpHeaderButton: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.background.elevated,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.strong,
   },
   earningsCard: {
     marginHorizontal: 20,

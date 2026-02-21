@@ -261,8 +261,6 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [vehicleVerificationStatus, setVehicleVerificationStatus] = useState('idle');
   const [vehicleVerificationResult, setVehicleVerificationResult] = useState(null);
   const [vehicleVerificationError, setVehicleVerificationError] = useState(null);
-  const [showVinHint, setShowVinHint] = useState(false);
-  const [showPhotoHint, setShowPhotoHint] = useState(false);
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const statePickerRef = useRef(null);
@@ -799,7 +797,7 @@ export default function DriverOnboardingScreen({ navigation }) {
     if (status !== 'granted') {
       Alert.alert(
         'Camera Permission',
-        'We need camera permission to photograph your vehicle.',
+        'We need camera permission to take photos of your vehicle.',
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Open Settings', onPress: () => Linking.openSettings() },
@@ -885,6 +883,36 @@ export default function DriverOnboardingScreen({ navigation }) {
       return updated;
     });
   });
+  const showVinHintAlert = () => {
+    Alert.alert(
+      'Where to find the VIN plate',
+      [
+        'Driver-side door jamb: open the door and look for a sticker on the frame.',
+        "Dashboard: check the base of the windshield on the driver's side.",
+        'Engine bay or vehicle registration documents.',
+        '',
+        'Tips for a good photo:',
+        'Use enough light and avoid shadows on the VIN.',
+        'Hold the camera close so all 17 characters are readable.',
+        'Keep the camera steady to avoid blur.',
+      ].join('\n'),
+      [{ text: 'OK' }]
+    );
+  };
+
+  const showVehiclePhotoHintAlert = () => {
+    Alert.alert(
+      'How to take photos of your vehicle',
+      [
+        'Front: stand about 10 feet in front and capture bumper, headlights, and license plate.',
+        'Side: stand at a slight angle and capture the whole car from hood to trunk.',
+        'Rear: stand about 10 feet behind and capture bumper, taillights, and license plate.',
+        '',
+        'For best results, take photos outdoors in daylight.',
+      ].join('\n'),
+      [{ text: 'OK' }]
+    );
+  };
 
   const handleVerifyVehicle = async () => {
     const validCarPhotos = carPhotoUris.filter(Boolean);
@@ -1132,22 +1160,24 @@ export default function DriverOnboardingScreen({ navigation }) {
             )}
             <View style={[styles.inputContainer, { zIndex: 10 }]}>
               <Text style={styles.inputLabel}>Street Address *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.address.line1}
-                onChangeText={(value) => {
-                  updateFormData('address.line1', value);
-                  searchAddress(value);
-                }}
-                placeholder="Start typing an address..."
-                placeholderTextColor={colors.text.placeholder}
-                autoCapitalize="words"
-              />
-              {isLoadingAddress && (
-                <View style={styles.addressLoadingIndicator}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                </View>
-              )}
+              <View style={styles.addressInputWrapper}>
+                <TextInput
+                  style={[styles.textInput, isLoadingAddress && styles.textInputWithLoader]}
+                  value={formData.address.line1}
+                  onChangeText={(value) => {
+                    updateFormData('address.line1', value);
+                    searchAddress(value);
+                  }}
+                  placeholder="Start typing an address..."
+                  placeholderTextColor={colors.text.placeholder}
+                  autoCapitalize="words"
+                />
+                {isLoadingAddress && (
+                  <View style={styles.addressLoadingIndicator}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  </View>
+                )}
+              </View>
               {addressSuggestions.length > 0 && (
                 <ScrollView
                   style={styles.suggestionsContainer}
@@ -1278,31 +1308,19 @@ export default function DriverOnboardingScreen({ navigation }) {
               {/* Photo Capture: VIN Plate */}
               <View style={styles.photoSection}>
                 <View style={styles.sectionLabelRow}>
-                  <Text style={styles.sectionLabel}>Step 1: Photograph your VIN plate</Text>
+                  <Text style={styles.sectionLabel}>Step 1: Take a photo of your VIN plate</Text>
                   <TouchableOpacity
                     style={styles.infoButton}
-                    onPress={() => setShowVinHint(prev => !prev)}
+                    onPress={showVinHintAlert}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons
-                      name={showVinHint ? 'information-circle' : 'information-circle-outline'}
+                      name="information-circle-outline"
                       size={20}
-                      color={showVinHint ? colors.primary : colors.text.subtle}
+                      color={colors.text.subtle}
                     />
                   </TouchableOpacity>
                 </View>
-                {showVinHint && (
-                  <View style={styles.hintPanel}>
-                    <Text style={styles.hintTitle}>Where to find the VIN plate</Text>
-                    <Text style={styles.hintText}>Driver-side door jamb — open the door and look for a sticker on the frame</Text>
-                    <Text style={styles.hintText}>Dashboard — look at the base of the windshield on the driver's side</Text>
-                    <Text style={styles.hintText}>Engine bay or vehicle registration documents</Text>
-                    <Text style={[styles.hintTitle, { marginTop: spacing.md }]}>Tips for a good photo</Text>
-                    <Text style={styles.hintText}>Make sure there is enough light — avoid shadows on the VIN</Text>
-                    <Text style={styles.hintText}>Hold the camera close so all 17 characters are clearly readable</Text>
-                    <Text style={styles.hintText}>Keep the camera steady — avoid blurry photos</Text>
-                  </View>
-                )}
                 <Text style={styles.sectionHint}>
                   Find the VIN plate on your driver-side door jamb or dashboard
                 </Text>
@@ -1317,7 +1335,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                     ) : (
                       <View style={styles.photoCaptureEmpty}>
                         <MaterialCommunityIcons name="card-text-outline" size={36} color={colors.text.subtle} />
-                        <Text style={styles.photoCaptureText}>Tap to photograph VIN plate</Text>
+                        <Text style={styles.photoCaptureText}>Tap to take a VIN plate photo</Text>
                       </View>
                     )}
                     {vinPhotoUri && (
@@ -1345,28 +1363,19 @@ export default function DriverOnboardingScreen({ navigation }) {
               {/* Photo Capture: Vehicle — multiple angles */}
               <View style={styles.photoSection}>
                 <View style={styles.sectionLabelRow}>
-                  <Text style={styles.sectionLabel}>Step 2: Photograph your vehicle</Text>
+                  <Text style={styles.sectionLabel}>Step 2: Take photos of your vehicle</Text>
                   <TouchableOpacity
                     style={styles.infoButton}
-                    onPress={() => setShowPhotoHint(prev => !prev)}
+                    onPress={showVehiclePhotoHintAlert}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <Ionicons
-                      name={showPhotoHint ? 'information-circle' : 'information-circle-outline'}
+                      name="information-circle-outline"
                       size={20}
-                      color={showPhotoHint ? colors.primary : colors.text.subtle}
+                      color={colors.text.subtle}
                     />
                   </TouchableOpacity>
                 </View>
-                {showPhotoHint && (
-                  <View style={styles.hintPanel}>
-                    <Text style={styles.hintTitle}>How to photograph your vehicle</Text>
-                    <Text style={styles.hintText}><Text style={styles.hintBold}>Front</Text> — Stand about 10 feet in front. Capture bumper, headlights, and license plate.</Text>
-                    <Text style={styles.hintText}><Text style={styles.hintBold}>Side</Text> — Stand to the side at a slight angle. The whole car should be visible from hood to trunk.</Text>
-                    <Text style={styles.hintText}><Text style={styles.hintBold}>Rear</Text> — Stand about 10 feet behind. Capture bumper, taillights, and license plate.</Text>
-                    <Text style={[styles.hintText, { marginTop: spacing.xs }]}>Photograph outdoors in daylight for the best results.</Text>
-                  </View>
-                )}
                 <Text style={styles.sectionHint}>
                   Take photos from different angles for better verification (at least 1 required)
                 </Text>
@@ -2217,12 +2226,19 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
   },
+  addressInputWrapper: {
+    position: 'relative',
+  },
   addressLoadingIndicator: {
     position: 'absolute',
     right: spacing.md,
     top: 0,
     bottom: 0,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textInputWithLoader: {
+    paddingRight: spacing.xxxl,
   },
   autoFilledBanner: {
     flexDirection: 'row',
@@ -2259,28 +2275,6 @@ const styles = StyleSheet.create({
   infoButton: {
     marginLeft: spacing.sm,
     padding: spacing.xs,
-  },
-  hintPanel: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  hintTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  hintText: {
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.sm,
-    lineHeight: typography.fontSize.sm * typography.lineHeight.normal,
-  },
-  hintBold: {
-    color: colors.primary,
-    fontWeight: typography.fontWeight.semibold,
   },
   sectionHint: {
     color: colors.text.tertiary,

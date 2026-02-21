@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -11,7 +13,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -54,10 +59,11 @@ const notificationItems = [
   },
 ];
 
-export default function CustomerSettingsScreen({ navigation }) {
+export default function CustomerSettingsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { userType } = useAuth();
+  const notificationsOnly = route?.params?.notificationsOnly === true;
   const [settings, setSettings] = useState({
     notifications: {
       pushNotifications: true,
@@ -67,9 +73,8 @@ export default function CustomerSettingsScreen({ navigation }) {
       tripUpdates: true,
       accountActivity: true,
     },
-    language: "English",
-    currency: "USD",
   });
+  const [downloadingData, setDownloadingData] = useState(false);
   const isDriver = userType === "driver";
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const appVersion =
@@ -92,6 +97,7 @@ export default function CustomerSettingsScreen({ navigation }) {
     icon,
     label,
     onPress,
+    loading = false,
     value,
     isLast = false,
     isExternal = false,
@@ -108,46 +114,156 @@ export default function CustomerSettingsScreen({ navigation }) {
 
       <View style={styles.rowRight}>
         {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-        <Ionicons
-          name={isExternal ? "open-outline" : "chevron-forward"}
-          size={18}
-          color={colors.text.tertiary}
-        />
+        {loading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Ionicons
+            name={isExternal ? "open-outline" : "chevron-forward"}
+            size={18}
+            color={colors.text.tertiary}
+          />
+        )}
       </View>
     </TouchableOpacity>
   );
 
-  const accountRows = isDriver
+  const handleDownloadMyData = async () => {
+    if (downloadingData) return;
+
+    Alert.alert(
+      "Download My Data",
+      "This will export all your personal data as a JSON file. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Download",
+          onPress: async () => {
+            setDownloadingData(true);
+            try {
+              const { data: sessionData, error: sessionError } =
+                await supabase.auth.getSession();
+              if (sessionError || !sessionData?.session?.access_token) {
+                throw new Error("Session expired. Please sign in again.");
+              }
+
+              const { data, error } = await supabase.functions.invoke(
+                "download-user-data",
+                {
+                  headers: {
+                    Authorization: `Bearer ${sessionData.session.access_token}`,
+                  },
+                  body: { role: isDriver ? "driver" : "customer" },
+                }
+              );
+
+              if (error) {
+                let errorMessage = "Failed to download data.";
+                if (error?.context) {
+                  try {
+                    const errorBody = await error.context.clone().json();
+                    errorMessage =
+                      errorBody?.error || errorBody?.message || errorMessage;
+                  } catch (_) {}
+                }
+                throw new Error(errorMessage);
+              }
+
+              const fileName = `pikup-data-${Date.now()}.json`;
+              const fileUri = FileSystem.cacheDirectory + fileName;
+              await FileSystem.writeAsStringAsync(
+                fileUri,
+                JSON.stringify(data, null, 2)
+              );
+
+              const sharingAvailable = await Sharing.isAvailableAsync();
+              if (!sharingAvailable) {
+                Alert.alert(
+                  "Sharing Unavailable",
+                  "Sharing is not available on this device."
+                );
+                return;
+              }
+
+              await Sharing.shareAsync(fileUri, {
+                mimeType: "application/json",
+                dialogTitle: "Save Your Data",
+                UTI: "public.json",
+              });
+            } catch (err) {
+              console.error("Error downloading user data:", err);
+              Alert.alert(
+                "Error",
+                err?.message || "Failed to download your data. Please try again."
+              );
+            } finally {
+              setDownloadingData(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const accountRows = notificationsOnly
     ? []
-    : [
+    : isDriver
+    ? [
         {
           icon: "person-outline",
-          label: "Personal Information",
-          onPress: () => navigation.navigate("CustomerPersonalInfoScreen"),
+          label: "Profile",
+          onPress: () => navigation.navigate("PersonalInfoScreen"),
+        },
+        {
+          icon: "options-outline",
+          label: "Preferences",
+          onPress: () => navigation.navigate("DriverPreferencesScreen"),
         },
         {
           icon: "card-outline",
-          label: "Payment Methods",
+          label: "Payment",
+          onPress: () => navigation.navigate("DriverPaymentSettingsScreen"),
+        },
+        {
+          icon: "notifications-outline",
+          label: "Notifications",
+          onPress: () =>
+            navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
+        },
+        {
+          icon: "download-outline",
+          label: "Download My Data",
+          onPress: handleDownloadMyData,
+          loading: downloadingData,
+        },
+      ]
+    : [
+        {
+          icon: "person-outline",
+          label: "Profile",
+          onPress: () => navigation.navigate("PersonalInfoScreen"),
+        },
+        {
+          icon: "location-outline",
+          label: "My Addresses",
+          onPress: () => navigation.navigate("CustomerSavedAddressesScreen"),
+        },
+        {
+          icon: "card-outline",
+          label: "Payment",
           onPress: () => navigation.navigate("PaymentMethodsScreen"),
         },
         {
-          icon: "globe-outline",
-          label: "Language",
-          value: settings.language,
-          onPress: () => {},
-        },
-        {
-          icon: "cash-outline",
-          label: "Currency",
-          value: settings.currency,
-          onPress: () => {},
+          icon: "download-outline",
+          label: "Download My Data",
+          onPress: handleDownloadMyData,
+          loading: downloadingData,
         },
       ];
 
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title={isDriver ? "Notifications" : "Settings"}
+        title={notificationsOnly ? "Notifications" : "Settings"}
         onBack={() => navigation.goBack()}
         topInset={insets.top}
       />
@@ -175,38 +291,42 @@ export default function CustomerSettingsScreen({ navigation }) {
             </View>
           )}
 
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
-            <View style={styles.card}>
-              {notificationItems.map((item, index) => (
-                <View
-                  key={item.key}
-                  style={[
-                    styles.switchRow,
-                    index === notificationItems.length - 1 && styles.rowLast,
-                  ]}
-                >
-                  <View style={styles.switchInfo}>
-                    <Text style={styles.rowTitle}>{item.title}</Text>
-                    <Text style={styles.switchDescription}>{item.description}</Text>
+          {(!isDriver || notificationsOnly) && (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+              <View style={styles.card}>
+                {notificationItems.map((item, index) => (
+                  <View
+                    key={item.key}
+                    style={[
+                      styles.switchRow,
+                      index === notificationItems.length - 1 && styles.rowLast,
+                    ]}
+                  >
+                    <View style={styles.switchInfo}>
+                      <Text style={styles.switchTitle}>{item.title}</Text>
+                      <Text style={styles.switchDescription}>{item.description}</Text>
+                    </View>
+                    <View style={styles.switchControl}>
+                      <Switch
+                        trackColor={{
+                          false: colors.border.strong,
+                          true: colors.background.brandTint,
+                        }}
+                        thumbColor={
+                          settings.notifications[item.key] ? colors.primary : colors.white
+                        }
+                        ios_backgroundColor={colors.border.strong}
+                        onValueChange={() => toggleSetting(item.key)}
+                        value={settings.notifications[item.key]}
+                      />
+                    </View>
                   </View>
-                  <Switch
-                    trackColor={{
-                      false: colors.border.strong,
-                      true: colors.background.brandTint,
-                    }}
-                    thumbColor={
-                      settings.notifications[item.key] ? colors.primary : colors.white
-                    }
-                    ios_backgroundColor={colors.border.strong}
-                    onValueChange={() => toggleSetting(item.key)}
-                    value={settings.notifications[item.key]}
-                  />
-                </View>
-              ))}
+                ))}
+              </View>
             </View>
-          </View>
-          <Text style={styles.versionText}>v{appVersion}</Text>
+          )}
+          {!notificationsOnly && <Text style={styles.versionText}>v{appVersion}</Text>}
         </View>
       </ScrollView>
     </View>
@@ -279,11 +399,12 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
   },
   switchRow: {
-    minHeight: 68,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.strong,
   },
@@ -291,10 +412,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: spacing.base,
   },
+  switchTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+  },
   switchDescription: {
     color: colors.text.tertiary,
     fontSize: typography.fontSize.base,
     marginTop: 2,
+  },
+  switchControl: {
+    width: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
   },
   versionText: {
     textAlign: "center",

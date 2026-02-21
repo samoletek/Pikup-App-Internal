@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Image,
@@ -11,12 +10,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
-import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -63,7 +59,6 @@ export default function DriverProfileScreen({ navigation }) {
     totalTrips: 0,
     acceptanceRate: 0,
   });
-  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     loadDriverProfile();
@@ -158,21 +153,6 @@ export default function DriverProfileScreen({ navigation }) {
     ]);
   };
 
-  const handleEarnings = () => {
-    if (!onboardingStatus.canReceivePayments) {
-      Alert.alert(
-        "Complete Setup Required",
-        "Please complete your driver onboarding to view earnings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Complete Setup", onPress: handleResumeOnboarding },
-        ]
-      );
-      return;
-    }
-    navigation.navigate("DriverEarningsScreen");
-  };
-
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
@@ -242,83 +222,6 @@ export default function DriverProfileScreen({ navigation }) {
               Alert.alert("Success", "Profile picture removed.");
             } catch (error) {
               Alert.alert("Error", "Failed to remove profile picture.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleDownloadMyData = () => {
-    if (downloadingData) return;
-
-    Alert.alert(
-      "Download My Data",
-      "This will export all your personal data as a JSON file. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Download",
-          onPress: async () => {
-            setDownloadingData(true);
-            try {
-              const { data: sessionData, error: sessionError } =
-                await supabase.auth.getSession();
-              if (sessionError || !sessionData?.session?.access_token) {
-                throw new Error("Session expired. Please sign in again.");
-              }
-
-              const { data, error } = await supabase.functions.invoke(
-                "download-user-data",
-                {
-                  headers: {
-                    Authorization: `Bearer ${sessionData.session.access_token}`,
-                  },
-                  body: { role: "driver" },
-                }
-              );
-
-              if (error) {
-                let errorMessage = "Failed to download data.";
-                if (error?.context) {
-                  try {
-                    const errorBody = await error.context.clone().json();
-                    errorMessage =
-                      errorBody?.error || errorBody?.message || errorMessage;
-                  } catch (_) {}
-                }
-                throw new Error(errorMessage);
-              }
-
-              const fileName = `pikup-data-${Date.now()}.json`;
-              const fileUri = FileSystem.cacheDirectory + fileName;
-              await FileSystem.writeAsStringAsync(
-                fileUri,
-                JSON.stringify(data, null, 2)
-              );
-
-              const sharingAvailable = await Sharing.isAvailableAsync();
-              if (!sharingAvailable) {
-                Alert.alert(
-                  "Sharing Unavailable",
-                  "Sharing is not available on this device."
-                );
-                return;
-              }
-
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/json",
-                dialogTitle: "Save Your Data",
-                UTI: "public.json",
-              });
-            } catch (err) {
-              console.error("Error downloading user data:", err);
-              Alert.alert(
-                "Error",
-                err?.message || "Failed to download your data. Please try again."
-              );
-            } finally {
-              setDownloadingData(false);
             }
           },
         },
@@ -400,17 +303,17 @@ export default function DriverProfileScreen({ navigation }) {
 
   const menuItems = [
     {
-      id: "notifications",
-      title: "Notifications",
-      icon: "notifications-outline",
+      id: "settings",
+      title: "Settings",
+      icon: "settings-outline",
       onPress: () => navigation.navigate("CustomerSettingsScreen"),
       disabled: false,
     },
     {
-      id: "driverPreferences",
-      title: "Driver Preferences",
-      icon: "options-outline",
-      onPress: () => navigation.navigate("DriverPreferencesScreen"),
+      id: "help",
+      title: "Help",
+      icon: "help-circle-outline",
+      onPress: () => navigation.navigate("CustomerHelpScreen"),
       disabled: false,
     },
     {
@@ -419,14 +322,6 @@ export default function DriverProfileScreen({ navigation }) {
       icon: "information-circle-outline",
       onPress: () => navigation.navigate("AboutScreen"),
       disabled: false,
-    },
-    {
-      id: "downloadData",
-      title: "Download My Data",
-      icon: "download-outline",
-      onPress: handleDownloadMyData,
-      disabled: downloadingData,
-      loading: downloadingData,
     },
   ];
 
@@ -489,15 +384,11 @@ export default function DriverProfileScreen({ navigation }) {
           {item.title}
         </Text>
       </View>
-      {item.loading ? (
-        <ActivityIndicator size="small" color={colors.primary} />
-      ) : (
-        <Ionicons
-          name={item.external ? "open-outline" : "chevron-forward"}
-          size={20}
-          color={colors.text.tertiary}
-        />
-      )}
+      <Ionicons
+        name={item.external ? "open-outline" : "chevron-forward"}
+        size={20}
+        color={colors.text.tertiary}
+      />
     </TouchableOpacity>
   );
 
@@ -650,45 +541,7 @@ export default function DriverProfileScreen({ navigation }) {
           ) : null}
         </TouchableOpacity>
 
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => navigation.navigate("CustomerHelpScreen")}
-          >
-            <View style={styles.quickActionIcon}>
-              <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
-            </View>
-            <Text style={styles.quickActionLabel}>Help</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionButton}
-            onPress={() => navigation.navigate("DriverPaymentSettingsScreen")}
-          >
-            <View style={styles.quickActionIcon}>
-              <Ionicons name="card-outline" size={24} color={colors.primary} />
-            </View>
-            <Text style={styles.quickActionLabel}>Payment</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.quickActionButton, !isReadyToEarn && styles.quickActionButtonDisabled]}
-            onPress={isReadyToEarn ? handleEarnings : handleResumeOnboarding}
-            disabled={!isReadyToEarn}
-          >
-            <View style={styles.quickActionIcon}>
-              <Ionicons
-                name="wallet-outline"
-                size={24}
-                color={!isReadyToEarn ? colors.text.muted : colors.primary}
-              />
-            </View>
-            <Text style={[styles.quickActionLabel, !isReadyToEarn && styles.quickActionLabelDisabled]}>
-              Earnings
-            </Text>
-          </TouchableOpacity>
-        </View>
-
+        <Text style={styles.sectionLabel}>ACCOUNT SETTINGS</Text>
         <View style={styles.menuSections}>
           {menuItems.map((item, index) =>
             renderMenuItem(item, index === menuItems.length - 1)
@@ -932,35 +785,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
   },
-  quickActions: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  quickActionButton: {
-    flex: 1,
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  quickActionButtonDisabled: {
-    opacity: 0.5,
-  },
-  quickActionIcon: {
-    position: "relative",
-  },
-  quickActionLabel: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-  },
-  quickActionLabelDisabled: {
-    color: colors.text.muted,
-  },
   menuSections: {
     backgroundColor: colors.background.secondary,
     marginBottom: spacing.base,
@@ -977,6 +801,14 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.base,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.strong,
+  },
+  sectionLabel: {
+    marginLeft: spacing.xs,
+    marginBottom: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 0.8,
+    color: colors.text.muted,
   },
   menuItemLast: {
     borderBottomWidth: 0,

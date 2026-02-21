@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Image,
@@ -11,12 +10,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
-import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -57,7 +53,6 @@ export default function CustomerProfileScreen({ navigation }) {
     avgRating: 0,
   });
   const [memberSince, setMemberSince] = useState("New on Pikup");
-  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     loadCustomerProfile();
@@ -151,83 +146,6 @@ export default function CustomerProfileScreen({ navigation }) {
         },
       },
     ]);
-  };
-
-  const handleDownloadMyData = () => {
-    if (downloadingData) return;
-
-    Alert.alert(
-      "Download My Data",
-      "This will export all your personal data as a JSON file. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Download",
-          onPress: async () => {
-            setDownloadingData(true);
-            try {
-              const { data: sessionData, error: sessionError } =
-                await supabase.auth.getSession();
-              if (sessionError || !sessionData?.session?.access_token) {
-                throw new Error("Session expired. Please sign in again.");
-              }
-
-              const { data, error } = await supabase.functions.invoke(
-                "download-user-data",
-                {
-                  headers: {
-                    Authorization: `Bearer ${sessionData.session.access_token}`,
-                  },
-                  body: { role: "customer" },
-                }
-              );
-
-              if (error) {
-                let errorMessage = "Failed to download data.";
-                if (error?.context) {
-                  try {
-                    const errorBody = await error.context.clone().json();
-                    errorMessage =
-                      errorBody?.error || errorBody?.message || errorMessage;
-                  } catch (_) {}
-                }
-                throw new Error(errorMessage);
-              }
-
-              const fileName = `pikup-data-${Date.now()}.json`;
-              const fileUri = FileSystem.cacheDirectory + fileName;
-              await FileSystem.writeAsStringAsync(
-                fileUri,
-                JSON.stringify(data, null, 2)
-              );
-
-              const sharingAvailable = await Sharing.isAvailableAsync();
-              if (!sharingAvailable) {
-                Alert.alert(
-                  "Sharing Unavailable",
-                  "Sharing is not available on this device."
-                );
-                return;
-              }
-
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/json",
-                dialogTitle: "Save Your Data",
-                UTI: "public.json",
-              });
-            } catch (err) {
-              console.error("Error downloading user data:", err);
-              Alert.alert(
-                "Error",
-                err?.message || "Failed to download your data. Please try again."
-              );
-            } finally {
-              setDownloadingData(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const takePhoto = async () => {
@@ -480,20 +398,6 @@ export default function CustomerProfileScreen({ navigation }) {
         <View style={styles.quickActions}>
           <TouchableOpacity
             style={styles.quickActionButton}
-            onPress={() => navigation.navigate("CustomerHelpScreen")}
-          >
-            <View style={styles.quickActionIcon}>
-              <Ionicons
-                name="help-circle-outline"
-                size={24}
-                color={colors.primary}
-              />
-            </View>
-            <Text style={styles.quickActionLabel}>Help</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionButton}
             onPress={() => navigation.navigate("CustomerRewardsScreen")}
           >
             <View style={styles.quickActionIcon}>
@@ -522,39 +426,23 @@ export default function CustomerProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Settings — unified card */}
-        <Text style={styles.sectionLabel}>SETTINGS</Text>
+        {/* Account Settings */}
+        <Text style={styles.sectionLabel}>ACCOUNT SETTINGS</Text>
         <View style={styles.sectionCard}>
-          {/* My Addresses */}
+          {/* Settings */}
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={() => navigation.navigate("CustomerSavedAddressesScreen")}
+            onPress={() => navigation.navigate("CustomerSettingsScreen")}
           >
             <View style={styles.menuIcon}>
-              <Ionicons name="location-outline" size={20} color={colors.primary} />
+              <Ionicons
+                name="settings-outline"
+                size={20}
+                color={colors.primary}
+              />
             </View>
             <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>My Addresses</Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.text.tertiary}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          {/* Payment Methods */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("PaymentMethodsScreen")}
-          >
-            <View style={styles.menuIcon}>
-              <Ionicons name="card-outline" size={20} color={colors.primary} />
-            </View>
-            <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>Payment Methods</Text>
+              <Text style={styles.menuTitle}>Settings</Text>
             </View>
             <Ionicons
               name="chevron-forward"
@@ -589,30 +477,6 @@ export default function CustomerProfileScreen({ navigation }) {
 
           <View style={styles.rowDivider} />
 
-          {/* Notifications */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("CustomerSettingsScreen")}
-          >
-            <View style={styles.menuIcon}>
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>Notifications</Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.text.tertiary}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
           {/* About */}
           <TouchableOpacity
             style={styles.menuRow}
@@ -637,31 +501,26 @@ export default function CustomerProfileScreen({ navigation }) {
 
           <View style={styles.rowDivider} />
 
-          {/* Download My Data */}
+          {/* Help */}
           <TouchableOpacity
             style={styles.menuRow}
-            onPress={handleDownloadMyData}
-            disabled={downloadingData}
+            onPress={() => navigation.navigate("CustomerHelpScreen")}
           >
             <View style={styles.menuIcon}>
               <Ionicons
-                name="download-outline"
+                name="help-circle-outline"
                 size={20}
                 color={colors.primary}
               />
             </View>
             <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>Download My Data</Text>
+              <Text style={styles.menuTitle}>Help</Text>
             </View>
-            {downloadingData ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.text.tertiary}
-              />
-            )}
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={colors.text.tertiary}
+            />
           </TouchableOpacity>
         </View>
 
