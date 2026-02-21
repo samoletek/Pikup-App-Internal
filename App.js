@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { LogBox, NativeModules, StyleSheet, View } from 'react-native';
+import { LogBox, NativeModules, StyleSheet, TextInput, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
@@ -39,6 +39,16 @@ if (NativeModules.MapboxNavigation) {
 }
 
 export default function App() {
+  const colorScheme = useColorScheme();
+  const keyboardAppearance = colorScheme === 'dark' ? 'dark' : 'light';
+
+  React.useEffect(() => {
+    TextInput.defaultProps = {
+      ...(TextInput.defaultProps || {}),
+      keyboardAppearance,
+    };
+  }, [keyboardAppearance]);
+
   return (
     <SafeAreaProvider>
       <View style={styles.appRoot}>

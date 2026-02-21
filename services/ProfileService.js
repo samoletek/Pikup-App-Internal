@@ -2,6 +2,7 @@
 // Extracted from AuthContext.js - User profile and feedback management
 
 import { supabase } from '../config/supabase';
+import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { uploadToSupabase } from './StorageService';
 
 const PROFILE_UPDATE_FIELD_MAP = Object.freeze({
@@ -58,6 +59,12 @@ const FEEDBACK_ROLE_BY_TYPE = Object.freeze({
     driver: 'driver',
     customer: 'customer',
 });
+const DEFAULT_DRIVER_BADGE_STATS = Object.freeze(
+    DRIVER_RATING_BADGES.reduce((acc, badge) => {
+        acc[badge.id] = 0;
+        return acc;
+    }, {})
+);
 
 const normalizeUserType = (value, fallback = 'customer') => {
     if (value === 'driver' || value === 'customer') return value;
@@ -71,6 +78,22 @@ const toBadgeStats = (value) => {
     return { ...value };
 };
 
+const withDefaultDriverBadgeStats = (value) => {
+    const source = toBadgeStats(value);
+    const normalized = {
+        ...DEFAULT_DRIVER_BADGE_STATS,
+    };
+
+    Object.entries(source).forEach(([badgeId, badgeCount]) => {
+        const parsedCount = Number(badgeCount);
+        normalized[badgeId] = Number.isFinite(parsedCount) && parsedCount >= 0
+            ? parsedCount
+            : 0;
+    });
+
+    return normalized;
+};
+
 const hasMissingColumnError = (error, columnName) => {
     const text = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
     return (
@@ -78,6 +101,36 @@ const hasMissingColumnError = (error, columnName) => {
         text.includes('column') &&
         text.includes(String(columnName || '').toLowerCase())
     );
+};
+
+const hasMissingTableError = (error, tableName) => {
+    const text = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+    const normalizedTable = String(tableName || '').toLowerCase();
+    return (
+        (
+            text.includes('does not exist') &&
+            text.includes('relation') &&
+            text.includes(normalizedTable)
+        ) ||
+        (
+            text.includes('could not find the table') &&
+            text.includes(normalizedTable)
+        )
+    );
+};
+
+const toSafeRating = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 5;
+    return Math.max(1, Math.min(5, parsed));
+};
+
+const normalizeFeedbackRow = (row = {}) => {
+    const timestamp = row.timestamp || row.created_at || row.updated_at || null;
+    return {
+        ...row,
+        timestamp,
+    };
 };
 
 /**
@@ -417,11 +470,14 @@ export const submitTripRating = async (ratingData = {}, currentUser) => {
         throw targetProfileError;
     }
 
-    const currentRating = Number(targetProfile?.rating) || 5;
+    const parsedCurrentRating = Number(targetProfile?.rating);
+    const currentRating = Number.isFinite(parsedCurrentRating) ? parsedCurrentRating : 5;
     const currentCount = Number(targetProfile?.rating_count) || 0;
     const nextCount = currentCount + 1;
     const nextAverage = Number((((currentRating * currentCount) + normalizedRating) / nextCount).toFixed(2));
-    const currentBadgeStats = toBadgeStats(targetProfile?.badge_stats);
+    const currentBadgeStats = normalizedTargetType === 'driver'
+        ? withDefaultDriverBadgeStats(targetProfile?.badge_stats)
+        : toBadgeStats(targetProfile?.badge_stats);
     const nextBadgeStats = { ...currentBadgeStats };
 
     uniqueBadges.forEach((badgeId) => {
@@ -442,9 +498,11 @@ export const submitTripRating = async (ratingData = {}, currentUser) => {
         .eq('id', toUserId);
 
     if (fullUpdateError) {
+        const ratingCountColumnMissing = hasMissingColumnError(fullUpdateError, 'rating_count');
+        const badgeStatsColumnMissing = hasMissingColumnError(fullUpdateError, 'badge_stats');
         const optionalColumnMissing =
-            hasMissingColumnError(fullUpdateError, 'rating_count') ||
-            hasMissingColumnError(fullUpdateError, 'badge_stats');
+            ratingCountColumnMissing ||
+            badgeStatsColumnMissing;
 
         if (!optionalColumnMissing) {
             throw fullUpdateError;
@@ -455,10 +513,10 @@ export const submitTripRating = async (ratingData = {}, currentUser) => {
             updated_at: timestamp,
         };
 
-        if (!hasMissingColumnError(fullUpdateError, 'rating_count')) {
+        if (!ratingCountColumnMissing) {
             fallbackUpdates.rating_count = nextCount;
         }
-        if (!hasMissingColumnError(fullUpdateError, 'badge_stats')) {
+        if (!badgeStatsColumnMissing) {
             fallbackUpdates.badge_stats = nextBadgeStats;
         }
 
@@ -469,6 +527,29 @@ export const submitTripRating = async (ratingData = {}, currentUser) => {
 
         if (fallbackUpdateError) {
             throw fallbackUpdateError;
+        }
+
+        if (badgeStatsColumnMissing && normalizedTargetType === 'driver') {
+            const currentMetadata =
+                targetProfile?.metadata &&
+                typeof targetProfile.metadata === 'object' &&
+                !Array.isArray(targetProfile.metadata)
+                    ? { ...targetProfile.metadata }
+                    : {};
+
+            currentMetadata.badge_stats = nextBadgeStats;
+
+            const { error: metadataUpdateError } = await supabase
+                .from(tableName)
+                .update({
+                    metadata: currentMetadata,
+                    updated_at: timestamp,
+                })
+                .eq('id', toUserId);
+
+            if (metadataUpdateError && !hasMissingColumnError(metadataUpdateError, 'metadata')) {
+                throw metadataUpdateError;
+            }
         }
     }
 
@@ -542,29 +623,61 @@ export const saveFeedback = async (feedbackData, currentUser) => {
     if (!currentUser) throw new Error('User not authenticated');
 
     try {
-        const { data, error } = await supabase
-            .from('feedback')
-            .insert({
-                request_id: feedbackData.requestId,
-                driver_id: feedbackData.driverId,
-                customer_id: currentUser.uid || currentUser.id,
-                rating: feedbackData.rating,
-                comment: feedbackData.comment,
-                type: feedbackData.type || 'customer_to_driver',
-                created_at: new Date().toISOString()
-            })
+        const sourceUserId = currentUser.uid || currentUser.id;
+        const normalizedRating = toSafeRating(feedbackData.rating);
+        const timestamp = new Date().toISOString();
+
+        const feedbackPayload = {
+            request_id: feedbackData.requestId,
+            driver_id: feedbackData.driverId || null,
+            user_id: sourceUserId,
+            rating: normalizedRating,
+            tip_amount: 0,
+            comment: feedbackData.comment || null,
+            created_at: timestamp,
+            updated_at: timestamp,
+        };
+
+        let insertedFeedback = null;
+        const { data: feedbacksData, error: feedbacksError } = await supabase
+            .from('feedbacks')
+            .insert(feedbackPayload)
             .select()
             .single();
 
-        if (error) throw error;
-        console.log('Feedback saved successfully:', data.id);
+        if (feedbacksError) {
+            if (!hasMissingTableError(feedbacksError, 'feedbacks')) {
+                throw feedbacksError;
+            }
 
-        // Update driver's rating
-        if (feedbackData.type === 'customer_to_driver' && feedbackData.driverId && feedbackData.rating) {
-            await updateUserRating(feedbackData.driverId, feedbackData.rating, 'driverProfile');
+            const { data: legacyData, error: legacyError } = await supabase
+                .from('feedback')
+                .insert({
+                    request_id: feedbackData.requestId,
+                    driver_id: feedbackData.driverId || null,
+                    customer_id: sourceUserId,
+                    rating: normalizedRating,
+                    comment: feedbackData.comment || null,
+                    type: feedbackData.type || 'customer_to_driver',
+                    created_at: timestamp,
+                })
+                .select()
+                .single();
+
+            if (legacyError) throw legacyError;
+            insertedFeedback = legacyData;
+        } else {
+            insertedFeedback = feedbacksData;
         }
 
-        return data.id;
+        console.log('Feedback saved successfully:', insertedFeedback?.id);
+
+        // Update driver's rating
+        if (feedbackData.type === 'customer_to_driver' && feedbackData.driverId && normalizedRating) {
+            await updateUserRating(feedbackData.driverId, normalizedRating, 'driverProfile');
+        }
+
+        return insertedFeedback?.id || null;
     } catch (error) {
         console.error('Error saving feedback:', error);
         return null;
@@ -579,15 +692,39 @@ export const saveFeedback = async (feedbackData, currentUser) => {
  */
 export const getDriverFeedback = async (driverId, limit = 5) => {
     try {
-        const { data, error } = await supabase
+        const { data: feedbacksData, error: feedbacksError } = await supabase
+            .from('feedbacks')
+            .select('*')
+            .eq('driver_id', driverId)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (!feedbacksError && Array.isArray(feedbacksData) && feedbacksData.length > 0) {
+            return feedbacksData.map(normalizeFeedbackRow);
+        }
+
+        if (feedbacksError && !hasMissingTableError(feedbacksError, 'feedbacks')) {
+            console.warn('Error fetching feedback from feedbacks table, trying legacy feedback table:', feedbacksError);
+        }
+
+        const { data: legacyData, error: legacyError } = await supabase
             .from('feedback')
             .select('*')
             .eq('driver_id', driverId)
             .order('created_at', { ascending: false })
             .limit(limit);
 
-        if (error) throw error;
-        return data;
+        if (legacyError && !hasMissingTableError(legacyError, 'feedback')) {
+            throw legacyError;
+        }
+
+        if (feedbacksError && !hasMissingTableError(feedbacksError, 'feedbacks')) {
+            throw feedbacksError;
+        }
+
+        return Array.isArray(legacyData)
+            ? legacyData.map(normalizeFeedbackRow)
+            : [];
     } catch (error) {
         console.error('Error fetching driver feedback:', error);
         return [];

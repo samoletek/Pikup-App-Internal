@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Image,
-  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,8 +11,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -20,6 +24,7 @@ import { DRIVER_RATING_BADGES } from "../../constants/ratingBadges";
 import {
   borderRadius,
   colors,
+  sizing,
   spacing,
   typography,
 } from "../../styles/theme";
@@ -33,11 +38,14 @@ export default function DriverProfileScreen({ navigation }) {
     currentUser,
     logout,
     getDriverProfile,
+    getDriverStats,
     getUserProfile,
     profileImage,
     getProfileImage,
-    getDriverFeedback,
+    uploadProfileImage,
+    deleteProfileImage,
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -51,8 +59,11 @@ export default function DriverProfileScreen({ navigation }) {
     documentsVerified: false,
     canReceivePayments: false,
   });
-  const [recentFeedback, setRecentFeedback] = useState([]);
-  const [loadingFeedback, setLoadingFeedback] = useState(false);
+  const [driverStats, setDriverStats] = useState({
+    totalTrips: 0,
+    acceptanceRate: 0,
+  });
+  const [downloadingData, setDownloadingData] = useState(false);
 
   useEffect(() => {
     loadDriverProfile();
@@ -60,7 +71,7 @@ export default function DriverProfileScreen({ navigation }) {
 
   const loadDriverProfile = async () => {
     try {
-      const profile = await getDriverProfile?.(currentUser?.uid);
+      const profile = await getDriverProfile?.(currentUserId);
       setDriverProfile(profile);
 
       const user = await getUserProfile?.();
@@ -87,27 +98,38 @@ export default function DriverProfileScreen({ navigation }) {
         canReceivePayments: profile.canReceivePayments || false,
       });
 
-      if (profile.canReceivePayments || profile.onboardingComplete) {
-        loadDriverFeedback();
-      }
+      await loadDriverStats();
     } catch (error) {
       console.error("Error loading driver profile:", error);
     }
   };
 
-  const loadDriverFeedback = async () => {
-    if (!currentUser?.uid) {
+  const loadDriverStats = async () => {
+    if (!currentUserId) {
       return;
     }
 
-    setLoadingFeedback(true);
     try {
-      const feedback = await getDriverFeedback(currentUser.uid, 5);
-      setRecentFeedback(feedback);
+      const stats = await getDriverStats?.(currentUserId);
+      const parsedTotalTrips = Number(stats?.totalTrips);
+      const parsedAcceptanceRate = Number(stats?.acceptanceRate);
+
+      setDriverStats({
+        totalTrips:
+          Number.isFinite(parsedTotalTrips) && parsedTotalTrips > 0
+            ? parsedTotalTrips
+            : 0,
+        acceptanceRate:
+          Number.isFinite(parsedAcceptanceRate) && parsedAcceptanceRate > 0
+            ? Math.round(parsedAcceptanceRate)
+            : 0,
+      });
     } catch (error) {
-      console.error("Error loading feedback:", error);
-    } finally {
-      setLoadingFeedback(false);
+      console.error("Error loading driver stats:", error);
+      setDriverStats({
+        totalTrips: 0,
+        acceptanceRate: 0,
+      });
     }
   };
 
@@ -151,6 +173,168 @@ export default function DriverProfileScreen({ navigation }) {
     navigation.navigate("DriverEarningsScreen");
   };
 
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Camera permission is required to take photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "Photo library permission is required to choose photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    try {
+      await uploadProfileImage?.(result.assets[0].uri);
+      Alert.alert("Success", "Profile picture updated successfully.");
+      await getProfileImage?.();
+    } catch (error) {
+      Alert.alert("Error", "Failed to upload profile picture.");
+    }
+  };
+
+  const removePhoto = () => {
+    Alert.alert(
+      "Remove Photo",
+      "Are you sure you want to remove your profile photo?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteProfileImage?.();
+              Alert.alert("Success", "Profile picture removed.");
+            } catch (error) {
+              Alert.alert("Error", "Failed to remove profile picture.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDownloadMyData = () => {
+    if (downloadingData) return;
+
+    Alert.alert(
+      "Download My Data",
+      "This will export all your personal data as a JSON file. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Download",
+          onPress: async () => {
+            setDownloadingData(true);
+            try {
+              const { data: sessionData, error: sessionError } =
+                await supabase.auth.getSession();
+              if (sessionError || !sessionData?.session?.access_token) {
+                throw new Error("Session expired. Please sign in again.");
+              }
+
+              const { data, error } = await supabase.functions.invoke(
+                "download-user-data",
+                {
+                  headers: {
+                    Authorization: `Bearer ${sessionData.session.access_token}`,
+                  },
+                  body: { role: "driver" },
+                }
+              );
+
+              if (error) {
+                let errorMessage = "Failed to download data.";
+                if (error?.context) {
+                  try {
+                    const errorBody = await error.context.clone().json();
+                    errorMessage =
+                      errorBody?.error || errorBody?.message || errorMessage;
+                  } catch (_) {}
+                }
+                throw new Error(errorMessage);
+              }
+
+              const fileName = `pikup-data-${Date.now()}.json`;
+              const fileUri = FileSystem.cacheDirectory + fileName;
+              await FileSystem.writeAsStringAsync(
+                fileUri,
+                JSON.stringify(data, null, 2)
+              );
+
+              const sharingAvailable = await Sharing.isAvailableAsync();
+              if (!sharingAvailable) {
+                Alert.alert(
+                  "Sharing Unavailable",
+                  "Sharing is not available on this device."
+                );
+                return;
+              }
+
+              await Sharing.shareAsync(fileUri, {
+                mimeType: "application/json",
+                dialogTitle: "Save Your Data",
+                UTI: "public.json",
+              });
+            } catch (err) {
+              console.error("Error downloading user data:", err);
+              Alert.alert(
+                "Error",
+                err?.message || "Failed to download your data. Please try again."
+              );
+            } finally {
+              setDownloadingData(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleProfilePhotoPress = () => {
+    Alert.alert("Update Profile Picture", "Choose an option", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Take Photo", onPress: takePhoto },
+      { text: "Choose from Library", onPress: pickImage },
+      { text: "Remove Photo", style: "destructive", onPress: removePhoto },
+    ]);
+  };
+
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -160,22 +344,24 @@ export default function DriverProfileScreen({ navigation }) {
     .toUpperCase();
 
   const isReadyToEarn = onboardingStatus.canReceivePayments;
-  const completedTrips = isReadyToEarn
-    ? String(driverProfile?.totalTrips || 156)
-    : "--";
-  const acceptanceRate = isReadyToEarn
-    ? `${driverProfile?.acceptanceRate || 98}%`
-    : "--";
-  const ratingValue = isReadyToEarn ? String(driverProfile?.rating || "5.0") : "--";
-  const topDriverBadges = useMemo(() => {
+  const completedTrips = String(Number(driverStats.totalTrips) || 0);
+  const acceptanceRate = `${Number(driverStats.acceptanceRate) || 0}%`;
+  const ratingCount = Number(
+    driverProfile?.rating_count ?? driverProfile?.driverProfile?.rating_count ?? 0
+  );
+  const parsedRating = Number(
+    driverProfile?.rating ?? driverProfile?.driverProfile?.rating ?? 0
+  );
+  const ratingValue =
+    ratingCount > 0 && Number.isFinite(parsedRating)
+      ? parsedRating.toFixed(1)
+      : "0";
+  const driverBadges = useMemo(() => {
     const badgeStats = driverProfile?.badge_stats || {};
     return DRIVER_RATING_BADGES.map((badge) => ({
       ...badge,
       count: Number(badgeStats?.[badge.id] || 0),
-    }))
-      .filter((badge) => badge.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
+    }));
   }, [driverProfile]);
   const statusConfig = isReadyToEarn
     ? {
@@ -212,8 +398,6 @@ export default function DriverProfileScreen({ navigation }) {
           onPress: handleStartOnboarding,
         };
 
-  const feedbackToRender = recentFeedback.slice(0, 3);
-
   const menuItems = [
     {
       id: "notifications",
@@ -230,19 +414,19 @@ export default function DriverProfileScreen({ navigation }) {
       disabled: false,
     },
     {
-      id: "safety",
-      title: "Safety",
-      icon: "shield-checkmark-outline",
-      onPress: () => navigation.navigate("CustomerSafetyScreen"),
+      id: "about",
+      title: "About",
+      icon: "information-circle-outline",
+      onPress: () => navigation.navigate("AboutScreen"),
       disabled: false,
     },
     {
-      id: "terms",
-      title: "Terms and Privacy",
-      icon: "document-text-outline",
-      onPress: () => Linking.openURL("https://pikup-app.com/"),
-      disabled: false,
-      external: true,
+      id: "downloadData",
+      title: "Download My Data",
+      icon: "download-outline",
+      onPress: handleDownloadMyData,
+      disabled: downloadingData,
+      loading: downloadingData,
     },
   ];
 
@@ -305,11 +489,15 @@ export default function DriverProfileScreen({ navigation }) {
           {item.title}
         </Text>
       </View>
-      <Ionicons
-        name={item.external ? "open-outline" : "chevron-forward"}
-        size={20}
-        color={colors.text.tertiary}
-      />
+      {item.loading ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <Ionicons
+          name={item.external ? "open-outline" : "chevron-forward"}
+          size={20}
+          color={colors.text.tertiary}
+        />
+      )}
     </TouchableOpacity>
   );
 
@@ -351,7 +539,7 @@ export default function DriverProfileScreen({ navigation }) {
           <View style={styles.profileTopRow}>
             <TouchableOpacity
               style={styles.avatarContainer}
-              onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+              onPress={handleProfilePhotoPress}
             >
               {profileImage ? (
                 <Image source={{ uri: profileImage }} style={styles.avatarImage} />
@@ -369,7 +557,7 @@ export default function DriverProfileScreen({ navigation }) {
                   !isReadyToEarn && styles.verifiedBadgePending,
                 ]}
               >
-                <Ionicons name="checkmark" size={10} color="#fff" />
+                <Ionicons name="checkmark" size={10} color={colors.white} />
               </View>
             </TouchableOpacity>
 
@@ -392,7 +580,7 @@ export default function DriverProfileScreen({ navigation }) {
               </View>
               <TouchableOpacity
                 style={styles.editProfileButton}
-                onPress={() => navigation.navigate("CustomerPersonalInfoScreen")}
+                onPress={() => navigation.navigate("PersonalInfoScreen")}
               >
                 <Ionicons name="create-outline" size={14} color={colors.primary} />
                 <Text style={styles.editProfileText}>Edit profile</Text>
@@ -417,22 +605,22 @@ export default function DriverProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {topDriverBadges.length > 0 && (
-            <View style={styles.badgesSummary}>
-              <Text style={styles.badgesSummaryTitle}>Top feedback badges</Text>
-              <View style={styles.badgesSummaryRow}>
-                {topDriverBadges.map((badge) => (
-                  <View key={badge.id} style={styles.badgeChip}>
+          <View style={styles.badgesBar}>
+            {driverBadges.map((badge, index) => (
+              <React.Fragment key={badge.id}>
+                {index > 0 ? <View style={styles.badgeDividerVertical} /> : null}
+                <View style={styles.badgeItem}>
+                  <View style={styles.badgeInfo}>
                     <Ionicons name={badge.icon} size={14} color={badge.activeColor} />
-                    <Text style={styles.badgeChipText}>{badge.label}</Text>
-                    <View style={styles.badgeChipCount}>
-                      <Text style={styles.badgeChipCountText}>{badge.count}</Text>
-                    </View>
+                    <Text style={styles.badgeLabel}>{badge.label}</Text>
                   </View>
-                ))}
-              </View>
-            </View>
-          )}
+                  <View style={styles.badgeChipCount}>
+                    <Text style={styles.badgeChipCountText}>{badge.count}</Text>
+                  </View>
+                </View>
+              </React.Fragment>
+            ))}
+          </View>
         </View>
 
         <TouchableOpacity
@@ -501,60 +689,6 @@ export default function DriverProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {isReadyToEarn ? (
-          <View style={styles.feedbackCard}>
-            <View style={styles.feedbackHeader}>
-              <Text style={styles.feedbackTitle}>Recent Feedback</Text>
-              {feedbackToRender.length > 0 ? (
-                <Text style={styles.feedbackCount}>{feedbackToRender.length} reviews</Text>
-              ) : null}
-            </View>
-
-            {loadingFeedback ? (
-              <Text style={styles.feedbackLoadingText}>Loading feedback...</Text>
-            ) : feedbackToRender.length > 0 ? (
-              feedbackToRender.map((feedback, index) => (
-                <View
-                  key={`${feedback.timestamp || "feedback"}-${index}`}
-                  style={styles.feedbackItem}
-                >
-                  <View style={styles.feedbackStars}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Ionicons
-                        key={star}
-                        name={star <= (feedback.rating || 5) ? "star" : "star-outline"}
-                        size={14}
-                        color={
-                          star <= (feedback.rating || 5)
-                            ? colors.gold
-                            : colors.border.light
-                        }
-                      />
-                    ))}
-                    <Text style={styles.feedbackDate}>
-                      {feedback.timestamp
-                        ? new Date(feedback.timestamp).toLocaleDateString()
-                        : ""}
-                    </Text>
-                  </View>
-                  <Text style={styles.feedbackComment} numberOfLines={2}>
-                    {feedback.comment ? `"${feedback.comment}"` : "No comment provided"}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <View style={styles.feedbackEmpty}>
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={24}
-                  color={colors.text.muted}
-                />
-                <Text style={styles.feedbackEmptyText}>No feedback yet</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
-
         <View style={styles.menuSections}>
           {menuItems.map((item, index) =>
             renderMenuItem(item, index === menuItems.length - 1)
@@ -608,33 +742,33 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   avatarImage: {
-    width: 80,
-    height: 80,
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
     borderRadius: borderRadius.xl,
   },
   avatarGradient: {
-    width: 80,
-    height: 80,
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
     borderRadius: borderRadius.xl,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarInitials: {
-    color: "#fff",
-    fontSize: 32,
+    color: colors.white,
+    fontSize: sizing.avatarInitialsFontSize,
     fontWeight: typography.fontWeight.bold,
   },
   verifiedBadge: {
     position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
+    bottom: -sizing.verificationBadgeOffset,
+    right: -sizing.verificationBadgeOffset,
+    width: sizing.verificationBadgeSize,
+    height: sizing.verificationBadgeSize,
     borderRadius: borderRadius.circle,
     backgroundColor: colors.success,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
+    borderWidth: sizing.verificationBadgeBorderWidth,
     borderColor: colors.background.secondary,
   },
   verifiedBadgePending: {
@@ -644,7 +778,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 22,
+    fontSize: sizing.profileNameFontSize,
     fontWeight: typography.fontWeight.bold,
     color: colors.text.primary,
     textTransform: "capitalize",
@@ -668,9 +802,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 6,
+    gap: sizing.compactGap,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: sizing.compactButtonVerticalPadding,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     borderColor: colors.border.strong,
@@ -698,43 +832,44 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: sizing.statLabelFontSize,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.muted,
-    marginTop: 3,
-    letterSpacing: 0.5,
+    marginTop: sizing.statLabelMarginTop,
+    letterSpacing: sizing.statLabelLetterSpacing,
   },
   statDividerVertical: {
     width: 1,
     backgroundColor: colors.border.strong,
     marginVertical: spacing.sm,
   },
-  badgesSummary: {
-    marginTop: spacing.base,
-  },
-  badgesSummaryTitle: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.sm,
-  },
-  badgesSummaryRow: {
+  badgesBar: {
     flexDirection: "row",
-    gap: spacing.sm,
-  },
-  badgeChip: {
-    flex: 1,
+    marginTop: spacing.base,
     backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+  },
+  badgeItem: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.sm + 1,
+  },
+  badgeDividerVertical: {
+    width: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
+  },
+  badgeInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.xs,
   },
-  badgeChipText: {
+  badgeLabel: {
     flex: 1,
     color: colors.text.primary,
     fontSize: typography.fontSize.xs + 1,
@@ -825,64 +960,6 @@ const styles = StyleSheet.create({
   },
   quickActionLabelDisabled: {
     color: colors.text.muted,
-  },
-  feedbackCard: {
-    backgroundColor: colors.background.secondary,
-    marginBottom: spacing.base,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: spacing.base,
-  },
-  feedbackHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  feedbackTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  feedbackCount: {
-    color: colors.text.link,
-    fontSize: typography.fontSize.base,
-  },
-  feedbackLoadingText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-  },
-  feedbackItem: {
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border.strong,
-  },
-  feedbackStars: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  feedbackDate: {
-    marginLeft: spacing.sm,
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.xs,
-  },
-  feedbackComment: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    lineHeight: 18,
-  },
-  feedbackEmpty: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
-  },
-  feedbackEmptyText: {
-    marginLeft: spacing.sm,
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
   },
   menuSections: {
     backgroundColor: colors.background.secondary,
