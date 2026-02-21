@@ -254,12 +254,7 @@ export default function CustomerProfileScreen({ navigation }) {
       ? Number(accountStats.avgRating).toFixed(1)
       : "0";
 
-  /* ── Scroll snap (same pattern as Activity/Messages) ── */
-  const titleLockCompensation = scrollY.interpolate({
-    inputRange: [0, TITLE_COLLAPSE_DISTANCE],
-    outputRange: [0, TITLE_COLLAPSE_DISTANCE],
-    extrapolate: "clamp",
-  });
+  /* ── Scroll snap (same pattern as driver Account) ── */
 
   const getSnapOffset = (offsetY) => {
     if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) return null;
@@ -317,14 +312,9 @@ export default function CustomerProfileScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* Large title (collapses on scroll like Activity/Messages) */}
-        <Animated.View
-          style={[
-            styles.largeTitleSection,
-            { transform: [{ translateY: titleLockCompensation }] },
-          ]}
-        >
+        <View style={styles.largeTitleSection}>
           <Text style={styles.largeTitle}>Account</Text>
-        </Animated.View>
+        </View>
 
         {/* Profile Card */}
         <View style={styles.profileCard}>

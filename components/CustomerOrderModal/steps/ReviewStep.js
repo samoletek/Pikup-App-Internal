@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles';
 import { colors, typography } from '../../../styles/theme';
 import PaymentMethodsScreen from '../../../screens/customer/PaymentMethodsScreen';
+import { estimateLaborMinutes } from '../../../services/PricingService';
 
 const ReviewStep = ({
     orderData,
@@ -41,36 +42,49 @@ const ReviewStep = ({
 
     const handlingEstimate = useMemo(() => {
         const aiVehicleRecommendation = orderData.aiVehicleRecommendation || {};
-        const totalWeight = (orderData.items || []).reduce((sum, item) => sum + (Number(item.weightEstimate) || 0), 0);
-        const itemCount = Math.max(1, orderData.items?.length || 0);
-        const baseMinutes = Math.max(12, Math.round(itemCount * 6 + totalWeight / 90));
-        const fallbackLoading = `${baseMinutes}-${baseMinutes + 12} min`;
-        const fallbackUnloading = `${Math.max(10, baseMinutes - 3)}-${baseMinutes + 9} min`;
 
-        if (aiVehicleRecommendation.status === 'success') {
+        const labor = pricing
+            ? {
+                pickupMinutes: Number(pricing.laborPickupMinutes) || 0,
+                dropoffMinutes: Number(pricing.laborDropoffMinutes) || 0,
+                bufferMinutes: Number(pricing.laborBufferMinutes) || 0,
+            }
+            : estimateLaborMinutes({
+                items: orderData.items || [],
+                pickupDetails: orderData.pickupDetails || {},
+                dropoffDetails: orderData.dropoffDetails || {},
+            });
+
+        const formatLegMinutes = (minutes) => (
+            minutes > 0 ? `${minutes} min` : 'Not requested'
+        );
+
+        const totalHandlingMinutes = (labor.pickupMinutes || 0) + (labor.dropoffMinutes || 0);
+
+        if (totalHandlingMinutes === 0) {
             return {
-                loading: aiVehicleRecommendation.loadingEstimate || fallbackLoading,
-                unloading: aiVehicleRecommendation.unloadingEstimate || fallbackUnloading,
-                hint: aiVehicleRecommendation.step6Description
-                    || aiVehicleRecommendation.notes
-                    || 'AI estimate based on your item list.',
+                loading: 'Not requested',
+                unloading: 'Not requested',
+                hint: 'No loading/unloading assistance selected.',
             };
         }
 
-        if (aiVehicleRecommendation.status === 'loading') {
-            return {
-                loading: 'Calculating...',
-                unloading: 'Calculating...',
-                hint: 'AI is estimating handling time in background.',
-            };
-        }
+        const baseHint = labor.bufferMinutes > 0
+            ? `Based on labor settings. Includes ${labor.bufferMinutes} min operational buffer in pricing.`
+            : 'Based on labor settings in your request.';
 
         return {
-            loading: fallbackLoading,
-            unloading: fallbackUnloading,
-            hint: 'Preliminary estimate from item count and weight.',
+            loading: formatLegMinutes(labor.pickupMinutes),
+            unloading: formatLegMinutes(labor.dropoffMinutes),
+            hint: aiVehicleRecommendation.step6Description || aiVehicleRecommendation.notes || baseHint,
         };
-    }, [orderData.items, orderData.aiVehicleRecommendation]);
+    }, [
+        pricing,
+        orderData.items,
+        orderData.pickupDetails,
+        orderData.dropoffDetails,
+        orderData.aiVehicleRecommendation,
+    ]);
 
     return (
         <>

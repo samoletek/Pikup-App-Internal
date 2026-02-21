@@ -327,33 +327,66 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     // ============================================
     // VALIDATION
     // ============================================
+    const trimValue = (value) => (typeof value === 'string' ? value.trim() : '');
+
+    const parseFloorNumber = (value) => {
+        const normalized = String(value ?? '').replace(/[^0-9]/g, '');
+        if (!normalized) return null;
+
+        const parsed = parseInt(normalized, 10);
+        return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+
+    const extractApartmentFloor = (locationDetails) => {
+        const explicitFloor = parseFloorNumber(locationDetails?.floor);
+        if (explicitFloor !== null) return explicitFloor;
+
+        const unitText = trimValue(locationDetails?.unitNumber);
+        const floorMatch = unitText.match(/(?:floor|fl\.?|flr\.?|lvl|level)\s*#?\s*(\d{1,3})/i);
+        if (!floorMatch?.[1]) return null;
+
+        return parseInt(floorMatch[1], 10);
+    };
+
     const validateLocationDetails = (locationDetails, label) => {
         const rawLocationType = locationDetails.locationType || 'store';
         const locationType = rawLocationType === 'house_other' ? 'residential_other' : rawLocationType;
 
         if (locationType === 'store') {
-            if (!locationDetails.storeName?.trim()) {
-                return `Please enter the store name for ${label}.`;
+            if (!trimValue(locationDetails.storeName)) {
+                return `Please enter the store or business name for ${label}.`;
             }
             return null;
         }
 
         if (locationType === 'apartment') {
-            if (!locationDetails.buildingName?.trim()) {
+            if (!trimValue(locationDetails.buildingName)) {
                 return `Please enter the building name/number for ${label}.`;
             }
 
-            if (!locationDetails.unitNumber?.trim()) {
-                return `Please enter the unit number for ${label}.`;
+            if (!trimValue(locationDetails.unitNumber)) {
+                return `Please enter the unit/apartment number for ${label}.`;
             }
 
-            if (!locationDetails.floor?.trim()) {
-                return `Please enter the floor number for ${label}.`;
+            if (trimValue(locationDetails.floor) && parseFloorNumber(locationDetails.floor) === null) {
+                return `Please enter a valid floor number for ${label}.`;
             }
 
-            if (locationDetails.hasElevator !== true && locationDetails.hasElevator !== false) {
+            const detectedFloor = extractApartmentFloor(locationDetails);
+            if (
+                detectedFloor &&
+                detectedFloor > 1 &&
+                locationDetails.hasElevator !== true &&
+                locationDetails.hasElevator !== false
+            ) {
                 return `Please specify if there is a working elevator for ${label}.`;
             }
+
+            return null;
+        }
+
+        if (locationType === 'residential_other') {
+            return null;
         }
 
         return null;
@@ -630,7 +663,28 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         address={orderData.pickup.address}
                         type="pickup"
                         details={orderData.pickupDetails}
-                        onUpdate={(details) => setOrderData(prev => ({ ...prev, pickupDetails: details }))}
+                        onUpdate={(details) =>
+                            setOrderData(prev => {
+                                const normalizedHelpPreference =
+                                    typeof details.driverHelpsLoading === 'boolean'
+                                        ? details.driverHelpsLoading
+                                        : typeof details.driverHelp === 'boolean'
+                                            ? details.driverHelp
+                                            : prev.pickupDetails?.driverHelpsLoading ?? false;
+
+                                return {
+                                    ...prev,
+                                    pickupDetails: {
+                                        ...details,
+                                        driverHelpsLoading: normalizedHelpPreference,
+                                    },
+                                    dropoffDetails: {
+                                        ...prev.dropoffDetails,
+                                        driverHelpsUnloading: normalizedHelpPreference,
+                                    },
+                                };
+                            })
+                        }
                     />
                 );
             case 4:

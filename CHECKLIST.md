@@ -106,8 +106,8 @@
 
 ### Customer Flow - Step 2: Item Details (AI Flow) *
 - [x] #92 Value field: show only if item = New, hide for Used
-- [x] #93 AI analysis: trigger ONCE after "Confirm" (not per photo) - adrei
-- [x] #94 Auto-create separate item cards from AI analysis - adrei
+- [x] #93 AI analysis: trigger ONCE after "Confirm" (not per photo)
+- [x] #94 Auto-create separate item cards from AI analysis
 - [x] #95 Add explicit hint: "You can upload multiple photos/items"
 - [x] #96 Fix photo picker: allow selecting up to 3 photos at once
 - [x] #97 Add "Powered by AI" visual indicator
@@ -116,31 +116,31 @@
 - [x] #98 Add reminder: "Be at location 5 min before driver arrival" (for self-handling)
 
 ### Customer Flow - Step 5: Vehicle Selection (REDESIGN) *
-- [x] #100 Simplify to 4 broad vehicle categories (Midsize SUV, Full-Size Pickup Truck, Full-Size Truck, Cargo Truck) + change the icons (need to found) - khan
-- [x] #101 Show size/capacity ranges in cards
-- [x] #102 Change price format to "starting at $X" - khan
-- [x] #103 Make vehicles expandable cards (like items) - khan
-- [x] #104 AI recommendation badge on best vehicle - khan
+- [x] #100 Simplify to 5 broad vehicle categories (Midsize, Full-Size, Cargo, Box Truck, and ai recommended) while implementing 3d models for each vehicle
+- [x] #101 Instead showing size/capacity ranges in cards, show description of real world items that more likely to fit. - like midsize: small furniture, boxes and retail pickups and full sized: Best for Appliances, large marketplace finds, and mattresses
+- [x] #102 Remove "starting at $X" and just show the price which has everything including time labor, insurance and base price
+- [x] #103 Remove the expandable feature when the card is tap
+- [x] #104 Implement best fit badge on best vehicle using Ai
 
 ### AI Features *
-- [x] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
-- [x] #73 Each item: photo + frame + AI description + new/used - adrei
+- [x] #29 Add AI analysis feature (all items, summary, vehicle - reimplement)
+- [x] #73 Each item: photo + frame + AI description + new/used
 - [x] #74 Receipt photo for new items (insurance)
-- [x] #75 Confirmation dialog: verify description and count - adrei
-- [x] #78 AI - adjustable frame for photo selection - adrei
-- [x] #79 AI - simplify system prompt for concise descriptions - adrei
+- [x] #75 Confirmation dialog: verify description and count
+- [x] #78 AI - adjustable frame for photo selection
+- [x] #79 AI - simplify system prompt for concise descriptions
 
 ### Authentication Flow Improvements *
 - [x] #105 Email flow: check if exists → show password OR signup form
 - [x] #106 Account type detection: "Switch to Driver account?" dialog
 
 ### Customer Flow - Messages Screen
-- [x] #43 Fix messaging - currently not functional - adrei
-- [x] #44 Auto-create chat room per trip - adrei
+- [x] #43 Fix messaging - currently not functional
+- [x] #44 Auto-create chat room per trip
 - [x] #45 Move Support messages to Account > Help
 - [x] #46 Center "No messages" empty state
 
-### Customer Flow - Account Screen - erema
+### Customer Flow - Account Screen
 - [x] #47 Account deletion (App Store requirement)
 - [x] #48 Remove Driver toggle - separate accounts
 - [x] #49 Remove Wallet for customer - direct payment (only loyalty program, bonuses)
@@ -160,22 +160,22 @@
 ### Driver Preferences UI *
 - [x] #109 Group options by sections (Items / Equipment / Team)
 - [x] #110 Fix grid/layout bugs
-- [ ] #76 Driver preferences UI (size, equipment, extra help) - erema
+- [x] #76 Driver preferences UI (size, equipment, extra help)
 
 ### Driver Flow - Onboarding
-- [x] #58 Phone verification (SMS) - prevent fake numbers
+- [-] #58 Phone verification (SMS) - NEED TWILIO
 - [x] #59 Driver address autocomplete
-- [x] #60 Cascading vehicle picker [CHANGED: AI car analysis] - khan
+- [x] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
-- [x] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) * - khan
+- [x] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) *
 - [ ] #112 [DISCUSSION] Vehicle age limit (15 vs 30 years - postponed) *
 
 ### Driver UI Enhancements *
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
-- [ ] #114 Badges system UI (Fast Loader, Fragile Handler, etc.) - adrei
-- [x] #115 "Go Online" flow: ask "Solo or Team today?" - adrei
-- [x] #116 Order notification card: full design with photos, timer - khan
-- [ ] #77 Gamification - weekly milestones, bonuses, progress - khan
+- [x] #114 Badges system UI (Fast Loader, Fragile Handler, etc.)
+- [x] #115 "Go Online" flow: ask "Solo or Team today?"
+- [x] #116 Order notification card: full design with photos, timer
+- [-] #77 Gamification - weekly milestones, bonuses, progress
 
 ### Backend / Infrastructure
 - [x] #70 Dynamic pricing algorithm
@@ -185,13 +185,13 @@
 - [x] #72 Multiple items - grid for adding items
 
 ### Milestone 3 Deliverables
-- [ ] Complete AI-powered item analysis flow
-- [ ] Simplified vehicle selection (4 categories)
-- [ ] Working messaging system
-- [ ] Rebuilt Account screens (Customer + Driver)
-- [ ] Complete driver onboarding with AI vehicle detection
-- [ ] Driver preferences and gamification UI
-- [ ] Dynamic pricing implemented
+- [x] Complete AI-powered item analysis flow
+- [x] Simplified vehicle selection (4 categories)
+- [x] Working messaging system
+- [x] Rebuilt Account screens (Customer + Driver)
+- [x] Complete driver onboarding with AI vehicle detection
+- [-] Driver preferences and gamification UI
+- [x] Dynamic pricing implemented
 
 ---
 

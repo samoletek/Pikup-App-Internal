@@ -253,6 +253,12 @@ export default function CustomerSettingsScreen({ navigation, route }) {
           onPress: () => navigation.navigate("PaymentMethodsScreen"),
         },
         {
+          icon: "notifications-outline",
+          label: "Notifications",
+          onPress: () =>
+            navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
+        },
+        {
           icon: "download-outline",
           label: "Download My Data",
           onPress: handleDownloadMyData,
@@ -291,7 +297,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
             </View>
           )}
 
-          {(!isDriver || notificationsOnly) && (
+          {notificationsOnly && (
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
               <View style={styles.card}>

@@ -31,12 +31,15 @@ const LocationDetailsStep = ({
     onUpdate
 }) => {
     const isPickup = type === 'pickup';
-    const helpText = isPickup ? 'Driver helps with loading?' : 'Driver helps with unloading?';
     const helpKey = isPickup ? 'driverHelpsLoading' : 'driverHelpsUnloading';
     const locationType = normalizeLocationType(details.locationType);
     const isStore = locationType === 'store';
     const isApartment = locationType === 'apartment';
+    const isResidentialOther = locationType === 'residential_other';
+    const hasResidentialFields = isApartment || isResidentialOther;
     const unitNumberValue = details.unitNumber ?? '';
+    const helpRequested = details[helpKey] === true;
+    const selfHandled = details[helpKey] === false;
 
     const updateDetails = (patch) => {
         onUpdate({ ...details, ...patch });
@@ -46,8 +49,8 @@ const LocationDetailsStep = ({
         updateDetails({
             locationType: nextType,
             hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
-            unitNumber: nextType === 'apartment' ? unitNumberValue : '',
-            floor: nextType === 'apartment' ? (details.floor ?? '') : '',
+            unitNumber: (nextType === 'apartment' || nextType === 'residential_other') ? unitNumberValue : '',
+            floor: (nextType === 'apartment' || nextType === 'residential_other') ? (details.floor ?? '') : '',
         });
     };
 
@@ -119,10 +122,12 @@ const LocationDetailsStep = ({
                 </>
             )}
 
-            {isApartment && (
+            {hasResidentialFields && (
                 <>
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Building Name/Number *</Text>
+                        <Text style={styles.fieldLabel}>
+                            {isApartment ? 'Building Name/Number *' : 'Building Name/Number'}
+                        </Text>
                         <TextInput
                             style={styles.textInput}
                             placeholder="Enter building name or number"
@@ -133,7 +138,9 @@ const LocationDetailsStep = ({
                     </View>
 
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Unit & Floor *</Text>
+                        <Text style={styles.fieldLabel}>
+                            {isApartment ? 'Unit & Floor *' : 'Unit & Floor'}
+                        </Text>
                         <TextInput
                             style={styles.textInput}
                             placeholder="e.g. Apt 4B, Floor 3"
@@ -150,38 +157,40 @@ const LocationDetailsStep = ({
                         />
                     </View>
 
-                    <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Is there a working elevator?</Text>
-                        <View style={styles.toggleRow}>
-                            <TouchableOpacity
-                                style={[styles.toggleBtn, details.hasElevator === true && styles.toggleBtnActive]}
-                                onPress={() => updateDetails({ hasElevator: true })}
-                            >
-                                <Ionicons
-                                    name="checkmark-circle"
-                                    size={20}
-                                    color={details.hasElevator === true ? colors.text.primary : colors.text.muted}
-                                />
-                                <Text style={[styles.toggleText, details.hasElevator === true && styles.toggleTextActive]}>
-                                    Yes
-                                </Text>
-                            </TouchableOpacity>
+                    {isApartment && (
+                        <View style={styles.field}>
+                            <Text style={styles.fieldLabel}>Is there a working elevator?</Text>
+                            <View style={styles.toggleRow}>
+                                <TouchableOpacity
+                                    style={[styles.toggleBtn, details.hasElevator === true && styles.toggleBtnActive]}
+                                    onPress={() => updateDetails({ hasElevator: true })}
+                                >
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={20}
+                                        color={details.hasElevator === true ? colors.text.primary : colors.text.muted}
+                                    />
+                                    <Text style={[styles.toggleText, details.hasElevator === true && styles.toggleTextActive]}>
+                                        Yes
+                                    </Text>
+                                </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={[styles.toggleBtn, details.hasElevator === false && styles.toggleBtnActive]}
-                                onPress={() => updateDetails({ hasElevator: false })}
-                            >
-                                <Ionicons
-                                    name="close-circle"
-                                    size={20}
-                                    color={details.hasElevator === false ? colors.text.primary : colors.text.muted}
-                                />
-                                <Text style={[styles.toggleText, details.hasElevator === false && styles.toggleTextActive]}>
-                                    No
-                                </Text>
-                            </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.toggleBtn, details.hasElevator === false && styles.toggleBtnActive]}
+                                    onPress={() => updateDetails({ hasElevator: false })}
+                                >
+                                    <Ionicons
+                                        name="close-circle"
+                                        size={20}
+                                        color={details.hasElevator === false ? colors.text.primary : colors.text.muted}
+                                    />
+                                    <Text style={[styles.toggleText, details.hasElevator === false && styles.toggleTextActive]}>
+                                        No
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                    </View>
+                    )}
                 </>
             )}
 
@@ -191,34 +200,34 @@ const LocationDetailsStep = ({
                     <Text style={styles.fieldLabel}>Driver helps with loading/unloading?</Text>
                     <View style={styles.toggleRow}>
                         <TouchableOpacity
-                            style={[styles.toggleBtn, details.driverHelp && styles.toggleBtnActive]}
-                            onPress={() => updateDetails({ driverHelp: true })}
+                            style={[styles.toggleBtn, helpRequested && styles.toggleBtnActive]}
+                            onPress={() => updateDetails({ [helpKey]: true })}
                         >
                             <Ionicons
                                 name="people"
                                 size={20}
-                                color={details.driverHelp ? colors.text.primary : colors.text.muted}
+                                color={helpRequested ? colors.text.primary : colors.text.muted}
                             />
-                            <Text style={[styles.toggleText, details.driverHelp && styles.toggleTextActive]}>
+                            <Text style={[styles.toggleText, helpRequested && styles.toggleTextActive]}>
                                 Yes, please help
                             </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.toggleBtn, details.driverHelp === false && styles.toggleBtnActive]}
-                            onPress={() => updateDetails({ driverHelp: false })}
+                            style={[styles.toggleBtn, selfHandled && styles.toggleBtnActive]}
+                            onPress={() => updateDetails({ [helpKey]: false })}
                         >
                             <Ionicons
                                 name="person"
                                 size={20}
-                                color={details.driverHelp === false ? colors.text.primary : colors.text.muted}
+                                color={selfHandled ? colors.text.primary : colors.text.muted}
                             />
-                            <Text style={[styles.toggleText, details.driverHelp === false && styles.toggleTextActive]}>
+                            <Text style={[styles.toggleText, selfHandled && styles.toggleTextActive]}>
                                 I'll handle it
                             </Text>
                         </TouchableOpacity>
                     </View>
-                    {details.driverHelp && (
+                    {helpRequested && (
                         <View style={styles.helpNote}>
                             <Ionicons name="information-circle" size={16} color={colors.primary} />
                             <Text style={styles.helpNoteText}>
