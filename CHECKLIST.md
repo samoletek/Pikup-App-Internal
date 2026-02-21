@@ -123,7 +123,7 @@
 - [x] #104 AI recommendation badge on best vehicle - khan
 
 ### AI Features *
-- [-] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
+- [x] #29 Add AI analysis feature (all items, summary, vehicle - reimplement) - adrei
 - [x] #73 Each item: photo + frame + AI description + new/used - adrei
 - [x] #74 Receipt photo for new items (insurance)
 - [x] #75 Confirmation dialog: verify description and count - adrei

@@ -6,7 +6,99 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
+import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { checkTermsAcceptance } from './TermsService';
+
+const DEFAULT_DRIVER_BADGE_STATS = Object.freeze(
+    DRIVER_RATING_BADGES.reduce((acc, badge) => {
+        acc[badge.id] = 0;
+        return acc;
+    }, {})
+);
+
+const getMissingColumnFromError = (error) => {
+    const message = String(error?.message || '');
+    let match = message.match(/Could not find the '([^']+)' column/i);
+    if (match?.[1]) return match[1];
+
+    match = message.match(/column\s+([a-zA-Z0-9_.]+)\s+does not exist/i);
+    if (match?.[1]) return match[1].split('.').pop();
+
+    return null;
+};
+
+const applyProfileUpdateWithColumnFallback = async (tableName, userId, rawUpdates = {}) => {
+    const updates = { ...rawUpdates };
+
+    while (Object.keys(updates).length > 0) {
+        const { error } = await supabase
+            .from(tableName)
+            .update(updates)
+            .eq('id', userId);
+
+        if (!error) {
+            return true;
+        }
+
+        const missingColumn = getMissingColumnFromError(error);
+        if (missingColumn && Object.prototype.hasOwnProperty.call(updates, missingColumn)) {
+            console.warn(`"${tableName}" is missing optional column "${missingColumn}". Retrying without it.`);
+            delete updates[missingColumn];
+            continue;
+        }
+
+        throw error;
+    }
+
+    return false;
+};
+
+const seedInitialProfileStats = async (tableName, userId, userType) => {
+    const timestamp = new Date().toISOString();
+    const baseUpdates = {
+        rating_count: 0,
+        updated_at: timestamp,
+    };
+
+    if (userType === 'driver') {
+        baseUpdates.badge_stats = { ...DEFAULT_DRIVER_BADGE_STATS };
+    }
+
+    await applyProfileUpdateWithColumnFallback(tableName, userId, baseUpdates);
+
+    if (userType !== 'driver') {
+        return;
+    }
+
+    const { data: profileRow } = await supabase
+        .from(tableName)
+        .select('metadata')
+        .eq('id', userId)
+        .maybeSingle();
+
+    const currentMetadata =
+        profileRow?.metadata && typeof profileRow.metadata === 'object' && !Array.isArray(profileRow.metadata)
+            ? profileRow.metadata
+            : {};
+    const currentBadgeStats =
+        currentMetadata.badge_stats &&
+        typeof currentMetadata.badge_stats === 'object' &&
+        !Array.isArray(currentMetadata.badge_stats)
+            ? currentMetadata.badge_stats
+            : {};
+    const metadataBadgeStats = {
+        ...DEFAULT_DRIVER_BADGE_STATS,
+        ...currentBadgeStats,
+    };
+
+    await applyProfileUpdateWithColumnFallback(tableName, userId, {
+        metadata: {
+            ...currentMetadata,
+            badge_stats: metadataBadgeStats,
+        },
+        updated_at: timestamp,
+    });
+};
 
 /**
  * Sign up new user
@@ -58,6 +150,11 @@ export const signup = async (email, password, type, additionalData = {}) => {
             console.warn(`⚠️ Error creating profile in ${tableName}:`, profileError);
         } else {
             console.log(`✅ Profile created in "${tableName}"`);
+            try {
+                await seedInitialProfileStats(tableName, authData.user.id, type);
+            } catch (seedError) {
+                console.warn('Could not seed initial profile stats:', seedError);
+            }
         }
 
         const fullUser = {
@@ -273,6 +370,12 @@ export const signInWithApple = async (userRole = 'customer') => {
 
         if (profileError) {
             console.error('Error updating profile for Apple User:', profileError);
+        } else if (!existingProfile) {
+            try {
+                await seedInitialProfileStats(targetTable, user.id, userRole);
+            } catch (seedError) {
+                console.warn('Could not seed initial profile stats for Apple user:', seedError);
+            }
         }
 
         const fullUser = { ...user, accessToken: session.access_token, ...profileUpdates, ...existingProfile };
@@ -379,6 +482,12 @@ const ensureOAuthRoleProfile = async (user, userRole) => {
 
     if (upsertError) {
         throw upsertError;
+    }
+
+    try {
+        await seedInitialProfileStats(targetTable, user.id, userRole);
+    } catch (seedError) {
+        console.warn('Could not seed initial profile stats for OAuth user:', seedError);
     }
 
     return newProfile;

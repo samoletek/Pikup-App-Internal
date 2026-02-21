@@ -7,6 +7,7 @@ const corsHeaders = {
 }
 
 type Role = 'customer' | 'driver'
+const DRIVER_BADGE_IDS = ['fast_loader', 'fragile_handler', 'friendly_service'] as const
 
 const normalizeRole = (value: unknown, fallback: Role): Role => {
   if (value === 'customer' || value === 'driver') return value
@@ -27,6 +28,24 @@ const toSafeBadges = (value: unknown): string[] => {
 const hasMissingColumnError = (error: unknown, columnName: string) => {
   const message = `${(error as { message?: string })?.message || ''} ${(error as { details?: string })?.details || ''}`.toLowerCase()
   return message.includes('column') && message.includes('does not exist') && message.includes(columnName.toLowerCase())
+}
+
+const toSafeBadgeStats = (value: unknown, includeDriverDefaults = false): Record<string, number> => {
+  const source =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+
+  const normalized: Record<string, number> = includeDriverDefaults
+    ? Object.fromEntries(DRIVER_BADGE_IDS.map((badgeId) => [badgeId, 0]))
+    : {}
+
+  for (const [badgeId, badgeCount] of Object.entries(source)) {
+    const parsedCount = Number(badgeCount)
+    normalized[badgeId] = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : 0
+  }
+
+  return normalized
 }
 
 serve(async (req) => {
@@ -194,15 +213,16 @@ serve(async (req) => {
       }
 
       if (targetProfile) {
-        const currentRating = Number(targetProfile?.rating) || 5
+        const parsedCurrentRating = Number(targetProfile?.rating)
+        const currentRating = Number.isFinite(parsedCurrentRating) ? parsedCurrentRating : 5
         const currentCount = Number(targetProfile?.rating_count) || 0
         const nextCount = currentCount + 1
         const nextAverage = Number((((currentRating * currentCount) + normalizedRating) / nextCount).toFixed(2))
 
-        const currentBadgeStats =
-          targetProfile?.badge_stats && typeof targetProfile.badge_stats === 'object'
-            ? { ...targetProfile.badge_stats }
-            : {}
+        const currentBadgeStats = toSafeBadgeStats(
+          targetProfile?.badge_stats,
+          targetRole === 'driver'
+        )
 
         for (const badgeId of badges) {
           currentBadgeStats[badgeId] = (Number(currentBadgeStats[badgeId]) || 0) + 1
@@ -221,9 +241,11 @@ serve(async (req) => {
           .eq('id', targetUserId)
 
         if (fullProfileUpdateError) {
+          const ratingCountColumnMissing = hasMissingColumnError(fullProfileUpdateError, 'rating_count')
+          const badgeStatsColumnMissing = hasMissingColumnError(fullProfileUpdateError, 'badge_stats')
           const canFallbackProfileUpdate =
-            hasMissingColumnError(fullProfileUpdateError, 'rating_count') ||
-            hasMissingColumnError(fullProfileUpdateError, 'badge_stats')
+            ratingCountColumnMissing ||
+            badgeStatsColumnMissing
 
           if (!canFallbackProfileUpdate) {
             throw fullProfileUpdateError
@@ -239,10 +261,10 @@ serve(async (req) => {
             updated_at: timestamp,
           }
 
-          if (!hasMissingColumnError(fullProfileUpdateError, 'rating_count')) {
+          if (!ratingCountColumnMissing) {
             fallbackProfileUpdatePayload.rating_count = nextCount
           }
-          if (!hasMissingColumnError(fullProfileUpdateError, 'badge_stats')) {
+          if (!badgeStatsColumnMissing) {
             fallbackProfileUpdatePayload.badge_stats = currentBadgeStats
           }
 
@@ -253,6 +275,27 @@ serve(async (req) => {
 
           if (fallbackProfileUpdateError) {
             throw fallbackProfileUpdateError
+          }
+
+          if (targetRole === 'driver' && badgeStatsColumnMissing) {
+            const currentMetadata =
+              targetProfile?.metadata && typeof targetProfile.metadata === 'object' && !Array.isArray(targetProfile.metadata)
+                ? { ...(targetProfile.metadata as Record<string, unknown>) }
+                : {}
+
+            currentMetadata.badge_stats = currentBadgeStats
+
+            const { error: metadataUpdateError } = await adminClient
+              .from(targetTable)
+              .update({
+                metadata: currentMetadata,
+                updated_at: timestamp,
+              })
+              .eq('id', targetUserId)
+
+            if (metadataUpdateError && !hasMissingColumnError(metadataUpdateError, 'metadata')) {
+              throw metadataUpdateError
+            }
           }
         }
 

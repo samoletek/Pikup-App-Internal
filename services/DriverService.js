@@ -2,6 +2,7 @@
 // Extracted from AuthContext.js - Driver profile, stats, and online/offline management
 
 import { supabase } from '../config/supabase';
+import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 import { getPlatformFees } from './PricingService';
@@ -9,6 +10,31 @@ import { getPlatformFees } from './PricingService';
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
 const NETWORK_TIMEOUT_MS = 8000;
+const DEFAULT_DRIVER_BADGE_STATS = Object.freeze(
+    DRIVER_RATING_BADGES.reduce((acc, badge) => {
+        acc[badge.id] = 0;
+        return acc;
+    }, {})
+);
+
+const normalizeDriverBadgeStats = (value) => {
+    const safeValue =
+        value && typeof value === 'object' && !Array.isArray(value)
+            ? value
+            : {};
+    const normalized = {
+        ...DEFAULT_DRIVER_BADGE_STATS,
+    };
+
+    Object.entries(safeValue).forEach(([badgeId, badgeCount]) => {
+        const parsedCount = Number(badgeCount);
+        normalized[badgeId] = Number.isFinite(parsedCount) && parsedCount >= 0
+            ? parsedCount
+            : 0;
+    });
+
+    return normalized;
+};
 
 const authFetchWithTimeout = async (authFetch, url, options = {}, timeoutMs = NETWORK_TIMEOUT_MS) => {
     const controller = new AbortController();
@@ -207,7 +233,20 @@ export const getDriverStats = async (driverId) => {
     try {
         console.log('Getting driver stats for:', driverId);
 
-        const trips = await getDriverTrips(driverId);
+        const completedTrips = await getDriverTrips(driverId);
+        let totalAssignedTrips = completedTrips.length;
+
+        try {
+            const { data: assignedTrips, error: assignedTripsError } = await supabase
+                .from('trips')
+                .select('id')
+                .eq('driver_id', driverId);
+
+            if (assignedTripsError) throw assignedTripsError;
+            totalAssignedTrips = Array.isArray(assignedTrips) ? assignedTrips.length : 0;
+        } catch (assignedTripsError) {
+            console.warn('Could not load assigned trips for acceptance rate, falling back to completed trips:', assignedTripsError);
+        }
 
         // Calculate current week (Monday to Sunday)
         const now = new Date();
@@ -218,7 +257,7 @@ export const getDriverStats = async (driverId) => {
         mondayDate.setHours(0, 0, 0, 0);
 
         // Filter this week's trips
-        const thisWeekTrips = trips.filter(trip => {
+        const thisWeekTrips = completedTrips.filter(trip => {
             const tripDate = new Date(trip.created_at);
             return tripDate >= mondayDate;
         });
@@ -227,8 +266,11 @@ export const getDriverStats = async (driverId) => {
         const currentWeekTrips = thisWeekTrips.length;
         const weeklyEarnings = thisWeekTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
 
-        const totalTrips = trips.length;
-        const totalEarnings = trips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+        const totalTrips = completedTrips.length;
+        const totalEarnings = completedTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+        const acceptanceRate = totalAssignedTrips > 0
+            ? Math.round((totalTrips / totalAssignedTrips) * 100)
+            : 0;
 
         // Get driver profile data
         let driverProfile = {};
@@ -241,15 +283,20 @@ export const getDriverStats = async (driverId) => {
             console.log('No driver profile found, using defaults');
         }
 
+        const parsedRatingCount = Number(driverProfile.rating_count);
+        const ratingCount = Number.isFinite(parsedRatingCount) ? parsedRatingCount : 0;
+        const parsedRating = Number(driverProfile.rating);
+        const rating = ratingCount > 0 && Number.isFinite(parsedRating) ? parsedRating : 0;
+
         const stats = {
             currentWeekTrips,
             weeklyEarnings,
             totalTrips,
             totalEarnings,
             availableBalance: driverProfile.availableBalance || totalEarnings,
-            rating: driverProfile.rating || 4.9,
-            acceptanceRate: driverProfile.acceptanceRate || 98,
-            lastTripCompletedAt: trips.length > 0 ? trips[0].created_at : null
+            rating,
+            acceptanceRate,
+            lastTripCompletedAt: completedTrips.length > 0 ? completedTrips[0].created_at : null
         };
 
         console.log('Driver stats calculated:', stats);
@@ -263,8 +310,8 @@ export const getDriverStats = async (driverId) => {
             totalTrips: 0,
             totalEarnings: 0,
             availableBalance: 0,
-            rating: 4.9,
-            acceptanceRate: 98,
+            rating: 0,
+            acceptanceRate: 0,
             lastTripCompletedAt: null
         };
     }
@@ -350,16 +397,26 @@ export const getDriverProfile = async (driverId) => {
         const documentsVerified =
             metadata?.documentsVerified ??
             false;
+        const badgeStats = normalizeDriverBadgeStats(
+            data?.badge_stats || metadata?.badge_stats
+        );
+        const ratingCount = Number.isFinite(Number(data?.rating_count))
+            ? Number(data.rating_count)
+            : 0;
 
         return {
             ...data,
             metadata,
+            badge_stats: badgeStats,
+            rating_count: ratingCount,
             onboardingComplete,
             canReceivePayments,
             connectAccountId,
             documentsVerified,
             driverProfile: {
                 ...metadata,
+                badge_stats: badgeStats,
+                rating_count: ratingCount,
                 onboardingComplete,
                 canReceivePayments,
                 connectAccountId,

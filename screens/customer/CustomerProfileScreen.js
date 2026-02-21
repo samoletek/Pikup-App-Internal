@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,7 +20,6 @@ import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
-import { CUSTOMER_RATING_BADGES } from "../../constants/ratingBadges";
 import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
 import {
   borderRadius,
@@ -55,7 +54,7 @@ export default function CustomerProfileScreen({ navigation }) {
   const [accountStats, setAccountStats] = useState({
     totalTrips: 0,
     totalSpent: 0,
-    avgRating: 5,
+    avgRating: 0,
   });
   const [memberSince, setMemberSince] = useState("New on Pikup");
   const [downloadingData, setDownloadingData] = useState(false);
@@ -112,12 +111,20 @@ export default function CustomerProfileScreen({ navigation }) {
         const amount = Number(trip.pricing?.total ?? trip.price ?? 0) || 0;
         return sum + amount;
       }, 0);
+      const ratingCount = Number(
+        customerProfile?.rating_count ||
+          customerProfile?.customerProfile?.rating_count ||
+          0
+      );
+      const rawRating = Number(
+        customerProfile?.rating ||
+          customerProfile?.customerProfile?.rating ||
+          0
+      );
       const rating =
-        Number(
-          customerProfile?.rating ||
-            customerProfile?.customerProfile?.rating ||
-            5
-        ) || 5;
+        ratingCount > 0 && Number.isFinite(rawRating)
+          ? rawRating
+          : 0;
 
       setAccountStats({
         totalTrips: completedTrips.length,
@@ -317,17 +324,17 @@ export default function CustomerProfileScreen({ navigation }) {
     .toUpperCase();
 
   const totalTrips = String(accountStats.totalTrips || 0);
-  const ratingValue = (accountStats.avgRating || 5).toFixed(1);
-  const topCustomerBadges = useMemo(() => {
-    const badgeStats = customerProfile?.badge_stats || {};
-    return CUSTOMER_RATING_BADGES.map((badge) => ({
-      ...badge,
-      count: Number(badgeStats?.[badge.id] || 0),
-    }))
-      .filter((badge) => badge.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 3);
-  }, [customerProfile]);
+  const reviewsCount = String(
+    Number(
+      customerProfile?.rating_count ||
+        customerProfile?.customerProfile?.rating_count ||
+        0
+    ) || 0
+  );
+  const ratingValue =
+    Number(accountStats.avgRating) > 0
+      ? Number(accountStats.avgRating).toFixed(1)
+      : "0";
 
   /* ── Scroll snap (same pattern as Activity/Messages) ── */
   const titleLockCompensation = scrollY.interpolate({
@@ -457,7 +464,7 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
             <View style={styles.statDividerVertical} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{totalTrips}</Text>
+              <Text style={styles.statNumber}>{reviewsCount}</Text>
               <Text style={styles.statLabel}>REVIEWS</Text>
             </View>
             <View style={styles.statDividerVertical} />
@@ -467,22 +474,6 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
           </View>
 
-          {topCustomerBadges.length > 0 && (
-            <View style={styles.badgesSummary}>
-              <Text style={styles.badgesSummaryTitle}>Top feedback badges</Text>
-              <View style={styles.badgesSummaryRow}>
-                {topCustomerBadges.map((badge) => (
-                  <View key={badge.id} style={styles.badgeChip}>
-                    <Ionicons name={badge.icon} size={14} color={badge.activeColor} />
-                    <Text style={styles.badgeChipText}>{badge.label}</Text>
-                    <View style={styles.badgeChipCount}>
-                      <Text style={styles.badgeChipCountText}>{badge.count}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
         </View>
 
         {/* Quick Actions */}
@@ -845,53 +836,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border.strong,
     marginVertical: spacing.sm,
   },
-  badgesSummary: {
-    marginTop: spacing.base,
-  },
-  badgesSummaryTitle: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    marginBottom: spacing.sm,
-  },
-  badgesSummaryRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
-  badgeChip: {
-    flex: 1,
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.sm,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.xs,
-  },
-  badgeChipText: {
-    flex: 1,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.xs + 1,
-    fontWeight: typography.fontWeight.medium,
-  },
-  badgeChipCount: {
-    minWidth: 22,
-    height: 22,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.background.secondary,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeChipCountText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.xs,
-    fontWeight: typography.fontWeight.semibold,
-  },
-
   /* Quick Actions */
   quickActions: {
     flexDirection: "row",
