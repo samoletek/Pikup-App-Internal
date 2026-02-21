@@ -8,7 +8,8 @@
       "env": {
         "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
         "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN",
-        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_FILE"
+        "GOOGLE_SERVICES_JSON": "$GOOGLE_SERVICES_FILE",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "$EXPO_PUBLIC_GEMINI_API_KEY"
       },
       "developmentClient": true,
       "distribution": "internal",
@@ -22,7 +23,8 @@
     "preview": {
       "env": {
         "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
-        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "$EXPO_PUBLIC_GEMINI_API_KEY"
       },
       "developmentClient": false,
       "distribution": "internal",
@@ -33,7 +35,8 @@
     "production": {
       "env": {
         "EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN": "$EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN",
-        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN"
+        "MAPBOX_DOWNLOAD_TOKEN": "$MAPBOX_DOWNLOAD_TOKEN",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "$EXPO_PUBLIC_GEMINI_API_KEY"
       },
       "developmentClient": false,
       "autoIncrement": true,
