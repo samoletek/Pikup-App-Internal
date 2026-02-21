@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useFocusEffect } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
@@ -19,24 +20,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import {
+  ACTIVE_TRIP_STATUSES,
+  DROPOFF_PHASE_STATUSES,
+  normalizeTripStatus,
+} from '../../constants/tripStatus';
+import {
   borderRadius,
   colors,
-  layout,
   shadows,
   spacing,
   typography,
 } from '../../styles/theme';
 
 const TIMER_SECONDS = 180;
+const ACTIVE_TRIP_STATUS_LABELS = Object.freeze({
+  accepted: 'Driver confirmed',
+  inProgress: 'On the way to pickup',
+  arrivedAtPickup: 'Arrived at pickup',
+  pickedUp: 'Package collected',
+  enRouteToDropoff: 'On the way to destination',
+  arrivedAtDropoff: 'Arrived at destination',
+});
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const { width } = useWindowDimensions();
-  const panelMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const {
     userType,
     currentUser,
+    getUserPickupRequests,
     getAvailableRequests,
     acceptRequest,
     checkExpiredRequests,
@@ -46,6 +58,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverHeartbeat,
     refreshProfile
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
   const [region, setRegion] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
@@ -75,6 +88,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [requestTimeRemaining, setRequestTimeRemaining] = useState(0);
   const requestTimerRef = useRef(null);
   const handleDeclineRef = useRef(null);
+  const isAcceptingRequestRef = useRef(false);
   const miniBarPulse = useRef(new Animated.Value(0)).current;
   const onlineDriverPulse = useRef(new Animated.Value(0)).current;
 
@@ -85,6 +99,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [acceptedRequestId, setAcceptedRequestId] = useState(null);
+  const [isRestoringActiveTrip, setIsRestoringActiveTrip] = useState(true);
+  const restoreInFlightRef = useRef(false);
 
   // Driver session tracking
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -146,6 +162,126 @@ export default function DriverHomeScreen({ navigation, route }) {
     outputRange: [0.45, 0.05],
   });
 
+  const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
+  const activeJobStatus = normalizeTripStatus(activeJob?.status);
+  const activeJobStatusLabel = ACTIVE_TRIP_STATUS_LABELS[activeJobStatus] || 'Active order';
+  const activeJobDestinationAddress = useMemo(() => {
+    if (!activeJob) {
+      return '';
+    }
+
+    if (DROPOFF_PHASE_STATUSES.includes(activeJobStatus)) {
+      return activeJob.dropoffAddress || activeJob?.dropoff?.address || 'Drop-off location';
+    }
+
+    return activeJob.pickupAddress || activeJob?.pickup?.address || 'Pickup location';
+  }, [activeJob, activeJobStatus]);
+
+  const activeJobSecondaryLabel = useMemo(() => {
+    const primaryItem = activeJob?.item || activeJob?.items?.[0];
+    if (primaryItem?.name) {
+      return primaryItem.name;
+    }
+
+    if (activeJob?.vehicleType) {
+      return activeJob.vehicleType;
+    }
+
+    return null;
+  }, [activeJob]);
+
+  const openActiveTrip = useCallback((trip) => {
+    if (!trip?.id) {
+      return;
+    }
+
+    const normalizedStatus = normalizeTripStatus(trip.status);
+
+    if (DROPOFF_PHASE_STATUSES.includes(normalizedStatus)) {
+      navigation.navigate('DeliveryNavigationScreen', {
+        request: trip,
+        driverLocation: trip?.driverLocation || driverLocation || null,
+      });
+      return;
+    }
+
+    navigation.navigate('GpsNavigationScreen', {
+      request: trip,
+      stage: 'pickup',
+    });
+  }, [driverLocation, navigation]);
+
+  const restoreActiveTrip = useCallback(async ({ initialLoad = false } = {}) => {
+    if (!currentUserId || userType !== 'driver' || typeof getUserPickupRequests !== 'function') {
+      if (initialLoad) {
+        setIsRestoringActiveTrip(false);
+      }
+      return null;
+    }
+
+    if (restoreInFlightRef.current) {
+      return null;
+    }
+
+    restoreInFlightRef.current = true;
+    if (initialLoad) {
+      setIsRestoringActiveTrip(true);
+    }
+
+    try {
+      const requests = await getUserPickupRequests();
+      if (!Array.isArray(requests)) {
+        setAcceptedRequestId(null);
+        setActiveJob(null);
+        return null;
+      }
+
+      const activeTrip = requests
+        .filter((trip) => {
+          if (!trip?.id) return false;
+
+          const normalizedStatus = normalizeTripStatus(trip.status);
+          if (!ACTIVE_TRIP_STATUSES.includes(normalizedStatus)) {
+            return false;
+          }
+
+          const assignedDriverId = trip.driverId || trip.driver_id || trip.assignedDriverId || trip.assigned_driver_id;
+          return assignedDriverId === currentUserId;
+        })
+        .sort((a, b) => {
+          const aTime = new Date(a?.updatedAt || a?.updated_at || a?.createdAt || a?.created_at || 0).getTime();
+          const bTime = new Date(b?.updatedAt || b?.updated_at || b?.createdAt || b?.created_at || 0).getTime();
+          return bTime - aTime;
+        })[0] || null;
+
+      if (!activeTrip) {
+        setAcceptedRequestId(null);
+        setActiveJob(null);
+        return null;
+      }
+
+      setAcceptedRequestId(activeTrip.id);
+      setActiveJob(activeTrip);
+      setIncomingRequest(null);
+      setShowIncomingModal(false);
+      setIsMinimized(false);
+      setIncomingRoute(null);
+      setIncomingMarkers(null);
+      setAvailableRequests((prev) => prev.filter((request) => request.id !== activeTrip.id));
+      setIsOnline(true);
+
+      return activeTrip;
+    } catch (restoreError) {
+      console.error('Error restoring active trip:', restoreError);
+      return null;
+    } finally {
+      restoreInFlightRef.current = false;
+      if (initialLoad) {
+        setIsRestoringActiveTrip(false);
+      }
+    }
+  }, [currentUserId, getUserPickupRequests, userType]);
+
   // Monitor order status for accepted requests
   useOrderStatusMonitor(acceptedRequestId, navigation, {
     currentScreen: 'DriverHomeScreen',
@@ -153,10 +289,28 @@ export default function DriverHomeScreen({ navigation, route }) {
     onCancel: () => {
       // Reset state when order is cancelled
       setAcceptedRequestId(null);
+      setActiveJob(null);
       // Reload requests to refresh the list
       loadRequests(false);
     }
   });
+
+  useEffect(() => {
+    if (!currentUserId || userType !== 'driver') {
+      setAcceptedRequestId(null);
+      setActiveJob(null);
+      setIsRestoringActiveTrip(false);
+      return;
+    }
+
+    restoreActiveTrip({ initialLoad: true });
+  }, [currentUserId, restoreActiveTrip, userType]);
+
+  useFocusEffect(
+    useCallback(() => {
+      restoreActiveTrip({ initialLoad: false });
+    }, [restoreActiveTrip])
+  );
 
   useEffect(() => {
     initializeLocation();
@@ -211,16 +365,20 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Start real-time location tracking and auto-refresh
   useEffect(() => {
-    if (isOnline && !locationSubscription.current) {
+    if (hasActiveTrip) {
+      clearAutoRefresh();
+    }
+
+    if (isOnline && !hasActiveTrip && !locationSubscription.current) {
       startLocationTracking();
       startAutoRefresh(); // Start auto-refresh when going online
       // Load initial requests
       loadRequests();
-    } else if (!isOnline && locationSubscription.current) {
+    } else if ((!isOnline || hasActiveTrip) && locationSubscription.current) {
       stopLocationTracking();
       clearAutoRefresh(); // Stop auto-refresh when going offline
     }
-  }, [isOnline]);
+  }, [hasActiveTrip, isOnline]);
 
   // Auto-refresh functions
   const startAutoRefresh = () => {
@@ -228,7 +386,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
     // Background refresh to update request count every 30 seconds
     backgroundRefreshInterval.current = setInterval(async () => {
-      if (isOnline) {
+      if (isOnline && !hasActiveTrip) {
         console.log('Background refresh of requests...');
 
         // Check for expired requests first
@@ -255,6 +413,11 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const loadRequests = async (showLoading = true) => {
+    if (hasActiveTrip) {
+      setAvailableRequests([]);
+      return;
+    }
+
     if (showLoading) setLoading(true);
     setError(null);
 
@@ -399,6 +562,11 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const handleGoOnline = () => {
+    if (hasActiveTrip && activeJob) {
+      openActiveTrip(activeJob);
+      return;
+    }
+
     if (isOnline) return;
 
     Alert.alert(
@@ -413,7 +581,6 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const confirmGoOnline = async (mode) => {
-    const currentUserId = currentUser?.uid || currentUser?.id;
     if (isOnline || !currentUserId) return;
 
     try {
@@ -500,6 +667,13 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const handleGoOffline = () => {
     if (!isOnline) return;
+    if (hasActiveTrip) {
+      Alert.alert(
+        'Active order in progress',
+        'Complete or cancel the current order before going offline.'
+      );
+      return;
+    }
 
     Alert.alert(
       'Go Offline?',
@@ -543,13 +717,20 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const handleAcceptRequest = async (request) => {
+    if (isAcceptingRequestRef.current || !request?.id) {
+      return;
+    }
+
     try {
+      isAcceptingRequestRef.current = true;
       console.log('Accepting request:', request.id);
       // Accept the request
       await acceptRequest(request.id);
 
       // Start monitoring the accepted request
       setAcceptedRequestId(request.id);
+      setActiveJob(request);
+      setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
 
       // Close modal and navigate to GPS navigation
       setShowRequestModal(false);
@@ -558,6 +739,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     } catch (error) {
       console.error('Error accepting request:', error);
       alert('Could not accept request. Please try again.');
+    } finally {
+      isAcceptingRequestRef.current = false;
     }
   };
 
@@ -675,11 +858,18 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Incoming request handlers
   const handleIncomingRequestAccept = async (request) => {
+    if (isAcceptingRequestRef.current || !request?.id) {
+      return;
+    }
+
     try {
+      isAcceptingRequestRef.current = true;
       console.log('Accepting incoming request:', request.id);
       await acceptRequest(request.id);
 
       setAcceptedRequestId(request.id);
+      setActiveJob(request);
+      setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
       setShowIncomingModal(false);
       setIsMinimized(false);
       setIncomingRequest(null);
@@ -689,6 +879,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     } catch (error) {
       console.error('Error accepting incoming request:', error);
       alert('Could not accept request. Please try again.');
+    } finally {
+      isAcceptingRequestRef.current = false;
     }
   };
 
@@ -746,7 +938,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Auto-show incoming request when new requests are available (like Uber)
   useEffect(() => {
-    if (isOnline && availableRequests.length > 0 && !showIncomingModal && !incomingRequest && !isMinimized) {
+    if (isOnline && !hasActiveTrip && availableRequests.length > 0 && !showIncomingModal && !incomingRequest && !isMinimized) {
       // Small delay to make it feel more natural
       const timer = setTimeout(() => {
         const firstRequest = availableRequests[0];
@@ -761,7 +953,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       return () => clearTimeout(timer);
     }
-  }, [availableRequests, isOnline, showIncomingModal, incomingRequest, isMinimized]);
+  }, [availableRequests, hasActiveTrip, incomingRequest, isMinimized, isOnline, showIncomingModal]);
 
   const renderModal = () => {
     switch (currentModal) {
@@ -842,7 +1034,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           )}
 
           {/* Show available pickup request markers (hide when incoming is active) */}
-          {isOnline && !showIncomingModal && !isMinimized && availableRequests.map((request) => {
+          {isOnline && !hasActiveTrip && !showIncomingModal && !isMinimized && availableRequests.map((request) => {
             // Skip if coordinates are invalid
             if (!request?.pickup?.coordinates?.longitude || !request?.pickup?.coordinates?.latitude) {
               return null;
@@ -957,7 +1149,42 @@ export default function DriverHomeScreen({ navigation, route }) {
           },
         ]}
       >
-        {isOnline ? (
+        {isRestoringActiveTrip ? (
+          <View style={styles.restoringTripContainer}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.restoringTripText}>Restoring active order...</Text>
+          </View>
+        ) : hasActiveTrip && activeJob ? (
+          <View style={styles.activeTripContainer}>
+            <View style={styles.activeTripHeader}>
+              <View style={styles.activeTripHeaderIcon}>
+                <Ionicons name="navigate" size={16} color={colors.white} />
+              </View>
+              <View style={styles.activeTripHeaderTextWrap}>
+                <Text style={styles.activeTripTitle}>Active Order</Text>
+                <Text style={styles.activeTripStatusText}>{activeJobStatusLabel}</Text>
+              </View>
+            </View>
+
+            <Text style={styles.activeTripAddress} numberOfLines={2}>
+              {activeJobDestinationAddress}
+            </Text>
+
+            {activeJobSecondaryLabel ? (
+              <Text style={styles.activeTripSecondaryLabel} numberOfLines={1}>
+                {activeJobSecondaryLabel}
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.activeTripButton}
+              onPress={() => openActiveTrip(activeJob)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.activeTripButtonText}>Resume trip</Text>
+            </TouchableOpacity>
+          </View>
+        ) : isOnline ? (
           <>
             <View style={styles.waitTimeContainer}>
               <Text style={styles.waitTimeText}>{waitTime} wait in your area</Text>
@@ -1103,7 +1330,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       />
 
       {/* Offline Dashboard Overlay */}
-      {!isOnline && (
+      {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && (
         <OfflineDashboard
           onGoOnline={handleGoOnline}
           navigation={navigation}
@@ -1163,6 +1390,75 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderTopWidth: 1,
     borderTopColor: colors.navigation.tabBarBorder,
+  },
+  restoringTripContainer: {
+    minHeight: 116,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restoringTripText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  activeTripContainer: {
+    backgroundColor: colors.background.panel,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
+    padding: spacing.base,
+  },
+  activeTripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  activeTripHeaderIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  activeTripHeaderTextWrap: {
+    flex: 1,
+  },
+  activeTripTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  activeTripStatusText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginTop: 2,
+  },
+  activeTripAddress: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    lineHeight: 20,
+    marginBottom: spacing.xs,
+  },
+  activeTripSecondaryLabel: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.base,
+  },
+  activeTripButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeTripButtonText: {
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    letterSpacing: 0.3,
   },
   waitTimeContainer: {
     marginBottom: spacing.base,

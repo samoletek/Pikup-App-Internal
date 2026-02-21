@@ -131,6 +131,7 @@ export const createAuthActions = ({
   const updateUserRating = (userId, newRating, profileType) =>
     ProfileService.updateUserRating(userId, newRating, profileType);
   const saveFeedback = (feedbackData) => ProfileService.saveFeedback(feedbackData, currentUser);
+  const submitTripRating = (ratingData) => ProfileService.submitTripRating(ratingData, currentUser);
   const getDriverFeedback = ProfileService.getDriverFeedback;
 
   const createPickupRequest = (requestData) => TripService.createPickupRequest(requestData, currentUser);
@@ -226,6 +227,7 @@ export const createAuthActions = ({
   const sendMessage = MessagingService.sendMessage;
   const getMessages = MessagingService.getMessages;
   const subscribeToMessages = MessagingService.subscribeToMessages;
+  const subscribeToConversations = MessagingService.subscribeToConversations;
   const markMessageAsRead = MessagingService.markMessageAsRead;
 
   const getLegalConfig = TermsService.getLegalConfig;
@@ -278,6 +280,7 @@ export const createAuthActions = ({
     getUserProfile,
     updateUserRating,
     saveFeedback,
+    submitTripRating,
     getDriverFeedback,
     getDriverTrips,
     getDriverStats,
@@ -305,6 +308,7 @@ export const createAuthActions = ({
     sendMessage,
     getMessages,
     subscribeToMessages,
+    subscribeToConversations,
     markMessageAsRead,
     getLegalConfig,
     checkTermsAcceptance,

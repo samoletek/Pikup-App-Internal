@@ -155,7 +155,13 @@ const ARCHIVE_STATUSES = new Set([
 export default function CustomerMessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { currentUser, getConversations, getUserProfile } = useAuth();
+  const {
+    currentUser,
+    getConversations,
+    getUserProfile,
+    subscribeToConversations,
+    markMessageAsRead,
+  } = useAuth();
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const isSnappingRef = useRef(false);
@@ -168,6 +174,35 @@ export default function CustomerMessagesScreen({ navigation }) {
   useEffect(() => {
     loadConversations();
   }, [currentUser]);
+
+  useEffect(() => {
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    if (!currentUserId || !subscribeToConversations) {
+      return undefined;
+    }
+
+    const unsubscribe = subscribeToConversations(
+      currentUserId,
+      "customer",
+      (userConversations) => {
+        const validConversations = (Array.isArray(userConversations) ? userConversations : []).filter(
+          (conversation) =>
+            conversation.customerId &&
+            conversation.driverId &&
+            (conversation.requestId ||
+              conversation.driverId === "support" ||
+              conversation.driverId === "ffffffff-ffff-ffff-ffff-ffffffffffff") &&
+            conversation.driverId !== conversation.customerId
+        );
+        setConversations(validConversations);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, [currentUser?.uid, currentUser?.id, subscribeToConversations]);
 
   useEffect(() => {
     loadPeerProfiles();
@@ -402,7 +437,7 @@ export default function CustomerMessagesScreen({ navigation }) {
     const driverName = getDisplayNameFromProfile(profile, fallbackName);
     const avatarUrl = getAvatarUrlFromProfile(profile);
     const avatarInitial = getAvatarInitial(driverName);
-    const isUnread = (conversation.unreadByCustomer || 0) > 0;
+    const isUnread = Number(conversation.unreadByCustomer || 0) > 0;
     const isArchived = isArchivedConversation(conversation);
     const metaIconName = isArchived ? "archive-outline" : "car-outline";
     const metaColor = isArchived ? colors.text.tertiary : colors.primary;
@@ -413,14 +448,22 @@ export default function CustomerMessagesScreen({ navigation }) {
       <TouchableOpacity
         key={conversation.id}
         style={styles.messageItem}
-        onPress={() =>
+        onPress={() => {
+          setConversations((prevConversations) =>
+            prevConversations.map((item) =>
+              item.id === conversation.id
+                ? { ...item, unreadByCustomer: 0 }
+                : item
+            )
+          );
+          markMessageAsRead?.(conversation.id, "customer");
           navigation.navigate("MessageScreen", {
             conversationId: conversation.id,
             driverId: conversation.driverId,
             driverName,
             requestId: conversation.requestId,
-          })
-        }
+          });
+        }}
       >
         <View style={styles.avatarContainer}>
           {avatarUrl ? (
@@ -795,10 +838,11 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   unreadDot: {
-    width: 8,
-    height: 8,
+    width: 9,
+    height: 9,
     borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.warning,
+    alignSelf: "center",
     marginLeft: spacing.sm,
   },
   emptyState: {
