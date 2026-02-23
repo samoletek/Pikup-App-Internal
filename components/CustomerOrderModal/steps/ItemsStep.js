@@ -10,7 +10,7 @@ const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).su
 import * as ImagePicker from 'expo-image-picker';
 import { analyzeImages } from '../../../services/AIService';
 
-const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId }) => {
+const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId, itemErrors, setItemErrors }) => {
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
 
     const handleAddWithAI = async () => {
@@ -190,7 +190,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
             description: '',
             photos: [],
             isFragile: false,
-            condition: 'used',
+            condition: '',
             hasInsurance: false,
             value: '',
             invoicePhoto: null,
@@ -205,6 +205,13 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
             ...prev,
             items: prev.items.map(item => item.id === updatedItem.id ? updatedItem : item)
         }));
+        if (itemErrors?.[updatedItem.id]) {
+            setItemErrors?.(prev => {
+                const next = { ...prev };
+                delete next[updatedItem.id];
+                return next;
+            });
+        }
     };
 
     const handleDeleteItem = (itemId) => {
@@ -278,13 +285,14 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
                         onToggleExpand={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
                         onUpdate={handleUpdateItem}
                         onDelete={() => handleDeleteItem(item.id)}
+                        errors={itemErrors?.[item.id]}
                     />
                 ))
             )}
 
             <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
                 <Ionicons name="add-circle" size={24} color={colors.primary} />
-                <Text style={styles.addItemBtnText}>Add Item Manually</Text>
+                <Text style={styles.addItemBtnText}>Add Another Item</Text>
             </TouchableOpacity>
 
             <View style={styles.itemsBottomSpacer} />

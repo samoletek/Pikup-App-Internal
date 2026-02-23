@@ -127,6 +127,7 @@ export const typography = {
 // SPACING
 // ============================================
 export const spacing = {
+    xxs: 2,
     xs: 4,
     sm: 8,
     md: 12,
@@ -141,6 +142,7 @@ export const spacing = {
 // SIZING
 // ============================================
 export const sizing = {
+    touchTargetMin: 44,
     avatarLg: 80,
     avatarInitialsFontSize: 32,
     verificationBadgeSize: 22,
@@ -302,6 +304,16 @@ export const zIndex = {
     modal: 998,
     overlay: 999,
     toast: 1000,
+};
+
+// ============================================
+// HIT SLOP (touch target expansion)
+// ============================================
+export const hitSlopDefault = {
+    top: spacing.md,
+    bottom: spacing.md,
+    left: spacing.md,
+    right: spacing.md,
 };
 
 // Default export for convenience

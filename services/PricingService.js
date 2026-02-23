@@ -146,8 +146,8 @@ export const estimateLaborMinutes = (laborOptions = {}) => {
     // Stairs penalty per location
     const stairsPenalty = (details) => {
         if (details.hasElevator || details.hasElevator === null) return 0;
-        const floor = parseInt(details.floor, 10) || 0;
-        return floor > 1 ? (floor - 1) * STAIRS_PER_FLOOR : 0;
+        const flights = parseInt(details.numberOfStairs, 10) || 0;
+        return flights > 0 ? flights * STAIRS_PER_FLOOR : 0;
     };
 
     const pickupMinutes = needsPickupLabor ? itemMinutes + stairsPenalty(pickupDetails) : 0;
@@ -184,7 +184,8 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const labor = options.laborOptions
         ? estimateLaborMinutes(options.laborOptions)
         : { totalMinutes: 0, pickupMinutes: 0, dropoffMinutes: 0, bufferMinutes: 0 };
-    const laborFee = labor.totalMinutes * vehicleRate.laborPerMin;
+    const billableMinutes = Math.max(0, labor.totalMinutes - labor.bufferMinutes);
+    const laborFee = billableMinutes * vehicleRate.laborPerMin;
 
     // Gross fare (base + mileage + labor)
     const baseFare = vehicleRate.baseFare;
@@ -234,6 +235,7 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         mileageFee: round2(mileageFee),
         laborFee: round2(laborFee),
         laborMinutes: labor.totalMinutes,
+        laborBillableMinutes: billableMinutes,
         laborPickupMinutes: labor.pickupMinutes,
         laborDropoffMinutes: labor.dropoffMinutes,
         laborBufferMinutes: labor.bufferMinutes,
