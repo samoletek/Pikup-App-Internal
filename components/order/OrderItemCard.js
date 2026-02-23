@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+import { colors, borderRadius, spacing, typography, hitSlopDefault } from '../../styles/theme';
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -27,7 +27,8 @@ const OrderItemCard = ({
     isExpanded,
     onToggleExpand,
     onUpdate,
-    onDelete
+    onDelete,
+    errors,
 }) => {
     const [isUploading, setIsUploading] = useState(false);
 
@@ -129,11 +130,20 @@ const OrderItemCard = ({
                         </View>
                     </View>
                 </View>
-                <Ionicons
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={24}
-                    color={colors.text.muted}
-                />
+                <View style={styles.cardHeaderActions}>
+                    <TouchableOpacity
+                        onPress={handleToggleExpand}
+                        hitSlop={hitSlopDefault}
+                    >
+                        <Ionicons name="create-outline" size={20} color={colors.text.muted} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
+                        hitSlop={hitSlopDefault}
+                    >
+                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                    </TouchableOpacity>
+                </View>
             </TouchableOpacity>
 
             {/* Expanded Content */}
@@ -221,8 +231,8 @@ const OrderItemCard = ({
 
                     {/* Condition Toggle (New / Used) */}
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Condition</Text>
-                        <View style={styles.conditionBtnGroup}>
+                        <Text style={styles.fieldLabel}>Condition *</Text>
+                        <View style={[styles.conditionBtnGroup, errors?.condition && styles.errorBorder]}>
                             <TouchableOpacity
                                 style={[styles.conditionBtn, item.condition === 'new' && styles.conditionBtnActive]}
                                 onPress={() => {
@@ -233,13 +243,13 @@ const OrderItemCard = ({
                                 <Text style={[styles.conditionBtnText, item.condition === 'new' && styles.conditionBtnTextActive]}>New</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.conditionBtn, (item.condition === 'used' || !item.condition) && styles.conditionBtnActive]} // Default visual to Used
+                                style={[styles.conditionBtn, item.condition === 'used' && styles.conditionBtnActive]}
                                 onPress={() => {
                                     // Used = Insurance OFF, Value cleared
                                     onUpdate({ ...item, condition: 'used', hasInsurance: false, value: '' });
                                 }}
                             >
-                                <Text style={[styles.conditionBtnText, (item.condition === 'used' || !item.condition) && styles.conditionBtnTextActive]}>Used</Text>
+                                <Text style={[styles.conditionBtnText, item.condition === 'used' && styles.conditionBtnTextActive]}>Used</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -247,9 +257,9 @@ const OrderItemCard = ({
                     {/* Value (only for New items) */}
                     {item.condition === 'new' && (
                         <View style={styles.field}>
-                            <Text style={styles.fieldLabel}>Item Value</Text>
+                            <Text style={styles.fieldLabel}>Item Value *</Text>
                             <TextInput
-                                style={styles.textInput}
+                                style={[styles.textInput, errors?.value && styles.errorBorder]}
                                 placeholder="Estimated value in dollars"
                                 placeholderTextColor={colors.text.placeholder}
                                 value={item.value}
@@ -279,22 +289,22 @@ const OrderItemCard = ({
                             style={[
                                 styles.toggleBtn,
                                 item.hasInsurance && styles.toggleBtnActive,
-                                (item.condition === 'used' || !item.condition) && styles.toggleBtnDisabled
+                                item.condition !== 'new' && styles.toggleBtnDisabled
                             ]}
                             onPress={() => {
-                                if (item.condition === 'used' || !item.condition) {
+                                if (item.condition !== 'new') {
                                     Alert.alert('Insurance Unavailable', 'Only new items with a valid invoice can be insured.');
                                     return;
                                 }
                                 onUpdate({ ...item, hasInsurance: !item.hasInsurance });
                             }}
-                            activeOpacity={(item.condition === 'used' || !item.condition) ? 1 : 0.7}
+                            activeOpacity={item.condition !== 'new' ? 1 : 0.7}
                         >
                             <Ionicons
                                 name={item.hasInsurance ? "shield-checkmark" : "shield-checkmark-outline"}
                                 size={20}
                                 color={
-                                    (item.condition === 'used' || !item.condition)
+                                    item.condition !== 'new'
                                         ? colors.border.light
                                         : (item.hasInsurance ? colors.text.primary : colors.text.muted)
                                 }
@@ -302,7 +312,7 @@ const OrderItemCard = ({
                             <Text style={[
                                 styles.toggleText,
                                 item.hasInsurance && styles.toggleTextActive,
-                                (item.condition === 'used' || !item.condition) && styles.toggleTextDisabled
+                                item.condition !== 'new' && styles.toggleTextDisabled
                             ]}>
                                 Insurance
                             </Text>
@@ -386,6 +396,11 @@ const styles = StyleSheet.create({
         backgroundColor: colors.border.default,
         alignItems: 'center',
         justifyContent: 'center'
+    },
+    cardHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
     },
     cardHeaderInfo: {
         marginLeft: spacing.md,
@@ -638,7 +653,11 @@ const styles = StyleSheet.create({
     },
     addActionText: {
         color: colors.text.primary,
-    }
+    },
+    errorBorder: {
+        borderWidth: 1,
+        borderColor: colors.error,
+    },
 });
 
 export default OrderItemCard;

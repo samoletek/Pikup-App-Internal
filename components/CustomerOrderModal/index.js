@@ -41,6 +41,7 @@ const createLocationDetailsDefaults = () => ({
     unitNumber: '',
     floor: '',
     hasElevator: null,
+    numberOfStairs: 1,
     driverHelpsLoading: false,
     driverHelpsUnloading: false,
     notes: '',
@@ -151,7 +152,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         scheduledDateTime: null,
         items: [],
         pickupDetails: createLocationDetailsDefaults(),
-        dropoffDetails: createLocationDetailsDefaults(),
+        dropoffDetails: { ...createLocationDetailsDefaults(), locationType: 'apartment' },
         selectedVehicle: null,
         selectedPaymentMethodId: null,
         distance: null,
@@ -165,6 +166,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
 
     // Step 2 specific state
     const [expandedItemId, setExpandedItemId] = useState(null);
+    const [itemErrors, setItemErrors] = useState({});
 
     // Pricing preview for ReviewStep (step 6)
     const [previewPricing, setPreviewPricing] = useState(null);
@@ -187,7 +189,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             scheduledDateTime: null,
             items: [],
             pickupDetails: createLocationDetailsDefaults(),
-            dropoffDetails: createLocationDetailsDefaults(),
+            dropoffDetails: { ...createLocationDetailsDefaults(), locationType: 'apartment' },
             selectedVehicle: null,
             selectedPaymentMethodId: null,
             distance: null,
@@ -196,6 +198,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             aiVehicleRecommendation: createAiVehicleRecommendationDefaults(),
         });
         setExpandedItemId(null);
+        setItemErrors({});
         setPreviewPricing(null);
         setIsSubmitting(false);
     };
@@ -356,6 +359,12 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             if (!trimValue(locationDetails.storeName)) {
                 return `Please enter the store or business name for ${label}.`;
             }
+            if (!trimValue(locationDetails.buildingName)) {
+                return `Please enter the building name/number for ${label}.`;
+            }
+            if (!trimValue(locationDetails.unitNumber)) {
+                return `Please enter the unit/suite number for ${label}.`;
+            }
             return null;
         }
 
@@ -408,22 +417,47 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     return false;
                 }
                 return true;
-            case 2:
+            case 2: {
                 if (orderData.items.length === 0) {
                     Alert.alert('Missing Info', 'Please add at least one item.');
                     return false;
                 }
-                const invalidItem = orderData.items.find(item => !item.name.trim());
-                if (invalidItem) {
-                    Alert.alert('Missing Info', 'Please enter a name for all items.');
+                const errors = {};
+                let firstErrorItemId = null;
+
+                orderData.items.forEach(item => {
+                    const itemErr = {};
+                    if (!item.name.trim()) itemErr.name = true;
+                    if (!item.condition) itemErr.condition = true;
+                    if (item.condition === 'new' && !item.value) itemErr.value = true;
+                    if (item.hasInsurance && !item.invoicePhoto) itemErr.invoice = true;
+
+                    if (Object.keys(itemErr).length > 0) {
+                        errors[item.id] = itemErr;
+                        if (!firstErrorItemId) firstErrorItemId = item.id;
+                    }
+                });
+
+                if (Object.keys(errors).length > 0) {
+                    setItemErrors(errors);
+                    setExpandedItemId(firstErrorItemId);
+
+                    const firstErr = errors[firstErrorItemId];
+                    if (firstErr.name) {
+                        Alert.alert('Missing Info', 'Please enter a name for all items.');
+                    } else if (firstErr.condition) {
+                        Alert.alert('Missing Info', 'Please select a condition (New or Used) for all items.');
+                    } else if (firstErr.value) {
+                        Alert.alert('Missing Info', 'Please enter a value for new items.');
+                    } else if (firstErr.invoice) {
+                        Alert.alert('Missing Invoice', 'Please upload an invoice for insured items to confirm they are new.');
+                    }
                     return false;
                 }
-                const insuranceNoInvoice = orderData.items.find(item => item.hasInsurance && !item.invoicePhoto);
-                if (insuranceNoInvoice) {
-                    Alert.alert('Missing Invoice', 'Please upload an invoice for insured items to confirm they are new.');
-                    return false;
-                }
+
+                setItemErrors({});
                 return true;
+            }
             case 3:
                 {
                     const pickupError = validateLocationDetails(orderData.pickupDetails, 'pickup');
@@ -655,6 +689,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         setOrderData={setOrderData}
                         expandedItemId={expandedItemId}
                         setExpandedItemId={setExpandedItemId}
+                        itemErrors={itemErrors}
+                        setItemErrors={setItemErrors}
                     />
                 );
             case 3:

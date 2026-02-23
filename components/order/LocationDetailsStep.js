@@ -8,7 +8,10 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borderRadius, spacing, typography } from '../../styles/theme';
+import { colors, borderRadius, spacing, typography, sizing, hitSlopDefault } from '../../styles/theme';
+
+const STEPPER_VALUE_MIN_WIDTH = 56;
+const STEPPER_INPUT_MIN_WIDTH = 48;
 
 const LOCATION_TYPES = [
     { id: 'store', label: 'Store' },
@@ -35,8 +38,7 @@ const LocationDetailsStep = ({
     const locationType = normalizeLocationType(details.locationType);
     const isStore = locationType === 'store';
     const isApartment = locationType === 'apartment';
-    const isResidentialOther = locationType === 'residential_other';
-    const hasResidentialFields = isApartment || isResidentialOther;
+    const hasResidentialFields = isApartment;
     const unitNumberValue = details.unitNumber ?? '';
     const helpRequested = details[helpKey] === true;
     const selfHandled = details[helpKey] === false;
@@ -49,8 +51,8 @@ const LocationDetailsStep = ({
         updateDetails({
             locationType: nextType,
             hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
-            unitNumber: (nextType === 'apartment' || nextType === 'residential_other') ? unitNumberValue : '',
-            floor: (nextType === 'apartment' || nextType === 'residential_other') ? (details.floor ?? '') : '',
+            unitNumber: nextType === 'apartment' ? unitNumberValue : '',
+            floor: nextType === 'apartment' ? (details.floor ?? '') : '',
         });
     };
 
@@ -110,6 +112,28 @@ const LocationDetailsStep = ({
                     </View>
 
                     <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Building Name/Number *</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="Enter building name or number"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={details.buildingName || ''}
+                            onChangeText={(text) => updateDetails({ buildingName: text })}
+                        />
+                    </View>
+
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Unit/Suite Number *</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder="e.g. Suite 200"
+                            placeholderTextColor={colors.text.placeholder}
+                            value={details.unitNumber || ''}
+                            onChangeText={(text) => updateDetails({ unitNumber: text })}
+                        />
+                    </View>
+
+                    <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Order Confirmation # (Optional)</Text>
                         <TextInput
                             style={styles.textInput}
@@ -125,9 +149,7 @@ const LocationDetailsStep = ({
             {hasResidentialFields && (
                 <>
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>
-                            {isApartment ? 'Building Name/Number *' : 'Building Name/Number'}
-                        </Text>
+                        <Text style={styles.fieldLabel}>Building Name/Number *</Text>
                         <TextInput
                             style={styles.textInput}
                             placeholder="Enter building name or number"
@@ -138,9 +160,7 @@ const LocationDetailsStep = ({
                     </View>
 
                     <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>
-                            {isApartment ? 'Unit & Floor *' : 'Unit & Floor'}
-                        </Text>
+                        <Text style={styles.fieldLabel}>Unit & Floor *</Text>
                         <TextInput
                             style={styles.textInput}
                             placeholder="e.g. Apt 4B, Floor 3"
@@ -188,6 +208,76 @@ const LocationDetailsStep = ({
                                         No
                                     </Text>
                                 </TouchableOpacity>
+                            </View>
+                        </View>
+                    )}
+
+                    {isApartment && details.hasElevator === false && (
+                        <View style={styles.field}>
+                            <Text style={styles.fieldLabel}>Number of Flights of Stairs</Text>
+                            <View style={styles.stepperRow}>
+                                <TouchableOpacity
+                                    style={[styles.stepperBtn, (details.numberOfStairs || 1) <= 1 && styles.stepperBtnDisabled]}
+                                    onPress={() => {
+                                        const current = details.numberOfStairs || 1;
+                                        if (current > 1) updateDetails({ numberOfStairs: current - 1 });
+                                    }}
+                                    hitSlop={hitSlopDefault}
+                                >
+                                    <Ionicons
+                                        name="remove"
+                                        size={22}
+                                        color={(details.numberOfStairs || 1) <= 1 ? colors.text.muted : colors.text.primary}
+                                    />
+                                </TouchableOpacity>
+
+                                <View style={styles.stepperValue}>
+                                    <TextInput
+                                        style={styles.stepperInput}
+                                        value={details.numberOfStairs === '' ? '' : String(details.numberOfStairs || 1)}
+                                        onChangeText={(text) => {
+                                            const clean = text.replace(/[^0-9]/g, '');
+                                            if (clean === '') {
+                                                updateDetails({ numberOfStairs: '' });
+                                            } else {
+                                                const num = parseInt(clean, 10);
+                                                if (num <= 50) {
+                                                    updateDetails({ numberOfStairs: num });
+                                                }
+                                            }
+                                        }}
+                                        onBlur={() => {
+                                            const val = parseInt(details.numberOfStairs, 10);
+                                            if (!val || val < 1) {
+                                                updateDetails({ numberOfStairs: 1 });
+                                            }
+                                        }}
+                                        keyboardType="number-pad"
+                                        maxLength={2}
+                                        selectTextOnFocus
+                                    />
+                                </View>
+
+                                <TouchableOpacity
+                                    style={[styles.stepperBtn, (details.numberOfStairs || 1) >= 50 && styles.stepperBtnDisabled]}
+                                    onPress={() => {
+                                        const current = details.numberOfStairs || 1;
+                                        if (current < 50) updateDetails({ numberOfStairs: current + 1 });
+                                    }}
+                                    hitSlop={hitSlopDefault}
+                                >
+                                    <Ionicons
+                                        name="add"
+                                        size={22}
+                                        color={(details.numberOfStairs || 1) >= 50 ? colors.text.muted : colors.text.primary}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.helpNote}>
+                                <Ionicons name="information-circle" size={16} color={colors.primary} />
+                                <Text style={styles.helpNoteText}>
+                                    This helps us estimate loading/unloading time accurately.
+                                </Text>
                             </View>
                         </View>
                     )}
@@ -387,6 +477,40 @@ locationTypeRow: {
     },
     toggleTextActive: {
         color: colors.white
+    },
+    stepperRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.lg,
+    },
+    stepperBtn: {
+        width: sizing.touchTargetMin,
+        height: sizing.touchTargetMin,
+        borderRadius: sizing.touchTargetMin / 2,
+        backgroundColor: colors.background.input,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepperBtnDisabled: {
+        opacity: 0.4,
+    },
+    stepperValue: {
+        minWidth: STEPPER_VALUE_MIN_WIDTH,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepperInput: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.xl,
+        fontWeight: typography.fontWeight.bold,
+        textAlign: 'center',
+        minWidth: STEPPER_INPUT_MIN_WIDTH,
+        paddingVertical: spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border.default,
     },
     helpNote: {
         flexDirection: 'row',

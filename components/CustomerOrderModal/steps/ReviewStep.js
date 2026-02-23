@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Modal } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles';
-import { colors, typography } from '../../../styles/theme';
+import { colors, typography, spacing, borderRadius, sizing, hitSlopDefault } from '../../../styles/theme';
 import PaymentMethodsScreen from '../../../screens/customer/PaymentMethodsScreen';
 import { estimateLaborMinutes } from '../../../services/PricingService';
+
+const SLIDER_VALUE_MIN_WIDTH = 80;
+const BOTTOM_SPACER_HEIGHT = 100;
 
 const ReviewStep = ({
     orderData,
@@ -40,6 +43,59 @@ const ReviewStep = ({
         };
     }, [selectedPaymentMethod]);
 
+    const isSelfHandling = orderData.pickupDetails?.driverHelpsLoading !== true
+        && orderData.dropoffDetails?.driverHelpsUnloading !== true;
+
+    // Labor time adjustment slider
+    const [laborAdjustment, setLaborAdjustment] = useState(null); // null = use estimate
+
+    const laborSliderConfig = useMemo(() => {
+        if (!pricing || isSelfHandling) return null;
+        const estimateMinutes = pricing.laborMinutes || 0;
+        if (estimateMinutes === 0) return null;
+
+        const bufferMinutes = pricing.laborBufferMinutes || 0;
+        const min = estimateMinutes;
+        const max = estimateMinutes * 2;
+        const step = 5;
+
+        return { min, max, step, estimateMinutes, bufferMinutes };
+    }, [pricing, isSelfHandling]);
+
+    const currentLaborMinutes = laborSliderConfig
+        ? (laborAdjustment ?? laborSliderConfig.estimateMinutes)
+        : (pricing?.laborMinutes || 0);
+
+    const adjustedPricing = useMemo(() => {
+        if (!pricing || !laborSliderConfig || laborAdjustment === null) return pricing;
+
+        const bufferMinutes = laborSliderConfig.bufferMinutes;
+        const billable = Math.max(0, laborAdjustment - bufferMinutes);
+        const newLaborFee = Math.round(billable * (pricing.laborPerMin || 0) * 100) / 100;
+        const laborDiff = newLaborFee - (pricing.laborFee || 0);
+
+        return {
+            ...pricing,
+            laborFee: newLaborFee,
+            laborMinutes: laborAdjustment,
+            laborBillableMinutes: billable,
+            total: Math.round((pricing.total + laborDiff) * 100) / 100,
+        };
+    }, [pricing, laborSliderConfig, laborAdjustment]);
+
+    const handleLaborStep = useCallback((direction) => {
+        if (!laborSliderConfig) return;
+        const { min, max, step } = laborSliderConfig;
+        const current = laborAdjustment ?? laborSliderConfig.estimateMinutes;
+        const next = direction === 'up'
+            ? Math.min(max, current + step)
+            : Math.max(min, current - step);
+        setLaborAdjustment(next);
+    }, [laborSliderConfig, laborAdjustment]);
+
+    // Use adjustedPricing for display
+    const displayPricing = adjustedPricing || pricing;
+
     const handlingEstimate = useMemo(() => {
         const aiVehicleRecommendation = orderData.aiVehicleRecommendation || {};
 
@@ -70,7 +126,7 @@ const ReviewStep = ({
         }
 
         const baseHint = labor.bufferMinutes > 0
-            ? `Based on labor settings. Includes ${labor.bufferMinutes} min operational buffer in pricing.`
+            ? `Based on labor settings. Includes ${labor.bufferMinutes} min free buffer.`
             : 'Based on labor settings in your request.';
 
         return {
@@ -115,18 +171,30 @@ const ReviewStep = ({
                             </View>
                         </View>
                     ))}
-                    <View style={styles.handlingEstimateBox}>
-                        <Text style={styles.handlingEstimateTitle}>Estimated Loading & Unloading</Text>
-                        <View style={styles.handlingEstimateRow}>
-                            <Text style={styles.handlingEstimateLabel}>Loading</Text>
-                            <Text style={styles.handlingEstimateValue}>{handlingEstimate.loading}</Text>
+                    {isSelfHandling ? (
+                        <View style={styles.handlingEstimateBox}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                                <Ionicons name="time-outline" size={18} color={colors.secondary} />
+                                <Text style={styles.handlingEstimateTitle}>Self-Handling</Text>
+                            </View>
+                            <Text style={styles.handlingEstimateHint}>
+                                Please be at the location ~5 min before the driver arrives. You will handle loading and unloading yourself.
+                            </Text>
                         </View>
-                        <View style={styles.handlingEstimateRow}>
-                            <Text style={styles.handlingEstimateLabel}>Unloading</Text>
-                            <Text style={styles.handlingEstimateValue}>{handlingEstimate.unloading}</Text>
+                    ) : (
+                        <View style={styles.handlingEstimateBox}>
+                            <Text style={styles.handlingEstimateTitle}>Estimated Loading & Unloading</Text>
+                            <View style={styles.handlingEstimateRow}>
+                                <Text style={styles.handlingEstimateLabel}>Loading</Text>
+                                <Text style={styles.handlingEstimateValue}>{handlingEstimate.loading}</Text>
+                            </View>
+                            <View style={styles.handlingEstimateRow}>
+                                <Text style={styles.handlingEstimateLabel}>Unloading</Text>
+                                <Text style={styles.handlingEstimateValue}>{handlingEstimate.unloading}</Text>
+                            </View>
+                            <Text style={styles.handlingEstimateHint}>{handlingEstimate.hint}</Text>
                         </View>
-                        <Text style={styles.handlingEstimateHint}>{handlingEstimate.hint}</Text>
-                    </View>
+                    )}
                 </TouchableOpacity>
 
                 {/* Vehicle */}
@@ -138,59 +206,117 @@ const ReviewStep = ({
                     </View>
                 </TouchableOpacity>
 
+                {/* Labor Time Adjustment */}
+                {laborSliderConfig && !isSelfHandling && (
+                    <View style={styles.summaryCard}>
+                        <Text style={styles.summaryCardTitle}>Adjust Labor Time</Text>
+                        <Text style={[styles.priceLabel, { marginBottom: spacing.md }]}>
+                            Move items take time. Adjust if you need more time.
+                        </Text>
+
+                        <View style={localStyles.sliderRow}>
+                            <TouchableOpacity
+                                style={[
+                                    localStyles.sliderBtn,
+                                    currentLaborMinutes <= laborSliderConfig.min && localStyles.sliderBtnDisabled,
+                                ]}
+                                onPress={() => handleLaborStep('down')}
+                                hitSlop={hitSlopDefault}
+                            >
+                                <Ionicons
+                                    name="remove"
+                                    size={22}
+                                    color={currentLaborMinutes <= laborSliderConfig.min ? colors.text.muted : colors.text.primary}
+                                />
+                            </TouchableOpacity>
+
+                            <View style={localStyles.sliderValueBox}>
+                                <Text style={localStyles.sliderValueText}>{currentLaborMinutes} min</Text>
+                                {laborAdjustment === null && (
+                                    <Text style={localStyles.sliderEstimateLabel}>estimated</Text>
+                                )}
+                            </View>
+
+                            <TouchableOpacity
+                                style={[
+                                    localStyles.sliderBtn,
+                                    currentLaborMinutes >= laborSliderConfig.max && localStyles.sliderBtnDisabled,
+                                ]}
+                                onPress={() => handleLaborStep('up')}
+                                hitSlop={hitSlopDefault}
+                            >
+                                <Ionicons
+                                    name="add"
+                                    size={22}
+                                    color={currentLaborMinutes >= laborSliderConfig.max ? colors.text.muted : colors.text.primary}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={localStyles.sliderRange}>
+                            <Text style={localStyles.sliderRangeText}>{laborSliderConfig.min} min</Text>
+                            <Text style={localStyles.sliderRangeText}>{laborSliderConfig.max} min</Text>
+                        </View>
+
+                        {laborSliderConfig.bufferMinutes > 0 && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.xs }}>
+                                <Ionicons name="information-circle" size={14} color={colors.primary} />
+                                <Text style={[styles.priceLabel, { fontSize: typography.fontSize.xs, color: colors.text.muted }]}>
+                                    Includes {laborSliderConfig.bufferMinutes} min free buffer
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+
                 {/* Price Breakdown */}
                 <View style={styles.summaryCard}>
                     <Text style={styles.summaryCardTitle}>Price Breakdown</Text>
 
                     <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>Base Fare</Text>
-                        <Text style={styles.priceValue}>${pricing?.baseFare?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.priceValue}>${displayPricing?.baseFare?.toFixed(2) || '0.00'}</Text>
                     </View>
 
                     <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Mileage ({pricing?.distance || 0} mi)</Text>
-                        <Text style={styles.priceValue}>${pricing?.mileageFee?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.priceLabel}>Mileage ({displayPricing?.distance || 0} mi)</Text>
+                        <Text style={styles.priceValue}>${displayPricing?.mileageFee?.toFixed(2) || '0.00'}</Text>
                     </View>
 
-                    {pricing?.laborFee > 0 && (
+                    {displayPricing?.laborFee > 0 && (
                         <View style={styles.priceRow}>
                             <Text style={styles.priceLabel}>
-                                Labor ({pricing.laborMinutes} min @ ${pricing.laborPerMin?.toFixed(2)}/min)
+                                Labor ({displayPricing.laborBillableMinutes || displayPricing.laborMinutes} min @ ${displayPricing.laborPerMin?.toFixed(2)}/min)
                             </Text>
-                            <Text style={styles.priceValue}>${pricing.laborFee.toFixed(2)}</Text>
+                            <Text style={styles.priceValue}>${displayPricing.laborFee.toFixed(2)}</Text>
                         </View>
                     )}
 
-                    {pricing?.laborBufferMinutes > 0 && (
+                    {displayPricing?.laborBufferMinutes > 0 && (
                         <View style={styles.priceRow}>
                             <Text style={[styles.priceLabel, { fontSize: typography.fontSize.xs, color: colors.text.muted }]}>
-                                Includes {pricing.laborBufferMinutes} min buffer
+                                Includes {displayPricing.laborBufferMinutes} min free buffer
                             </Text>
                         </View>
                     )}
 
-                    {pricing?.surgeFee > 0 && (
+                    {displayPricing?.surgeFee > 0 && (
                         <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Surge ({pricing.surgeLabel})</Text>
-                            <Text style={styles.priceValue}>${pricing.surgeFee.toFixed(2)}</Text>
+                            <Text style={styles.priceLabel}>Surge ({displayPricing.surgeLabel})</Text>
+                            <Text style={styles.priceValue}>${displayPricing.surgeFee.toFixed(2)}</Text>
                         </View>
                     )}
-
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Service & Technology Fee</Text>
-                        <Text style={styles.priceValue}>${pricing?.serviceFee?.toFixed(2) || '0.00'}</Text>
-                    </View>
 
                     <View style={styles.priceRow}>
                         <Text style={styles.priceLabel}>Mandatory Insurance</Text>
-                        <Text style={styles.priceValue}>${pricing?.mandatoryInsurance?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.priceValue}>${displayPricing?.mandatoryInsurance?.toFixed(2) || '0.00'}</Text>
                     </View>
 
                     <View style={styles.priceDivider} />
 
                     <View style={styles.priceRow}>
                         <Text style={styles.totalLabel}>Total</Text>
-                        <Text style={styles.totalValue}>${pricing?.total?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.totalValue}>${displayPricing?.total?.toFixed(2) || '0.00'}</Text>
                     </View>
                 </View>
 
@@ -251,7 +377,7 @@ const ReviewStep = ({
                     </TouchableOpacity>
                 </View>
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: BOTTOM_SPACER_HEIGHT }} />
             </ScrollView>
 
             <Modal
@@ -267,5 +393,52 @@ const ReviewStep = ({
         </>
     );
 };
+
+const localStyles = StyleSheet.create({
+    sliderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.lg,
+    },
+    sliderBtn: {
+        width: sizing.touchTargetMin,
+        height: sizing.touchTargetMin,
+        borderRadius: sizing.touchTargetMin / 2,
+        backgroundColor: colors.background.input,
+        borderWidth: 1,
+        borderColor: colors.border.default,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sliderBtnDisabled: {
+        opacity: 0.4,
+    },
+    sliderValueBox: {
+        minWidth: SLIDER_VALUE_MIN_WIDTH,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sliderValueText: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.xl,
+        fontWeight: typography.fontWeight.bold,
+    },
+    sliderEstimateLabel: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+        marginTop: spacing.xxs,
+    },
+    sliderRange: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: spacing.sm,
+        paddingHorizontal: spacing.sm,
+    },
+    sliderRangeText: {
+        color: colors.text.muted,
+        fontSize: typography.fontSize.xs,
+    },
+});
 
 export default ReviewStep;
