@@ -1466,6 +1466,13 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
   },
   destinationMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   // Customer View Styles

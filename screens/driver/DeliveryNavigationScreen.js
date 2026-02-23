@@ -981,27 +981,29 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
           followUserMode="course"
         >
           {driverLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="driverLocation"
               coordinate={[driverLocation.longitude, driverLocation.latitude]}
-              title="Your Location"
+              anchor={{ x: 0.5, y: 0.5 }}
+              allowOverlap
             >
               <View style={styles.driverMarker}>
                 <Ionicons name="car" size={18} color={colors.white} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {dropoffLocation && (
-            <Mapbox.PointAnnotation
+            <Mapbox.MarkerView
               id="dropoffLocation"
               coordinate={[dropoffLocation.longitude, dropoffLocation.latitude]}
-              title="Dropoff Location"
+              anchor={{ x: 0.5, y: 1 }}
+              allowOverlap
             >
               <View style={styles.destinationMarker}>
                 <Ionicons name="location" size={24} color={colors.primary} />
               </View>
-            </Mapbox.PointAnnotation>
+            </Mapbox.MarkerView>
           )}
           
           {routeCoordinates.length > 0 && (
@@ -1203,6 +1205,13 @@ const styles = StyleSheet.create({
     borderColor: colors.white,
   },
   destinationMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   infoCard: {

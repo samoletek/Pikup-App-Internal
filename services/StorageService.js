@@ -2,7 +2,57 @@
 // Extracted from AuthContext.js - Storage utilities for Supabase
 
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '../config/supabase';
+
+const MAX_UPLOAD_RETRIES = 3;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const ensureStorageSessionUserId = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.access_token && sessionData.session?.user?.id) {
+        return sessionData.session.user.id;
+    }
+
+    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshedData?.session?.access_token && refreshedData.session?.user?.id) {
+        return refreshedData.session.user.id;
+    }
+
+    return null;
+};
+
+const shouldRetryUpload = (error) => {
+    const message = String(error?.message || '').toLowerCase();
+    const status = Number(error?.status || 0);
+
+    return (
+        message.includes('network request failed') ||
+        message.includes('failed to fetch') ||
+        message.includes('network error') ||
+        message.includes('load failed') ||
+        status >= 500
+    );
+};
+
+const readLocalFileAsArrayBuffer = async (uri) => {
+    try {
+        const base64Data = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType.Base64
+        });
+        return decode(base64Data);
+    } catch (fileSystemError) {
+        // Fallback for URI formats that cannot be read directly by FileSystem.
+        const response = await fetch(uri);
+        if (!response.ok) {
+            throw new Error(`Failed to read local file for upload: ${response.status}`);
+        }
+        const blob = await response.blob();
+        return new Response(blob).arrayBuffer();
+    }
+};
 
 /**
  * Compress and optimize image for upload
@@ -35,24 +85,45 @@ export const compressImage = async (uri) => {
  */
 export const uploadToSupabase = async (uri, bucket, path) => {
     try {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const arrayBuffer = await new Response(blob).arrayBuffer();
+        const sessionUserId = await ensureStorageSessionUserId();
+        if (!sessionUserId) {
+            throw new Error('No authenticated session available for storage upload');
+        }
 
-        const { data, error } = await supabase.storage
-            .from(bucket)
-            .upload(path, arrayBuffer, {
-                contentType: 'image/jpeg',
-                upsert: true
-            });
+        const arrayBuffer = await readLocalFileAsArrayBuffer(uri);
+        let lastError = null;
 
-        if (error) throw error;
+        for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
+            const body = arrayBuffer.slice(0);
+            const { error } = await supabase.storage
+                .from(bucket)
+                .upload(path, body, {
+                    contentType: 'image/jpeg',
+                    upsert: true
+                });
 
-        const { data: { publicUrl } } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(path);
+            if (!error) {
+                const { data: { publicUrl } } = supabase.storage
+                    .from(bucket)
+                    .getPublicUrl(path);
 
-        return publicUrl;
+                return publicUrl;
+            }
+
+            lastError = error;
+            if (attempt < MAX_UPLOAD_RETRIES && shouldRetryUpload(error)) {
+                console.warn(
+                    `Retrying Supabase upload (${attempt}/${MAX_UPLOAD_RETRIES}) for ${bucket}/${path}:`,
+                    error?.message || error
+                );
+                await sleep(500 * attempt);
+                continue;
+            }
+
+            throw error;
+        }
+
+        throw lastError || new Error('Upload failed');
     } catch (error) {
         console.error('Supabase upload error:', error);
         throw error;

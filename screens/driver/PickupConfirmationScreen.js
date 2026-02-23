@@ -187,9 +187,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     try {
       console.log(`Confirming pickup with ${photos.length} photos...`);
       
-      // Confirm pickup with photos and location (photos will be uploaded to Firebase Storage)
+      // Confirm pickup with photos and location (photos are uploaded to Supabase Storage)
       await confirmPickup(request.id, photos, driverLocation);
-      console.log('Pickup confirmed with photos uploaded to Firebase Storage');
+      console.log('Pickup confirmed with photos uploaded to Supabase Storage');
       
       setIsUploadingPhotos(false);
       

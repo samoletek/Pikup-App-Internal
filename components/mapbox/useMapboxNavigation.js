@@ -10,9 +10,10 @@ const useMapboxNavigation = ({
   onCancel
 }) => {
   const [isNavigating, setIsNavigating] = useState(false);
+  const nativeNavigationAvailable = Platform.OS === 'ios' && MapboxNavigationService.isAvailable();
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return; // Only iOS supported initially
+    if (!nativeNavigationAvailable) return;
 
     // Set up event listeners
     const progressListener = MapboxNavigationService.addListener('onRouteProgress', (data) => {
@@ -34,11 +35,13 @@ const useMapboxNavigation = ({
       arrivalListener?.remove();
       cancelListener?.remove();
     };
-  }, [onRouteProgress, onArrival, onCancel]);
+  }, [nativeNavigationAvailable, onRouteProgress, onArrival, onCancel]);
 
   const startNavigation = async () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert('Navigation', 'Turn-by-turn navigation is currently iOS only. Android support coming soon.');
+    if (!nativeNavigationAvailable) {
+      if (Platform.OS !== 'ios') {
+        Alert.alert('Navigation', 'Turn-by-turn navigation is currently iOS only. Android support coming soon.');
+      }
       return;
     }
 
@@ -69,7 +72,7 @@ const useMapboxNavigation = ({
     startNavigation,
     stopNavigation,
     isNavigating,
-    isSupported: Platform.OS === 'ios'
+    isSupported: nativeNavigationAvailable
   };
 };
 
