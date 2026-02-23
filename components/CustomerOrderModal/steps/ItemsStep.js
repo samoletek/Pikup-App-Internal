@@ -6,8 +6,11 @@ import { styles } from '../styles';
 import { colors } from '../../../styles/theme';
 
 const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const ANALYSIS_IMAGE_MAX_SIDE = 1080;
+const ANALYSIS_IMAGE_QUALITY = 0.4;
 
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { analyzeImages } from '../../../services/AIService';
 
 const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId }) => {
@@ -50,7 +53,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
                 allowsEditing: source === 'camera', // Editing only for single photo from camera
                 aspect: [4, 3],
                 quality: 0.5,
-                base64: true,
+                base64: false,
             };
 
             if (source === 'camera') {
@@ -82,46 +85,57 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
 
     const analyzeItemPhotos = async (assets) => {
         setIsAnalyzing(true);
-        let successCount = 0;
-        let failCount = 0;
 
         try {
-            // 1. Prepare images: Resize and get base64
             const processedImages = [];
-            const assetMap = {}; // Map index to original asset URI for source_photos
+            const assetMap = {};
+
+            const buildResizeActions = (asset) => {
+                const width = Number(asset?.width) || 0;
+                const height = Number(asset?.height) || 0;
+
+                if (width <= 0 || height <= 0) {
+                    return [{ resize: { width: ANALYSIS_IMAGE_MAX_SIDE } }];
+                }
+
+                const largestSide = Math.max(width, height);
+                if (largestSide <= ANALYSIS_IMAGE_MAX_SIDE) return [];
+
+                if (width >= height) {
+                    return [{ resize: { width: ANALYSIS_IMAGE_MAX_SIDE } }];
+                }
+
+                return [{ resize: { height: ANALYSIS_IMAGE_MAX_SIDE } }];
+            };
 
             for (let i = 0; i < assets.length; i++) {
                 const asset = assets[i];
                 try {
-                    // Resize image to max 1024x1024 to reduce payload size
-                    // Wait, launchImageLibrary is for picking.
-                    // To resize existing asset we need ImageManipulator.
-                    // But Expo ImagePicker's 'quality' option only works during pick.
-                    // Since we already picked, we might need expo-image-manipulator.
-                    // If not installed, we can rely on the initial pick options (quality 0.5) which we set in pickImage.
+                    if (!asset?.uri) {
+                        console.warn(`Image ${i} missing uri`);
+                        continue;
+                    }
 
-                    // Let's check pickImage options. It has quality: 0.5.
-                    // Identify if we need to resize. The 'asset' from pickImage already has base64 if we asked for it.
-                    // However, in multi-selection, 'quality' applies to all.
-                    // The user prompt asked to "turn them into what size".
-                    // Let's assume we use the base64 we got from pickImage for now, but ensure we request base64 in pickImage.
+                    const optimizedAsset = await ImageManipulator.manipulateAsync(
+                        asset.uri,
+                        buildResizeActions(asset),
+                        {
+                            compress: ANALYSIS_IMAGE_QUALITY,
+                            format: ImageManipulator.SaveFormat.JPEG,
+                            base64: true,
+                        }
+                    );
 
-                    if (asset.base64) {
-                        processedImages.push(asset.base64);
-                        assetMap[i + 1] = asset.uri; // 1-based index to match AI output
+                    if (optimizedAsset?.base64) {
+                        processedImages.push(optimizedAsset.base64);
+                        assetMap[i + 1] = asset.uri;
                     } else {
                         console.warn(`Image ${i} missing base64`);
                     }
-
                 } catch (e) {
                     console.error("Error processing image", e);
                 }
             }
-
-            // To properly implement resizing as requested (1024x1024), we would typically use expo-image-manipulator.
-            // checking if it is available. If not, I will rely on `quality: 0.5` from the picker which is usually sufficient for Gemini.
-            // For now, I will proceed with sending the base64 we have, but I will optimistically ask the picker for lower quality/size if possible
-            // Re-reading pickImage: it uses quality: 0.5.
 
             if (processedImages.length === 0) {
                 Alert.alert('Error', 'No valid image data to analyze.');
@@ -129,19 +143,15 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId 
                 return;
             }
 
-            // 2. Call Batch AI Service
-            const result = await analyzeImages(processedImages);  // uses top-level import
+            const result = await analyzeImages(processedImages);
 
-            // 3. Process Response
             if (result && result.items) {
                 const newItems = [];
 
                 result.items.forEach(aiItem => {
-                    // Check quantity
                     const qty = aiItem.quantity || 1;
 
                     for (let q = 0; q < qty; q++) {
-                        // Map source_photos indices to URIs — limit to 3 (MAX_PHOTOS)
                         const itemPhotos = (aiItem.source_photos || []).map(idx => assetMap[idx]).filter(Boolean);
                         const finalPhotos = itemPhotos.length > 0 ? itemPhotos.slice(0, 3) : (assetMap[1] ? [assetMap[1]] : []);
 

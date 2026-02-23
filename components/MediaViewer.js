@@ -9,6 +9,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "../styles/theme";
@@ -19,13 +20,41 @@ const DISMISS_THRESHOLD = 100;
 /**
  * Full-screen media viewer with swipe-to-dismiss
  * @param {boolean} visible - Whether the modal is visible
- * @param {string} imageUri - URI of the image to display
+ * @param {string} mediaUri - URI of the media to display
+ * @param {"image"|"video"} mediaType - Media type
+ * @param {string} imageUri - Legacy image URI fallback
  * @param {function} onClose - Callback when viewer is closed
  */
-export default function MediaViewer({ visible, imageUri, onClose }) {
+export default function MediaViewer({ visible, mediaUri, mediaType = "image", imageUri, onClose }) {
     const insets = useSafeAreaInsets();
     const translateY = React.useRef(new Animated.Value(0)).current;
     const opacity = React.useRef(new Animated.Value(1)).current;
+    const isClosingRef = React.useRef(false);
+    const resolvedMediaUri = mediaUri || imageUri || null;
+    const resolvedMediaType = mediaType === "video" ? "video" : "image";
+
+    React.useEffect(() => {
+        if (!visible) {
+            translateY.setValue(0);
+            opacity.setValue(1);
+            isClosingRef.current = false;
+        }
+    }, [opacity, translateY, visible]);
+
+    const closeViewer = React.useCallback(() => {
+        if (isClosingRef.current) {
+            return;
+        }
+
+        isClosingRef.current = true;
+        onClose?.();
+    }, [onClose]);
+
+    // Keep a ref to closeViewer so panResponder (created once) always calls the latest version
+    const closeViewerRef = React.useRef(closeViewer);
+    React.useEffect(() => {
+        closeViewerRef.current = closeViewer;
+    }, [closeViewer]);
 
     const panResponder = React.useRef(
         PanResponder.create({
@@ -33,6 +62,7 @@ export default function MediaViewer({ visible, imageUri, onClose }) {
             onMoveShouldSetPanResponder: (_, gestureState) => {
                 return Math.abs(gestureState.dy) > 10;
             },
+            onPanResponderTerminationRequest: () => false,
             onPanResponderMove: (_, gestureState) => {
                 translateY.setValue(gestureState.dy);
                 const newOpacity = Math.max(0, 1 - Math.abs(gestureState.dy) / SCREEN_HEIGHT);
@@ -53,9 +83,7 @@ export default function MediaViewer({ visible, imageUri, onClose }) {
                             useNativeDriver: true,
                         }),
                     ]).start(() => {
-                        translateY.setValue(0);
-                        opacity.setValue(1);
-                        onClose();
+                        closeViewerRef.current();
                     });
                 } else {
                     // Snap back
@@ -74,10 +102,29 @@ export default function MediaViewer({ visible, imageUri, onClose }) {
                     ]).start();
                 }
             },
+            onPanResponderTerminate: () => {
+                Animated.parallel([
+                    Animated.spring(translateY, {
+                        toValue: 0,
+                        useNativeDriver: true,
+                        tension: 100,
+                        friction: 10,
+                    }),
+                    Animated.timing(opacity, {
+                        toValue: 1,
+                        duration: 150,
+                        useNativeDriver: true,
+                    }),
+                ]).start();
+            },
         })
     ).current;
 
     const handleClose = () => {
+        if (isClosingRef.current) {
+            return;
+        }
+
         Animated.parallel([
             Animated.timing(opacity, {
                 toValue: 0,
@@ -85,12 +132,11 @@ export default function MediaViewer({ visible, imageUri, onClose }) {
                 useNativeDriver: true,
             }),
         ]).start(() => {
-            opacity.setValue(1);
-            onClose();
+            closeViewer();
         });
     };
 
-    if (!imageUri) return null;
+    if (!resolvedMediaUri) return null;
 
     return (
         <Modal
@@ -111,19 +157,31 @@ export default function MediaViewer({ visible, imageUri, onClose }) {
                     </View>
                 </TouchableOpacity>
 
-                {/* Image with pan gesture */}
+                {/* Media with pan gesture */}
                 <Animated.View
                     style={[
-                        styles.imageContainer,
+                        styles.mediaContainer,
                         { transform: [{ translateY }] },
                     ]}
                     {...panResponder.panHandlers}
                 >
-                    <Image
-                        source={{ uri: imageUri }}
-                        style={styles.image}
-                        resizeMode="contain"
-                    />
+                    {resolvedMediaType === "video" ? (
+                        <Video
+                            source={{ uri: resolvedMediaUri }}
+                            style={styles.media}
+                            pointerEvents="none"
+                            resizeMode={ResizeMode.CONTAIN}
+                            shouldPlay
+                            useNativeControls={false}
+                            isLooping={false}
+                        />
+                    ) : (
+                        <Image
+                            source={{ uri: resolvedMediaUri }}
+                            style={styles.media}
+                            resizeMode="contain"
+                        />
+                    )}
                 </Animated.View>
             </Animated.View>
         </Modal>
@@ -149,13 +207,13 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
     },
-    imageContainer: {
+    mediaContainer: {
         width: "100%",
         height: "100%",
         justifyContent: "center",
         alignItems: "center",
     },
-    image: {
+    media: {
         width: "100%",
         height: "100%",
     },

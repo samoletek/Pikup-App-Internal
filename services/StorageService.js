@@ -3,12 +3,23 @@
 
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Image } from 'react-native';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '../config/supabase';
 
 const MAX_UPLOAD_RETRIES = 3;
+const IMAGE_MAX_SIDE_PX = 1024;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getImageSize = (uri) =>
+    new Promise((resolve, reject) => {
+        Image.getSize(
+            uri,
+            (width, height) => resolve({ width, height }),
+            reject
+        );
+    });
 
 const ensureStorageSessionUserId = async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -61,9 +72,25 @@ const readLocalFileAsArrayBuffer = async (uri) => {
  */
 export const compressImage = async (uri) => {
     try {
+        let actions = [];
+
+        try {
+            const { width, height } = await getImageSize(uri);
+            const longestSide = Math.max(Number(width || 0), Number(height || 0));
+
+            if (longestSide > IMAGE_MAX_SIDE_PX) {
+                actions =
+                    width >= height
+                        ? [{ resize: { width: IMAGE_MAX_SIDE_PX } }]
+                        : [{ resize: { height: IMAGE_MAX_SIDE_PX } }];
+            }
+        } catch (sizeError) {
+            console.warn('Could not determine image dimensions before compression, compressing without resize:', sizeError);
+        }
+
         const manipulatedImage = await ImageManipulator.manipulateAsync(
             uri,
-            [{ resize: { width: 1024, height: 1024 } }],
+            actions,
             {
                 compress: 0.8,
                 format: ImageManipulator.SaveFormat.JPEG

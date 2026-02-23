@@ -9,6 +9,8 @@ const NETWORK_ERROR_PATTERNS = Object.freeze([
     'network error',
     'load failed'
 ]);
+const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)(\?|#|$)/i;
+const VIDEO_URL_PATTERN = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
 const CONVERSATIONS_FETCH_MAX_RETRIES = 3;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -16,6 +18,34 @@ const isNetworkRequestFailure = (error) => {
     const message = String(error?.message || '').toLowerCase();
     const details = String(error?.details || '').toLowerCase();
     return NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern) || details.includes(pattern));
+};
+
+const isLikelyImageAttachmentUrl = (value) => {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!/^https?:\/\//i.test(trimmed)) return false;
+    return trimmed.includes('/chat-attachments/') || IMAGE_URL_PATTERN.test(trimmed);
+};
+
+const isLikelyVideoAttachmentUrl = (value) => {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!/^https?:\/\//i.test(trimmed)) return false;
+    return VIDEO_URL_PATTERN.test(trimmed);
+};
+
+const getConversationPreviewText = (content, messageType = 'text') => {
+    const normalizedType = String(messageType || '').toLowerCase();
+
+    if (normalizedType === 'video' || isLikelyVideoAttachmentUrl(content)) {
+        return 'Video';
+    }
+
+    if (normalizedType === 'image' || isLikelyImageAttachmentUrl(content)) {
+        return 'Photo';
+    }
+
+    return content;
 };
 
 const ensureAuthenticatedUserId = async () => {
@@ -252,7 +282,7 @@ export const getConversations = async (userId, userType) => {
                     requestId: conv.request_id,
                     customerId: conv.customer_id,
                     driverId: conv.driver_id,
-                    lastMessage: conv.last_message,
+                    lastMessage: getConversationPreviewText(conv.last_message, conv.last_message_type),
                     lastMessageAt: conv.last_message_at,
                     unreadByCustomer: conv.unread_by_customer,
                     unreadByDriver: conv.unread_by_driver,
@@ -442,7 +472,7 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
 
         // Update conversation last_message
         const updates = {
-            last_message: content,
+            last_message: getConversationPreviewText(content, messageType),
             last_message_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };

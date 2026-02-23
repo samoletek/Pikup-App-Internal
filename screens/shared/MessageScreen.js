@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/ScreenHeader";
@@ -27,6 +28,13 @@ import {
   spacing,
   typography,
 } from "../../styles/theme";
+
+const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)(\?|#|$)/i;
+const VIDEO_URL_PATTERN = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
+const DEFAULT_IMAGE_ASPECT_RATIO = 4 / 3;
+const DEFAULT_VIDEO_ASPECT_RATIO = 16 / 9;
+const MIN_MEDIA_ASPECT_RATIO = 0.45;
+const MAX_MEDIA_ASPECT_RATIO = 2.2;
 
 export default function MessageScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -50,17 +58,132 @@ export default function MessageScreen({ navigation, route }) {
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
-  const [viewerImageUri, setViewerImageUri] = useState(null);
+  const [viewerMediaUri, setViewerMediaUri] = useState(null);
+  const [viewerMediaType, setViewerMediaType] = useState("image");
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [mediaNaturalSizeById, setMediaNaturalSizeById] = useState({});
   const messageListRef = useRef(null);
   const hasInitialScrollRef = useRef(false);
+  const mediaSizeProbeInFlightRef = useRef(new Set());
   const isKeyboardVisible = keyboardHeight > 0;
+  const mediaMaxWidth = Math.round(Math.min(contentMaxWidth * 0.7, width * 0.72));
+  const mediaMaxHeight = Math.round(Math.min(contentMaxWidth * 0.78, width * 0.8));
 
   const scrollToLatest = useCallback((animated = true) => {
     requestAnimationFrame(() => {
       messageListRef.current?.scrollToEnd?.({ animated });
     });
   }, []);
+
+  const getMessageMediaType = useCallback((message) => {
+    const normalizedType = String(message?.messageType || "").toLowerCase();
+    if (normalizedType === "image" || normalizedType === "video") {
+      return normalizedType;
+    }
+
+    const content = String(message?.content || "").trim();
+    if (!/^https?:\/\//i.test(content)) {
+      return null;
+    }
+
+    if (VIDEO_URL_PATTERN.test(content)) {
+      return "video";
+    }
+
+    if (content.includes("/chat-attachments/") || IMAGE_URL_PATTERN.test(content)) {
+      return "image";
+    }
+
+    return null;
+  }, []);
+
+  const getMediaDisplaySize = useCallback(
+    (messageId, mediaType) => {
+      const naturalSize = mediaNaturalSizeById[String(messageId)];
+      const hasNaturalSize = !!naturalSize?.width && !!naturalSize?.height;
+      const defaultAspectRatio =
+        mediaType === "video" ? DEFAULT_VIDEO_ASPECT_RATIO : DEFAULT_IMAGE_ASPECT_RATIO;
+      const rawAspectRatio = hasNaturalSize
+        ? naturalSize.width / naturalSize.height
+        : defaultAspectRatio;
+      const aspectRatio = Math.min(
+        MAX_MEDIA_ASPECT_RATIO,
+        Math.max(MIN_MEDIA_ASPECT_RATIO, rawAspectRatio)
+      );
+
+      let widthCandidate = mediaMaxWidth;
+      let heightCandidate = Math.round(widthCandidate / aspectRatio);
+      if (heightCandidate > mediaMaxHeight) {
+        heightCandidate = mediaMaxHeight;
+        widthCandidate = Math.round(heightCandidate * aspectRatio);
+      }
+
+      return {
+        width: Math.max(widthCandidate, 1),
+        height: Math.max(heightCandidate, 1),
+      };
+    },
+    [mediaMaxHeight, mediaMaxWidth, mediaNaturalSizeById]
+  );
+
+  const saveMediaNaturalSize = useCallback((messageId, loadedWidth, loadedHeight) => {
+    const parsedWidth = Number(loadedWidth || 0);
+    const parsedHeight = Number(loadedHeight || 0);
+
+    if (!parsedWidth || !parsedHeight) {
+      return;
+    }
+
+    const mediaKey = String(messageId);
+    setMediaNaturalSizeById((prev) => {
+      const existing = prev[mediaKey];
+      if (existing?.width === parsedWidth && existing?.height === parsedHeight) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [mediaKey]: { width: parsedWidth, height: parsedHeight },
+      };
+    });
+  }, []);
+
+  const handleImageLoad = useCallback((messageId, event) => {
+    const source = event?.nativeEvent?.source;
+    saveMediaNaturalSize(messageId, source?.width, source?.height);
+  }, [saveMediaNaturalSize]);
+
+  const handleVideoReady = useCallback((messageId, event) => {
+    const naturalSize = event?.naturalSize || event?.nativeEvent?.naturalSize;
+    saveMediaNaturalSize(messageId, naturalSize?.width, naturalSize?.height);
+  }, [saveMediaNaturalSize]);
+
+  const probeMediaSize = useCallback((messageId, uri) => {
+    if (typeof uri !== "string" || !uri) {
+      return;
+    }
+
+    const mediaKey = String(messageId);
+    if (mediaNaturalSizeById[mediaKey] || mediaSizeProbeInFlightRef.current.has(mediaKey)) {
+      return;
+    }
+
+    mediaSizeProbeInFlightRef.current.add(mediaKey);
+    Image.getSize(
+      uri,
+      (loadedWidth, loadedHeight) => {
+        mediaSizeProbeInFlightRef.current.delete(mediaKey);
+        if (!loadedWidth || !loadedHeight) {
+          return;
+        }
+
+        saveMediaNaturalSize(mediaKey, loadedWidth, loadedHeight);
+      },
+      () => {
+        mediaSizeProbeInFlightRef.current.delete(mediaKey);
+      }
+    );
+  }, [mediaNaturalSizeById, saveMediaNaturalSize]);
 
   useEffect(() => {
     if (!conversationId || !currentUserId) {
@@ -92,6 +215,43 @@ export default function MessageScreen({ navigation, route }) {
   }, [conversationId]);
 
   useEffect(() => {
+    setMediaNaturalSizeById((prev) => {
+      const activeIds = new Set(messages.map((message) => String(message.id)));
+      let hasRemovedItems = false;
+      const next = {};
+
+      mediaSizeProbeInFlightRef.current.forEach((mediaId) => {
+        if (!activeIds.has(mediaId)) {
+          mediaSizeProbeInFlightRef.current.delete(mediaId);
+        }
+      });
+
+      Object.entries(prev).forEach(([mediaId, size]) => {
+        if (activeIds.has(mediaId)) {
+          next[mediaId] = size;
+        } else {
+          hasRemovedItems = true;
+        }
+      });
+
+      return hasRemovedItems ? next : prev;
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    messages.forEach((message) => {
+      const mediaType = getMessageMediaType(message);
+      if (!mediaType) {
+        return;
+      }
+
+      if (mediaType === "image") {
+        probeMediaSize(message.id, String(message.content || ""));
+      }
+    });
+  }, [getMessageMediaType, messages, probeMediaSize]);
+
+  useEffect(() => {
     if (loading) {
       return;
     }
@@ -115,13 +275,13 @@ export default function MessageScreen({ navigation, route }) {
     const subscriptions =
       Platform.OS === "ios"
         ? [
-            Keyboard.addListener("keyboardWillChangeFrame", handleKeyboardChange),
-            Keyboard.addListener("keyboardWillHide", handleKeyboardHide),
-          ]
+          Keyboard.addListener("keyboardWillChangeFrame", handleKeyboardChange),
+          Keyboard.addListener("keyboardWillHide", handleKeyboardHide),
+        ]
         : [
-            Keyboard.addListener("keyboardDidShow", handleKeyboardChange),
-            Keyboard.addListener("keyboardDidHide", handleKeyboardHide),
-          ];
+          Keyboard.addListener("keyboardDidShow", handleKeyboardChange),
+          Keyboard.addListener("keyboardDidHide", handleKeyboardHide),
+        ];
 
     return () => {
       subscriptions.forEach((subscription) => subscription.remove());
@@ -194,12 +354,12 @@ export default function MessageScreen({ navigation, route }) {
 
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets?.[0]) {
-      await uploadAndSendImage(result.assets[0].uri);
+      await uploadAndSendImage(result.assets[0]);
     }
   };
 
@@ -212,19 +372,24 @@ export default function MessageScreen({ navigation, route }) {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
+      allowsEditing: false,
       quality: 0.8,
     });
 
     if (!result.canceled && result.assets?.[0]) {
-      await uploadAndSendImage(result.assets[0].uri);
+      await uploadAndSendImage(result.assets[0]);
     }
   };
 
-  const uploadAndSendImage = async (uri) => {
+  const uploadAndSendImage = async (asset) => {
     if (!currentUserId || !conversationId) return;
 
+    const uri = typeof asset === "string" ? asset : asset?.uri;
+    if (!uri) return;
+
     const tempId = `temp-img-${Date.now()}`;
+    const imageWidth = Number(asset?.width || 0);
+    const imageHeight = Number(asset?.height || 0);
 
     // Optimistic update - show image immediately with local URI
     const optimisticMessage = {
@@ -235,6 +400,10 @@ export default function MessageScreen({ navigation, route }) {
       timestamp: new Date().toISOString(),
       status: "uploading",
     };
+
+    if (imageWidth && imageHeight) {
+      saveMediaNaturalSize(tempId, imageWidth, imageHeight);
+    }
 
     setMessages((prev) => [...prev, optimisticMessage]);
     setUploadingImage(true);
@@ -273,14 +442,17 @@ export default function MessageScreen({ navigation, route }) {
     }
   };
 
-  const openImageViewer = (imageUri) => {
-    setViewerImageUri(imageUri);
+  const openMediaViewer = (mediaUri, mediaType) => {
+    if (!mediaUri) return;
+    setViewerMediaUri(mediaUri);
+    setViewerMediaType(mediaType === "video" ? "video" : "image");
     setViewerVisible(true);
   };
 
-  const closeImageViewer = () => {
+  const closeMediaViewer = () => {
     setViewerVisible(false);
-    setViewerImageUri(null);
+    setViewerMediaUri(null);
+    setViewerMediaType("image");
   };
 
   // Render message status icon for outgoing messages
@@ -317,9 +489,15 @@ export default function MessageScreen({ navigation, route }) {
       );
     }
 
-    // Image message
-    if (item.messageType === "image") {
+    // Media message (image/video)
+    const mediaType = getMessageMediaType(item);
+    if (mediaType) {
       const isUploading = item.status === "uploading" || item.status === "sending";
+      const mediaSize = getMediaDisplaySize(item.id, mediaType);
+      const isImage = mediaType === "image";
+      const canOpenMediaViewer = !isUploading;
+      const MediaBubble = canOpenMediaViewer ? TouchableOpacity : View;
+
       return (
         <View
           style={[
@@ -327,21 +505,53 @@ export default function MessageScreen({ navigation, route }) {
             isMyMessage ? styles.outgoingContainer : styles.incomingContainer,
           ]}
         >
-          <TouchableOpacity
+          <MediaBubble
             style={[
               styles.imageBubble,
               item.status === "failed" && styles.failedMsg,
             ]}
-            onPress={() => openImageViewer(item.content)}
-            activeOpacity={0.9}
-            disabled={isUploading}
+            {...(canOpenMediaViewer
+              ? {
+                onPress: () => openMediaViewer(item.content, mediaType),
+                activeOpacity: 0.9,
+              }
+              : {})}
           >
-            <View style={styles.imageWrapper}>
-              <Image
-                source={{ uri: item.content }}
-                style={[styles.messageImage, isUploading && styles.imageUploading]}
-                resizeMode="cover"
-              />
+            <View style={[styles.imageWrapper, mediaSize]}>
+              {isImage ? (
+                <Image
+                  source={{ uri: item.content }}
+                  style={[styles.messageImage, mediaSize, isUploading && styles.imageUploading]}
+                  resizeMode="contain"
+                  onLoad={(event) => handleImageLoad(item.id, event)}
+                />
+              ) : (
+                <>
+                  <View style={[styles.videoContainer, mediaSize, isUploading && styles.imageUploading]}>
+                    <Video
+                      source={{ uri: item.content }}
+                      style={StyleSheet.absoluteFill}
+                      pointerEvents="none"
+                      resizeMode={ResizeMode.CONTAIN}
+                      shouldPlay={false}
+                      isLooping={false}
+                      isMuted
+                      useNativeControls={false}
+                      onLoad={(status) =>
+                        saveMediaNaturalSize(
+                          item.id,
+                          status?.naturalSize?.width,
+                          status?.naturalSize?.height
+                        )
+                      }
+                      onReadyForDisplay={(event) => handleVideoReady(item.id, event)}
+                    />
+                  </View>
+                  <View style={styles.videoPreviewOverlay} pointerEvents="none">
+                    <Ionicons name="play-circle" size={spacing.xxl} color={colors.white} />
+                  </View>
+                </>
+              )}
               {isUploading && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator size="large" color={colors.white} />
@@ -357,7 +567,7 @@ export default function MessageScreen({ navigation, route }) {
                 )}
               </View>
             </View>
-          </TouchableOpacity>
+          </MediaBubble>
         </View>
       );
     }
@@ -492,11 +702,12 @@ export default function MessageScreen({ navigation, route }) {
         </View>
       </View>
 
-      {/* Full-screen Image Viewer */}
+      {/* Full-screen Media Viewer */}
       <MediaViewer
         visible={viewerVisible}
-        imageUri={viewerImageUri}
-        onClose={closeImageViewer}
+        mediaUri={viewerMediaUri}
+        mediaType={viewerMediaType}
+        onClose={closeMediaViewer}
       />
     </View>
   );
@@ -516,7 +727,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messageList: {
-    padding: spacing.base,
+    paddingTop: spacing.base,
+    paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm,
   },
   systemBox: {
@@ -642,11 +854,20 @@ const styles = StyleSheet.create({
   imageBubble: {
     borderRadius: borderRadius.lg,
     overflow: "hidden",
+    alignSelf: "flex-start",
   },
   messageImage: {
-    width: 200,
-    height: 200,
     borderRadius: borderRadius.md,
+    backgroundColor: colors.background.secondary,
+  },
+  messageVideo: {
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.secondary,
+  },
+  videoContainer: {
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.secondary,
+    overflow: "hidden",
   },
   imageTime: {
     fontSize: typography.fontSize.xs,
@@ -685,9 +906,18 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     position: "relative",
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+    alignSelf: "flex-start",
   },
   imageUploading: {
     opacity: 0.5,
+  },
+  videoPreviewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
   },
   uploadingOverlay: {
     position: "absolute",

@@ -307,18 +307,21 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         );
     };
 
+    const closeAndReset = () => {
+        resetState();
+        onClose();
+    };
+
     const handleClose = () => {
         if (!hasOrderChanges()) {
-            resetState();
-            onClose();
+            closeAndReset();
             return;
         }
         Alert.alert('Cancel Order?', 'Your progress will be lost.', [
             { text: 'Keep Editing', style: 'cancel' },
             {
                 text: 'Cancel Order', style: 'destructive', onPress: () => {
-                    resetState();
-                    onClose();
+                    closeAndReset();
                 }
             }
         ]);
@@ -730,8 +733,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     return (
         <BaseModal
             visible={visible}
-            onClose={onClose}
-            onBackdropPress={onClose}
+            onClose={closeAndReset}
+            onBackdropPress={handleClose}
             height={SCREEN_HEIGHT * 0.9}
             backgroundColor={colors.background.secondary}
             avoidKeyboard={false}
