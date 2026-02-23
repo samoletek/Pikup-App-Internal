@@ -5,27 +5,26 @@ const MapboxNavigation = NativeModules.MapboxNavigation ||
                          NativeModules.MapboxNavigationModule || 
                          NativeModules.MapboxNavigationBridge || 
                          null;
+const isNavigationModuleAvailable = !!MapboxNavigation && typeof MapboxNavigation.startNavigation === 'function';
 
 // Debug logging (dev only)
 if (__DEV__) {
   console.log('=== MAPBOX SERVICE DEBUG ===');
   console.log('Platform.OS:', Platform.OS);
-  console.log('Available NativeModules:', Object.keys(NativeModules || {}));
-  console.log('Final resolved module:', !!MapboxNavigation);
+  console.log('Mapbox native module available:', isNavigationModuleAvailable);
   console.log('============================');
-
-  // Additional check after a delay to see if modules load later
-  setTimeout(() => {
-    console.log('=== DELAYED MODULE CHECK (2s) ===', !!NativeModules?.MapboxNavigation);
-  }, 2000);
 }
 
 class MapboxNavigationService {
   constructor() {
-    this.eventEmitter = Platform.OS === 'ios' && MapboxNavigation 
+    this.eventEmitter = Platform.OS === 'ios' && isNavigationModuleAvailable
       ? new NativeEventEmitter(MapboxNavigation) 
       : null;
     this.listeners = [];
+  }
+
+  isAvailable() {
+    return Platform.OS === 'ios' && isNavigationModuleAvailable;
   }
 
   startNavigation(origin, destination) {
@@ -33,9 +32,9 @@ class MapboxNavigationService {
       console.log('=== START NAVIGATION ATTEMPT ===');
       console.log('Origin:', origin);
       console.log('Destination:', destination);
-      console.log('MapboxNavigation available:', !!MapboxNavigation);
+      console.log('MapboxNavigation available:', this.isAvailable());
       
-      if (!MapboxNavigation) {
+      if (!this.isAvailable()) {
         const error = 'Mapbox Navigation not available on this platform';
         console.log('ERROR:', error);
         reject(new Error(error));
@@ -57,7 +56,7 @@ class MapboxNavigationService {
 
   stopNavigation() {
     return new Promise((resolve, reject) => {
-      if (!MapboxNavigation) {
+      if (!this.isAvailable()) {
         reject(new Error('Mapbox Navigation not available'));
         return;
       }

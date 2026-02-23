@@ -205,7 +205,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     try {
       console.log(`Completing delivery with ${deliveryPhotos.length} photos...`);
       
-      // Complete delivery with photos, location, and rating (photos will be uploaded to Firebase Storage)
+      // Complete delivery with photos, location, and rating (photos are uploaded to Supabase Storage)
       await finishDelivery(
         request.id, 
         deliveryPhotos, 
@@ -213,7 +213,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
         customerRating
       );
       
-      console.log('Delivery completed with photos uploaded to Firebase Storage');
+      console.log('Delivery completed with photos uploaded to Supabase Storage');
       setIsUploadingPhotos(false);
       
       console.log('Delivery completed successfully');

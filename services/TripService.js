@@ -2,7 +2,7 @@
 // Extracted from AuthContext.js - Trip/request lifecycle management
 
 import { supabase } from '../config/supabase';
-import { uploadToSupabase } from './StorageService';
+import { compressImage, uploadToSupabase } from './StorageService';
 import { createConversation } from './MessagingService';
 import { TRIP_STATUS, normalizeTripStatus, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
@@ -21,6 +21,94 @@ const STATUS_TIMESTAMP_FIELDS = Object.freeze({
 });
 
 let hasTripExpiresAtColumn = true;
+const NETWORK_RETRY_PATTERNS = Object.freeze([
+    'network request failed',
+    'failed to fetch',
+    'network error',
+    'load failed'
+]);
+const TRIP_UPDATE_MAX_RETRIES = 3;
+const TRIP_FETCH_MAX_RETRIES = 3;
+const STATUS_FLOW = Object.freeze([
+    TRIP_STATUS.PENDING,
+    TRIP_STATUS.ACCEPTED,
+    TRIP_STATUS.IN_PROGRESS,
+    TRIP_STATUS.ARRIVED_AT_PICKUP,
+    TRIP_STATUS.PICKED_UP,
+    TRIP_STATUS.EN_ROUTE_TO_DROPOFF,
+    TRIP_STATUS.ARRIVED_AT_DROPOFF,
+    TRIP_STATUS.COMPLETED
+]);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const ensureAuthenticatedUserId = async () => {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (!userError && userData?.user?.id) {
+        return userData.user.id;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+        const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshedData?.user?.id) {
+            return refreshedData.user.id;
+        }
+    }
+
+    return null;
+};
+
+const isNetworkRequestFailure = (error) => {
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+
+    return NETWORK_RETRY_PATTERNS.some((pattern) => message.includes(pattern) || details.includes(pattern));
+};
+
+const hasReachedOrPassedStatus = (currentStatus, targetStatus) => {
+    const current = normalizeTripStatus(currentStatus);
+    const target = normalizeTripStatus(targetStatus);
+
+    if (current === target) {
+        return true;
+    }
+
+    const currentIndex = STATUS_FLOW.indexOf(current);
+    const targetIndex = STATUS_FLOW.indexOf(target);
+
+    if (currentIndex === -1 || targetIndex === -1) {
+        return false;
+    }
+
+    return currentIndex >= targetIndex;
+};
+
+const fetchTripByIdWithRetry = async (requestId, maxAttempts = TRIP_FETCH_MAX_RETRIES) => {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const { data, error } = await supabase
+            .from('trips')
+            .select('*')
+            .eq('id', requestId)
+            .maybeSingle();
+
+        if (!error) {
+            return { data, error: null };
+        }
+
+        lastError = error;
+        if (attempt < maxAttempts && isNetworkRequestFailure(error)) {
+            await sleep(250 * attempt);
+            continue;
+        }
+
+        return { data: null, error };
+    }
+
+    return { data: null, error: lastError };
+};
 
 const isMissingColumnError = (error, columnName) => {
     const message = String(error?.message || '').toLowerCase();
@@ -89,6 +177,7 @@ const isMissingRpcFunctionError = (error, functionName) => {
 const applyTripUpdateWithColumnFallback = async (requestId, rawUpdates = {}) => {
     const updates = { ...rawUpdates };
     const attemptedStatuses = new Set();
+    let networkAttempts = 0;
 
     while (Object.keys(updates).length > 0) {
         if (typeof updates.status === 'string' && updates.status) {
@@ -102,6 +191,16 @@ const applyTripUpdateWithColumnFallback = async (requestId, rawUpdates = {}) => 
 
         if (!error) {
             return updates;
+        }
+
+        if (isNetworkRequestFailure(error) && networkAttempts < TRIP_UPDATE_MAX_RETRIES - 1) {
+            networkAttempts += 1;
+            console.warn(
+                `Retrying trip update (${networkAttempts}/${TRIP_UPDATE_MAX_RETRIES}) for request ${requestId}:`,
+                error?.message || error
+            );
+            await sleep(300 * networkAttempts);
+            continue;
         }
 
         const missingColumn = getMissingColumnFromError(error);
@@ -466,13 +565,19 @@ export const updateRequestStatus = async (requestId, newStatus, additionalData =
 
         const appliedUpdates = await applyTripUpdateWithColumnFallback(requestId, requestedUpdates);
 
-        const { data, error } = await supabase
-            .from('trips')
-            .select('*')
-            .eq('id', requestId)
-            .maybeSingle();
+        const { data, error } = await fetchTripByIdWithRetry(requestId);
 
-        if (error) throw error;
+        if (error) {
+            if (isNetworkRequestFailure(error)) {
+                console.warn('Returning optimistic request status after network failure while reloading trip.');
+                return mapTripFromDb({
+                    id: requestId,
+                    ...requestedUpdates,
+                    ...appliedUpdates,
+                });
+            }
+            throw error;
+        }
         if (!data) {
             return mapTripFromDb({
                 id: requestId,
@@ -496,28 +601,34 @@ export const updateRequestStatus = async (requestId, newStatus, additionalData =
  * @returns {Promise<Object>} Updated trip
  */
 export const updateDriverStatus = async (requestId, status, location = null, additionalData = {}) => {
-    try {
-        const normalizedStatus = normalizeTripStatus(status);
-        const statusTimestampField = STATUS_TIMESTAMP_FIELDS[normalizedStatus] || `${normalizedStatus}_at`;
-        const requestedUpdates = {
-            ...additionalData,
-            status: toDbTripStatus(normalizedStatus),
-            [statusTimestampField]: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-        };
-        if (location) {
-            requestedUpdates.driver_location = location;
-        }
+    const normalizedStatus = normalizeTripStatus(status);
+    const statusTimestampField = STATUS_TIMESTAMP_FIELDS[normalizedStatus] || `${normalizedStatus}_at`;
+    const requestedUpdates = {
+        ...additionalData,
+        status: toDbTripStatus(normalizedStatus),
+        [statusTimestampField]: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    };
+    if (location) {
+        requestedUpdates.driver_location = location;
+    }
 
+    try {
         const appliedUpdates = await applyTripUpdateWithColumnFallback(requestId, requestedUpdates);
 
-        const { data, error } = await supabase
-            .from('trips')
-            .select('*')
-            .eq('id', requestId)
-            .maybeSingle();
+        const { data, error } = await fetchTripByIdWithRetry(requestId);
 
-        if (error) throw error;
+        if (error) {
+            if (isNetworkRequestFailure(error)) {
+                console.warn('Returning optimistic driver status after network failure while reloading trip.');
+                return mapTripFromDb({
+                    id: requestId,
+                    ...requestedUpdates,
+                    ...appliedUpdates,
+                });
+            }
+            throw error;
+        }
         if (!data) {
             return mapTripFromDb({
                 id: requestId,
@@ -527,6 +638,16 @@ export const updateDriverStatus = async (requestId, status, location = null, add
         }
         return mapTripFromDb(data);
     } catch (error) {
+        if (isNetworkRequestFailure(error)) {
+            const { data: latestTrip, error: latestError } = await fetchTripByIdWithRetry(requestId);
+            if (!latestError && latestTrip && hasReachedOrPassedStatus(latestTrip.status, normalizedStatus)) {
+                console.warn(
+                    `Driver status ${normalizedStatus} appears persisted despite transient network failure for request ${requestId}.`
+                );
+                return mapTripFromDb(latestTrip);
+            }
+        }
+
         console.error('Error updating driver status:', error);
         throw error;
     }
@@ -569,6 +690,11 @@ export const uploadRequestPhotos = async (requestId, photos, photoType = 'pickup
     if (!photos || photos.length === 0) return null;
 
     try {
+        const authUserId = await ensureAuthenticatedUserId();
+        if (!authUserId) {
+            throw new Error('Session expired. Please sign in again.');
+        }
+
         console.log(`Uploading ${photos.length} ${photoType} photos for request ${requestId}`);
 
         const uploadedUrls = [];
@@ -577,29 +703,61 @@ export const uploadRequestPhotos = async (requestId, photos, photoType = 'pickup
         for (let i = 0; i < photos.length; i++) {
             const photo = photos[i];
             const uri = photo.uri || photo;
-            const filename = `${requestId}/${photoType}_${Date.now()}_${i}.jpg`;
-            const url = await uploadToSupabase(uri, bucket, filename);
+            const compressedUri = await compressImage(uri);
+            const filename = `${authUserId}/${requestId}/${photoType}_${Date.now()}_${i}.jpg`;
+            const url = await uploadToSupabase(compressedUri, bucket, filename);
             uploadedUrls.push(url);
         }
 
         let column = 'pickup_photos';
         if (photoType === 'dropoff' || photoType === 'delivery') column = 'dropoff_photos';
 
-        const { data: trip } = await supabase.from('trips').select(column).eq('id', requestId).single();
-        const existing = trip?.[column] || [];
-        const newPhotos = [...existing, ...uploadedUrls];
+        let existing = [];
+        let canPersistToTrip = true;
 
-        const { error } = await supabase
+        const { data: trip, error: selectError } = await supabase
             .from('trips')
-            .update({
-                [column]: newPhotos,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', requestId);
+            .select(column)
+            .eq('id', requestId)
+            .single();
 
-        if (error) throw error;
+        if (selectError) {
+            const missingColumn = getMissingColumnFromError(selectError);
+            if (missingColumn === column) {
+                canPersistToTrip = false;
+                console.warn(`Trips table is missing "${column}". Skipping photo URL persistence.`);
+            } else {
+                throw selectError;
+            }
+        } else {
+            existing = trip?.[column] || [];
+        }
 
-        return { uploadedPhotos: uploadedUrls };
+        if (canPersistToTrip) {
+            const newPhotos = [...existing, ...uploadedUrls];
+            const { error: updateError } = await supabase
+                .from('trips')
+                .update({
+                    [column]: newPhotos,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', requestId);
+
+            if (updateError) {
+                const missingColumn = getMissingColumnFromError(updateError);
+                if (missingColumn === column) {
+                    canPersistToTrip = false;
+                    console.warn(`Trips table is missing "${column}" during update. Uploaded files were kept in storage.`);
+                } else {
+                    throw updateError;
+                }
+            }
+        }
+
+        return {
+            uploadedPhotos: uploadedUrls,
+            persistedToTrip: canPersistToTrip
+        };
     } catch (error) {
         console.error('Error uploading photos:', error);
         throw error;
@@ -613,17 +771,20 @@ export const uploadRequestPhotos = async (requestId, photos, photoType = 'pickup
  */
 export const getRequestById = async (requestId) => {
     try {
-        const { data, error } = await supabase
-            .from('trips')
-            .select('*')
-            .eq('id', requestId)
-            .single();
+        const { data, error } = await fetchTripByIdWithRetry(requestId, TRIP_FETCH_MAX_RETRIES);
 
         if (error) throw error;
+        if (!data) {
+            throw new Error(`Request ${requestId} not found`);
+        }
 
         return mapTripFromDb(data);
     } catch (error) {
-        console.error('Error fetching request:', error);
+        if (isNetworkRequestFailure(error)) {
+            console.warn('Transient network failure while fetching request:', error?.message || error);
+        } else {
+            console.error('Error fetching request:', error);
+        }
         throw error;
     }
 };

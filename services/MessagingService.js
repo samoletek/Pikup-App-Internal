@@ -3,6 +3,21 @@
 
 import { supabase } from '../config/supabase';
 
+const NETWORK_ERROR_PATTERNS = Object.freeze([
+    'network request failed',
+    'failed to fetch',
+    'network error',
+    'load failed'
+]);
+const CONVERSATIONS_FETCH_MAX_RETRIES = 3;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isNetworkRequestFailure = (error) => {
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+    return NETWORK_ERROR_PATTERNS.some((pattern) => message.includes(pattern) || details.includes(pattern));
+};
+
 const ensureAuthenticatedUserId = async () => {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     if (!userError && userData?.user?.id) {
@@ -210,42 +225,58 @@ export const createConversation = async (
  */
 export const getConversations = async (userId, userType) => {
     try {
-        let query = supabase
-            .from('conversations')
-            .select('*')
-            .order('updated_at', { ascending: false });
+        let lastError = null;
 
-        if (userType === 'driver') {
-            // Drivers need to see:
-            // 1. Trips where they are the driver (driver_id = userId)
-            // 2. Support chats where they are the customer (customer_id = userId AND driver_id = SUPPORT)
-            // We use an OR condition
-            query = query.or(`driver_id.eq.${userId},and(customer_id.eq.${userId},driver_id.eq.ffffffff-ffff-ffff-ffff-ffffffffffff)`);
-        } else {
-            // Customers just see their own chats
-            query = query.eq('customer_id', userId);
+        for (let attempt = 1; attempt <= CONVERSATIONS_FETCH_MAX_RETRIES; attempt++) {
+            let query = supabase
+                .from('conversations')
+                .select('*')
+                .order('updated_at', { ascending: false });
+
+            if (userType === 'driver') {
+                // Drivers need to see:
+                // 1. Trips where they are the driver (driver_id = userId)
+                // 2. Support chats where they are the customer (customer_id = userId AND driver_id = SUPPORT)
+                // We use an OR condition
+                query = query.or(`driver_id.eq.${userId},and(customer_id.eq.${userId},driver_id.eq.ffffffff-ffff-ffff-ffff-ffffffffffff)`);
+            } else {
+                // Customers just see their own chats
+                query = query.eq('customer_id', userId);
+            }
+
+            const { data, error } = await query;
+            if (!error) {
+                const dedupedConversations = dedupeConversationsByRequest(data || []);
+                return dedupedConversations.map(conv => ({
+                    id: conv.id,
+                    requestId: conv.request_id,
+                    customerId: conv.customer_id,
+                    driverId: conv.driver_id,
+                    lastMessage: conv.last_message,
+                    lastMessageAt: conv.last_message_at,
+                    unreadByCustomer: conv.unread_by_customer,
+                    unreadByDriver: conv.unread_by_driver,
+                    createdAt: conv.created_at,
+                    updatedAt: conv.updated_at
+                }));
+            }
+
+            lastError = error;
+            if (attempt < CONVERSATIONS_FETCH_MAX_RETRIES && isNetworkRequestFailure(error)) {
+                await sleep(250 * attempt);
+                continue;
+            }
+
+            throw error;
         }
 
-        const { data, error } = await query;
-
-        if (error) throw error;
-
-        const dedupedConversations = dedupeConversationsByRequest(data || []);
-
-        return dedupedConversations.map(conv => ({
-            id: conv.id,
-            requestId: conv.request_id,
-            customerId: conv.customer_id,
-            driverId: conv.driver_id,
-            lastMessage: conv.last_message,
-            lastMessageAt: conv.last_message_at,
-            unreadByCustomer: conv.unread_by_customer,
-            unreadByDriver: conv.unread_by_driver,
-            createdAt: conv.created_at,
-            updatedAt: conv.updated_at
-        }));
+        throw lastError || new Error('Failed to fetch conversations');
     } catch (error) {
-        console.error('Error fetching conversations:', error);
+        if (isNetworkRequestFailure(error)) {
+            console.warn('Transient network failure while fetching conversations:', error?.message || error);
+        } else {
+            console.error('Error fetching conversations:', error);
+        }
         return [];
     }
 };
