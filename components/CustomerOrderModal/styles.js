@@ -455,3 +455,45 @@ export const styles = StyleSheet.create({
         fontWeight: typography.fontWeight.semibold,
     },
 });
+
+const THUMB_SIZE = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm * 2) / 3;
+
+export const aiPhotoStyles = StyleSheet.create({
+    safeArea: { flex: 1, backgroundColor: colors.background.secondary },
+    header: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingHorizontal: spacing.base, height: 56,
+    },
+    headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    headerTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary },
+    photoArea: { flex: 1, backgroundColor: colors.background.primary },
+    photoAreaContent: { padding: spacing.lg },
+    photoAreaEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 300 },
+    placeholder: { alignItems: 'center', paddingVertical: spacing.xxxl },
+    placeholderTitle: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.base },
+    placeholderSubtitle: { color: colors.text.muted, fontSize: typography.fontSize.base, textAlign: 'center', marginTop: spacing.sm, paddingHorizontal: spacing.xl, lineHeight: typography.fontSize.base * 1.5 },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+    thumbWrapper: { width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: borderRadius.md, overflow: 'visible' },
+    thumb: { width: THUMB_SIZE, height: THUMB_SIZE, borderRadius: borderRadius.md, backgroundColor: colors.background.tertiary },
+    thumbDelete: { position: 'absolute', top: -8, right: -8, backgroundColor: colors.background.secondary, borderRadius: borderRadius.circle },
+    footer: {
+        paddingHorizontal: spacing.lg, paddingTop: spacing.base, paddingBottom: spacing.xl,
+        borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.background.secondary,
+    },
+    photoCount: { color: colors.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center', marginBottom: spacing.base },
+    footerButtons: { flexDirection: 'row', gap: spacing.sm },
+    addPhotoBtn: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        height: 52, borderRadius: borderRadius.full, borderWidth: 2,
+        borderColor: colors.primary, backgroundColor: colors.background.tertiary, gap: spacing.sm,
+    },
+    addPhotoBtnText: { color: colors.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold },
+    identifyBtn: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        height: 52, borderRadius: borderRadius.full, backgroundColor: colors.primary, gap: spacing.sm,
+    },
+    identifyBtnDisabled: { opacity: 0.4 },
+    identifyBtnText: { color: colors.white, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.bold },
+    poweredByRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: spacing.sm, gap: spacing.xs },
+    poweredByText: { color: colors.text.muted, fontSize: typography.fontSize.xs },
+});

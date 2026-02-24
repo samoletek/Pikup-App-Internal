@@ -7,25 +7,38 @@ Role: You are an expert Moving & Delivery Estimator for a US-based logistics app
 
 Context: A customer uploads multiple photos of their belongings before booking a move. Photos are taken casually — the same item may appear in several photos. The driver needs an accurate, non-redundant list.
 
+NON-NEGOTIABLE FOCUS RULE:
+- In each photo, identify primary transport subject(s): usually ONE, but include multiple when several large central items are co-primary.
+- "Most central" means the item is mostly inside the center area of the frame (roughly middle 60%).
+- "Largest" means it visually dominates the scene (not a tiny or background object).
+- Ignore all secondary/background objects, even if recognizable.
+- NEVER capture small background items such as shoes, wall decor, lamps, plants, pillows, rugs, or small tabletop objects.
+- If an object is small, on the periphery, wall-mounted decor, or not the transport target, exclude it from the inventory.
+- Default to one candidate item per photo, but include 2+ candidates if there are multiple large central transport targets (e.g., sofa + table).
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 1 — CROSS-PHOTO DEDUPLICATION (Critical)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Before building the inventory, you MUST perform deduplication across all images:
-1. Scan every image and build a mental map of all visible objects.
-2. Match items across photos by comparing: shape, material, color, distinct features, and spatial context.
-3. If ≥70% confident an object in Photo A is the same as in Photo B, treat them as ONE item.
-4. If in doubt, lean toward merging rather than duplicating.
-5. In "source_photos", list ONLY the photo indices where this item is clearly and prominently visible as a PRIMARY subject — NOT photos where it merely appears in the background, is partially cropped, or is obscured. If an item is the main focus of Photo 2 but only a tiny corner is visible in Photo 4, include ONLY [2].
+1. For each photo, extract its primary transport subject(s): normally one, or multiple if several large central co-primary items exist.
+2. Match extracted primary subjects across photos by comparing: shape, material, color, distinct features, and context.
+3. If ≥70% confident Photo A and Photo B show the same physical object, merge as ONE item.
+4. Different angle, distance, lighting, rotation, crop, or partial view of the same object still counts as the SAME item.
+5. If in doubt, lean toward merging rather than duplicating.
+6. In "source_photos", list ONLY photo indices where this item is clearly and prominently visible as a PRIMARY subject.
+7. If all uploaded photos show the same object, output exactly ONE item with quantity = 1.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2 — ITEM DETECTION & CLASSIFICATION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 For EACH unique item:
-1. Detect all primary objects (ignore background clutter).
-2. If multiple IDENTICAL items exist (e.g., 4 matching chairs), group them into one entry with correct quantity.
-3. If items are SIMILAR but not identical, list separately.
-4. Estimate weight in lbs conservatively.
-5. Estimate dimensions (L x W x H) in inches.
+1. Use only deduplicated primary subjects from Phase 1 (ignore background clutter completely).
+2. Do NOT create extra entries for the same object seen in multiple photos.
+3. If multiple IDENTICAL physical copies truly exist, group them into one entry with correct quantity.
+4. If items are SIMILAR but not identical, list separately.
+5. Do NOT include incidental household/background items (e.g., shoes, wall decor, lamps) unless they are clearly the main transport item.
+6. Estimate weight in lbs conservatively.
+7. Estimate dimensions (L x W x H) in inches.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 3 — JSON OUTPUT
@@ -70,7 +83,12 @@ Rules:
 3) If a vehicle is false, provide a short concrete reason.
 4) Prefer the smallest vehicle that safely fits all items.
 5) Consider quantity, bulk, fragility stacking limits, and rough weight.
-6) Output ONLY valid JSON, no markdown.
+6) TV SAFETY RULE (strict):
+   - If any item is a TV/television, it must be transported upright (not laid flat).
+   - With any TV present, "midsize_suv" must be marked fits=false.
+   - Minimum allowed recommendation becomes "fullsize_pickup".
+   - If pickup cannot safely fit all items together with the TV upright, recommend "fullsize_truck" or "cargo_truck" based on total load.
+7) Output ONLY valid JSON, no markdown.
 
 Output schema:
 {
@@ -122,22 +140,75 @@ Output schema:
 }
 `;
 
+// Repairs truncated JSON by tracking open braces/brackets char-by-char,
+// then trimming to last valid closed position and appending missing closers.
+const repairTruncatedJson = (text) => {
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+    let lastClosedPos = -1;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\' && inString) { escaped = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+
+        if (ch === '{' || ch === '[') {
+            stack.push(ch);
+        } else if (ch === '}' || ch === ']') {
+            stack.pop();
+            if (stack.length === 0) lastClosedPos = i;
+        }
+    }
+
+    if (stack.length === 0) return text; // already valid
+
+    // Trim back to last fully-closed root, then close remaining open structures
+    let repaired = lastClosedPos >= 0
+        ? text.substring(0, lastClosedPos + 1)
+        : text.trimEnd().replace(/,\s*$/, '');
+
+    repaired = repaired.replace(/,\s*$/, '');
+    for (let i = stack.length - 1; i >= 0; i--) {
+        repaired += stack[i] === '{' ? '}' : ']';
+    }
+    return repaired;
+};
+
 const parseGeminiJson = (textResponse) => {
     if (!textResponse) {
         throw new Error('No analysis result received');
     }
 
+    // Remove markdown fences
+    let cleaned = textResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    // Attempt 1: direct parse
     try {
-        return JSON.parse(textResponse);
-    } catch (e) {
-        // Remove markdown fences
-        let cleaned = textResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
-        }
-        throw new Error('Could not parse AI response as JSON');
+        return JSON.parse(cleaned);
+    } catch (e1) { }
+
+    // Attempt 2: extract outermost {...} and parse
+    const outerMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (outerMatch) {
+        try {
+            return JSON.parse(outerMatch[0]);
+        } catch (e2) { }
     }
+
+    // Attempt 3: response was truncated — try to repair the JSON structure
+    console.warn('AI response truncated, attempting JSON repair...');
+    try {
+        const toRepair = outerMatch ? outerMatch[0] : cleaned;
+        const repaired = repairTruncatedJson(toRepair);
+        const parsed = JSON.parse(repaired);
+        console.warn(`JSON repair succeeded, salvaged ${parsed?.items?.length ?? 0} items`);
+        return parsed;
+    } catch (e3) { }
+
+    throw new Error('Could not parse AI response as JSON');
 };
 
 const callGeminiJson = async ({ prompt, input, temperature = 0.2 }) => {
@@ -271,7 +342,8 @@ export const analyzeImages = async (base64Images) => {
                     }
                 ],
                 generationConfig: {
-                    response_mime_type: "application/json"
+                    response_mime_type: "application/json",
+                    maxOutputTokens: 65536
                 }
             })
         });

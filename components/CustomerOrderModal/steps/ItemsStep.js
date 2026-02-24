@@ -4,84 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import OrderItemCard from '../../order/OrderItemCard';
 import { styles } from '../styles';
 import { colors } from '../../../styles/theme';
+import AIPhotoPickerModal from '../AIPhotoPickerModal';
 
 const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 const ANALYSIS_IMAGE_MAX_SIDE = 1080;
 const ANALYSIS_IMAGE_QUALITY = 0.4;
 
-import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { analyzeImages } from '../../../services/AIService';
 
 const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId, itemErrors, setItemErrors }) => {
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
-
-    const handleAddWithAI = async () => {
-        try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permission needed', 'Please grant camera roll permissions to upload photos.');
-                return;
-            }
-
-            Alert.alert(
-                'Analyze Item',
-                'Choose a photo of your item',
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Take Photo',
-                        onPress: () => pickImage('camera')
-                    },
-                    {
-                        text: 'Choose from Library',
-                        onPress: () => pickImage('library')
-                    }
-                ]
-            );
-        } catch (error) {
-            console.error('Error initiating AI analysis:', error);
-            Alert.alert('Error', 'Could not start image picker.');
-        }
-    };
-
-    const pickImage = async (source) => {
-        try {
-            let result;
-            const options = {
-                mediaTypes: 'images',
-                allowsEditing: source === 'camera', // Editing only for single photo from camera
-                aspect: [4, 3],
-                quality: 0.5,
-                base64: false,
-            };
-
-            if (source === 'camera') {
-                const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                if (status !== 'granted') {
-                    Alert.alert('Permission needed', 'Please grant camera permissions.');
-                    return;
-                }
-                result = await ImagePicker.launchCameraAsync(options);
-            } else {
-                // Enable multiple selection for library
-                result = await ImagePicker.launchImageLibraryAsync({
-                    ...options,
-                    allowsMultipleSelection: true,
-                    selectionLimit: 10,
-                    allowsEditing: false // Multi-selection doesn't support editing
-                });
-            }
-
-            if (!result.canceled && result.assets && result.assets.length > 0) {
-                // Process all selected assets
-                analyzeItemPhotos(result.assets);
-            }
-        } catch (error) {
-            console.error('Image picker error:', error);
-            Alert.alert('Error', 'Failed to pick image.');
-        }
-    };
+    const [showAIModal, setShowAIModal] = React.useState(false);
 
     const analyzeItemPhotos = async (assets) => {
         setIsAnalyzing(true);
@@ -190,6 +124,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
             Alert.alert('Analysis Failed', error?.message || 'Could not analyze images. Please try again.');
         } finally {
             setIsAnalyzing(false);
+            setShowAIModal(false);
         }
     };
 
@@ -200,7 +135,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
             description: '',
             photos: [],
             isFragile: false,
-            condition: '',
+            condition: 'used',
             hasInsurance: false,
             value: '',
             invoicePhoto: null,
@@ -239,74 +174,79 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
     };
 
     return (
-        <ScrollView
-            style={styles.stepContent}
-            contentContainerStyle={styles.itemsStepContentContainer}
-            showsVerticalScrollIndicator={false}
-        >
-            <View style={styles.aiActionsSection}>
-                <TouchableOpacity
-                    style={[styles.aiPrimaryBtn, isAnalyzing && { opacity: 0.7 }]}
-                    onPress={handleAddWithAI}
-                    disabled={isAnalyzing}
-                >
-                    <View style={styles.aiPrimaryIconContainer}>
-                        {isAnalyzing ? (
-                            <ActivityIndicator size="small" color={colors.white} />
-                        ) : (
-                            <Ionicons name="sparkles" size={20} color={colors.white} />
-                        )}
+        <>
+            <ScrollView
+                style={styles.stepContent}
+                contentContainerStyle={styles.itemsStepContentContainer}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.aiActionsSection}>
+                    <TouchableOpacity
+                        style={[styles.aiPrimaryBtn, isAnalyzing && { opacity: 0.7 }]}
+                        onPress={() => setShowAIModal(true)}
+                        disabled={isAnalyzing}
+                    >
+                        <View style={styles.aiPrimaryIconContainer}>
+                            {isAnalyzing ? (
+                                <ActivityIndicator size="small" color={colors.white} />
+                            ) : (
+                                <Ionicons name="sparkles" size={20} color={colors.white} />
+                            )}
+                        </View>
+                        <View style={styles.aiActionTextContainer}>
+                            <Text style={styles.aiPrimaryTitle}>
+                                {isAnalyzing ? `Analyzing Items...` : 'Add Multiple Items with AI'}
+                            </Text>
+                            <Text style={styles.aiActionSubtitle}>
+                                {isAnalyzing ? 'Identifying item details...' : '✦ Powered by Gemini'}
+                            </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+
+                </View>
+
+                <View style={styles.manualSectionRow}>
+                    <View style={styles.manualSectionLine} />
+                    <Text style={styles.manualSectionText}>Or add items manually</Text>
+                    <View style={styles.manualSectionLine} />
+                </View>
+
+                {orderData.items.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="cube-outline" size={64} color={colors.border.light} />
+                        <Text style={styles.emptyStateText}>No items added yet</Text>
+                        <Text style={styles.emptyStateSubtext}>You can add multiple items to your order</Text>
                     </View>
-                    <View style={styles.aiActionTextContainer}>
-                        <Text style={styles.aiPrimaryTitle}>
-                            {isAnalyzing ? `Analyzing Items...` : 'Add Multiple Items with AI'}
-                        </Text>
-                        <Text style={styles.aiActionSubtitle}>
-                            {isAnalyzing ? 'Identifying item details...' : 'Upload up to 10 photos'}
-                        </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                ) : (
+                    orderData.items.map(item => (
+                        <OrderItemCard
+                            key={item.id}
+                            item={item}
+                            isExpanded={expandedItemId === item.id}
+                            onToggleExpand={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
+                            onUpdate={handleUpdateItem}
+                            onDelete={() => handleDeleteItem(item.id)}
+                            errors={itemErrors?.[item.id]}
+                        />
+                    ))
+                )}
+
+                <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
+                    <Ionicons name="add-circle" size={24} color={colors.primary} />
+                    <Text style={styles.addItemBtnText}>Add Another Item</Text>
                 </TouchableOpacity>
 
-                <View style={styles.aiPoweredByRow}>
-                    <Ionicons name="sparkles-outline" size={14} color={colors.text.muted} />
-                    <Text style={styles.aiPoweredByText}>Powered by Gemini</Text>
-                </View>
-            </View>
+                <View style={styles.itemsBottomSpacer} />
+            </ScrollView>
 
-            <View style={styles.manualSectionRow}>
-                <View style={styles.manualSectionLine} />
-                <Text style={styles.manualSectionText}>Or add items manually</Text>
-                <View style={styles.manualSectionLine} />
-            </View>
-
-            {orderData.items.length === 0 ? (
-                <View style={styles.emptyState}>
-                    <Ionicons name="cube-outline" size={64} color={colors.border.light} />
-                    <Text style={styles.emptyStateText}>No items added yet</Text>
-                    <Text style={styles.emptyStateSubtext}>You can add multiple items to your order</Text>
-                </View>
-            ) : (
-                orderData.items.map(item => (
-                    <OrderItemCard
-                        key={item.id}
-                        item={item}
-                        isExpanded={expandedItemId === item.id}
-                        onToggleExpand={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}
-                        onUpdate={handleUpdateItem}
-                        onDelete={() => handleDeleteItem(item.id)}
-                        errors={itemErrors?.[item.id]}
-                    />
-                ))
-            )}
-
-            <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
-                <Ionicons name="add-circle" size={24} color={colors.primary} />
-                <Text style={styles.addItemBtnText}>Add Another Item</Text>
-            </TouchableOpacity>
-
-            <View style={styles.itemsBottomSpacer} />
-        </ScrollView>
+            <AIPhotoPickerModal
+                visible={showAIModal}
+                onClose={() => setShowAIModal(false)}
+                onAnalyze={analyzeItemPhotos}
+                isAnalyzing={isAnalyzing}
+            />
+        </>
     );
 };
 
