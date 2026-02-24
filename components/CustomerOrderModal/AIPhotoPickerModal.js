@@ -7,6 +7,7 @@ import {
     Image,
     Alert,
     ActivityIndicator,
+    StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -14,13 +15,23 @@ import { colors } from '../../styles/theme';
 import { aiPhotoStyles as s } from './styles';
 import { SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
+import CameraScreen from './CameraScreen';
 
 const MAX_PHOTOS = 20;
 
 const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
     const [photos, setPhotos] = useState([]);
+    const [showCamera, setShowCamera] = useState(false);
+
+    // Clear photos when modal is closed
+    React.useEffect(() => {
+        if (!visible) {
+            setPhotos([]);
+        }
+    }, [visible]);
 
     const handleClose = () => {
+        if (isAnalyzing) return;
         setPhotos([]);
         onClose();
     };
@@ -31,58 +42,44 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
             'Choose a source',
             [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Take Photo', onPress: () => pickPhotos('camera') },
-                { text: 'Choose from Gallery', onPress: () => pickPhotos('library') },
+                { text: 'Take Photo', onPress: () => setShowCamera(true) },
+                { text: 'Choose from Gallery', onPress: () => pickFromLibrary() },
             ]
         );
     };
 
-    const pickPhotos = async (source) => {
+    const handleCameraCapture = (newPhotos) => {
+        setShowCamera(false);
+        if (newPhotos && newPhotos.length > 0) {
+            setPhotos(prev => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
+        }
+    };
+
+    const pickFromLibrary = async () => {
         try {
             const remaining = MAX_PHOTOS - photos.length;
             if (remaining <= 0) {
                 Alert.alert('Limit reached', `You can add up to ${MAX_PHOTOS} photos.`);
                 return;
             }
-
-            let result;
-
-            if (source === 'camera') {
-                const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                if (status !== 'granted') {
-                    Alert.alert('Permission needed', 'Please grant camera permissions.');
-                    return;
-                }
-                result = await ImagePicker.launchCameraAsync({
-                    mediaTypes: 'images',
-                    allowsEditing: false,
-                    quality: 0.5,
-                    base64: false,
-                });
-            } else {
-                const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (status !== 'granted') {
-                    Alert.alert('Permission needed', 'Please grant photo library permissions.');
-                    return;
-                }
-                result = await ImagePicker.launchImageLibraryAsync({
-                    mediaTypes: 'images',
-                    allowsMultipleSelection: true,
-                    selectionLimit: remaining,
-                    allowsEditing: false,
-                    quality: 0.5,
-                    base64: false,
-                });
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Please grant photo library permissions.');
+                return;
             }
-
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: 'images',
+                allowsMultipleSelection: true,
+                selectionLimit: remaining,
+                allowsEditing: false,
+                quality: 0.5,
+                base64: false,
+            });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                setPhotos(prev => {
-                    const combined = [...prev, ...result.assets];
-                    return combined.slice(0, MAX_PHOTOS);
-                });
+                setPhotos(prev => [...prev, ...result.assets].slice(0, MAX_PHOTOS));
             }
         } catch (error) {
-            console.error('Image picker error:', error);
+            console.error('Library picker error:', error);
             Alert.alert('Error', 'Failed to pick photos.');
         }
     };
@@ -92,9 +89,9 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
     };
 
     const handleIdentify = () => {
-        if (photos.length === 0) return;
+        if (photos.length === 0 || isAnalyzing) return;
         onAnalyze(photos);
-        setPhotos([]);
+        // Modal stays open — closes from ItemsStep after analysis completes
     };
 
     const canIdentify = photos.length > 0 && !isAnalyzing;
@@ -103,16 +100,25 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
         <BaseModal
             visible={visible}
             onClose={handleClose}
-            onBackdropPress={handleClose}
+            onBackdropPress={isAnalyzing ? () => { } : handleClose}
             height={SCREEN_HEIGHT * 0.9}
             backgroundColor={colors.background.secondary}
             avoidKeyboard={false}
+            disableDrag={isAnalyzing}
             renderHeader={() => (
                 <View style={s.header}>
                     <View style={s.headerBtn} />
                     <Text style={s.headerTitle}>AI Item Detection</Text>
-                    <TouchableOpacity style={s.headerBtn} onPress={handleClose}>
-                        <Ionicons name="close" size={24} color={colors.text.primary} />
+                    <TouchableOpacity
+                        style={s.headerBtn}
+                        onPress={handleClose}
+                        disabled={isAnalyzing}
+                    >
+                        <Ionicons
+                            name="close"
+                            size={24}
+                            color={isAnalyzing ? colors.text.muted : colors.text.primary}
+                        />
                     </TouchableOpacity>
                 </View>
             )}
@@ -152,6 +158,22 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                 )}
             </ScrollView>
 
+            {/* Blocking overlay during analysis */}
+            {isAnalyzing && (
+                <View style={overlayStyle.overlay} pointerEvents="box-only">
+                    <ActivityIndicator size="large" color={colors.primary} />
+                    <Text style={overlayStyle.overlayText}>Analyzing photos...</Text>
+                </View>
+            )}
+
+            {/* Custom Camera with boundary box */}
+            <CameraScreen
+                visible={showCamera}
+                onCapture={handleCameraCapture}
+                onClose={() => setShowCamera(false)}
+                alreadyCount={photos.length}
+            />
+
             {/* Footer */}
             <View style={s.footer}>
                 {photos.length > 0 && (
@@ -189,5 +211,20 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
         </BaseModal>
     );
 };
+
+const overlayStyle = StyleSheet.create({
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(10, 10, 31, 0.75)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+    },
+    overlayText: {
+        color: colors.text.primary,
+        fontSize: 16,
+        fontWeight: '600',
+    },
+});
 
 export default AIPhotoPickerModal;

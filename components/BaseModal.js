@@ -29,8 +29,9 @@ const BaseModal = forwardRef(({
     containerStyle,
     renderHeader,
     backgroundColor = colors.background.surface,
-    onBackdropPress, // Optional: custom handler for backdrop tap (e.g., show confirmation)
+    onBackdropPress,
     avoidKeyboard = false,
+    disableDrag = false,
 }, ref) => {
     const insets = useSafeAreaInsets();
 
@@ -63,12 +64,18 @@ const BaseModal = forwardRef(({
         animateCloseRef.current = animateClose;
     }, [animateClose]);
 
+    // Track disableDrag via ref so panResponder (created once) can read latest value
+    const disableDragRef = useRef(disableDrag);
+    useEffect(() => {
+        disableDragRef.current = disableDrag;
+    }, [disableDrag]);
+
     // Pan responder
     const panResponder = useRef(
         PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponder: () => !disableDragRef.current,
             onMoveShouldSetPanResponder: (_, gestureState) => {
-                // Only respond to vertical gestures
+                if (disableDragRef.current) return false;
                 return Math.abs(gestureState.dy) > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
             },
             onPanResponderGrant: () => {
