@@ -150,7 +150,7 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                                     onPress={() => handleRemovePhoto(index)}
                                     hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                                 >
-                                    <Ionicons name="close-circle" size={20} color={colors.error} />
+                                    <Ionicons name="close-circle" size={30} color={colors.error} />
                                 </TouchableOpacity>
                             </View>
                         ))}

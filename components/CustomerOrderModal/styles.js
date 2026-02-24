@@ -463,7 +463,6 @@ export const aiPhotoStyles = StyleSheet.create({
     header: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         paddingHorizontal: spacing.base, height: 56,
-        borderBottomWidth: 1, borderBottomColor: colors.border.default,
     },
     headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary },
@@ -481,7 +480,7 @@ export const aiPhotoStyles = StyleSheet.create({
         paddingHorizontal: spacing.lg, paddingTop: spacing.base, paddingBottom: spacing.xl,
         borderTopWidth: 1, borderTopColor: colors.border.default, backgroundColor: colors.background.secondary,
     },
-    photoCount: { color: colors.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center', marginBottom: spacing.sm },
+    photoCount: { color: colors.text.muted, fontSize: typography.fontSize.sm, textAlign: 'center', marginBottom: spacing.base },
     footerButtons: { flexDirection: 'row', gap: spacing.sm },
     addPhotoBtn: {
         flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
