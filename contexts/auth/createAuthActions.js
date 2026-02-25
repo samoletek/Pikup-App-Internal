@@ -231,6 +231,7 @@ export const createAuthActions = ({
   const subscribeToMessages = MessagingService.subscribeToMessages;
   const subscribeToConversations = MessagingService.subscribeToConversations;
   const markMessageAsRead = MessagingService.markMessageAsRead;
+  const loadOlderMessages = MessagingService.loadOlderMessages;
 
   const getLegalConfig = TermsService.getLegalConfig;
   const checkTermsAcceptance = TermsService.checkTermsAcceptance;
@@ -313,6 +314,7 @@ export const createAuthActions = ({
     subscribeToMessages,
     subscribeToConversations,
     markMessageAsRead,
+    loadOlderMessages,
     getLegalConfig,
     checkTermsAcceptance,
     acceptTerms,

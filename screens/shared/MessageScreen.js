@@ -45,6 +45,7 @@ export default function MessageScreen({ navigation, route }) {
     sendMessage,
     subscribeToMessages,
     markMessageAsRead,
+    loadOlderMessages,
   } = useAuth();
 
   const { conversationId, driverName, customerName, driverInfo } = route.params || {};
@@ -55,6 +56,8 @@ export default function MessageScreen({ navigation, route }) {
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -63,15 +66,14 @@ export default function MessageScreen({ navigation, route }) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [mediaNaturalSizeById, setMediaNaturalSizeById] = useState({});
   const messageListRef = useRef(null);
-  const hasInitialScrollRef = useRef(false);
   const mediaSizeProbeInFlightRef = useRef(new Set());
   const isKeyboardVisible = keyboardHeight > 0;
   const mediaMaxWidth = Math.round(Math.min(contentMaxWidth * 0.7, width * 0.72));
   const mediaMaxHeight = Math.round(Math.min(contentMaxWidth * 0.78, width * 0.8));
 
-  const scrollToLatest = useCallback((animated = true) => {
+  const scrollToLatest = useCallback(() => {
     requestAnimationFrame(() => {
-      messageListRef.current?.scrollToEnd?.({ animated });
+      messageListRef.current?.scrollToOffset?.({ offset: 0, animated: true });
     });
   }, []);
 
@@ -192,27 +194,34 @@ export default function MessageScreen({ navigation, route }) {
     }
 
     setLoading(true);
+    setHasMore(true);
 
-    const unsubscribe = subscribeToMessages(conversationId, (serverMessages) => {
-      setMessages((prevMessages) => {
-        // Keep only pending optimistic messages (those with temp IDs that aren't on server yet)
-        const pendingMessages = prevMessages.filter(
-          (msg) => msg.id?.startsWith("temp-") && msg.status !== "sent"
-        );
-
-        // Merge: server messages + pending optimistic messages
-        return [...serverMessages, ...pendingMessages];
-      });
-      setLoading(false);
-    });
+    const unsubscribe = subscribeToMessages(
+      conversationId,
+      // onInitialLoad — receives array of last 20 messages
+      (initialMessages) => {
+        setMessages((prevMessages) => {
+          const pendingMessages = prevMessages.filter(
+            (msg) => msg.id?.startsWith("temp-") && msg.status !== "sent"
+          );
+          return [...initialMessages, ...pendingMessages];
+        });
+        if (initialMessages.length < 20) setHasMore(false);
+        setLoading(false);
+      },
+      // onNewMessage — receives single new message from realtime
+      (newMsg) => {
+        setMessages((prev) => {
+          // Skip if already present (e.g. optimistic)
+          if (prev.some((m) => m.id === newMsg.id)) return prev;
+          return [...prev, newMsg];
+        });
+      }
+    );
 
     markMessageAsRead(conversationId, userType);
     return unsubscribe;
   }, [conversationId, currentUserId, subscribeToMessages, markMessageAsRead, userType]);
-
-  useEffect(() => {
-    hasInitialScrollRef.current = false;
-  }, [conversationId]);
 
   useEffect(() => {
     setMediaNaturalSizeById((prev) => {
@@ -251,21 +260,34 @@ export default function MessageScreen({ navigation, route }) {
     });
   }, [getMessageMediaType, messages, probeMediaSize]);
 
-  useEffect(() => {
-    if (loading) {
-      return;
-    }
+  // No initial scroll logic needed — inverted FlatList shows latest messages first
 
-    const shouldAnimate = hasInitialScrollRef.current;
-    scrollToLatest(shouldAnimate && !isKeyboardVisible);
-    hasInitialScrollRef.current = true;
-  }, [isKeyboardVisible, loading, messages.length, scrollToLatest]);
+  const handleLoadOlder = useCallback(async () => {
+    if (loadingOlder || !hasMore || messages.length === 0) return;
+
+    const oldestMessage = messages[0];
+    if (!oldestMessage?.timestamp) return;
+
+    setLoadingOlder(true);
+    try {
+      const olderMessages = await loadOlderMessages(conversationId, oldestMessage.timestamp);
+      if (olderMessages.length === 0 || olderMessages.length < 20) {
+        setHasMore(false);
+      }
+      if (olderMessages.length > 0) {
+        setMessages((prev) => [...olderMessages, ...prev]);
+      }
+    } catch (error) {
+      console.error('Error loading older messages:', error);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [conversationId, hasMore, loadOlderMessages, loadingOlder, messages]);
 
   useEffect(() => {
     const handleKeyboardChange = (event) => {
       const nextKeyboardHeight = Number(event?.endCoordinates?.height || 0);
       setKeyboardHeight(nextKeyboardHeight);
-      scrollToLatest(false);
     };
 
     const handleKeyboardHide = () => {
@@ -632,18 +654,23 @@ export default function MessageScreen({ navigation, route }) {
         ) : (
           <FlatList
             ref={messageListRef}
-            data={messages}
+            data={[...messages].reverse()}
             keyExtractor={(item) => String(item.id)}
             renderItem={renderMessage}
+            inverted
             style={styles.messageListContainer}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            onLayout={() => scrollToLatest(false)}
-            onContentSizeChange={() => {
-              if (!hasInitialScrollRef.current) return;
-              scrollToLatest(false);
-            }}
+            onEndReached={handleLoadOlder}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={
+              loadingOlder ? (
+                <View style={styles.loadingOlderContainer}>
+                  <ActivityIndicator size="small" color={colors.text.secondary} />
+                </View>
+              ) : null
+            }
           />
         )}
 
@@ -727,9 +754,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   messageList: {
-    paddingTop: spacing.base,
+    paddingTop: spacing.sm,
     paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.base,
   },
   systemBox: {
     backgroundColor: colors.background.tertiary,
@@ -745,6 +772,10 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingOlderContainer: {
+    paddingVertical: spacing.base,
     alignItems: "center",
   },
   loadingText: {

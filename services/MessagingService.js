@@ -322,7 +322,7 @@ export const getConversations = async (userId, userType) => {
  */
 export const subscribeToConversations = (userId, userType, callback) => {
     if (!userId || typeof callback !== 'function') {
-        return () => {};
+        return () => { };
     }
 
     let isDisposed = false;
@@ -530,10 +530,21 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
     }
 };
 
+const PAGE_SIZE = 20;
+
+const mapMessageRow = (msg) => ({
+    id: msg.id,
+    conversationId: msg.conversation_id,
+    senderId: msg.sender_id,
+    content: msg.content,
+    messageType: msg.message_type,
+    isRead: msg.is_read,
+    createdAt: msg.created_at,
+    timestamp: msg.created_at // Compatibility with MessageScreen
+});
+
 /**
- * Get all messages in a conversation
- * @param {string} conversationId - Conversation ID
- * @returns {Promise<Array>} Array of message objects
+ * Get all messages in a conversation (legacy — used by subscribeToConversations)
  */
 export const getMessages = async (conversationId) => {
     try {
@@ -544,17 +555,7 @@ export const getMessages = async (conversationId) => {
             .order('created_at', { ascending: true });
 
         if (error) throw error;
-
-        return data.map(msg => ({
-            id: msg.id,
-            conversationId: msg.conversation_id,
-            senderId: msg.sender_id,
-            content: msg.content,
-            messageType: msg.message_type,
-            isRead: msg.is_read,
-            createdAt: msg.created_at,
-            timestamp: msg.created_at // Compatibility with MessageScreen
-        }));
+        return data.map(mapMessageRow);
     } catch (error) {
         console.error('Error fetching messages:', error);
         return [];
@@ -562,14 +563,86 @@ export const getMessages = async (conversationId) => {
 };
 
 /**
- * Subscribe to real-time message updates
+ * Get the most recent messages in a conversation (paginated)
  * @param {string} conversationId - Conversation ID
- * @param {Function} callback - Callback function receiving messages array
+ * @param {number} limit - Number of messages to fetch (default PAGE_SIZE)
+ * @returns {Promise<Array>} Array of message objects, sorted oldest-first
+ */
+export const getRecentMessages = async (conversationId, limit = PAGE_SIZE) => {
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) throw error;
+
+        // Reverse so messages are oldest-first (matching MessageScreen expectation)
+        return (data || []).reverse().map(mapMessageRow);
+    } catch (error) {
+        console.error('Error fetching recent messages:', error);
+        return [];
+    }
+};
+
+/**
+ * Load older messages before a given timestamp (cursor-based pagination)
+ * @param {string} conversationId - Conversation ID
+ * @param {string} beforeTimestamp - ISO timestamp to load messages before
+ * @param {number} limit - Number of messages to fetch (default PAGE_SIZE)
+ * @returns {Promise<Array>} Array of older messages, sorted oldest-first
+ */
+export const loadOlderMessages = async (conversationId, beforeTimestamp, limit = PAGE_SIZE) => {
+    try {
+        const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('conversation_id', conversationId)
+            .lt('created_at', beforeTimestamp)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) throw error;
+
+        // Reverse so messages are oldest-first
+        return (data || []).reverse().map(mapMessageRow);
+    } catch (error) {
+        console.error('Error loading older messages:', error);
+        return [];
+    }
+};
+
+/**
+ * Subscribe to real-time message updates (paginated — loads last PAGE_SIZE initially)
+ * @param {string} conversationId - Conversation ID
+ * @param {Function} onInitialLoad - Callback receiving initial messages array
+ * @param {Function} onNewMessage - Callback receiving a single new message object
  * @returns {Function} Cleanup function to unsubscribe
  */
-export const subscribeToMessages = (conversationId, callback) => {
-    // Initial fetch
-    getMessages(conversationId).then(callback);
+export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage) => {
+    // Support legacy single-callback usage: subscribeToMessages(id, callback)
+    if (typeof onNewMessage !== 'function') {
+        const legacyCallback = onInitialLoad;
+        getRecentMessages(conversationId).then(legacyCallback);
+
+        const channel = supabase.channel(`public:messages:${conversationId}`)
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'messages',
+                filter: `conversation_id=eq.${conversationId}`
+            }, () => {
+                getRecentMessages(conversationId).then(legacyCallback);
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }
+
+    // Paginated usage
+    getRecentMessages(conversationId).then(onInitialLoad);
 
     const channel = supabase.channel(`public:messages:${conversationId}`)
         .on('postgres_changes', {
@@ -577,9 +650,10 @@ export const subscribeToMessages = (conversationId, callback) => {
             schema: 'public',
             table: 'messages',
             filter: `conversation_id=eq.${conversationId}`
-        }, () => {
-            // Fetch all messages again to ensure order and consistency
-            getMessages(conversationId).then(callback);
+        }, (payload) => {
+            if (payload?.new) {
+                onNewMessage(mapMessageRow(payload.new));
+            }
         })
         .subscribe();
 
