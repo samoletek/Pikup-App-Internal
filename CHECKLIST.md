@@ -168,7 +168,7 @@
 - [x] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
 - [x] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) *
-- [ ] #112 [DISCUSSION] Vehicle age limit (15 vs 30 years - postponed) *
+- [ ] #112 Vehicle age limit 40 years - drew
 
 ### Driver UI Enhancements *
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
@@ -184,13 +184,50 @@
 ### New Features *
 - [x] #72 Multiple items - grid for adding items
 
+### Additional Tasks after final call *
+- [x] Item cards UI: Rename `Add Manual` to `Add Another Item`
+- [x] Item cards UI: In collapsed item cards, add quick-action icons for delete and edit (trash + pencil) with Apple HIG-compliant touch target sizing
+- [x] Item cards validation: Make `New/Used` selection required before continuing from Step 2, and highlight missing fields in red
+- [x] Item cards validation: If `New` is selected, make `Value` required
+
+- [x] Pickup/Dropoff details: For `Apartment`, add a `Number of stairs` question with +/- controls
+- [x] Pickup/Dropoff details: For `Residence`, hide building/unit fields and show only `Additional notes`
+- [x] Pickup/Dropoff details: If `I'll handle it myself` is already selected, do not show `Do you need help?` again
+- [x] Pickup/Dropoff details: For `Store` and `Apartment`, require `Building name` and `Unit number`
+- [x] Pickup/Dropoff details: Preselect `Apartment` for dropoff by default (most common case)
+
+- [x] Review & Payment: Remove `Service and Technology Fee` from the visible price breakdown
+- [x] Review & Payment: If self-handling is selected, hide labor time and show a reminder: `Be there 5 min early`
+- [x] Review & Payment: Add a slider so users can increase labor time manually
+- [x] Review & Payment: Recalculate total price in real time when labor time changes
+- [x] Review & Payment: Fix waiting-time formula so the 10-minute buffer is free and only overage minutes are charged
+
+- [x] AI photo flow: Update flow to `capture/select multiple photos -> review grid -> add more -> Analyze with AI`, with analysis triggered once on confirm
+- [x] AI photo flow: Add a camera boundary guide box to help users center the item
+
+- [x] AI extraction logic: Prioritize the main large object in the center and deduplicate the same item across multiple photos
+- [x] AI extraction logic: Ignore small background objects (e.g., shoes, wall decor, lamps)
+- [x] AI extraction logic: If multiple large center objects are present (e.g., sofa + table), capture all major items
+- [x] AI extraction logic: If AI detects a TV, recommend `Pickup Truck` (TVs should not be transported flat)
+
+- [x] Driver profile restrictions: Make `First name`, `Last name`, and `Date of birth` read-only (sourced from Stripe Identity)
+- [x] Driver profile restrictions: Keep `Phone number` editable with SMS re-verification
+- [x] Driver profile restrictions: Keep `Address` editable
+
+- [x] Driver onboarding: Block `Go Online` until onboarding is complete
+- [x] Driver onboarding: Add mandatory onboarding video as Step 1 (no skip/seek until full playback)
+- [x] Driver onboarding: Unlock Step 2 verification only after the onboarding video finishes
+
+- [ ] Fixes: Repair `Download my data`
+- [ ] Fixes: Complete `Forgot password` backend flow so Supabase sends reset emails correctly
+
 ### Milestone 3 Deliverables
 - [x] Complete AI-powered item analysis flow
 - [x] Simplified vehicle selection (4 categories)
 - [x] Working messaging system
 - [x] Rebuilt Account screens (Customer + Driver)
 - [x] Complete driver onboarding with AI vehicle detection
-- [-] Driver preferences and gamification UI
+- [x] Driver preferences and gamification UI
 - [x] Dynamic pricing implemented
 
 ---
