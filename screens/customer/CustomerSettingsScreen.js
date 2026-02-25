@@ -13,8 +13,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 import { useAuth } from "../../contexts/AuthContext";
 import { supabase } from "../../config/supabase";
 import ScreenHeader from "../../components/ScreenHeader";
@@ -132,11 +130,11 @@ export default function CustomerSettingsScreen({ navigation, route }) {
 
     Alert.alert(
       "Download My Data",
-      "This will export all your personal data as a JSON file. Continue?",
+      "We'll send a copy of all your personal data to your email address. Continue?",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Download",
+          text: "Send",
           onPress: async () => {
             setDownloadingData(true);
             try {
@@ -157,7 +155,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
               );
 
               if (error) {
-                let errorMessage = "Failed to download data.";
+                let errorMessage = "Failed to send data export.";
                 if (error?.context) {
                   try {
                     const errorBody = await error.context.clone().json();
@@ -168,32 +166,15 @@ export default function CustomerSettingsScreen({ navigation, route }) {
                 throw new Error(errorMessage);
               }
 
-              const fileName = `pikup-data-${Date.now()}.json`;
-              const fileUri = FileSystem.cacheDirectory + fileName;
-              await FileSystem.writeAsStringAsync(
-                fileUri,
-                JSON.stringify(data, null, 2)
+              Alert.alert(
+                "Check Your Email",
+                "Your data export has been sent to your email address. It may take a few minutes to arrive."
               );
-
-              const sharingAvailable = await Sharing.isAvailableAsync();
-              if (!sharingAvailable) {
-                Alert.alert(
-                  "Sharing Unavailable",
-                  "Sharing is not available on this device."
-                );
-                return;
-              }
-
-              await Sharing.shareAsync(fileUri, {
-                mimeType: "application/json",
-                dialogTitle: "Save Your Data",
-                UTI: "public.json",
-              });
             } catch (err) {
-              console.error("Error downloading user data:", err);
+              console.error("Error requesting data export:", err);
               Alert.alert(
                 "Error",
-                err?.message || "Failed to download your data. Please try again."
+                err?.message || "Failed to send your data. Please try again."
               );
             } finally {
               setDownloadingData(false);
@@ -230,8 +211,8 @@ export default function CustomerSettingsScreen({ navigation, route }) {
             navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
         },
         {
-          icon: "download-outline",
-          label: "Download My Data",
+          icon: "mail-outline",
+          label: "Export My Data",
           onPress: handleDownloadMyData,
           loading: downloadingData,
         },
@@ -259,8 +240,8 @@ export default function CustomerSettingsScreen({ navigation, route }) {
             navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
         },
         {
-          icon: "download-outline",
-          label: "Download My Data",
+          icon: "mail-outline",
+          label: "Export My Data",
           onPress: handleDownloadMyData,
           loading: downloadingData,
         },

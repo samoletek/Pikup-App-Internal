@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import AppSwitch from "../../components/AppSwitch";
 import ScreenHeader from "../../components/ScreenHeader";
+import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import {
   borderRadius,
   colors,
@@ -30,6 +31,7 @@ export default function PersonalInfoScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const {
     currentUser,
+    userType,
     profileImage,
     uploadProfileImage,
     getProfileImage,
@@ -41,6 +43,10 @@ export default function PersonalInfoScreen({ navigation }) {
   } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const isDriver = userType === "driver";
+
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
 
   const [personalInfo, setPersonalInfo] = useState({
     firstName: "",
@@ -111,11 +117,16 @@ export default function PersonalInfoScreen({ navigation }) {
           firstName: loadedFirstName,
           lastName: loadedLastName,
           email: profile.email || prev.email || currentUser?.email || "",
+          phone: profile.phone || profile.phoneNumber || prev.phone,
+          dateOfBirth: profile.date_of_birth || profile.dateOfBirth || prev.dateOfBirth,
         }));
         setInitialNameState({
           firstName: loadedFirstName,
           lastName: loadedLastName,
         });
+        if (isDriver && profile.identity_verified) {
+          setIdentityVerified(true);
+        }
       } catch (error) {
         console.error("Error loading profile data:", error);
       }
@@ -368,11 +379,13 @@ export default function PersonalInfoScreen({ navigation }) {
     `${personalInfo.firstName?.[0] || ""}${personalInfo.lastName?.[0] || ""}` || "U"
   ).toUpperCase();
 
+  const fieldsLocked = isDriver && identityVerified;
   const normalizedFirstName = toTitle((personalInfo.firstName || "").trim());
   const normalizedLastName = toTitle((personalInfo.lastName || "").trim());
   const hasNameChanges =
-    normalizedFirstName !== initialNameState.firstName ||
-    normalizedLastName !== initialNameState.lastName;
+    !fieldsLocked &&
+    (normalizedFirstName !== initialNameState.firstName ||
+      normalizedLastName !== initialNameState.lastName);
 
   return (
     <View style={styles.container}>
@@ -437,31 +450,55 @@ export default function PersonalInfoScreen({ navigation }) {
             <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
             <View style={styles.card}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>First Name</Text>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>First Name</Text>
+                  {fieldsLocked && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+                      <Text style={styles.verifiedBadgeText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, fieldsLocked && styles.textInputDisabled]}
                   value={personalInfo.firstName}
                   onChangeText={(value) => updateField("firstName", value)}
+                  editable={!fieldsLocked}
                   placeholder="First Name"
                   placeholderTextColor={colors.text.placeholder}
                   textContentType="givenName"
                   autoCapitalize="words"
                   returnKeyType="next"
                 />
+                {fieldsLocked && (
+                  <Text style={styles.inputNote}>Verified by identity check</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Last Name</Text>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>Last Name</Text>
+                  {fieldsLocked && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+                      <Text style={styles.verifiedBadgeText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, fieldsLocked && styles.textInputDisabled]}
                   value={personalInfo.lastName}
                   onChangeText={(value) => updateField("lastName", value)}
+                  editable={!fieldsLocked}
                   placeholder="Last Name"
                   placeholderTextColor={colors.text.placeholder}
                   textContentType="familyName"
                   autoCapitalize="words"
                   returnKeyType="next"
                 />
+                {fieldsLocked && (
+                  <Text style={styles.inputNote}>Verified by identity check</Text>
+                )}
               </View>
 
               <View style={styles.inputGroup}>
@@ -479,27 +516,62 @@ export default function PersonalInfoScreen({ navigation }) {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={personalInfo.phone}
-                  onChangeText={(value) => updateField("phone", value)}
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                  placeholder="+1 (555) 123-4567"
-                  placeholderTextColor={colors.text.placeholder}
-                  returnKeyType="next"
-                />
+                {isDriver ? (
+                  <TouchableOpacity
+                    style={[styles.textInput, styles.phoneRow]}
+                    onPress={() => setPhoneVerifyVisible(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.phoneText,
+                        !personalInfo.phone && { color: colors.text.placeholder },
+                      ]}
+                    >
+                      {personalInfo.phone || "+1 (555) 123-4567"}
+                    </Text>
+                    <Ionicons name="create-outline" size={18} color={colors.text.muted} />
+                  </TouchableOpacity>
+                ) : (
+                  <TextInput
+                    style={styles.textInput}
+                    value={personalInfo.phone}
+                    onChangeText={(value) => updateField("phone", value)}
+                    keyboardType="phone-pad"
+                    textContentType="telephoneNumber"
+                    placeholder="+1 (555) 123-4567"
+                    placeholderTextColor={colors.text.placeholder}
+                    returnKeyType="next"
+                  />
+                )}
+                {isDriver && (
+                  <Text style={styles.inputNote}>
+                    Changing phone requires re-verification
+                  </Text>
+                )}
               </View>
 
               <View style={[styles.inputGroup, styles.inputGroupLast]}>
-                <Text style={styles.inputLabel}>Date of Birth</Text>
+                <View style={styles.inputLabelRow}>
+                  <Text style={styles.inputLabel}>Date of Birth</Text>
+                  {fieldsLocked && (
+                    <View style={styles.verifiedBadge}>
+                      <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+                      <Text style={styles.verifiedBadgeText}>Verified</Text>
+                    </View>
+                  )}
+                </View>
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, fieldsLocked && styles.textInputDisabled]}
                   value={personalInfo.dateOfBirth}
                   onChangeText={(value) => updateField("dateOfBirth", value)}
+                  editable={!fieldsLocked}
                   placeholder="MM/DD/YYYY"
                   placeholderTextColor={colors.text.placeholder}
                 />
+                {fieldsLocked && (
+                  <Text style={styles.inputNote}>Verified by identity check</Text>
+                )}
               </View>
             </View>
           </View>
@@ -765,6 +837,26 @@ export default function PersonalInfoScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {isDriver && (
+        <PhoneVerificationModal
+          visible={phoneVerifyVisible}
+          onClose={() => setPhoneVerifyVisible(false)}
+          onVerified={() => {
+            setPhoneVerifyVisible(false);
+            getUserProfile(userId).then((profile) => {
+              if (profile) {
+                setPersonalInfo((prev) => ({
+                  ...prev,
+                  phone: profile.phone || profile.phoneNumber || prev.phone,
+                }));
+              }
+            });
+          }}
+          userId={userId}
+          userTable="drivers"
+        />
+      )}
     </View>
   );
 }
@@ -857,10 +949,34 @@ const styles = StyleSheet.create({
   inputGroupLast: {
     marginBottom: 0,
   },
+  inputLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   inputLabel: {
     color: colors.text.secondary,
     fontSize: typography.fontSize.base,
     marginBottom: spacing.sm,
+  },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: "auto",
+    gap: spacing.xs,
+  },
+  verifiedBadgeText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  phoneText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
   },
   textInput: {
     backgroundColor: colors.background.elevated,
@@ -924,7 +1040,7 @@ const styles = StyleSheet.create({
   switchTitle: {
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
-    marginBottom: 2,
+    marginBottom: spacing.xs,
   },
   switchDescription: {
     color: colors.text.tertiary,
@@ -961,7 +1077,7 @@ const styles = StyleSheet.create({
   dangerDescription: {
     color: colors.text.tertiary,
     fontSize: typography.fontSize.base,
-    lineHeight: 20,
+    lineHeight: typography.fontSize.base * 1.35,
   },
   dangerButton: {
     marginTop: spacing.base,
