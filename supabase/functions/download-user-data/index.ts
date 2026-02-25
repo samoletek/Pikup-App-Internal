@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -169,8 +170,60 @@ serve(async (req) => {
       exportData.claims = claims || []
     }
 
+    // Send data via email using SMTP
+    const smtpHostname = Deno.env.get("SMTP_HOSTNAME")
+    const smtpPort = Number(Deno.env.get("SMTP_PORT") || "465")
+    const smtpUsername = Deno.env.get("SMTP_USERNAME")
+    const smtpPassword = Deno.env.get("SMTP_PASSWORD")
+
+    if (!smtpHostname || !smtpUsername || !smtpPassword) {
+      throw new Error("Email service is not configured. Please contact support.")
+    }
+
+    const jsonContent = JSON.stringify(exportData, null, 2)
+    const encoder = new TextEncoder()
+    const jsonBytes = encoder.encode(jsonContent)
+
+    const client = new SMTPClient({
+      connection: {
+        hostname: smtpHostname,
+        port: smtpPort,
+        tls: true,
+        auth: {
+          username: smtpUsername,
+          password: smtpPassword,
+        },
+      },
+    })
+
+    try {
+      await client.send({
+        from: smtpUsername,
+        to: user.email!,
+        subject: "Your PikUp Data Export",
+        html: `
+          <h2>Your Data Export</h2>
+          <p>Hi there,</p>
+          <p>You requested an export of your PikUp data. Please find the attached JSON file containing all your personal data.</p>
+          <p>This export includes your profile information, trip history, conversations, messages, and feedback.</p>
+          <br/>
+          <p>— The PikUp Team</p>
+        `,
+        attachments: [
+          {
+            filename: `pikup-data-${Date.now()}.json`,
+            content: jsonBytes,
+            contentType: "application/json",
+            encoding: "binary",
+          },
+        ],
+      })
+    } finally {
+      await client.close()
+    }
+
     return new Response(
-      JSON.stringify(exportData, null, 2),
+      JSON.stringify({ success: true, message: "Data export sent to your email." }),
       {
         headers: {
           ...corsHeaders,

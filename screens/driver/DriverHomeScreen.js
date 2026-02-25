@@ -553,10 +553,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     if (error || !profile) return { ready: false, issues: ['Could not load profile'] };
 
     const issues = [];
-    // BYPASS: Checks disabled for development
-    // if (!profile.phone_verified) issues.push('phone');
-    // if (!profile.onboarding_complete) issues.push('vehicle');
-    // if (!profile.identity_verified) issues.push('identity');
+    if (!profile.phone_verified) issues.push('phone');
+    if (!profile.onboarding_complete) issues.push('vehicle');
+    if (!profile.identity_verified) issues.push('identity');
 
     return { ready: issues.length === 0, issues, profile };
   };

@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Video } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,8 +45,8 @@ import {
 const steps = [
   {
     title: 'Welcome to PikUp',
-    subtitle: 'Start earning by delivering packages on your route',
-    icon: 'car-sport',
+    subtitle: 'Watch this short video to learn how PikUp works',
+    icon: 'videocam',
     color: colors.primary,
   },
   {
@@ -164,6 +165,7 @@ const formatYear = (value) => value.replace(/[^\d]/g, '').slice(0, 4);
 
 const formatLicensePlate = (value) => value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
 
+const ONBOARDING_VIDEO_WATCHED_KEY = 'driver_onboarding_video_watched';
 const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
 const VALID_VERIFICATION_STATUSES = ['pending', 'completed', 'failed', 'canceled'];
 
@@ -254,6 +256,11 @@ export default function DriverOnboardingScreen({ navigation }) {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
+
+  // Video state
+  const [videoWatched, setVideoWatched] = useState(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const videoRef = useRef(null);
 
   // Vehicle verification state
   const [vinPhotoUri, setVinPhotoUri] = useState(null);
@@ -601,6 +608,40 @@ export default function DriverOnboardingScreen({ navigation }) {
     };
   }, [userId, progressAnim]);
 
+  // Check if onboarding video was already watched
+  useEffect(() => {
+    if (!userId) return;
+    AsyncStorage.getItem(`${ONBOARDING_VIDEO_WATCHED_KEY}:${userId}`)
+      .then((val) => { if (val === 'true') setVideoWatched(true); })
+      .catch(() => {});
+  }, [userId]);
+
+  const handleVideoPlaybackStatus = async (status) => {
+    if (status.isPlaying !== undefined) {
+      setIsVideoPlaying(status.isPlaying);
+    }
+    if (status.didJustFinish) {
+      setVideoWatched(true);
+      try {
+        await AsyncStorage.setItem(`${ONBOARDING_VIDEO_WATCHED_KEY}:${userId}`, 'true');
+      } catch (_) {}
+    }
+  };
+
+  const toggleVideoPlayback = async () => {
+    if (!videoRef.current) return;
+    const status = await videoRef.current.getStatusAsync();
+    if (status.isPlaying) {
+      await videoRef.current.pauseAsync();
+    } else {
+      if (status.didJustFinish || status.positionMillis === status.durationMillis) {
+        await videoRef.current.replayAsync();
+      } else {
+        await videoRef.current.playAsync();
+      }
+    }
+  };
+
   useEffect(() => {
     if (!isDraftHydrated || !userId) {
       return undefined;
@@ -702,6 +743,8 @@ export default function DriverOnboardingScreen({ navigation }) {
           formData.address.state &&
           formData.address.postalCode.length === 5
         );
+      case 0: // Welcome — video must be watched
+        return videoWatched;
       case 4: // Vehicle Info — photos + verification required
         return (
           !!vinPhotoUri &&
@@ -719,7 +762,11 @@ export default function DriverOnboardingScreen({ navigation }) {
 
   const handleNext = async () => {
     if (!validateStep()) {
-      Alert.alert('Missing Information', 'Please fill in all required fields correctly.');
+      if (currentStep === 0) {
+        Alert.alert('Watch the Video', 'Please watch the onboarding video before continuing.');
+      } else {
+        Alert.alert('Missing Information', 'Please fill in all required fields correctly.');
+      }
       return;
     }
 
@@ -981,6 +1028,38 @@ export default function DriverOnboardingScreen({ navigation }) {
       case 0:
         return (
           <View style={styles.welcomeContent}>
+            {/* Video player */}
+            <TouchableOpacity
+              style={styles.videoContainer}
+              activeOpacity={0.9}
+              onPress={toggleVideoPlayback}
+            >
+              <Video
+                ref={videoRef}
+                source={require('../../assets/videos/pikup-order-v2.mp4')}
+                style={styles.video}
+                resizeMode="contain"
+                shouldPlay={false}
+                isLooping={false}
+                onPlaybackStatusUpdate={handleVideoPlaybackStatus}
+              />
+              {/* Play/Pause overlay */}
+              {!isVideoPlaying && (
+                <View style={styles.videoOverlay}>
+                  <View style={styles.playButton}>
+                    <Ionicons name="play" size={32} color={colors.white} />
+                  </View>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {videoWatched && (
+              <View style={styles.videoWatchedBadge}>
+                <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                <Text style={styles.videoWatchedText}>Video watched — you can continue</Text>
+              </View>
+            )}
+
             <View style={styles.benefitsList}>
               <View style={styles.benefitItem}>
                 <Ionicons name="cash-outline" size={20} color={colors.success} />
@@ -1678,13 +1757,15 @@ export default function DriverOnboardingScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.stepContainer, { maxWidth: contentMaxWidth }]}>
-          <View style={[styles.stepIcon, { backgroundColor: `${steps[currentStep].color}20` }]}>
-            <Ionicons
-              name={steps[currentStep].icon}
-              size={32}
-              color={steps[currentStep].color}
-            />
-          </View>
+          {currentStep !== 0 && (
+            <View style={[styles.stepIcon, { backgroundColor: `${steps[currentStep].color}20` }]}>
+              <Ionicons
+                name={steps[currentStep].icon}
+                size={32}
+                color={steps[currentStep].color}
+              />
+            </View>
+          )}
 
           <Text style={styles.stepTitle}>{steps[currentStep].title}</Text>
           <Text style={styles.stepSubtitle}>{steps[currentStep].subtitle}</Text>
@@ -1715,10 +1796,10 @@ export default function DriverOnboardingScreen({ navigation }) {
           style={[
             styles.nextButton,
             currentStep === 0 && styles.nextButtonFull,
-            loading && styles.nextButtonDisabled,
+            (loading || (currentStep === 0 && !videoWatched)) && styles.nextButtonDisabled,
           ]}
           onPress={handleNext}
-          disabled={loading}
+          disabled={loading || (currentStep === 0 && !videoWatched)}
         >
           {loading ? (
             <View style={styles.loadingContainer}>
@@ -1843,6 +1924,48 @@ const styles = StyleSheet.create({
   welcomeContent: {
     width: '100%',
     alignItems: 'center',
+  },
+  videoContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.black,
+    marginBottom: spacing.lg,
+  },
+  video: {
+    width: '100%',
+    height: '100%',
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  playButton: {
+    width: spacing.xxl * 2,
+    height: spacing.xxl * 2,
+    borderRadius: spacing.xxl,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: spacing.xs,
+  },
+  videoWatchedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  videoWatchedText: {
+    color: colors.success,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
   },
   welcomeIconContainer: {
     width: 120,

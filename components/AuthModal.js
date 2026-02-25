@@ -91,7 +91,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
     const modalRef = useRef(null);
 
     // Auth Context
-    const { login, signup, signInWithGoogle, signInWithApple, loading } = useAuth();
+    const { login, signup, signInWithGoogle, signInWithApple, resetPassword, loading } = useAuth();
 
     // State
     const [step, setStep] = useState('initial'); // 'initial' | 'email_check' | 'password' | 'register' | 'phone_input' | 'phone_verify'
@@ -535,7 +535,24 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
                 loading={loading}
             />
 
-            <TouchableOpacity style={styles.forgotBtn}>
+            <TouchableOpacity
+                style={styles.forgotBtn}
+                onPress={async () => {
+                    if (!email) {
+                        Alert.alert('Email Required', 'Please enter your email address first.');
+                        return;
+                    }
+                    try {
+                        await resetPassword(email);
+                        Alert.alert(
+                            'Check Your Email',
+                            'If an account exists for this email, a password reset link has been sent.'
+                        );
+                    } catch (err) {
+                        Alert.alert('Error', err?.message || 'Failed to send reset email.');
+                    }
+                }}
+            >
                 <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
         </>

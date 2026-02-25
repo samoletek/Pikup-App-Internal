@@ -9,8 +9,9 @@ config.resolver.alias = {
   // Add more aliases if needed
 };
 
-// Ensure proper handling of native modules
-config.resolver.sourceExts = ['jsx', 'js', 'ts', 'tsx', 'json', 'cjs', 'mjs'];
-config.resolver.assetExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ttf'];
+// Extend default asset extensions with mp4 for onboarding video
+if (!config.resolver.assetExts.includes('mp4')) {
+  config.resolver.assetExts.push('mp4');
+}
 
 module.exports = config;

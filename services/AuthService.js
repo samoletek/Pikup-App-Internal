@@ -624,6 +624,25 @@ export const changePassword = async (currentUser, currentPassword, newPassword) 
 };
 
 /**
+ * Send password reset email
+ * @param {string} email - User email address
+ * @returns {Promise<boolean>} Success status
+ */
+export const resetPassword = async (email) => {
+    if (!email) {
+        throw new Error('Email is required.');
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+    if (error) {
+        throw error;
+    }
+
+    return true;
+};
+
+/**
  * Delete user account
  * @param {Object} currentUser - Current user object
  * @returns {Promise<boolean>} Success status
