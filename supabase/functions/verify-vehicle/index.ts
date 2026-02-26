@@ -536,9 +536,18 @@ serve(async (req) => {
             status = 'rejected';
             reason = `VIN indicates ${vinData.make}, but ${checkResult.differentBrandDetected} was detected in the photo. The vehicle photos must match the VIN.`;
         } else {
-            // VIN decoded + vehicle detected + no brand mismatch → approved
-            status = 'approved';
-            reason = 'Vehicle verified successfully.';
+            // All checks passed — verify vehicle age
+            const MAX_VEHICLE_AGE = 40;
+            const currentYear = new Date().getFullYear();
+            const vehicleYear = parseInt(vinData.year, 10);
+
+            if (vehicleYear && (currentYear - vehicleYear) > MAX_VEHICLE_AGE) {
+                status = 'rejected';
+                reason = `This ${vinData.year} ${vinData.make} ${vinData.model} is over ${MAX_VEHICLE_AGE} years old. Vehicles older than ${MAX_VEHICLE_AGE} years are not eligible for the platform.`;
+            } else {
+                status = 'approved';
+                reason = 'Vehicle verified successfully.';
+            }
         }
 
         // Step 7: Server-side save — only the server can set vehicle_verified
