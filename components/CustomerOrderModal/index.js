@@ -362,12 +362,6 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             if (!trimValue(locationDetails.storeName)) {
                 return `Please enter the store or business name for ${label}.`;
             }
-            if (!trimValue(locationDetails.buildingName)) {
-                return `Please enter the building name/number for ${label}.`;
-            }
-            if (!trimValue(locationDetails.unitNumber)) {
-                return `Please enter the unit/suite number for ${label}.`;
-            }
             return null;
         }
 
@@ -430,7 +424,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
 
                 orderData.items.forEach(item => {
                     const itemErr = {};
-                    if (!item.name.trim()) itemErr.name = true;
+                    if (!item.name?.trim()) itemErr.name = true;
+                    if (!Array.isArray(item.photos) || item.photos.length === 0) itemErr.photos = true;
                     if (!item.condition) itemErr.condition = true;
                     if (item.condition === 'new' && !item.value) itemErr.value = true;
                     if (item.hasInsurance && !item.invoicePhoto) itemErr.invoice = true;
@@ -448,6 +443,8 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     const firstErr = errors[firstErrorItemId];
                     if (firstErr.name) {
                         Alert.alert('Missing Info', 'Please enter a name for all items.');
+                    } else if (firstErr.photos) {
+                        Alert.alert('Missing Info', 'Please add at least one photo for every item.');
                     } else if (firstErr.condition) {
                         Alert.alert('Missing Info', 'Please select a condition (New or Used) for all items.');
                     } else if (firstErr.value) {

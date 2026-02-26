@@ -24,15 +24,15 @@ const CORNER_SIZE = 28;
 const CORNER_THICKNESS = 3;
 
 const THUMB_SIZE = 56;
-const MAX_CAMERA_PHOTOS = 10;
+const DEFAULT_MAX_CAMERA_PHOTOS = 10;
 
-const CameraScreen = ({ visible, onCapture, onClose, alreadyCount = 0 }) => {
+const CameraScreen = ({ visible, onCapture, onClose, alreadyCount = 0, maxPhotos = DEFAULT_MAX_CAMERA_PHOTOS }) => {
     const [facing, setFacing] = useState('back');
     const [permission, requestPermission] = useCameraPermissions();
     const [capturedPhotos, setCapturedPhotos] = useState([]);
     const cameraRef = useRef(null);
 
-    const totalLimit = MAX_CAMERA_PHOTOS;
+    const totalLimit = Math.max(1, Number(maxPhotos) || DEFAULT_MAX_CAMERA_PHOTOS);
     const canCapture = capturedPhotos.length + alreadyCount < totalLimit;
     const remaining = totalLimit - alreadyCount - capturedPhotos.length;
 

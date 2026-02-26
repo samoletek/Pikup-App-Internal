@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -7,7 +7,6 @@ import {
     TouchableOpacity,
     Image,
     Alert,
-    Animated,
     LayoutAnimation,
     Platform,
     UIManager
@@ -15,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors, borderRadius, spacing, typography, hitSlopDefault } from '../../styles/theme';
+import AIPhotoPickerModal from '../CustomerOrderModal/AIPhotoPickerModal';
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -30,52 +30,27 @@ const OrderItemCard = ({
     onDelete,
     errors,
 }) => {
-    const [isUploading, setIsUploading] = useState(false);
+    const [showPhotoPicker, setShowPhotoPicker] = useState(false);
 
     const remainingSlots = MAX_PHOTOS - item.photos.length;
+    const hasPhotoError = !!errors?.photos;
 
-    const handleAddPhoto = async () => {
+    const openPhotoPicker = () => {
         if (remainingSlots <= 0) {
             Alert.alert('Limit Reached', `Maximum ${MAX_PHOTOS} photos per item.`);
             return;
         }
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsMultipleSelection: true,
-            selectionLimit: remainingSlots,
-            quality: 0.8,
-        });
-
-        if (!result.canceled && result.assets?.length > 0) {
-            const selectedUris = result.assets.map(a => a.uri);
-            const newPhotos = [...item.photos, ...selectedUris].slice(0, MAX_PHOTOS);
-            onUpdate({ ...item, photos: newPhotos });
-        }
+        setShowPhotoPicker(true);
     };
 
-    const handleTakePhoto = async () => {
-        if (item.photos.length >= MAX_PHOTOS) {
-            Alert.alert('Limit Reached', `Maximum ${MAX_PHOTOS} photos per item.`);
-            return;
-        }
+    const handlePhotoSelectionDone = (selectedPhotos = []) => {
+        const selectedUris = selectedPhotos
+            .map(photo => photo?.uri)
+            .filter(Boolean)
+            .slice(0, MAX_PHOTOS);
 
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-            Alert.alert('Permission Required', 'Camera permission is needed to take photos.');
-            return;
-        }
-
-        const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.8
-        });
-
-        if (!result.canceled && result.assets[0]) {
-            const newPhotos = [...item.photos, result.assets[0].uri];
-            onUpdate({ ...item, photos: newPhotos });
-        }
+        onUpdate({ ...item, photos: selectedUris });
+        setShowPhotoPicker(false);
     };
 
     const handleRemovePhoto = (index) => {
@@ -132,16 +107,18 @@ const OrderItemCard = ({
                 </View>
                 <View style={styles.cardHeaderActions}>
                     <TouchableOpacity
+                        style={styles.headerActionButton}
                         onPress={handleToggleExpand}
                         hitSlop={hitSlopDefault}
                     >
-                        <Ionicons name="create-outline" size={20} color={colors.text.muted} />
+                        <Ionicons name="create-outline" size={22} color={colors.text.muted} />
                     </TouchableOpacity>
                     <TouchableOpacity
+                        style={styles.headerActionButton}
                         onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
                         hitSlop={hitSlopDefault}
                     >
-                        <Ionicons name="trash-outline" size={20} color={colors.error} />
+                        <Ionicons name="trash-outline" size={22} color={colors.error} />
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>
@@ -151,22 +128,8 @@ const OrderItemCard = ({
                 <View style={styles.cardContent}>
                     {/* Add Photo Button (Top) */}
                     <TouchableOpacity
-                        style={styles.addPhotoBtnTop}
-                        onPress={() => {
-                            if (item.photos.length >= MAX_PHOTOS) {
-                                Alert.alert('Limit Reached', `Maximum ${MAX_PHOTOS} photos per item.`);
-                                return;
-                            }
-                            Alert.alert(
-                                'Add Photo',
-                                'Choose an option:',
-                                [
-                                    { text: 'Take Photo', onPress: handleTakePhoto },
-                                    { text: 'Choose from Library', onPress: handleAddPhoto },
-                                    { text: 'Cancel', style: 'cancel' }
-                                ]
-                            );
-                        }}
+                        style={[styles.addPhotoBtnTop, hasPhotoError && styles.errorBorder]}
+                        onPress={openPhotoPicker}
                     >
                         <Ionicons name="camera" size={24} color={colors.text.primary} />
                         <View style={{ marginLeft: 12 }}>
@@ -183,6 +146,9 @@ const OrderItemCard = ({
                         </View>
                         <Ionicons name="add-circle" size={24} color={colors.primary} style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
+                    {hasPhotoError && (
+                        <Text style={styles.errorText}>Please add at least one photo.</Text>
+                    )}
 
                     {/* Photo Preview Grid (Moved here) */}
                     {item.photos.length > 0 && (
@@ -291,14 +257,8 @@ const OrderItemCard = ({
                                 item.hasInsurance && styles.toggleBtnActive,
                                 item.condition !== 'new' && styles.toggleBtnDisabled
                             ]}
-                            onPress={() => {
-                                if (item.condition !== 'new') {
-                                    Alert.alert('Insurance Unavailable', 'Only new items with a valid invoice can be insured.');
-                                    return;
-                                }
-                                onUpdate({ ...item, hasInsurance: !item.hasInsurance });
-                            }}
-                            activeOpacity={item.condition !== 'new' ? 1 : 0.7}
+                            disabled
+                            activeOpacity={1}
                         >
                             <Ionicons
                                 name={item.hasInsurance ? "shield-checkmark" : "shield-checkmark-outline"}
@@ -360,6 +320,17 @@ const OrderItemCard = ({
                     </View>
                 </View>
             )}
+
+            <AIPhotoPickerModal
+                visible={showPhotoPicker}
+                onClose={() => setShowPhotoPicker(false)}
+                mode="select"
+                title="Item Photos"
+                maxPhotos={MAX_PHOTOS}
+                initialPhotos={item.photos}
+                onConfirm={handlePhotoSelectionDone}
+                isAnalyzing={false}
+            />
         </View>
     );
 };
@@ -401,6 +372,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
+    },
+    headerActionButton: {
+        width: 44,
+        height: 44,
+        borderRadius: borderRadius.circle,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     cardHeaderInfo: {
         marginLeft: spacing.md,
@@ -511,6 +489,12 @@ const styles = StyleSheet.create({
         color: colors.text.secondary,
         fontSize: typography.fontSize.xs,
         marginTop: 2
+    },
+    errorText: {
+        color: colors.error,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
+        marginBottom: spacing.sm,
     },
     photoGridTop: {
         flexDirection: 'row',

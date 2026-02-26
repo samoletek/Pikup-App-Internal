@@ -14,9 +14,9 @@ const STEPPER_VALUE_MIN_WIDTH = 56;
 const STEPPER_INPUT_MIN_WIDTH = 48;
 
 const LOCATION_TYPES = [
-    { id: 'store', label: 'Store' },
-    { id: 'apartment', label: 'Apartment/Condo' },
-    { id: 'residential_other', label: 'Residential/Other' },
+    { id: 'store', label: 'Store', icon: 'storefront-outline' },
+    { id: 'apartment', label: 'Apartment/Condo', icon: 'business-outline' },
+    { id: 'residential_other', label: 'Residential/Other', icon: 'home-outline' },
 ];
 
 const normalizeLocationType = (value) => {
@@ -50,9 +50,11 @@ const LocationDetailsStep = ({
     const setLocationType = (nextType) => {
         updateDetails({
             locationType: nextType,
+            buildingName: nextType === 'apartment' ? (details.buildingName || '') : '',
             hasElevator: nextType === 'apartment' ? (details.hasElevator ?? null) : null,
             unitNumber: nextType === 'apartment' ? unitNumberValue : '',
             floor: nextType === 'apartment' ? (details.floor ?? '') : '',
+            numberOfStairs: nextType === 'apartment' ? (details.numberOfStairs || 1) : 1,
         });
     };
 
@@ -85,6 +87,12 @@ const LocationDetailsStep = ({
                                 style={[styles.locationTypeChip, isActive && styles.locationTypeChipActive]}
                                 onPress={() => setLocationType(item.id)}
                             >
+                                <Ionicons
+                                    name={item.icon}
+                                    size={24}
+                                    color={isActive ? colors.white : colors.text.muted}
+                                    style={styles.locationTypeChipIcon}
+                                />
                                 <Text
                                     style={[styles.locationTypeChipText, isActive && styles.locationTypeChipTextActive]}
                                     numberOfLines={2}
@@ -108,28 +116,6 @@ const LocationDetailsStep = ({
                             placeholderTextColor={colors.text.placeholder}
                             value={details.storeName || ''}
                             onChangeText={(text) => updateDetails({ storeName: text })}
-                        />
-                    </View>
-
-                    <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Building Name/Number *</Text>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="Enter building name or number"
-                            placeholderTextColor={colors.text.placeholder}
-                            value={details.buildingName || ''}
-                            onChangeText={(text) => updateDetails({ buildingName: text })}
-                        />
-                    </View>
-
-                    <View style={styles.field}>
-                        <Text style={styles.fieldLabel}>Unit/Suite Number *</Text>
-                        <TextInput
-                            style={styles.textInput}
-                            placeholder="e.g. Suite 200"
-                            placeholderTextColor={colors.text.placeholder}
-                            value={details.unitNumber || ''}
-                            onChangeText={(text) => updateDetails({ unitNumber: text })}
                         />
                     </View>
 
@@ -412,18 +398,22 @@ locationTypeRow: {
     },
     locationTypeChip: {
         flex: 1,
-        minHeight: 44,
-        borderRadius: borderRadius.full,
+        minHeight: 92,
+        borderRadius: borderRadius.md,
         borderWidth: 1,
         borderColor: colors.border.default,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: colors.background.input,
         paddingHorizontal: spacing.xs,
+        paddingVertical: spacing.md,
     },
     locationTypeChipActive: {
         backgroundColor: colors.primary,
         borderColor: colors.primary,
+    },
+    locationTypeChipIcon: {
+        marginBottom: spacing.xs,
     },
     locationTypeChipText: {
         color: colors.text.muted,

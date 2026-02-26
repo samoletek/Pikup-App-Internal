@@ -144,23 +144,46 @@ const AddressSearchStep = ({
         Keyboard.dismiss();
         try {
             setIsLoadingCurrentLocation(true);
-            const location = await MapboxLocationService.getCurrentLocation();
+            const location = await MapboxLocationService.getCurrentLocation({
+                maximumAge: 180000,
+                timeoutMs: 8000,
+            });
 
             if (location) {
                 const coordinates = { latitude: location.latitude, longitude: location.longitude };
-                let addressText = `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`;
+                const fallbackAddress = `Current location (${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)})`;
 
-                try {
-                    const addressData = await MapboxLocationService.reverseGeocode(location.latitude, location.longitude);
-                    if (addressData?.address) addressText = addressData.address;
-                } catch (err) {
-                    console.log('Reverse geocoding failed', err);
-                }
-
-                setOrderData(prev => ({ ...prev, [fieldType]: { address: addressText, coordinates } }));
+                // Fill coordinates immediately to keep UX responsive, then refine address in background.
+                setOrderData(prev => ({ ...prev, [fieldType]: { address: fallbackAddress, coordinates } }));
                 if (fieldType === 'pickup') setPickupSuggestions([]);
                 else setDropoffSuggestions([]);
                 setActiveField(null);
+
+                MapboxLocationService.reverseGeocode(location.latitude, location.longitude)
+                    .then((addressData) => {
+                        if (!addressData?.address) return;
+
+                        setOrderData(prev => {
+                            const selectedCoords = prev[fieldType]?.coordinates;
+                            const sameCoords =
+                                selectedCoords &&
+                                Math.abs(selectedCoords.latitude - coordinates.latitude) < 0.00001 &&
+                                Math.abs(selectedCoords.longitude - coordinates.longitude) < 0.00001;
+
+                            if (!sameCoords) return prev;
+
+                            return {
+                                ...prev,
+                                [fieldType]: {
+                                    ...prev[fieldType],
+                                    address: addressData.address,
+                                },
+                            };
+                        });
+                    })
+                    .catch((err) => {
+                        console.log('Reverse geocoding failed', err);
+                    });
             }
         } catch (error) {
             Alert.alert('Location Error', 'Unable to get current location.');

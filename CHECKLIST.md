@@ -218,6 +218,18 @@
 - [x] Driver onboarding: Add mandatory onboarding video as Step 1 (no skip/seek until full playback)
 - [x] Driver onboarding: Unlock Step 2 verification only after the onboarding video finishes
 
+NEW EDITS:
+
+- [x] Location UX: Optimize `Use current location` responsiveness with faster fallback behavior for real-world US testing
+- [x] Location details UI: Enlarge location type buttons and place icons above labels (Step 3/4)
+- [x] Step 2 validation: Block next step when item details are incomplete (including required condition and photos)
+- [x] Step 2 copy: Rename top CTA from `Add Multiple Items with AI` to `Add Multiple Item`
+- [x] Step 2 copy: Use dynamic manual CTA text (`Add item` when empty, `Add Another Item` after first item)
+- [x] Item photo flow: Reuse the same camera/review model from multi-item AI flow for manual item photo upload
+- [x] Item insurance CTA: Make insurance control non-tappable and condition-driven
+- [x] AI screen copy: Rename `Identify with AI` action to `Scan`
+- [x] Location details logic: For `Store`, do not request `Building name` or `Unit number`
+
 - [ ] Fixes: Repair `Download my data`
 - [ ] Fixes: Complete `Forgot password` backend flow so Supabase sends reset emails correctly
 

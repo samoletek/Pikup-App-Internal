@@ -135,7 +135,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
             description: '',
             photos: [],
             isFragile: false,
-            condition: 'used',
+            condition: '',
             hasInsurance: false,
             value: '',
             invoicePhoto: null,
@@ -195,7 +195,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                         </View>
                         <View style={styles.aiActionTextContainer}>
                             <Text style={styles.aiPrimaryTitle}>
-                                {isAnalyzing ? `Analyzing Items...` : 'Add Multiple Items with AI'}
+                                {isAnalyzing ? `Analyzing Items...` : 'Add Multiple Item'}
                             </Text>
                             <Text style={styles.aiActionSubtitle}>
                                 {isAnalyzing ? 'Identifying item details...' : '✦ Powered by Gemini'}
@@ -234,7 +234,9 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
 
                 <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
                     <Ionicons name="add-circle" size={24} color={colors.primary} />
-                    <Text style={styles.addItemBtnText}>Add Another Item</Text>
+                    <Text style={styles.addItemBtnText}>
+                        {orderData.items.length > 0 ? 'Add Another Item' : 'Add item'}
+                    </Text>
                 </TouchableOpacity>
 
                 <View style={styles.itemsBottomSpacer} />

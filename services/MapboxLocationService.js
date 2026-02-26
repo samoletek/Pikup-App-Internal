@@ -132,25 +132,70 @@ class MapboxLocationService {
   }
 
   // Keep existing location methods (no changes needed)
-  async getCurrentLocation() {
+  normalizeLocationPayload(location) {
+    if (!location?.coords) return null;
+
+    return {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      accuracy: location.coords.accuracy,
+      timestamp: location.timestamp || Date.now(),
+    };
+  }
+
+  async getCurrentLocation(options = {}) {
+    const {
+      accuracy = Location.Accuracy.Balanced,
+      timeoutMs = 8000,
+      maximumAge = 120000,
+      requiredAccuracy = 250,
+      allowLastKnown = true,
+      allowStoredFallback = true,
+    } = options;
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      let { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        status = permission.status;
+      }
+
       if (status !== 'granted') {
         throw new Error('Location permission required');
       }
 
+      const now = Date.now();
+      const currentTimestamp = Number(this.currentLocation?.timestamp || 0);
+      if (this.currentLocation && now - currentTimestamp <= maximumAge) {
+        return this.currentLocation;
+      }
+
+      if (allowLastKnown) {
+        const lastKnownPosition = await Location.getLastKnownPositionAsync({
+          maxAge: maximumAge,
+          requiredAccuracy,
+        });
+
+        const lastKnownLocation = this.normalizeLocationPayload(lastKnownPosition);
+        if (lastKnownLocation) {
+          this.currentLocation = lastKnownLocation;
+          this.saveLastKnownLocation(lastKnownLocation);
+          return lastKnownLocation;
+        }
+      }
+
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-        timeout: 10000,
-        maximumAge: 60000,
+        accuracy,
+        timeout: timeoutMs,
+        maximumAge,
       });
 
-      this.currentLocation = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy,
-        timestamp: location.timestamp,
-      };
+      const normalizedLocation = this.normalizeLocationPayload(location);
+      if (!normalizedLocation) {
+        throw new Error('Unable to resolve location coordinates');
+      }
+
+      this.currentLocation = normalizedLocation;
 
       // Save to storage
       this.saveLastKnownLocation(this.currentLocation);
@@ -158,6 +203,13 @@ class MapboxLocationService {
       return this.currentLocation;
     } catch (error) {
       console.error('Error getting current location:', error);
+      if (allowStoredFallback) {
+        const storedLocation = await this.getLastKnownLocation();
+        if (storedLocation?.latitude && storedLocation?.longitude) {
+          this.currentLocation = storedLocation;
+          return storedLocation;
+        }
+      }
       throw error;
     }
   }

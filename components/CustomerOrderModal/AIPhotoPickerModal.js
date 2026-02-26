@@ -17,21 +17,47 @@ import { SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
 import CameraScreen from './CameraScreen';
 
-const MAX_PHOTOS = 20;
+const DEFAULT_MAX_PHOTOS = 20;
 
-const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
+const normalizePhotos = (photos = []) => (
+    (photos || [])
+        .map((photo) => {
+            if (typeof photo === 'string') return { uri: photo };
+            if (photo?.uri) return { uri: photo.uri };
+            return null;
+        })
+        .filter(Boolean)
+);
+
+const AIPhotoPickerModal = ({
+    visible,
+    onClose,
+    onAnalyze,
+    isAnalyzing,
+    mode = 'analyze',
+    onConfirm,
+    maxPhotos = DEFAULT_MAX_PHOTOS,
+    initialPhotos = [],
+    title = 'AI Item Detection',
+}) => {
+    const photoLimit = Math.max(1, Number(maxPhotos) || DEFAULT_MAX_PHOTOS);
+    const isAnalyzeMode = mode === 'analyze';
+    const isBusy = isAnalyzeMode && !!isAnalyzing;
     const [photos, setPhotos] = useState([]);
     const [showCamera, setShowCamera] = useState(false);
 
-    // Clear photos when modal is closed
     React.useEffect(() => {
-        if (!visible) {
-            setPhotos([]);
+        if (visible) {
+            setPhotos(normalizePhotos(initialPhotos).slice(0, photoLimit));
+            return;
         }
-    }, [visible]);
+
+        setPhotos([]);
+        setShowCamera(false);
+    }, [visible, initialPhotos, photoLimit]);
 
     const handleClose = () => {
-        if (isAnalyzing) return;
+        if (isBusy) return;
         setPhotos([]);
         onClose();
     };
@@ -51,15 +77,15 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
     const handleCameraCapture = (newPhotos) => {
         setShowCamera(false);
         if (newPhotos && newPhotos.length > 0) {
-            setPhotos(prev => [...prev, ...newPhotos].slice(0, MAX_PHOTOS));
+            setPhotos(prev => [...prev, ...newPhotos].slice(0, photoLimit));
         }
     };
 
     const pickFromLibrary = async () => {
         try {
-            const remaining = MAX_PHOTOS - photos.length;
+            const remaining = photoLimit - photos.length;
             if (remaining <= 0) {
-                Alert.alert('Limit reached', `You can add up to ${MAX_PHOTOS} photos.`);
+                Alert.alert('Limit reached', `You can add up to ${photoLimit} photos.`);
                 return;
             }
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -76,7 +102,7 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                 base64: false,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                setPhotos(prev => [...prev, ...result.assets].slice(0, MAX_PHOTOS));
+                setPhotos(prev => [...prev, ...result.assets].slice(0, photoLimit));
             }
         } catch (error) {
             console.error('Library picker error:', error);
@@ -88,36 +114,42 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
         setPhotos(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleIdentify = () => {
-        if (photos.length === 0 || isAnalyzing) return;
-        onAnalyze(photos);
-        // Modal stays open — closes from ItemsStep after analysis completes
+    const handlePrimaryAction = () => {
+        if (photos.length === 0 || isBusy) return;
+        if (isAnalyzeMode) {
+            onAnalyze?.(photos);
+            return;
+        }
+
+        onConfirm?.(photos);
     };
 
-    const canIdentify = photos.length > 0 && !isAnalyzing;
+    const canPrimaryAction = photos.length > 0 && !isBusy;
+    const primaryLabel = isAnalyzeMode ? 'Scan' : 'Done';
+    const processingLabel = isAnalyzeMode ? 'Analyzing...' : 'Saving...';
 
     return (
         <BaseModal
             visible={visible}
             onClose={handleClose}
-            onBackdropPress={isAnalyzing ? () => { } : handleClose}
+            onBackdropPress={isBusy ? () => { } : handleClose}
             height={SCREEN_HEIGHT * 0.9}
             backgroundColor={colors.background.secondary}
             avoidKeyboard={false}
-            disableDrag={isAnalyzing}
+            disableDrag={isBusy}
             renderHeader={() => (
                 <View style={s.header}>
                     <View style={s.headerBtn} />
-                    <Text style={s.headerTitle}>AI Item Detection</Text>
+                    <Text style={s.headerTitle}>{title}</Text>
                     <TouchableOpacity
                         style={s.headerBtn}
                         onPress={handleClose}
-                        disabled={isAnalyzing}
+                        disabled={isBusy}
                     >
                         <Ionicons
                             name="close"
                             size={24}
-                            color={isAnalyzing ? colors.text.muted : colors.text.primary}
+                            color={isBusy ? colors.text.muted : colors.text.primary}
                         />
                     </TouchableOpacity>
                 </View>
@@ -137,7 +169,9 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                         <Ionicons name="images-outline" size={56} color={colors.border.light} />
                         <Text style={s.placeholderTitle}>No photos yet</Text>
                         <Text style={s.placeholderSubtitle}>
-                            Add up to {MAX_PHOTOS} photos and AI will identify all items
+                            {isAnalyzeMode
+                                ? `Add up to ${photoLimit} photos and AI will identify all items`
+                                : `Add up to ${photoLimit} photos for this item`}
                         </Text>
                     </View>
                 ) : (
@@ -159,7 +193,7 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
             </ScrollView>
 
             {/* Blocking overlay during analysis */}
-            {isAnalyzing && (
+            {isBusy && (
                 <View style={overlayStyle.overlay} pointerEvents="box-only">
                     <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={overlayStyle.overlayText}>Analyzing photos...</Text>
@@ -172,13 +206,14 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                 onCapture={handleCameraCapture}
                 onClose={() => setShowCamera(false)}
                 alreadyCount={photos.length}
+                maxPhotos={photoLimit}
             />
 
             {/* Footer */}
             <View style={s.footer}>
                 {photos.length > 0 && (
                     <Text style={s.photoCount}>
-                        {photos.length} / {MAX_PHOTOS} photos
+                        {photos.length} / {photoLimit} photos
                     </Text>
                 )}
 
@@ -186,24 +221,28 @@ const AIPhotoPickerModal = ({ visible, onClose, onAnalyze, isAnalyzing }) => {
                     <TouchableOpacity
                         style={s.addPhotoBtn}
                         onPress={handleAddPhoto}
-                        disabled={isAnalyzing || photos.length >= MAX_PHOTOS}
+                        disabled={isBusy || photos.length >= photoLimit}
                     >
                         <Ionicons name="camera-outline" size={20} color={colors.primary} />
                         <Text style={s.addPhotoBtnText}>Add Photo</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        style={[s.identifyBtn, !canIdentify && s.identifyBtnDisabled]}
-                        onPress={handleIdentify}
-                        disabled={!canIdentify}
+                        style={[s.identifyBtn, !canPrimaryAction && s.identifyBtnDisabled]}
+                        onPress={handlePrimaryAction}
+                        disabled={!canPrimaryAction}
                     >
-                        {isAnalyzing ? (
+                        {isBusy ? (
                             <ActivityIndicator size="small" color={colors.white} />
                         ) : (
-                            <Ionicons name="sparkles" size={20} color={colors.white} />
+                            <Ionicons
+                                name={isAnalyzeMode ? 'scan' : 'checkmark-circle'}
+                                size={20}
+                                color={colors.white}
+                            />
                         )}
                         <Text style={s.identifyBtnText}>
-                            {isAnalyzing ? 'Analyzing...' : 'Identify with AI'}
+                            {isBusy ? processingLabel : primaryLabel}
                         </Text>
                     </TouchableOpacity>
                 </View>
