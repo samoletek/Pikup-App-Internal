@@ -18,14 +18,24 @@ import BaseModal from '../BaseModal';
 import CameraScreen from './CameraScreen';
 
 const DEFAULT_MAX_PHOTOS = 20;
+const EMPTY_INITIAL_PHOTOS = [];
+const PHOTO_ID_PREFIX = 'photo';
 
-const normalizePhotos = (photos = []) => (
+const createPhotoEntry = (photo, { isLoading = false } = {}) => {
+    const uri = typeof photo === 'string' ? photo : photo?.uri;
+    if (!uri) return null;
+
+    return {
+        id: `${PHOTO_ID_PREFIX}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        uri,
+        asset: typeof photo === 'string' ? { uri: photo } : photo,
+        isLoading,
+    };
+};
+
+const normalizePhotos = (photos = [], options = {}) => (
     (photos || [])
-        .map((photo) => {
-            if (typeof photo === 'string') return { uri: photo };
-            if (photo?.uri) return { uri: photo.uri };
-            return null;
-        })
+        .map((photo) => createPhotoEntry(photo, options))
         .filter(Boolean)
 );
 
@@ -37,7 +47,7 @@ const AIPhotoPickerModal = ({
     mode = 'analyze',
     onConfirm,
     maxPhotos = DEFAULT_MAX_PHOTOS,
-    initialPhotos = [],
+    initialPhotos = EMPTY_INITIAL_PHOTOS,
     title = 'AI Item Detection',
 }) => {
     const photoLimit = Math.max(1, Number(maxPhotos) || DEFAULT_MAX_PHOTOS);
@@ -46,15 +56,40 @@ const AIPhotoPickerModal = ({
     const [photos, setPhotos] = useState([]);
     const [showCamera, setShowCamera] = useState(false);
 
+    const normalizedInitialPhotos = React.useMemo(
+        () => normalizePhotos(initialPhotos).slice(0, photoLimit),
+        [initialPhotos, photoLimit]
+    );
+    const initialPhotosKey = React.useMemo(
+        () => normalizedInitialPhotos.map(photo => photo.uri).join('|'),
+        [normalizedInitialPhotos]
+    );
+
     React.useEffect(() => {
         if (visible) {
-            setPhotos(normalizePhotos(initialPhotos).slice(0, photoLimit));
+            setPhotos(normalizedInitialPhotos);
             return;
         }
 
         setPhotos([]);
         setShowCamera(false);
-    }, [visible, initialPhotos, photoLimit]);
+    }, [visible, initialPhotosKey]);
+
+    const updatePhotoLoadingState = (photoId, isLoading) => {
+        setPhotos(prev => {
+            let changed = false;
+            const next = prev.map((photo) => {
+                if (photo.id !== photoId || photo.isLoading === isLoading) {
+                    return photo;
+                }
+
+                changed = true;
+                return { ...photo, isLoading };
+            });
+
+            return changed ? next : prev;
+        });
+    };
 
     const handleClose = () => {
         if (isBusy) return;
@@ -77,7 +112,8 @@ const AIPhotoPickerModal = ({
     const handleCameraCapture = (newPhotos) => {
         setShowCamera(false);
         if (newPhotos && newPhotos.length > 0) {
-            setPhotos(prev => [...prev, ...newPhotos].slice(0, photoLimit));
+            const newEntries = normalizePhotos(newPhotos, { isLoading: true });
+            setPhotos(prev => [...prev, ...newEntries].slice(0, photoLimit));
         }
     };
 
@@ -102,7 +138,8 @@ const AIPhotoPickerModal = ({
                 base64: false,
             });
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                setPhotos(prev => [...prev, ...result.assets].slice(0, photoLimit));
+                const newEntries = normalizePhotos(result.assets, { isLoading: true });
+                setPhotos(prev => [...prev, ...newEntries].slice(0, photoLimit));
             }
         } catch (error) {
             console.error('Library picker error:', error);
@@ -110,23 +147,26 @@ const AIPhotoPickerModal = ({
         }
     };
 
-    const handleRemovePhoto = (index) => {
-        setPhotos(prev => prev.filter((_, i) => i !== index));
+    const handleRemovePhoto = (photoId) => {
+        setPhotos(prev => prev.filter((photo) => photo.id !== photoId));
     };
 
     const handlePrimaryAction = () => {
         if (photos.length === 0 || isBusy) return;
+        const assets = photos.map((photo) => photo.asset || { uri: photo.uri });
         if (isAnalyzeMode) {
-            onAnalyze?.(photos);
+            onAnalyze?.(assets);
             return;
         }
 
-        onConfirm?.(photos);
+        onConfirm?.(assets);
     };
 
-    const canPrimaryAction = photos.length > 0 && !isBusy;
+    const hasLoadingPhotos = photos.some((photo) => photo.isLoading);
+    const canPrimaryAction = photos.length > 0 && !isBusy && !hasLoadingPhotos;
     const primaryLabel = isAnalyzeMode ? 'Scan' : 'Done';
     const processingLabel = isAnalyzeMode ? 'Analyzing...' : 'Saving...';
+    const loadingPhotosLabel = 'Processing...';
 
     return (
         <BaseModal
@@ -176,12 +216,23 @@ const AIPhotoPickerModal = ({
                     </View>
                 ) : (
                     <View style={s.grid}>
-                        {photos.map((photo, index) => (
-                            <View key={`${photo.uri}-${index}`} style={s.thumbWrapper}>
-                                <Image source={{ uri: photo.uri }} style={s.thumb} />
+                        {photos.map((photo) => (
+                            <View key={photo.id} style={s.thumbWrapper}>
+                                <Image
+                                    source={{ uri: photo.uri }}
+                                    style={s.thumb}
+                                    onLoadStart={() => updatePhotoLoadingState(photo.id, true)}
+                                    onLoadEnd={() => updatePhotoLoadingState(photo.id, false)}
+                                    onError={() => updatePhotoLoadingState(photo.id, false)}
+                                />
+                                {photo.isLoading && (
+                                    <View style={overlayStyle.thumbLoadingOverlay} pointerEvents="none">
+                                        <ActivityIndicator size="small" color={colors.white} />
+                                    </View>
+                                )}
                                 <TouchableOpacity
                                     style={s.thumbDelete}
-                                    onPress={() => handleRemovePhoto(index)}
+                                    onPress={() => handleRemovePhoto(photo.id)}
                                     hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                                 >
                                     <Ionicons name="close-circle" size={30} color={colors.error} />
@@ -242,7 +293,7 @@ const AIPhotoPickerModal = ({
                             />
                         )}
                         <Text style={s.identifyBtnText}>
-                            {isBusy ? processingLabel : primaryLabel}
+                            {isBusy ? processingLabel : (hasLoadingPhotos ? loadingPhotosLabel : primaryLabel)}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -263,6 +314,13 @@ const overlayStyle = StyleSheet.create({
         color: colors.text.primary,
         fontSize: 16,
         fontWeight: '600',
+    },
+    thumbLoadingOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(10, 10, 31, 0.55)',
+        borderRadius: 12,
     },
 });
 
