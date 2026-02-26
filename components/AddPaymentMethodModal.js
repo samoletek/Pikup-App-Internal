@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Alert,
   ActivityIndicator,
   Keyboard,
@@ -63,6 +64,13 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
   const handleAddCard = async () => {
     if (!cardDetails?.complete) {
       Alert.alert('Invalid Card', 'Please enter complete card details.');
+      return;
+    }
+
+    const postalCode = String(cardDetails?.postalCode || '').trim();
+    const postalDigits = postalCode.replace(/\D/g, '');
+    if (postalCode && (postalCode !== postalDigits || ![5, 9].includes(postalDigits.length))) {
+      Alert.alert('Invalid ZIP Code', 'Please enter a valid US ZIP code using digits only.');
       return;
     }
 
@@ -153,76 +161,79 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
       showHandle={true}
     >
       {() => (
-        <View style={styles.content}>
-          {/* Security Notice */}
-          <View style={styles.securityNotice}>
-            <Ionicons name="shield-checkmark" size={20} color={colors.success} />
-            <Text style={styles.securityText}>
-              Powered by Stripe
-            </Text>
-          </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.content}>
+            {/* Security Notice */}
+            <View style={styles.securityNotice}>
+              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+              <Text style={styles.securityText}>
+                Powered by Stripe
+              </Text>
+            </View>
 
-          {/* Card Input Section */}
-          <View style={styles.cardSection}>
-            <Text style={styles.sectionLabel}>Card Details</Text>
+            {/* Card Input Section */}
+            <View style={styles.cardSection}>
+              <Text style={styles.sectionLabel}>Card Details</Text>
 
-            <View style={styles.cardFieldContainer}>
-              <CardField
-                postalCodeEnabled={true}
-                placeholders={{
-                  number: '0000 0000 0000 0000',
-                  expiration: 'MM/YY',
-                  cvc: 'CVC',
-                  postalCode: 'ZIP Code',
-                }}
-                cardStyle={styles.cardField}
-                style={styles.cardFieldWrapper}
-                onCardChange={(cardDetails) => {
-                  setCardDetails(cardDetails);
-                }}
+              <View style={styles.cardFieldContainer}>
+                <CardField
+                  postalCodeEnabled={true}
+                  countryCode="US"
+                  placeholders={{
+                    number: '0000 0000 0000 0000',
+                    expiration: 'MM/YY',
+                    cvc: 'CVC',
+                    postalCode: 'ZIP Code',
+                  }}
+                  cardStyle={styles.cardField}
+                  style={styles.cardFieldWrapper}
+                  onCardChange={(cardDetails) => {
+                    setCardDetails(cardDetails);
+                  }}
+                />
+              </View>
+
+              {/* Supported Brands */}
+              <View style={styles.brandsContainer}>
+                <View style={styles.brandBadge}>
+                  <Text style={styles.brandText}>VISA</Text>
+                </View>
+                <View style={styles.brandBadge}>
+                  <Text style={styles.brandText}>Mastercard</Text>
+                </View>
+                <View style={styles.brandBadge}>
+                  <Text style={styles.brandText}>Amex</Text>
+                </View>
+                <View style={styles.brandBadge}>
+                  <Text style={styles.brandText}>Discover</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Features */}
+            <View style={styles.featuresList}>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
+                <Text style={styles.featureText}>Instant verification</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
+                <Text style={styles.featureText}>Secure storage</Text>
+              </View>
+            </View>
+
+            {/* Action Button */}
+            <View style={styles.footer}>
+              <Button
+                title="Add Payment Method"
+                onPress={handleAddCard}
+                loading={loading}
+                disabled={!cardDetails?.complete}
+                icon="add-circle-outline"
               />
             </View>
-
-            {/* Supported Brands */}
-            <View style={styles.brandsContainer}>
-              <View style={styles.brandBadge}>
-                <Text style={styles.brandText}>VISA</Text>
-              </View>
-              <View style={styles.brandBadge}>
-                <Text style={styles.brandText}>Mastercard</Text>
-              </View>
-              <View style={styles.brandBadge}>
-                <Text style={styles.brandText}>Amex</Text>
-              </View>
-              <View style={styles.brandBadge}>
-                <Text style={styles.brandText}>Discover</Text>
-              </View>
-            </View>
           </View>
-
-          {/* Features */}
-          <View style={styles.featuresList}>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
-              <Text style={styles.featureText}>Instant verification</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
-              <Text style={styles.featureText}>Secure storage</Text>
-            </View>
-          </View>
-
-          {/* Action Button */}
-          <View style={styles.footer}>
-            <Button
-              title="Add Payment Method"
-              onPress={handleAddCard}
-              loading={loading}
-              disabled={!cardDetails?.complete}
-              icon="add-circle-outline"
-            />
-          </View>
-        </View>
+        </TouchableWithoutFeedback>
       )}
     </BaseModal>
   );

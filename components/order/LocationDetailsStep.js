@@ -89,7 +89,7 @@ const LocationDetailsStep = ({
                             >
                                 <Ionicons
                                     name={item.icon}
-                                    size={24}
+                                    size={40}
                                     color={isActive ? colors.white : colors.text.muted}
                                     style={styles.locationTypeChipIcon}
                                 />
@@ -413,7 +413,7 @@ locationTypeRow: {
         borderColor: colors.primary,
     },
     locationTypeChipIcon: {
-        marginBottom: spacing.xs,
+        marginBottom: spacing.md,
     },
     locationTypeChipText: {
         color: colors.text.muted,
