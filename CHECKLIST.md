@@ -175,7 +175,7 @@
 - [x] #114 Badges system UI (Fast Loader, Fragile Handler, etc.)
 - [x] #115 "Go Online" flow: ask "Solo or Team today?"
 - [x] #116 Order notification card: full design with photos, timer
-- [-] #77 Gamification - weekly milestones, bonuses, progress
+- [x] #77 Gamification - weekly milestones, bonuses, progress
 
 ### Backend / Infrastructure
 - [x] #70 Dynamic pricing algorithm
@@ -250,7 +250,7 @@ NEW EDITS:
 **Focus:** Driver screens, matching algorithm, payments, deployment
 
 ### Customer Flow - Account Screen
-- [ ] #57 Referral program with deep links
+- [ ] #57 Referral program with deep links (bluehost requires, domain setup for deeplinks)
 
 ### Driver Flow - Home Screen
 - [x] #62 Large buttons for driver (use while driving) - khan
