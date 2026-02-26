@@ -134,7 +134,14 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                 const priceMap = {};
 
                 await Promise.all(vehicles.map(async (vehicle) => {
-                    const result = await calculatePrice(vehicle, dist, dur);
+                    const result = await calculatePrice(vehicle, dist, dur, {
+                        items: orderData.items || [],
+                        laborOptions: {
+                            items: orderData.items || [],
+                            pickupDetails: orderData.pickupDetails || {},
+                            dropoffDetails: orderData.dropoffDetails || {},
+                        },
+                    });
                     priceMap[vehicle.id] = result.total;
                 }));
 
@@ -146,7 +153,14 @@ const VehicleStep = ({ orderData, setOrderData }) => {
             }
         };
         loadPrices();
-    }, [vehicles, orderData.distance, orderData.duration]);
+    }, [
+        vehicles,
+        orderData.distance,
+        orderData.duration,
+        orderData.items,
+        orderData.pickupDetails,
+        orderData.dropoffDetails,
+    ]);
 
     const handleToggleExpand = (vehicleId) => {
         if (fitMetaByVehicle[vehicleId]?.disabled) return;

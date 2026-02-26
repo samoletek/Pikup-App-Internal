@@ -34,6 +34,11 @@ const OrderItemCard = ({
 
     const remainingSlots = MAX_PHOTOS - item.photos.length;
     const hasPhotoError = !!errors?.photos;
+    const isInsuranceActive = item.condition === 'new' && item.hasInsurance;
+
+    const updateItemDraft = (patch) => {
+        onUpdate({ ...item, ...patch, isConfirmed: false });
+    };
 
     const openPhotoPicker = () => {
         if (remainingSlots <= 0) {
@@ -49,13 +54,13 @@ const OrderItemCard = ({
             .filter(Boolean)
             .slice(0, MAX_PHOTOS);
 
-        onUpdate({ ...item, photos: selectedUris });
+        updateItemDraft({ photos: selectedUris });
         setShowPhotoPicker(false);
     };
 
     const handleRemovePhoto = (index) => {
         const newPhotos = item.photos.filter((_, i) => i !== index);
-        onUpdate({ ...item, photos: newPhotos });
+        updateItemDraft({ photos: newPhotos });
     };
 
     const handleAddInvoice = async () => {
@@ -66,12 +71,18 @@ const OrderItemCard = ({
         });
 
         if (!result.canceled && result.assets[0]) {
-            onUpdate({ ...item, invoicePhoto: result.assets[0].uri });
+            updateItemDraft({ invoicePhoto: result.assets[0].uri });
         }
     };
 
     const handleToggleExpand = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        onToggleExpand();
+    };
+
+    const handleConfirmItem = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        onUpdate({ ...item, isConfirmed: true });
         onToggleExpand();
     };
 
@@ -97,7 +108,7 @@ const OrderItemCard = ({
                                     <Text style={styles.badgeText}>Fragile</Text>
                                 </View>
                             )}
-                            {item.hasInsurance && (
+                            {isInsuranceActive && (
                                 <View style={[styles.badge, styles.badgeInsured]}>
                                     <Text style={styles.badgeText}>Insured</Text>
                                 </View>
@@ -177,7 +188,7 @@ const OrderItemCard = ({
                             placeholder="e.g. Couch, TV, Moving boxes..."
                             placeholderTextColor={colors.text.placeholder}
                             value={item.name}
-                            onChangeText={(text) => onUpdate({ ...item, name: text })}
+                            onChangeText={(text) => updateItemDraft({ name: text })}
                         />
                     </View>
 
@@ -189,7 +200,7 @@ const OrderItemCard = ({
                             placeholder="Additional details about this item..."
                             placeholderTextColor={colors.text.placeholder}
                             value={item.description}
-                            onChangeText={(text) => onUpdate({ ...item, description: text })}
+                            onChangeText={(text) => updateItemDraft({ description: text })}
                             multiline
                             numberOfLines={3}
                         />
@@ -203,7 +214,7 @@ const OrderItemCard = ({
                                 style={[styles.conditionBtn, item.condition === 'new' && styles.conditionBtnActive]}
                                 onPress={() => {
                                     // New = Auto insurance ON (user can toggle off later)
-                                    onUpdate({ ...item, condition: 'new', hasInsurance: true });
+                                    updateItemDraft({ condition: 'new', hasInsurance: true });
                                 }}
                             >
                                 <Text style={[styles.conditionBtnText, item.condition === 'new' && styles.conditionBtnTextActive]}>New</Text>
@@ -212,7 +223,7 @@ const OrderItemCard = ({
                                 style={[styles.conditionBtn, item.condition === 'used' && styles.conditionBtnActive]}
                                 onPress={() => {
                                     // Used = Insurance OFF, Value cleared
-                                    onUpdate({ ...item, condition: 'used', hasInsurance: false, value: '' });
+                                    updateItemDraft({ condition: 'used', hasInsurance: false, value: '', invoicePhoto: null });
                                 }}
                             >
                                 <Text style={[styles.conditionBtnText, item.condition === 'used' && styles.conditionBtnTextActive]}>Used</Text>
@@ -229,7 +240,7 @@ const OrderItemCard = ({
                                 placeholder="Estimated value in dollars"
                                 placeholderTextColor={colors.text.placeholder}
                                 value={item.value}
-                                onChangeText={(text) => onUpdate({ ...item, value: text.replace(/[^0-9.]/g, '') })}
+                                onChangeText={(text) => updateItemDraft({ value: text.replace(/[^0-9.]/g, '') })}
                                 keyboardType="decimal-pad"
                             />
                         </View>
@@ -239,7 +250,7 @@ const OrderItemCard = ({
                     <View style={styles.toggleRow}>
                         <TouchableOpacity
                             style={[styles.toggleBtn, item.isFragile && styles.toggleBtnActive]}
-                            onPress={() => onUpdate({ ...item, isFragile: !item.isFragile })}
+                            onPress={() => updateItemDraft({ isFragile: !item.isFragile })}
                         >
                             <Ionicons
                                 name="warning-outline"
@@ -254,24 +265,24 @@ const OrderItemCard = ({
                         <TouchableOpacity
                             style={[
                                 styles.toggleBtn,
-                                item.hasInsurance && styles.toggleBtnActive,
+                                isInsuranceActive && styles.toggleBtnActive,
                                 item.condition !== 'new' && styles.toggleBtnDisabled
                             ]}
                             disabled
                             activeOpacity={1}
                         >
                             <Ionicons
-                                name={item.hasInsurance ? "shield-checkmark" : "shield-checkmark-outline"}
+                                name={isInsuranceActive ? "shield-checkmark" : "shield-checkmark-outline"}
                                 size={20}
                                 color={
                                     item.condition !== 'new'
                                         ? colors.border.light
-                                        : (item.hasInsurance ? colors.text.primary : colors.text.muted)
+                                        : (isInsuranceActive ? colors.text.primary : colors.text.muted)
                                 }
                             />
                             <Text style={[
                                 styles.toggleText,
-                                item.hasInsurance && styles.toggleTextActive,
+                                isInsuranceActive && styles.toggleTextActive,
                                 item.condition !== 'new' && styles.toggleTextDisabled
                             ]}>
                                 Insurance
@@ -280,7 +291,7 @@ const OrderItemCard = ({
                     </View>
 
                     {/* Invoice Upload (if insurance is enabled) */}
-                    {item.hasInsurance && (
+                    {isInsuranceActive && (
                         <View style={styles.invoiceSection}>
                             <Text style={styles.invoiceLabel}>
                                 Upload invoice to confirm item is new
@@ -290,7 +301,7 @@ const OrderItemCard = ({
                                     <Image source={{ uri: item.invoicePhoto }} style={[styles.invoiceImage, { marginRight: 0 }]} />
                                     <TouchableOpacity
                                         style={styles.removePhotoBtn}
-                                        onPress={() => onUpdate({ ...item, invoicePhoto: null })}
+                                        onPress={() => updateItemDraft({ invoicePhoto: null })}
                                     >
                                         <View style={styles.removePhotoIconBg}>
                                             <Ionicons name="close" size={14} color={colors.text.primary} />
@@ -313,7 +324,7 @@ const OrderItemCard = ({
                             <Text style={[styles.footerActionText, styles.deleteActionText]}>Delete Item</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.footerActionBtn, styles.addActionBtn]} onPress={handleToggleExpand}>
+                        <TouchableOpacity style={[styles.footerActionBtn, styles.addActionBtn]} onPress={handleConfirmItem}>
                             <Ionicons name="checkmark-circle-outline" size={18} color={colors.text.primary} />
                             <Text style={[styles.footerActionText, styles.addActionText]}>Add</Text>
                         </TouchableOpacity>

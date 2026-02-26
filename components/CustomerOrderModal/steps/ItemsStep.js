@@ -101,7 +101,8 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                             invoicePhoto: null,
                             category: aiItem.category || 'Other',
                             weightEstimate: aiItem.estimated_weight_lbs,
-                            addedByAI: true
+                            addedByAI: true,
+                            isConfirmed: true,
                         };
 
                         newItems.push(newItem);
@@ -140,6 +141,7 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
             value: '',
             invoicePhoto: null,
             weightEstimate: 0,
+            isConfirmed: false,
         };
         setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
         setExpandedItemId(newItem.id);

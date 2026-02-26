@@ -217,11 +217,18 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const fareAfterSurge = grossFare + surgeFee;
 
     // Platform fees
+    const pricingItems = Array.isArray(options.items)
+        ? options.items
+        : (options.laborOptions?.items || []);
+    const hasInsuredNewItem = pricingItems.some(isItemEligibleForInsurance);
     const serviceFeePercent = platformFees.serviceFeePercent || 0.25;
     const insuranceSpread = platformFees.insuranceSpread || 2;
-    const mandatoryInsurance = platformFees.mandatoryInsurance || 12.99;
+    const appliedInsuranceSpread = hasInsuredNewItem ? insuranceSpread : 0;
+    const mandatoryInsurance = hasInsuredNewItem
+        ? (platformFees.mandatoryInsurance || 12.99)
+        : 0;
 
-    const serviceFee = (fareAfterSurge * serviceFeePercent) + insuranceSpread;
+    const serviceFee = (fareAfterSurge * serviceFeePercent) + appliedInsuranceSpread;
 
     // Total
     const total = fareAfterSurge + serviceFee + mandatoryInsurance;
@@ -245,6 +252,8 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         surgeLabel,
         serviceFee: round2(serviceFee),
         mandatoryInsurance: round2(mandatoryInsurance),
+        insuranceApplied: hasInsuredNewItem,
+        insuranceSpread: round2(appliedInsuranceSpread),
         total: round2(total),
         driverPayout: round2(driverPayout),
         distance: dist,
@@ -268,3 +277,9 @@ export const calculateEstimate = (vehicleRate, distance, duration) => {
 };
 
 const round2 = (n) => Math.round(n * 100) / 100;
+
+const isItemEligibleForInsurance = (item = {}) => {
+    const condition = String(item?.condition || '').trim().toLowerCase();
+    const hasInsurance = item?.hasInsurance === true || item?.insured === true;
+    return condition === 'new' && hasInsurance;
+};

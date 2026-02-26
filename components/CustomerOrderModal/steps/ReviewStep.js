@@ -167,7 +167,7 @@ const ReviewStep = ({
                             <Text style={styles.itemSummaryName}>{item.name}</Text>
                             <View style={styles.itemSummaryBadges}>
                                 {item.isFragile && <Text style={styles.fragileTag}>Fragile</Text>}
-                                {item.hasInsurance && <Text style={styles.insuredTag}>Insured</Text>}
+                                {(item.condition === 'new' && item.hasInsurance) && <Text style={styles.insuredTag}>Insured</Text>}
                             </View>
                         </View>
                     ))}
@@ -307,10 +307,12 @@ const ReviewStep = ({
                         </View>
                     )}
 
-                    <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Mandatory Insurance</Text>
-                        <Text style={styles.priceValue}>${displayPricing?.mandatoryInsurance?.toFixed(2) || '0.00'}</Text>
-                    </View>
+                    {displayPricing?.mandatoryInsurance > 0 && (
+                        <View style={styles.priceRow}>
+                            <Text style={styles.priceLabel}>Mandatory Insurance</Text>
+                            <Text style={styles.priceValue}>${displayPricing.mandatoryInsurance.toFixed(2)}</Text>
+                        </View>
+                    )}
 
                     <View style={styles.priceDivider} />
 

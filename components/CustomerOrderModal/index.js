@@ -419,6 +419,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     Alert.alert('Missing Info', 'Please add at least one item.');
                     return false;
                 }
+
+                if (orderData.items.length === 1 && orderData.items[0]?.isConfirmed !== true) {
+                    setExpandedItemId(orderData.items[0].id);
+                    Alert.alert('Confirm Item', 'Please tap "Add" on the item card before continuing.');
+                    return false;
+                }
+
                 const errors = {};
                 let firstErrorItemId = null;
 
@@ -659,6 +666,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         const duration = orderData.duration || 0;
 
         return calculatePrice(vehicle, distance, duration, {
+            items: orderData.items || [],
             laborOptions: {
                 items: orderData.items || [],
                 pickupDetails: orderData.pickupDetails || {},
