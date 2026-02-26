@@ -32,9 +32,16 @@ const OrderItemCard = ({
 }) => {
     const [showPhotoPicker, setShowPhotoPicker] = useState(false);
 
+    const normalizedCondition = String(item.condition || '').trim().toLowerCase();
     const remainingSlots = MAX_PHOTOS - item.photos.length;
     const hasPhotoError = !!errors?.photos;
-    const isInsuranceActive = item.condition === 'new' && item.hasInsurance;
+    const isInsuranceActive = normalizedCondition === 'new' && item.hasInsurance;
+    const hasRequiredName = !!item.name?.trim();
+    const hasRequiredPhotos = Array.isArray(item.photos) && item.photos.length > 0;
+    const hasValidCondition = normalizedCondition === 'new' || normalizedCondition === 'used';
+    const hasRequiredValue = normalizedCondition !== 'new' || !!String(item.value || '').trim();
+    const hasRequiredInvoice = !isInsuranceActive || !!item.invoicePhoto;
+    const canConfirmItem = hasRequiredName && hasRequiredPhotos && hasValidCondition && hasRequiredValue && hasRequiredInvoice;
 
     const updateItemDraft = (patch) => {
         onUpdate({ ...item, ...patch, isConfirmed: false });
@@ -184,7 +191,7 @@ const OrderItemCard = ({
                     <View style={styles.field}>
                         <Text style={styles.fieldLabel}>Item Name *</Text>
                         <TextInput
-                            style={styles.textInput}
+                            style={[styles.textInput, errors?.name && styles.errorBorder]}
                             placeholder="e.g. Couch, TV, Moving boxes..."
                             placeholderTextColor={colors.text.placeholder}
                             value={item.name}
@@ -211,28 +218,28 @@ const OrderItemCard = ({
                         <Text style={styles.fieldLabel}>Condition *</Text>
                         <View style={[styles.conditionBtnGroup, errors?.condition && styles.errorBorder]}>
                             <TouchableOpacity
-                                style={[styles.conditionBtn, item.condition === 'new' && styles.conditionBtnActive]}
+                                style={[styles.conditionBtn, normalizedCondition === 'new' && styles.conditionBtnActive]}
                                 onPress={() => {
                                     // New = Auto insurance ON (user can toggle off later)
                                     updateItemDraft({ condition: 'new', hasInsurance: true });
                                 }}
                             >
-                                <Text style={[styles.conditionBtnText, item.condition === 'new' && styles.conditionBtnTextActive]}>New</Text>
+                                <Text style={[styles.conditionBtnText, normalizedCondition === 'new' && styles.conditionBtnTextActive]}>New</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.conditionBtn, item.condition === 'used' && styles.conditionBtnActive]}
+                                style={[styles.conditionBtn, normalizedCondition === 'used' && styles.conditionBtnActive]}
                                 onPress={() => {
                                     // Used = Insurance OFF, Value cleared
                                     updateItemDraft({ condition: 'used', hasInsurance: false, value: '', invoicePhoto: null });
                                 }}
                             >
-                                <Text style={[styles.conditionBtnText, item.condition === 'used' && styles.conditionBtnTextActive]}>Used</Text>
+                                <Text style={[styles.conditionBtnText, normalizedCondition === 'used' && styles.conditionBtnTextActive]}>Used</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
                     {/* Value (only for New items) */}
-                    {item.condition === 'new' && (
+                    {normalizedCondition === 'new' && (
                         <View style={styles.field}>
                             <Text style={styles.fieldLabel}>Item Value *</Text>
                             <TextInput
@@ -266,7 +273,7 @@ const OrderItemCard = ({
                             style={[
                                 styles.toggleBtn,
                                 isInsuranceActive && styles.toggleBtnActive,
-                                item.condition !== 'new' && styles.toggleBtnDisabled
+                                normalizedCondition !== 'new' && styles.toggleBtnDisabled
                             ]}
                             disabled
                             activeOpacity={1}
@@ -275,7 +282,7 @@ const OrderItemCard = ({
                                 name={isInsuranceActive ? "shield-checkmark" : "shield-checkmark-outline"}
                                 size={20}
                                 color={
-                                    item.condition !== 'new'
+                                    normalizedCondition !== 'new'
                                         ? colors.border.light
                                         : (isInsuranceActive ? colors.text.primary : colors.text.muted)
                                 }
@@ -283,7 +290,7 @@ const OrderItemCard = ({
                             <Text style={[
                                 styles.toggleText,
                                 isInsuranceActive && styles.toggleTextActive,
-                                item.condition !== 'new' && styles.toggleTextDisabled
+                                normalizedCondition !== 'new' && styles.toggleTextDisabled
                             ]}>
                                 Insurance
                             </Text>
@@ -324,7 +331,15 @@ const OrderItemCard = ({
                             <Text style={[styles.footerActionText, styles.deleteActionText]}>Delete Item</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={[styles.footerActionBtn, styles.addActionBtn]} onPress={handleConfirmItem}>
+                        <TouchableOpacity
+                            style={[
+                                styles.footerActionBtn,
+                                styles.addActionBtn,
+                                !canConfirmItem && styles.addActionBtnDisabled,
+                            ]}
+                            onPress={handleConfirmItem}
+                            disabled={!canConfirmItem}
+                        >
                             <Ionicons name="checkmark-circle-outline" size={18} color={colors.text.primary} />
                             <Text style={[styles.footerActionText, styles.addActionText]}>Add</Text>
                         </TouchableOpacity>
@@ -638,6 +653,9 @@ const styles = StyleSheet.create({
     addActionBtn: {
         borderColor: colors.success,
         backgroundColor: colors.success
+    },
+    addActionBtnDisabled: {
+        opacity: 0.45,
     },
     footerActionText: {
         fontWeight: typography.fontWeight.semibold,

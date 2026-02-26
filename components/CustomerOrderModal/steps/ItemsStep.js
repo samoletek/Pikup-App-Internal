@@ -95,14 +95,14 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                             description: aiItem.description || '',
                             photos: finalPhotos,
                             isFragile: aiItem.is_fragile || false,
-                            condition: (aiItem.condition || 'Used').toLowerCase(),
+                            condition: '',
                             hasInsurance: false,
                             value: '',
                             invoicePhoto: null,
                             category: aiItem.category || 'Other',
                             weightEstimate: aiItem.estimated_weight_lbs,
                             addedByAI: true,
-                            isConfirmed: true,
+                            isConfirmed: false,
                         };
 
                         newItems.push(newItem);
@@ -110,6 +110,9 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                 });
 
                 setOrderData(prev => ({ ...prev, items: [...prev.items, ...newItems] }));
+                if (newItems.length > 0) {
+                    setExpandedItemId(newItems[0].id);
+                }
 
                 Alert.alert(
                     'Analysis Complete',

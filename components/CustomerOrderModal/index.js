@@ -420,22 +420,20 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     return false;
                 }
 
-                if (orderData.items.length === 1 && orderData.items[0]?.isConfirmed !== true) {
-                    setExpandedItemId(orderData.items[0].id);
-                    Alert.alert('Confirm Item', 'Please tap "Add" on the item card before continuing.');
-                    return false;
-                }
-
                 const errors = {};
                 let firstErrorItemId = null;
 
                 orderData.items.forEach(item => {
                     const itemErr = {};
+                    const normalizedCondition = String(item.condition || '').trim().toLowerCase();
+                    const hasValidCondition = normalizedCondition === 'new' || normalizedCondition === 'used';
+                    const insuranceEnabledForNew = normalizedCondition === 'new' && item.hasInsurance === true;
+
                     if (!item.name?.trim()) itemErr.name = true;
                     if (!Array.isArray(item.photos) || item.photos.length === 0) itemErr.photos = true;
-                    if (!item.condition) itemErr.condition = true;
-                    if (item.condition === 'new' && !item.value) itemErr.value = true;
-                    if (item.hasInsurance && !item.invoicePhoto) itemErr.invoice = true;
+                    if (!hasValidCondition) itemErr.condition = true;
+                    if (normalizedCondition === 'new' && !String(item.value || '').trim()) itemErr.value = true;
+                    if (insuranceEnabledForNew && !item.invoicePhoto) itemErr.invoice = true;
 
                     if (Object.keys(itemErr).length > 0) {
                         errors[item.id] = itemErr;
@@ -459,6 +457,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     } else if (firstErr.invoice) {
                         Alert.alert('Missing Invoice', 'Please upload an invoice for insured items to confirm they are new.');
                     }
+                    return false;
+                }
+
+                const firstUnconfirmedItem = orderData.items.find(item => item.isConfirmed !== true);
+                if (firstUnconfirmedItem) {
+                    setExpandedItemId(firstUnconfirmedItem.id);
+                    Alert.alert('Confirm Items', 'Please tap "Add" on every item card before continuing.');
                     return false;
                 }
 

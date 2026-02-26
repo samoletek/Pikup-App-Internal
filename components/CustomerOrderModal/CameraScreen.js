@@ -169,6 +169,7 @@ const CameraScreen = ({ visible, onCapture, onClose, alreadyCount = 0, maxPhotos
                                         <TouchableOpacity
                                             style={styles.thumbRemove}
                                             onPress={() => handleRemove(index)}
+                                            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
                                         >
                                             <Ionicons name="close-circle" size={18} color={colors.error} />
                                         </TouchableOpacity>
@@ -309,8 +310,9 @@ const styles = StyleSheet.create({
     },
     thumbRemove: {
         position: 'absolute',
-        top: -6, right: -6,
-        backgroundColor: colors.background.secondary,
+        top: 2,
+        right: 2,
+        backgroundColor: 'rgba(0,0,0,0.35)',
         borderRadius: borderRadius.circle,
     },
 
