@@ -6,10 +6,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { styles, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 
-const COLLAPSED_HEIGHT = 200;
+export const COLLAPSED_HEIGHT = 200;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 
-export default function OfflineDashboard({ onGoOnline, navigation }) {
+export default function OfflineDashboard({ onGoOnline, navigation, onExpandedChange }) {
     const { currentUser, getDriverSessionStats, getDriverStats } = useAuth();
     const [sessionStats, setSessionStats] = useState({
         totalEarnings: 0,
@@ -30,6 +30,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
     const expand = useCallback(() => {
         setIsExpanded(true);
         isExpandedRef.current = true;
+        onExpandedChange?.(true);
         Animated.parallel([
             Animated.spring(animatedHeight, {
                 toValue: EXPANDED_HEIGHT,
@@ -48,6 +49,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
     const collapse = useCallback(() => {
         setIsExpanded(false);
         isExpandedRef.current = false;
+        onExpandedChange?.(false);
         Animated.parallel([
             Animated.spring(animatedHeight, {
                 toValue: COLLAPSED_HEIGHT,
@@ -87,6 +89,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                     // Expand
                     setIsExpanded(true);
                     isExpandedRef.current = true;
+                    onExpandedChange?.(true);
                     Animated.parallel([
                         Animated.spring(animatedHeight, {
                             toValue: EXPANDED_HEIGHT,
@@ -104,6 +107,7 @@ export default function OfflineDashboard({ onGoOnline, navigation }) {
                     // Collapse - set state FIRST, then animate
                     setIsExpanded(false);
                     isExpandedRef.current = false;
+                    onExpandedChange?.(false);
                     Animated.parallel([
                         Animated.spring(animatedHeight, {
                             toValue: COLLAPSED_HEIGHT,

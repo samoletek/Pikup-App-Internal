@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Alert,
   Animated,
@@ -10,10 +10,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import { TRIP_STATUS } from "../../constants/tripStatus";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
+import RecentTripsModal from "../../components/RecentTripsModal";
 import {
   borderRadius,
   colors,
@@ -51,6 +53,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
   });
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [driverProfile, setDriverProfile] = useState(null);
+  const [showAllTrips, setShowAllTrips] = useState(false);
 
   useEffect(() => {
     if (currentUserId) {
@@ -58,6 +61,63 @@ export default function DriverEarningsScreen({ navigation, route }) {
     } else {
       setLoading(false);
     }
+  }, [currentUserId]);
+
+  // Re-process chart data when period changes
+  useEffect(() => {
+    if (driverTrips.length > 0) {
+      setWeeklyData(processTripsIntoChartData(driverTrips, selectedPeriod));
+    }
+  }, [selectedPeriod, driverTrips]);
+
+  // Realtime subscription for trips and earnings updates
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    let refreshTimer = null;
+    const scheduleRefresh = (delayMs = 200) => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        loadDriverData();
+      }, delayMs);
+    };
+
+    const channelSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const tripsChannel = supabase
+      .channel(`driver:earnings:${currentUserId}:${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+          filter: `driver_id=eq.${currentUserId}`,
+        },
+        () => scheduleRefresh(300)
+      )
+      .subscribe();
+
+    const driversChannel = supabase
+      .channel(`driver:profile:${currentUserId}:${channelSuffix}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "drivers",
+          filter: `id=eq.${currentUserId}`,
+        },
+        () => scheduleRefresh(300)
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(tripsChannel);
+      supabase.removeChannel(driversChannel);
+    };
   }, [currentUserId]);
 
   const loadDriverData = async () => {
@@ -77,8 +137,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
         weeklyMilestone: 15,
       });
 
-      const processedWeeklyData = processTripsIntoWeeklyData(trips);
-      setWeeklyData(processedWeeklyData);
+      setWeeklyData(processTripsIntoChartData(trips, selectedPeriod));
     } catch (error) {
       console.error("Error loading driver data:", error);
       setWeeklyData(getMockWeeklyData());
@@ -93,23 +152,61 @@ export default function DriverEarningsScreen({ navigation, route }) {
     }
   };
 
-  const processTripsIntoWeeklyData = (trips) => {
-    const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const weekData = daysOfWeek.map((day) => ({ day, trips: 0, earnings: 0 }));
-
+  const getPeriodStartDate = (period) => {
     const now = new Date();
+    if (period === "month") {
+      return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    // Default: "week"
     const currentDay = now.getDay();
     const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-    const mondayDate = new Date(now);
-    mondayDate.setDate(now.getDate() + mondayOffset);
-    mondayDate.setHours(0, 0, 0, 0);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  };
 
-    const thisWeekTrips = trips.filter((trip) => {
+  const processTripsIntoChartData = (trips, period) => {
+    const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    if (period === "month") {
+      // Group by week of month
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weeks = ["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"];
+      const weekData = weeks.map((label) => ({ day: label, trips: 0, earnings: 0 }));
+
+      const monthTrips = trips.filter((trip) => {
+        const tripDate = new Date(trip.completedAt || trip.timestamp);
+        return tripDate >= monthStart;
+      });
+
+      monthTrips.forEach((trip) => {
+        const tripDate = new Date(trip.completedAt || trip.timestamp);
+        const weekIndex = Math.min(Math.floor((tripDate.getDate() - 1) / 7), 4);
+        weekData[weekIndex].trips += 1;
+        weekData[weekIndex].earnings += parseFloat(
+          trip.driverEarnings || trip.pricing?.total * 0.7 || 0
+        );
+      });
+
+      return weekData.filter((_, i) => {
+        const weekStart = new Date(monthStart);
+        weekStart.setDate(1 + i * 7);
+        return weekStart <= now;
+      });
+    }
+
+    // Default: weekly view
+    const weekData = daysOfWeek.map((day) => ({ day, trips: 0, earnings: 0 }));
+    const periodStart = getPeriodStartDate("week");
+
+    const filteredTrips = trips.filter((trip) => {
       const tripDate = new Date(trip.completedAt || trip.timestamp);
-      return tripDate >= mondayDate;
+      return tripDate >= periodStart;
     });
 
-    thisWeekTrips.forEach((trip) => {
+    filteredTrips.forEach((trip) => {
       const tripDate = new Date(trip.completedAt || trip.timestamp);
       const dayIndex = tripDate.getDay() === 0 ? 6 : tripDate.getDay() - 1;
 
@@ -147,8 +244,8 @@ export default function DriverEarningsScreen({ navigation, route }) {
         id: trip.id,
         date: formatTripDate(trip.completedAt || trip.timestamp),
         time: formatTripTime(trip.completedAt || trip.timestamp),
-        pickup: "Pickup Location",
-        dropoff: "Dropoff Location",
+        pickup: trip.pickupAddress || trip.pickup?.address || "Pickup Location",
+        dropoff: trip.dropoffAddress || trip.dropoff?.address || "Dropoff Location",
         amount: Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0),
         distance: trip.distance || "0 mi",
         duration: trip.duration || "0 min",
@@ -247,6 +344,26 @@ export default function DriverEarningsScreen({ navigation, route }) {
     );
   };
 
+  const handlePayoutDetails = () => {
+    if (!driverProfile?.connectAccountId) {
+      Alert.alert(
+        "Payout Account",
+        "Complete your driver onboarding to set up payouts via Stripe Connect.",
+        [
+          { text: "OK", style: "default" },
+          { text: "Setup Now", onPress: () => navigation.navigate("DriverOnboardingScreen") },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Payout Account",
+      `Status: ${driverProfile?.canReceivePayments ? "Active" : "Under Review"}\nAvailable Balance: $${driverStats.availableBalance.toFixed(2)}\nAuto-deposit: Every Monday`,
+      [{ text: "OK", style: "default" }]
+    );
+  };
+
   const getSnapOffset = (offsetY) => {
     if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) {
       return null;
@@ -290,11 +407,13 @@ export default function DriverEarningsScreen({ navigation, route }) {
     snapToNearestOffset(event.nativeEvent.contentOffset.y);
   };
 
+  const chartTitle = selectedPeriod === "month" ? "Monthly Trip Activity" : "Weekly Trip Activity";
+
   const renderChart = () => {
     if (loading) {
       return (
         <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>Weekly Trip Activity</Text>
+          <Text style={styles.chartTitle}>{chartTitle}</Text>
           <View style={styles.loadingChart}>
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
@@ -306,7 +425,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
 
     return (
       <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Weekly Trip Activity</Text>
+        <Text style={styles.chartTitle}>{chartTitle}</Text>
         <View style={styles.chartWrapper}>
           {weeklyData.map((day, index) => (
             <View key={index} style={styles.barContainer}>
@@ -477,7 +596,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
               <Ionicons name="card" size={20} color={colors.success} />
               <Text style={styles.payoutTitle}>PikUp Payout Account</Text>
             </View>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handlePayoutDetails}>
               <Ionicons
                 name="chevron-forward"
                 size={20}
@@ -525,7 +644,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
         <View style={styles.historySection}>
           <View style={styles.historyHeader}>
             <Text style={styles.historyTitle}>Recent Trips</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowAllTrips(true)}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -573,6 +692,13 @@ export default function DriverEarningsScreen({ navigation, route }) {
           )}
         </View>
       </Animated.ScrollView>
+
+      <RecentTripsModal
+        visible={showAllTrips}
+        onClose={() => setShowAllTrips(false)}
+        trips={driverTrips}
+        loading={loading}
+      />
     </View>
   );
 }

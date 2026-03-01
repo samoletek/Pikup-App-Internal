@@ -74,6 +74,19 @@ export const mapTripFromDb = (trip) => {
       trip.driver_email ||
       trip.driver?.email ||
       null,
-    driverLocation: trip.driverLocation || toLocation(trip.driver_location)
+    driverLocation: trip.driverLocation || toLocation(trip.driver_location),
+
+    // Insurance data (mapped for CustomerClaimsScreen compatibility)
+    insurance: {
+      included: !!(trip.insurance_booking_id),
+      bookingId: trip.insurance_booking_id || null,
+      quoteId: trip.insurance_quote_id || null,
+      premium: trip.insurance_premium != null ? toNumber(trip.insurance_premium) : null,
+      status: trip.insurance_status || null,
+    },
+    itemValue: toArray(trip.items).reduce(
+      (sum, item) => sum + (Number(item.value) || 0),
+      0
+    ) || null,
   };
 };

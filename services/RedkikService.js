@@ -1,47 +1,94 @@
-// Redkik calls must run through a trusted backend.
+// Redkik calls must run through a trusted backend (Supabase Edge Function).
 // Do not place Redkik client secrets in the mobile app bundle.
 
-const REDKIK_PROXY_BASE_URL =
-  process.env.EXPO_PUBLIC_REDKIK_PROXY_BASE_URL ||
-  process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL ||
-  null;
-
-const buildProxyUrl = (path) => {
-  if (!REDKIK_PROXY_BASE_URL) {
-    throw new Error(
-      'Redkik proxy is not configured. Set EXPO_PUBLIC_REDKIK_PROXY_BASE_URL.'
-    );
-  }
-
-  const baseUrl = REDKIK_PROXY_BASE_URL.endsWith("/")
-    ? REDKIK_PROXY_BASE_URL.slice(0, -1)
-    : REDKIK_PROXY_BASE_URL;
-
-  return `${baseUrl}${path}`;
-};
+import { supabase } from '../config/supabase';
 
 const RedkikService = {
-  async authenticate() {
-    // Kept for compatibility with existing call sites.
-    // Authentication is handled server-side by the proxy.
-    return true;
+  /**
+   * Request an insurance quote for eligible items.
+   * Returns null on failure — insurance errors must never block orders.
+   *
+   * @param {Object} params
+   * @param {Array}  params.items   - Items with name, value, weight, condition
+   * @param {Object} params.pickup  - { address, coordinates }
+   * @param {Object} params.dropoff - { address, coordinates }
+   * @param {string|null} params.scheduledTime - ISO string or null
+   * @returns {Promise<{ offerId: string, premium: number, details: Object } | null>}
+   */
+  async getQuote({ items, pickup, dropoff, scheduledTime }) {
+    try {
+      const { data, error } = await supabase.functions.invoke('redkik-quote', {
+        body: {
+          action: 'get-quote',
+          items: (items || []).map(item => ({
+            name: item.name || 'Item',
+            description: item.description || '',
+            value: Number(item.value) || 0,
+            weight: Number(item.weightEstimate || item.weight) || 0,
+            condition: item.condition || 'new',
+          })),
+          pickup,
+          dropoff,
+          scheduledTime: scheduledTime || null,
+        },
+      });
+
+      if (error) {
+        console.warn('Redkik quote request failed:', error.message || error);
+        return null;
+      }
+
+      if (data?.error) {
+        console.warn('Redkik quote returned error:', data.error);
+        return null;
+      }
+
+      return {
+        offerId: data.offerId || null,
+        premium: Number(data.premium) || 0,
+        details: data.details || {},
+      };
+    } catch (err) {
+      console.warn('Redkik getQuote exception:', err);
+      return null;
+    }
   },
 
-  async getQuote(bookingDetails) {
-    const response = await fetch(buildProxyUrl('/redkik/quotes'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(bookingDetails || {}),
-    });
+  /**
+   * Purchase insurance for a confirmed quote.
+   * Returns null on failure — order creation must proceed regardless.
+   *
+   * @param {string} offerId - The offerId from getQuote()
+   * @returns {Promise<{ bookingId: string } | null>}
+   */
+  async purchaseInsurance(offerId) {
+    if (!offerId) return null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Redkik quote request failed: ${response.status} ${errorText}`);
+    try {
+      const { data, error } = await supabase.functions.invoke('redkik-quote', {
+        body: {
+          action: 'purchase',
+          offerId,
+        },
+      });
+
+      if (error) {
+        console.warn('Redkik purchase failed:', error.message || error);
+        return null;
+      }
+
+      if (data?.error) {
+        console.warn('Redkik purchase returned error:', data.error);
+        return null;
+      }
+
+      return {
+        bookingId: data.bookingId || null,
+      };
+    } catch (err) {
+      console.warn('Redkik purchaseInsurance exception:', err);
+      return null;
     }
-
-    return await response.json();
   },
 };
 
