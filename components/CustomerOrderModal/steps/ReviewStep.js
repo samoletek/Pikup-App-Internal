@@ -12,6 +12,9 @@ const BOTTOM_SPACER_HEIGHT = 100;
 const ReviewStep = ({
     orderData,
     pricing,
+    insuranceQuote = null,
+    insuranceLoading = false,
+    insuranceError = false,
     onNavigateToStep,
     paymentMethods = [],
     selectedPaymentMethod = null,
@@ -307,10 +310,24 @@ const ReviewStep = ({
                         </View>
                     )}
 
-                    {displayPricing?.mandatoryInsurance > 0 && (
-                        <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Mandatory Insurance</Text>
-                            <Text style={styles.priceValue}>${displayPricing.mandatoryInsurance.toFixed(2)}</Text>
+                    {(displayPricing?.insuranceApplied || displayPricing?.mandatoryInsurance > 0) && (
+                        <View>
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>
+                                    Mandatory Insurance{insuranceLoading ? ' (loading...)' : ''}
+                                </Text>
+                                <Text style={styles.priceValue}>
+                                    {insuranceLoading
+                                        ? '...'
+                                        : `$${(insuranceQuote?.premium || displayPricing.mandatoryInsurance || 0).toFixed(2)}`
+                                    }
+                                </Text>
+                            </View>
+                            {insuranceError && (
+                                <Text style={{ fontSize: typography.fontSize.xs, color: colors.warning, paddingHorizontal: spacing.xs, marginBottom: spacing.xs }}>
+                                    Could not verify insurance rate. A default rate will apply.
+                                </Text>
+                            )}
                         </View>
                     )}
 
@@ -318,7 +335,12 @@ const ReviewStep = ({
 
                     <View style={styles.priceRow}>
                         <Text style={styles.totalLabel}>Total</Text>
-                        <Text style={styles.totalValue}>${displayPricing?.total?.toFixed(2) || '0.00'}</Text>
+                        <Text style={styles.totalValue}>
+                            ${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
+                                ? ((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) || 0).toFixed(2)
+                                : displayPricing?.total?.toFixed(2) || '0.00'
+                            }
+                        </Text>
                     </View>
                 </View>
 

@@ -10,12 +10,13 @@ import * as Location from 'expo-location';
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN);
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../config/supabase';
-import OfflineDashboard from '../../components/OfflineDashboard';
+import OfflineDashboard, { COLLAPSED_HEIGHT } from '../../components/OfflineDashboard';
 import DrivingProgressModal from '../../components/DrivingProgressModal';
 import NavigationModal from '../../components/NavigationModal';
 import RequestModal from '../../components/RequestModal';
 import IncomingRequestModal from '../../components/IncomingRequestModal';
 import PhoneVerificationModal from '../../components/PhoneVerificationModal';
+import RecentTripsModal from '../../components/RecentTripsModal';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
@@ -28,8 +29,10 @@ import {
   borderRadius,
   colors,
   shadows,
+  sizing,
   spacing,
   typography,
+  zIndex as zLayers,
 } from '../../styles/theme';
 
 const TIMER_SECONDS = 180;
@@ -56,7 +59,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     setDriverOnline,
     setDriverOffline,
     updateDriverHeartbeat,
-    refreshProfile
+    refreshProfile,
+    getDriverTrips,
   } = useAuth();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const [region, setRegion] = useState(null);
@@ -77,6 +81,12 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Phone verification modal
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
+
+  // Recent trips modal
+  const [dashboardExpanded, setDashboardExpanded] = useState(false);
+  const [showRecentTrips, setShowRecentTrips] = useState(false);
+  const [recentTrips, setRecentTrips] = useState([]);
+  const [recentTripsLoading, setRecentTripsLoading] = useState(false);
 
   // Route for incoming request (Mapbox Directions)
   const [incomingRoute, setIncomingRoute] = useState(null); // GeoJSON LineString
@@ -639,8 +649,23 @@ export default function DriverHomeScreen({ navigation, route }) {
         return;
       }
 
-      // Get current location
-      let location = await Location.getCurrentPositionAsync({});
+      // Get current location (fall back to last known if GPS is slow)
+      let location;
+      try {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+          timeout: 10000,
+        });
+      } catch {
+        location = await Location.getLastKnownPositionAsync({});
+      }
+
+      if (!location) {
+        alert('Unable to determine your location. Please make sure location services are enabled and try again.');
+        setLoading(false);
+        return;
+      }
+
       const driverPos = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -708,6 +733,19 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   };
 
+
+  const handleOpenRecentTrips = async () => {
+    setShowRecentTrips(true);
+    setRecentTripsLoading(true);
+    try {
+      const trips = (await getDriverTrips?.(currentUserId)) || [];
+      setRecentTrips(trips);
+    } catch (err) {
+      console.error('Error loading recent trips:', err);
+    } finally {
+      setRecentTripsLoading(false);
+    }
+  };
 
   const handleRequestMarkerPress = (request) => {
     console.log('Request marker pressed:', request.id);
@@ -1328,11 +1366,23 @@ export default function DriverHomeScreen({ navigation, route }) {
         onSnapChange={handleIncomingSnapChange}
       />
 
+      {/* Recent Trips floating button - above Offline Dashboard */}
+      {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && !dashboardExpanded && (
+        <TouchableOpacity
+          style={styles.floatingRecentTripsBtn}
+          onPress={handleOpenRecentTrips}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="time-outline" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+      )}
+
       {/* Offline Dashboard Overlay */}
       {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && (
         <OfflineDashboard
           onGoOnline={handleGoOnline}
           navigation={navigation}
+          onExpandedChange={setDashboardExpanded}
         />
       )}
 
@@ -1346,6 +1396,14 @@ export default function DriverHomeScreen({ navigation, route }) {
         }}
         userId={currentUser?.uid || currentUser?.id}
         userTable="drivers"
+      />
+
+      {/* Recent Trips Modal */}
+      <RecentTripsModal
+        visible={showRecentTrips}
+        onClose={() => setShowRecentTrips(false)}
+        trips={recentTrips}
+        loading={recentTripsLoading}
       />
 
     </View>
@@ -1737,5 +1795,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.elevated,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  floatingRecentTripsBtn: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: COLLAPSED_HEIGHT + spacing.xs,
+    width: sizing.touchTargetMin,
+    height: sizing.touchTargetMin,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: zLayers.toast + 1,
   },
 });

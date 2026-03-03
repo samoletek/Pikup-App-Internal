@@ -11,6 +11,7 @@ import { usePayment } from '../../contexts/PaymentContext';
 import { calculatePrice, getVehicleRates } from '../../services/PricingService';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { recommendVehicleForItems } from '../../services/AIService';
+import RedkikService from '../../services/RedkikService';
 
 // Step Components
 import AddressSearchStep from './steps/AddressSearchStep';
@@ -171,6 +172,11 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     // Pricing preview for ReviewStep (step 6)
     const [previewPricing, setPreviewPricing] = useState(null);
 
+    // Insurance quote from Redkik
+    const [insuranceQuote, setInsuranceQuote] = useState(null);
+    const [insuranceLoading, setInsuranceLoading] = useState(false);
+    const [insuranceError, setInsuranceError] = useState(false);
+
     // ============================================
     // EFFECTS
     // ============================================
@@ -201,6 +207,9 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         setItemErrors({});
         setPreviewPricing(null);
         setIsSubmitting(false);
+        setInsuranceQuote(null);
+        setInsuranceLoading(false);
+        setInsuranceError(false);
     };
 
     useEffect(() => {
@@ -634,15 +643,56 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             // Pre-compute pricing when entering Review step
             if (currentStep === 5) {
                 calculatePricing().then(p => setPreviewPricing(p));
+
+                // Request Redkik insurance quote for insured new items
+                const insuredItems = (orderData.items || []).filter(
+                    item => String(item.condition || '').toLowerCase() === 'new' && item.hasInsurance === true
+                );
+                if (insuredItems.length > 0) {
+                    setInsuranceLoading(true);
+                    setInsuranceError(false);
+                    setInsuranceQuote(null);
+                    RedkikService.getQuote({
+                        items: insuredItems,
+                        pickup: orderData.pickup,
+                        dropoff: orderData.dropoff,
+                        scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
+                    }).then(quote => {
+                        setInsuranceQuote(quote);
+                        setInsuranceLoading(false);
+                        if (!quote) setInsuranceError(true);
+                    }).catch(() => {
+                        setInsuranceQuote(null);
+                        setInsuranceLoading(false);
+                        setInsuranceError(true);
+                    });
+                } else {
+                    setInsuranceQuote(null);
+                    setInsuranceLoading(false);
+                    setInsuranceError(false);
+                }
             }
             goToStep(currentStep + 1, 'forward');
         } else {
             const selectedPaymentMethod = paymentMethods?.find(method => method.id === orderData.selectedPaymentMethodId) || null;
             const pricing = await calculatePricing();
+
+            // Override insurance premium with real Redkik quote when available
+            let finalPricing = pricing;
+            if (insuranceQuote?.premium > 0 && pricing?.mandatoryInsurance > 0) {
+                const pricingDiff = insuranceQuote.premium - (pricing.mandatoryInsurance || 0);
+                finalPricing = {
+                    ...pricing,
+                    mandatoryInsurance: insuranceQuote.premium,
+                    total: Math.round((pricing.total + pricingDiff) * 100) / 100,
+                };
+            }
+
             const finalOrder = {
                 ...orderData,
-                pricing,
+                pricing: finalPricing,
                 selectedPaymentMethod,
+                insuranceQuote,
             };
 
             try {
@@ -758,6 +808,9 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     <ReviewStep
                         orderData={orderData}
                         pricing={previewPricing}
+                        insuranceQuote={insuranceQuote}
+                        insuranceLoading={insuranceLoading}
+                        insuranceError={insuranceError}
                         onNavigateToStep={setCurrentStep}
                         paymentMethods={paymentMethods || []}
                         selectedPaymentMethod={selectedPaymentMethod}

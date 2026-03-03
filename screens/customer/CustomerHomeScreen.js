@@ -29,6 +29,7 @@ import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import TripRatingModal from "../../components/TripRatingModal";
 import MapboxLocationService from "../../services/MapboxLocationService";
+import RedkikService from "../../services/RedkikService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import {
   borderRadius,
@@ -664,6 +665,39 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
+        // Purchase insurance if a Redkik quote was obtained
+        let insuranceData = null;
+        if (orderData?.insuranceQuote?.offerId) {
+          try {
+            const purchaseResult = await RedkikService.purchaseInsurance(
+              orderData.insuranceQuote.offerId
+            );
+            if (purchaseResult?.bookingId) {
+              insuranceData = {
+                bookingId: purchaseResult.bookingId,
+                quoteId: orderData.insuranceQuote.offerId,
+                premium: orderData.insuranceQuote.premium,
+                status: 'purchased',
+              };
+            } else {
+              // Purchase didn't return a bookingId — record as failed but don't block order
+              insuranceData = {
+                quoteId: orderData.insuranceQuote.offerId,
+                premium: orderData.insuranceQuote.premium,
+                status: 'purchase_failed',
+              };
+              console.warn('Insurance purchase did not return a bookingId');
+            }
+          } catch (insuranceErr) {
+            console.warn('Insurance purchase failed:', insuranceErr);
+            insuranceData = {
+              quoteId: orderData.insuranceQuote.offerId,
+              premium: orderData.insuranceQuote.premium,
+              status: 'purchase_failed',
+            };
+          }
+        }
+
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,
@@ -680,6 +714,7 @@ export default function CustomerHomeScreen({ navigation }) {
             orderData?.scheduleType === "scheduled"
               ? orderData?.scheduledDateTime
               : null,
+          insurance: insuranceData,
         });
 
         setSearchModalVisible(false);
