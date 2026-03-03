@@ -63,7 +63,12 @@ async function getRedkikToken(): Promise<string> {
   }
 
   cachedToken = token
-  tokenExpiresAt = Date.now() + ((data.expires_in || 3600) - 60) * 1000
+  // Redkik returns expires_in in milliseconds (86400000 = 24h).
+  // If value > 10000 treat as ms, otherwise treat as seconds.
+  const expiresInMs = (data.expires_in || 3600000) > 10000
+    ? (data.expires_in || 3600000)
+    : (data.expires_in || 3600) * 1000
+  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 60s safety buffer
 
   return token
 }
