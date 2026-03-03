@@ -57,11 +57,11 @@ export default function DriverEarningsScreen({ navigation, route }) {
 
   useEffect(() => {
     if (currentUserId) {
-      loadDriverData();
+      loadDriverData(false);
     } else {
       setLoading(false);
     }
-  }, [currentUserId]);
+  }, [currentUserId, loadDriverData]);
 
   // Re-process chart data when period changes
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         refreshTimer = null;
-        loadDriverData();
+        loadDriverDataRef.current?.(true); // silent refresh — no loading flash
       }, delayMs);
     };
 
@@ -120,9 +120,11 @@ export default function DriverEarningsScreen({ navigation, route }) {
     };
   }, [currentUserId]);
 
-  const loadDriverData = async () => {
+  const loadDriverDataRef = useRef(null);
+
+  const loadDriverData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const trips = (await getDriverTrips?.(currentUserId)) || [];
       const stats = (await getDriverStats?.(currentUserId)) || {};
@@ -140,17 +142,16 @@ export default function DriverEarningsScreen({ navigation, route }) {
       setWeeklyData(processTripsIntoChartData(trips, selectedPeriod));
     } catch (error) {
       console.error("Error loading driver data:", error);
-      setWeeklyData(getMockWeeklyData());
-      setDriverStats({
-        currentWeekTrips: 12,
-        totalEarnings: 330.5,
-        availableBalance: 0,
-        weeklyMilestone: 15,
-      });
+      if (!silent) {
+        setWeeklyData(getMockWeeklyData());
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [currentUserId, selectedPeriod]);
+
+  // Keep a stable ref so the realtime subscription always calls the latest version
+  loadDriverDataRef.current = loadDriverData;
 
   const getPeriodStartDate = (period) => {
     const now = new Date();

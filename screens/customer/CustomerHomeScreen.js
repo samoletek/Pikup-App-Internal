@@ -622,8 +622,7 @@ export default function CustomerHomeScreen({ navigation }) {
           error: "Please select a saved payment method.",
         };
       }
-      const amountInCents = Math.round(totalAmount * 100);
-      if (!Number.isInteger(amountInCents) || amountInCents <= 0) {
+      if (totalAmount <= 0) {
         return {
           success: false,
           error: "Invalid order total. Please review your order and try again.",
@@ -631,6 +630,64 @@ export default function CustomerHomeScreen({ navigation }) {
       }
 
       try {
+        // Step 1: Purchase insurance BEFORE payment (so we know the final charge amount)
+        let insuranceData = null;
+        let finalAmount = totalAmount;
+
+        if (orderData?.insuranceQuote?.offerId) {
+          const attemptPurchase = async () => {
+            const purchaseResult = await RedkikService.purchaseInsurance(
+              orderData.insuranceQuote.offerId
+            );
+            if (purchaseResult?.bookingId) {
+              return {
+                bookingId: purchaseResult.bookingId,
+                quoteId: orderData.insuranceQuote.offerId,
+                premium: orderData.insuranceQuote.premium,
+                status: 'purchased',
+              };
+            }
+            return null;
+          };
+
+          try {
+            insuranceData = await attemptPurchase();
+            if (!insuranceData) {
+              await new Promise(r => setTimeout(r, 1500));
+              insuranceData = await attemptPurchase();
+            }
+          } catch (insuranceErr) {
+            console.warn('Insurance purchase failed:', insuranceErr);
+          }
+
+          if (!insuranceData) {
+            // Insurance failed — remove premium from charge amount
+            const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
+            finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
+
+            insuranceData = {
+              quoteId: orderData.insuranceQuote.offerId,
+              premium: orderData.insuranceQuote.premium,
+              status: 'purchase_failed',
+            };
+
+            Alert.alert(
+              'Insurance Notice',
+              'We could not activate your insurance coverage. You will only be charged for the delivery itself. Our support team will follow up.',
+              [{ text: 'OK' }]
+            );
+          }
+        }
+
+        // Step 2: Charge the correct amount (with or without insurance)
+        const finalAmountInCents = Math.round(finalAmount * 100);
+        if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
+          return {
+            success: false,
+            error: "Invalid order total. Please review your order and try again.",
+          };
+        }
+
         const rideDetails = {
           scheduleType: orderData?.scheduleType,
           scheduledDateTime: orderData?.scheduledDateTime,
@@ -643,7 +700,7 @@ export default function CustomerHomeScreen({ navigation }) {
           timestamp: new Date().toISOString(),
         };
         const paymentIntentResult = await createPaymentIntent(
-          amountInCents,
+          finalAmountInCents,
           "usd",
           rideDetails,
           selectedPaymentMethod.stripePaymentMethodId
@@ -665,39 +722,6 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
-        // Purchase insurance if a Redkik quote was obtained
-        let insuranceData = null;
-        if (orderData?.insuranceQuote?.offerId) {
-          try {
-            const purchaseResult = await RedkikService.purchaseInsurance(
-              orderData.insuranceQuote.offerId
-            );
-            if (purchaseResult?.bookingId) {
-              insuranceData = {
-                bookingId: purchaseResult.bookingId,
-                quoteId: orderData.insuranceQuote.offerId,
-                premium: orderData.insuranceQuote.premium,
-                status: 'purchased',
-              };
-            } else {
-              // Purchase didn't return a bookingId — record as failed but don't block order
-              insuranceData = {
-                quoteId: orderData.insuranceQuote.offerId,
-                premium: orderData.insuranceQuote.premium,
-                status: 'purchase_failed',
-              };
-              console.warn('Insurance purchase did not return a bookingId');
-            }
-          } catch (insuranceErr) {
-            console.warn('Insurance purchase failed:', insuranceErr);
-            insuranceData = {
-              quoteId: orderData.insuranceQuote.offerId,
-              premium: orderData.insuranceQuote.premium,
-              status: 'purchase_failed',
-            };
-          }
-        }
-
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,
@@ -706,7 +730,7 @@ export default function CustomerHomeScreen({ navigation }) {
           vehicle: orderData?.selectedVehicle,
           pricing: {
             ...(orderData?.pricing || {}),
-            total: totalAmount,
+            total: finalAmount,
             distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
           },
           items: orderData?.items || [],
