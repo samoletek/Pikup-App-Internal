@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
 import { colors } from '../styles/theme';
+import { supabase } from '../config/supabase';
 import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -105,7 +106,7 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
         setPhoneError('');
 
         try {
-            await sendPhoneOtp(fullPhone);
+            await sendPhoneOtp(fullPhone, { userId, userTable });
             setResendTimer(60);
             animateStepChange('phone_verify');
         } catch (err) {
@@ -130,15 +131,17 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
             if (!result?.verified) throw new Error('Invalid verification code');
 
             // Update phone number and mark as verified in DB
-            if (userId && userTable) {
-                const { error: updateError } = await supabase
-                    .from(userTable)
-                    .update({ phone_number: fullPhone, phone_verified: true })
-                    .eq('id', userId);
+            if (!userId || !userTable) {
+                throw new Error('Could not link verification to your profile. Please sign in again.');
+            }
 
-                if (updateError) {
-                    console.error('Error updating phone_number:', updateError);
-                }
+            const { error: updateError } = await supabase
+                .from(userTable)
+                .update({ phone_number: fullPhone, phone_verified: true })
+                .eq('id', userId);
+
+            if (updateError) {
+                throw new Error(updateError.message || 'Failed to save verified phone number');
             }
 
             handleClose();
@@ -163,7 +166,7 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
         setSendingOtp(true);
 
         try {
-            await sendPhoneOtp(fullPhone);
+            await sendPhoneOtp(fullPhone, { userId, userTable });
             setResendTimer(60);
             setOtpError('');
             setOtpCode('');
