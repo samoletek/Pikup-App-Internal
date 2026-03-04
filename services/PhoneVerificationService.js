@@ -1,5 +1,23 @@
 import { supabase } from '../config/supabase';
 
+const getEdgeFunctionErrorMessage = async (error) => {
+    if (!error) return 'Request failed';
+
+    // Supabase Functions HTTP errors include a Response-like context with the real payload.
+    const context = error.context;
+    if (context && typeof context.json === 'function') {
+        try {
+            const payload = await context.json();
+            if (payload?.error) return payload.error;
+            if (payload?.message) return payload.message;
+        } catch (_) {
+            // fall back to generic message below
+        }
+    }
+
+    return error.message || 'Request failed';
+};
+
 /**
  * Send OTP to phone number via Twilio (through Edge Function)
  * @param {string} phone - Full phone number with country code (e.g., "+12125551234")
@@ -13,7 +31,9 @@ export const sendPhoneOtp = async (phone) => {
         body: { phone }
     });
 
-    if (error) throw error;
+    if (error) {
+        throw new Error(await getEdgeFunctionErrorMessage(error));
+    }
     if (data?.error) throw new Error(data.error);
 
     return { success: true };
@@ -33,7 +53,9 @@ export const verifyPhoneOtp = async (phone, code) => {
         body: { phone, code }
     });
 
-    if (error) throw error;
+    if (error) {
+        throw new Error(await getEdgeFunctionErrorMessage(error));
+    }
     if (data?.error) throw new Error(data.error);
 
     return { success: true, verified: data?.verified === true };

@@ -16,7 +16,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
 import { colors } from '../styles/theme';
-import { supabase } from '../config/supabase';
 import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
