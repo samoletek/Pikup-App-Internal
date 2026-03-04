@@ -259,14 +259,17 @@ export const createPickupRequest = async (requestData, currentUser) => {
             scheduled_time: requestData.scheduledTime || null,
             status: toDbTripStatus(TRIP_STATUS.PENDING),
             created_at: new Date().toISOString(),
-            // Insurance fields (nullable — only set when insured items exist)
-            insurance_quote_id: requestData.insurance?.quoteId || null,
-            insurance_booking_id: requestData.insurance?.bookingId || null,
-            insurance_premium: requestData.insurance?.premium != null
-                ? parseFloat(requestData.insurance.premium)
-                : null,
-            insurance_status: requestData.insurance?.status || null,
         };
+
+        // Only include insurance fields when data exists (avoids column-missing errors on unmigrated DB)
+        if (requestData.insurance) {
+            tripData.insurance_quote_id = requestData.insurance.quoteId || null;
+            tripData.insurance_booking_id = requestData.insurance.bookingId || null;
+            tripData.insurance_premium = requestData.insurance.premium != null
+                ? parseFloat(requestData.insurance.premium)
+                : null;
+            tripData.insurance_status = requestData.insurance.status || null;
+        }
 
         const { data, error } = await supabase
             .from('trips')

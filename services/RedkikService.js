@@ -43,9 +43,20 @@ const RedkikService = {
         return null;
       }
 
+      console.log('[RedkikService] Quote response:', JSON.stringify(data, null, 2));
+
+      if (!data.offerId) {
+        console.warn('[RedkikService] Quote missing offerId — check Edge Function logs for raw Redkik response');
+        return null;
+      }
+      if (Number(data.premium) <= 0) {
+        console.warn('[RedkikService] Quote has invalid premium:', data.premium);
+        return null;
+      }
+
       return {
-        offerId: data.offerId || null,
-        premium: Number(data.premium) || 0,
+        offerId: data.offerId,
+        premium: Number(data.premium),
         details: data.details || {},
       };
     } catch (err) {
@@ -82,8 +93,15 @@ const RedkikService = {
         return null;
       }
 
+      console.log('[RedkikService] Purchase response:', JSON.stringify(data, null, 2));
+
+      if (!data.bookingId) {
+        console.warn('[RedkikService] Purchase missing bookingId — check Edge Function logs for raw Redkik response');
+        return null;
+      }
+
       return {
-        bookingId: data.bookingId || null,
+        bookingId: data.bookingId,
       };
     } catch (err) {
       console.warn('Redkik purchaseInsurance exception:', err);

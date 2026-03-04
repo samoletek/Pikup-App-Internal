@@ -78,7 +78,8 @@ export const mapTripFromDb = (trip) => {
 
     // Insurance data (mapped for CustomerClaimsScreen compatibility)
     insurance: {
-      included: !!(trip.insurance_booking_id),
+      included: !!(trip.insurance_booking_id) || trip.insurance_status === 'purchased',
+      purchaseFailed: trip.insurance_status === 'purchase_failed',
       bookingId: trip.insurance_booking_id || null,
       quoteId: trip.insurance_quote_id || null,
       premium: trip.insurance_premium != null ? toNumber(trip.insurance_premium) : null,

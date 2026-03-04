@@ -15,6 +15,7 @@ const ReviewStep = ({
     insuranceQuote = null,
     insuranceLoading = false,
     insuranceError = false,
+    onLaborAdjustmentChange,
     onNavigateToStep,
     paymentMethods = [],
     selectedPaymentMethod = null,
@@ -94,7 +95,8 @@ const ReviewStep = ({
             ? Math.min(max, current + step)
             : Math.max(min, current - step);
         setLaborAdjustment(next);
-    }, [laborSliderConfig, laborAdjustment]);
+        onLaborAdjustmentChange?.(next);
+    }, [laborSliderConfig, laborAdjustment, onLaborAdjustmentChange]);
 
     // Use adjustedPricing for display
     const displayPricing = adjustedPricing || pricing;
@@ -337,7 +339,7 @@ const ReviewStep = ({
                         <Text style={styles.totalLabel}>Total</Text>
                         <Text style={styles.totalValue}>
                             ${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
-                                ? ((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) || 0).toFixed(2)
+                                ? (Math.round((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) * 100) / 100).toFixed(2)
                                 : displayPricing?.total?.toFixed(2) || '0.00'
                             }
                         </Text>
