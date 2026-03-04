@@ -40,7 +40,7 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
 
     const [step, setStep] = useState('phone_input'); // 'phone_input' | 'phone_verify'
     const countryCode = '+1';
-    const [phoneNumber, setPhoneNumber] = useState('(555) 123-4567');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [otpCode, setOtpCode] = useState('');
     const [phoneError, setPhoneError] = useState('');
     const [otpError, setOtpError] = useState('');
@@ -96,24 +96,6 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
     };
 
     const handleSendOtp = async () => {
-        if (phoneNumber === '(555) 123-4567') {
-            // Bypass for testing
-            const fullPhone = '+15551234567';
-            if (userId && userTable) {
-                const { error: updateError } = await supabase
-                    .from(userTable)
-                    .update({ phone_number: fullPhone, phone_verified: true })
-                    .eq('id', userId);
-
-                if (updateError) {
-                    console.error('Error updating phone_number:', updateError);
-                }
-            }
-            handleClose();
-            if (onVerified) onVerified(fullPhone);
-            return;
-        }
-
         if (!validatePhoneNumber(phoneNumber)) {
             setPhoneError('Please enter a valid phone number');
             return;

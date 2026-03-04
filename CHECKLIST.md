@@ -163,7 +163,7 @@
 - [x] #76 Driver preferences UI (size, equipment, extra help)
 
 ### Driver Flow - Onboarding
-- [-] #58 Phone verification (SMS) - NEED TWILIO
+- [x] #58 Phone verification (SMS) - Twilio Verify connected
 - [x] #59 Driver address autocomplete
 - [x] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
