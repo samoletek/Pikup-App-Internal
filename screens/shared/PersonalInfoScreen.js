@@ -40,6 +40,7 @@ export default function PersonalInfoScreen({ navigation }) {
     updateUserProfile,
     deleteAccount,
     changePassword,
+    verifyAccountPassword,
   } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
@@ -51,13 +52,13 @@ export default function PersonalInfoScreen({ navigation }) {
   const [personalInfo, setPersonalInfo] = useState({
     firstName: "",
     lastName: "",
-    email: currentUser?.email || "user@example.com",
+    email: currentUser?.email || "",
     phone: "",
-    dateOfBirth: "01/15/1990",
-    address: "123 Main Street, Apt 4B",
-    city: "New York",
-    state: "NY",
-    zipCode: "10001",
+    dateOfBirth: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
   });
   const [privacySettings, setPrivacySettings] = useState({
     shareLocation: true,
@@ -839,6 +840,10 @@ export default function PersonalInfoScreen({ navigation }) {
         }}
         userId={userId}
         userTable={isDriver ? "drivers" : "customers"}
+        requirePassword
+        verifyAccountPassword={verifyAccountPassword}
+        flowType="phone_change"
+        currentPhone={personalInfo.phone}
       />
     </View>
   );
