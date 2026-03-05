@@ -9,7 +9,12 @@ import { colors } from '../../styles/theme';
 export const COLLAPSED_HEIGHT = 200;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 
-export default function OfflineDashboard({ onGoOnline, navigation, onExpandedChange }) {
+export default function OfflineDashboard({
+    onGoOnline,
+    onGoOnlineScheduled,
+    navigation,
+    onExpandedChange,
+}) {
     const { currentUser, getDriverSessionStats, getDriverStats } = useAuth();
     const [sessionStats, setSessionStats] = useState({
         totalEarnings: 0,
@@ -417,12 +422,18 @@ export default function OfflineDashboard({ onGoOnline, navigation, onExpandedCha
                         style={[styles.buttonContainer, { opacity: goOnlineButtonOpacity }]}
                         pointerEvents={isExpanded ? 'none' : 'auto'}
                     >
-                        <TouchableOpacity onPress={onGoOnline} activeOpacity={0.8}>
-                            <View style={styles.goOnlineBtn}>
-                                <Ionicons name="radio-button-off" size={18} color={colors.text.primary} style={{ marginRight: 8 }} />
+                        <View style={styles.buttonStack}>
+                            <TouchableOpacity style={styles.goOnlineBtn} onPress={onGoOnline} activeOpacity={0.8}>
                                 <Text style={styles.goOnlineText}>Go Online</Text>
-                            </View>
-                        </TouchableOpacity>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.goOnlineBtn, styles.goOnlineScheduledBtn]}
+                                onPress={onGoOnlineScheduled}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={styles.goOnlineScheduledText}>Go Online Scheduled</Text>
+                            </TouchableOpacity>
+                        </View>
                     </Animated.View>
 
                 </LinearGradient>

@@ -120,6 +120,47 @@ EXPO_PUBLIC_SUPABASE_URL=your-supabase-url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 REDKIK_CLIENT_ID=your-redkik-client-id
 REDKIK_CLIENT_SECRET=your-redkik-client-secret
+
+# Optional: Dispatch tuning (driver request pool)
+EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES=15
+EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES=35
+EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS=72
+EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES=5
+```
+
+For Supabase Edge Functions, you can also set the same values as project secrets
+without the `EXPO_PUBLIC_` prefix (`DISPATCH_*`).
+
+### Dispatch Smoke Check (No UI)
+Use this script to validate request-pool behavior for two drivers.
+
+```bash
+npm run dispatch:smoke -- \
+  --driverAEmail=driver1@example.com --driverAPassword='***' \
+  --driverBEmail=driver2@example.com --driverBPassword='***' \
+  --requestPool=asap
+```
+
+To validate disappearance after accept (mutates one trip):
+
+```bash
+npm run dispatch:smoke -- \
+  --driverAEmail=driver1@example.com --driverAPassword='***' \
+  --driverBEmail=driver2@example.com --driverBPassword='***' \
+  --requestPool=asap --accept
+```
+
+If the trip is intentionally visible only to one driver (Preferences), add:
+`--allowSingleDriver`
+
+If there are no pending trips, the script can seed one using a customer account:
+
+```bash
+npm run dispatch:smoke -- \
+  --driverAEmail=driver1@example.com --driverAPassword='***' \
+  --driverBEmail=driver2@example.com --driverBPassword='***' \
+  --customerEmail=customer@example.com --customerPassword='***' \
+  --requestPool=asap --accept
 ```
 
 ### Installation

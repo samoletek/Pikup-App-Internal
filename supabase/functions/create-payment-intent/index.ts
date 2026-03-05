@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? ""
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 
 const stripe = new Stripe(stripeKey, {
   apiVersion: "2022-11-15",
@@ -39,6 +40,10 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     })
+    const supabaseAdminClient = createClient(
+      supabaseUrl,
+      supabaseServiceRoleKey || supabaseAnonKey
+    )
 
     const {
       data: { user },
@@ -78,9 +83,69 @@ serve(async (req) => {
       metadata.payment_method_id = String(paymentMethodId)
     }
 
+    const { data: customerProfile } = await supabaseAdminClient
+      .from("customers")
+      .select("id, stripe_customer_id, first_name, last_name")
+      .eq("id", user.id)
+      .maybeSingle()
+
+    let stripeCustomerId = customerProfile?.stripe_customer_id || ""
+
+    if (!stripeCustomerId) {
+      const resolvedName = [
+        customerProfile?.first_name ?? "",
+        customerProfile?.last_name ?? "",
+      ]
+        .join(" ")
+        .trim()
+
+      const createdCustomer = await stripe.customers.create({
+        email: user.email ?? undefined,
+        name: resolvedName || undefined,
+        metadata: {
+          user_id: user.id,
+        },
+      })
+
+      stripeCustomerId = createdCustomer.id
+
+      const { error: updateCustomerError } = await supabaseAdminClient
+        .from("customers")
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq("id", user.id)
+
+      if (updateCustomerError) {
+        console.warn("Unable to persist stripe_customer_id for customer:", updateCustomerError)
+      }
+    }
+
+    if (paymentMethodId) {
+      const resolvedPaymentMethodId = String(paymentMethodId)
+      const paymentMethod = await stripe.paymentMethods.retrieve(resolvedPaymentMethodId)
+      const attachedCustomerId =
+        typeof paymentMethod.customer === "string"
+          ? paymentMethod.customer
+          : paymentMethod.customer?.id || null
+
+      if (!attachedCustomerId) {
+        await stripe.paymentMethods.attach(resolvedPaymentMethodId, {
+          customer: stripeCustomerId,
+        })
+      } else if (attachedCustomerId !== stripeCustomerId) {
+        return jsonResponse(
+          {
+            error:
+              "Selected payment method belongs to a different customer. Please add a new card.",
+          },
+          400
+        )
+      }
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: normalizedAmount,
       currency: String(currency || "usd").toLowerCase(),
+      customer: stripeCustomerId,
       automatic_payment_methods: { enabled: true },
       metadata,
     })

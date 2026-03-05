@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-const IGNORABLE_PG_CODES = new Set(["42P01", "42703"])
+const IGNORABLE_PG_CODES = new Set(["42P01", "42703", "PGRST205"])
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

@@ -274,6 +274,11 @@ export default function CustomerHomeScreen({ navigation }) {
       return;
     }
 
+    // Don't update delivery state while customer is rating the trip
+    if (isRatingModalVisible) {
+      return;
+    }
+
     try {
       const requests = await getUserPickupRequests?.();
       if (!Array.isArray(requests)) {
@@ -301,7 +306,7 @@ export default function CustomerHomeScreen({ navigation }) {
       setActiveDelivery(null);
       setPendingBooking(null);
     }
-  }, [currentUserId, getUserPickupRequests]);
+  }, [currentUserId, getUserPickupRequests, isRatingModalVisible]);
 
   useEffect(() => {
     loadCurrentLocation();
@@ -358,10 +363,10 @@ export default function CustomerHomeScreen({ navigation }) {
 
       const hasTripMatchUnread = unreadConversations.some(
         (conversation) =>
-          (
-            (requestIdString && String(conversation?.requestId || "") === requestIdString) ||
-            (activeDriverId && String(conversation?.driverId || "") === activeDriverId)
-          )
+        (
+          (requestIdString && String(conversation?.requestId || "") === requestIdString) ||
+          (activeDriverId && String(conversation?.driverId || "") === activeDriverId)
+        )
       );
 
       // Fallback for legacy conversations where request/participant linkage may be inconsistent.

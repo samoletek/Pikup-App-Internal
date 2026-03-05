@@ -30,14 +30,14 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   const { request, driverLocation } = route.params;
   const { confirmPickup, startDelivery } = useAuth();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
-  
+
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  
+
   const scrollViewRef = useRef(null);
-  
+
   // Monitor order status for cancellations
   useOrderStatusMonitor(request?.id, navigation, {
     currentScreen: 'PickupConfirmationScreen',
@@ -65,9 +65,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
       const hasPermission = await requestPermissions();
       if (!hasPermission) return;
 
-          const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         exif: false,
@@ -79,9 +79,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
         };
-        
+
         setPhotos(prev => [...prev, newPhoto]);
-        
+
         // Scroll to the end to show the new photo
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -101,9 +101,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
         return;
       }
 
-          const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         exif: false,
@@ -115,9 +115,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
         };
-        
+
         setPhotos(prev => [...prev, newPhoto]);
-        
+
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -183,27 +183,27 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   const handleConfirmPickup = async () => {
     setIsCompleting(true);
     setIsUploadingPhotos(true);
-    
+
     try {
       console.log(`Confirming pickup with ${photos.length} photos...`);
-      
+
       // Confirm pickup with photos and location (photos are uploaded to Supabase Storage)
       await confirmPickup(request.id, photos, driverLocation);
       console.log('Pickup confirmed with photos uploaded to Supabase Storage');
-      
+
       setIsUploadingPhotos(false);
-      
+
       // Start delivery phase
       await startDelivery(request.id, driverLocation);
       console.log('Started delivery phase');
-      
+
       // Navigate to delivery screen
       navigation.replace('DeliveryNavigationScreen', {
         request,
         pickupPhotos: photos,
         driverLocation
       });
-      
+
     } catch (error) {
       console.error('Error confirming pickup:', error);
       setIsUploadingPhotos(false);
@@ -247,16 +247,26 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           {/* Customer Info */}
           <View style={styles.customerCard}>
             <View style={styles.customerHeader}>
-              <Image
-                source={{ uri: 'https://via.placeholder.com/50x50/CCCCCC/000000?text=C' }}
-                style={styles.customerPhoto}
-              />
-              <View style={styles.customerDetails}>
-                <Text style={styles.customerName}>{customerName}</Text>
-                <Text style={styles.customerEmail}>{request?.customerEmail}</Text>
-              </View>
-              <TouchableOpacity style={styles.callButton}>
-                <Ionicons name="call" size={20} color={colors.white} />
+              {request?.customerPhoto ? (
+                <Image
+                  source={{ uri: request.customerPhoto }}
+                  style={styles.customerPhoto}
+                />
+              ) : (
+                <View style={styles.customerPhotoPlaceholder}>
+                  <Ionicons name="person" size={22} color={colors.text.muted} />
+                </View>
+              )}
+              <Text style={styles.customerName}>{customerName}</Text>
+              <TouchableOpacity
+                style={styles.chatButton}
+                onPress={() => navigation.navigate('MessageScreen', {
+                  recipientId: request?.customerId,
+                  recipientName: customerName,
+                  tripId: request?.id,
+                })}
+              >
+                <Ionicons name="chatbubble-ellipses" size={20} color={colors.white} />
               </TouchableOpacity>
             </View>
           </View>
@@ -301,6 +311,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
               style={styles.photoScrollView}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoContainer}
+              clipsToBounds={false}
             >
               {/* Add Photo Button */}
               <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
@@ -315,8 +326,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
                   <TouchableOpacity
                     style={styles.removePhotoButton}
                     onPress={() => removePhoto(photo.id)}
+                    hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                   >
-                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                    <Ionicons name="close-circle" size={30} color={colors.error} />
                   </TouchableOpacity>
                   <View style={styles.photoIndex}>
                     <Text style={styles.photoIndexText}>{index + 1}</Text>
@@ -324,14 +336,6 @@ export default function PickupConfirmationScreen({ route, navigation }) {
                 </View>
               ))}
             </ScrollView>
-
-            {photos.length === 0 && (
-              <View style={styles.noPhotosContainer}>
-                <Ionicons name="camera-outline" size={48} color={colors.text.muted} />
-                <Text style={styles.noPhotosText}>No photos yet</Text>
-                <Text style={styles.noPhotosSubtext}>Take at least 1 photo to continue</Text>
-              </View>
-            )}
           </View>
 
           {/* Instructions */}
@@ -359,9 +363,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 
       {/* Bottom Action Button */}
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.confirmButton, 
+            styles.confirmButton,
             { opacity: (photos.length === 0 || isCompleting) ? 0.6 : 1 }
           ]}
           onPress={confirmPickupComplete}
@@ -373,12 +377,12 @@ export default function PickupConfirmationScreen({ route, navigation }) {
             <Ionicons name="checkmark" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
           )}
           <Text style={styles.confirmButtonText}>
-            {isUploadingPhotos ? 'Uploading Photos...' : 
-             isCompleting ? 'Confirming Pickup...' : 
-             'Confirm Pickup & Start Delivery'}
+            {isUploadingPhotos ? 'Uploading Photos...' :
+              isCompleting ? 'Confirming Pickup...' :
+                'Confirm Pickup & Start Delivery'}
           </Text>
         </TouchableOpacity>
-        
+
         {photos.length === 0 && (
           <Text style={styles.warningText}>⚠️ At least 1 photo required</Text>
         )}
@@ -441,25 +445,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   customerPhoto: {
-    width: 50,
-    height: 50,
+    width: 44,
+    height: 44,
     borderRadius: borderRadius.circle,
     marginRight: spacing.md,
   },
-  customerDetails: {
-    flex: 1,
+  customerPhotoPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   customerName: {
+    flex: 1,
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
   },
-  customerEmail: {
-    color: colors.text.tertiary,
-    fontSize: typography.fontSize.base,
-    marginTop: 2,
-  },
-  callButton: {
+  chatButton: {
     width: 44,
     height: 44,
     backgroundColor: colors.primary,
@@ -518,9 +524,11 @@ const styles = StyleSheet.create({
   },
   photoScrollView: {
     marginHorizontal: -spacing.base,
+    overflow: 'visible',
   },
   photoContainer: {
     paddingHorizontal: spacing.base,
+    paddingTop: 8,
     gap: spacing.md,
   },
   addPhotoButton: {
@@ -554,8 +562,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.circle,
+    zIndex: 10,
   },
   photoIndex: {
     position: 'absolute',

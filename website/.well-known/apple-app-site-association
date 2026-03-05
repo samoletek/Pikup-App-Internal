@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "99LU49ANLX.io.architeq.pikup",
+        "paths": ["/invite/*"]
+      }
+    ]
+  }
+}

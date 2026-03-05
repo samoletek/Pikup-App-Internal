@@ -42,6 +42,12 @@ export const mapTripFromDb = (trip) => {
     total: toNumber(trip.price),
     distance: toNumber(trip.distance_miles)
   };
+  const dispatchRequirements =
+    trip.dispatchRequirements ||
+    trip.dispatch_requirements ||
+    pickup?.dispatchRequirements ||
+    pickup?.details?.dispatchRequirements ||
+    null;
 
   return {
     ...trip,
@@ -57,6 +63,7 @@ export const mapTripFromDb = (trip) => {
     pickupPhotos,
     dropoffPhotos,
     pricing,
+    dispatchRequirements,
     scheduledTime: trip.scheduledTime || trip.scheduled_time || null,
     items: toArray(trip.items),
     item: trip.item || (Array.isArray(trip.items) && trip.items.length > 0 ? trip.items[0] : null),

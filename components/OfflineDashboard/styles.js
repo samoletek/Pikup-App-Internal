@@ -1,5 +1,5 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { colors } from '../../styles/theme';
+import { colors, spacing } from '../../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,7 +46,7 @@ export const styles = StyleSheet.create({
     // ============================================
     collapsedContainer: {
         flex: 1,
-        paddingBottom: 90, // Space for Go Online button
+        paddingBottom: 146, // Space for stacked online buttons
     },
     peekContent: {
         paddingHorizontal: 20,
@@ -325,22 +325,37 @@ export const styles = StyleSheet.create({
         paddingBottom: 16,
         // Removed explicit background to blend with dashboard gradient
     },
-    goOnlineBtn: {
+    buttonStack: {
+        width: "100%",
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: spacing.sm,
+    },
+    goOnlineBtn: {
+        flex: 1,
+        alignItems: "center",
         justifyContent: 'center',
         paddingVertical: 16,
-        borderRadius: 25,
-        backgroundColor: colors.primary, // Solid color matching Customer Request button
-        // Shadow properties
+        borderRadius: 30,
+        backgroundColor: colors.primary,
         shadowColor: colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
         elevation: 8,
     },
+    goOnlineScheduledBtn: {
+        backgroundColor: colors.primaryDark,
+        shadowColor: colors.primaryDark,
+    },
     goOnlineText: {
-        fontSize: 18,
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text.primary,
+    },
+    goOnlineScheduledText: {
+        fontSize: 16,
         fontWeight: '600',
         color: colors.text.primary,
     },

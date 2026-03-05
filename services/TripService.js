@@ -6,6 +6,12 @@ import { compressImage, uploadToSupabase } from './StorageService';
 import { createConversation } from './MessagingService';
 import { TRIP_STATUS, normalizeTripStatus, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
+import {
+    buildDispatchRequirementsFromRequest,
+    evaluateTripForDriverPreferences,
+    mergeDriverPreferences,
+    resolveDispatchRequirements,
+} from './DispatchMatchingService';
 
 // Payment service URL
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
@@ -41,6 +47,255 @@ const STATUS_FLOW = Object.freeze([
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseEnvNumber = (value, fallback, { min = null, max = null } = {}) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return fallback;
+    }
+
+    if (typeof min === 'number' && parsed < min) {
+        return fallback;
+    }
+    if (typeof max === 'number' && parsed > max) {
+        return fallback;
+    }
+
+    return parsed;
+};
+
+const REQUEST_POOLS = Object.freeze({
+    ALL: 'all',
+    ASAP: 'asap',
+    SCHEDULED: 'scheduled',
+});
+const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
+const MAX_REQUEST_DISTANCE_BY_POOL_MILES = Object.freeze({
+    [REQUEST_POOLS.ASAP]: parseEnvNumber(
+        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES,
+        15,
+        { min: 1, max: 500 }
+    ),
+    [REQUEST_POOLS.SCHEDULED]: parseEnvNumber(
+        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES,
+        35,
+        { min: 1, max: 1000 }
+    ),
+    [REQUEST_POOLS.ALL]: parseEnvNumber(
+        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES,
+        35,
+        { min: 1, max: 1000 }
+    ),
+});
+const SCHEDULED_LOOKAHEAD_HOURS = parseEnvNumber(
+    process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS,
+    72,
+    { min: 1, max: 24 * 30 }
+);
+const SCHEDULED_PAST_GRACE_MINUTES = parseEnvNumber(
+    process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES,
+    5,
+    { min: 0, max: 120 }
+);
+
+const normalizeRequestPool = (value) => {
+    const pool = String(value || REQUEST_POOLS.ALL).trim().toLowerCase();
+    if (pool === REQUEST_POOLS.ASAP) return REQUEST_POOLS.ASAP;
+    if (pool === REQUEST_POOLS.SCHEDULED) return REQUEST_POOLS.SCHEDULED;
+    return REQUEST_POOLS.ALL;
+};
+
+const formatEdgeInvokeError = (error) => {
+    if (!error) return 'Unknown edge function error';
+    const status = error.status ? `status ${error.status}` : null;
+    const message = error.message || error.details || String(error);
+    return [status, message].filter(Boolean).join(': ');
+};
+
+const getAvailableRequestsFromEdge = async ({ requestPool, driverLocation }) => {
+    const payload = { requestPool };
+    if (driverLocation) {
+        payload.driverLocation = driverLocation;
+    }
+
+    const { data, error } = await supabase.functions.invoke(DRIVER_REQUEST_POOL_FUNCTION, {
+        body: payload,
+    });
+
+    if (error) {
+        throw error;
+    }
+
+    const requests = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.requests)
+            ? data.requests
+            : null;
+
+    if (!Array.isArray(requests)) {
+        throw new Error('get-driver-request-pool returned an invalid response shape');
+    }
+
+    return requests;
+};
+
+const hasValidCoordinatePair = (value) => {
+    if (!value) return false;
+    const lat = Number(value.latitude);
+    const lng = Number(value.longitude);
+    return Number.isFinite(lat) && Number.isFinite(lng);
+};
+
+const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+const distanceMilesBetweenPoints = (first, second) => {
+    if (!hasValidCoordinatePair(first) || !hasValidCoordinatePair(second)) {
+        return Number.POSITIVE_INFINITY;
+    }
+
+    const earthRadiusMiles = 3959;
+    const lat1 = Number(first.latitude);
+    const lng1 = Number(first.longitude);
+    const lat2 = Number(second.latitude);
+    const lng2 = Number(second.longitude);
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRadians(lat1)) *
+            Math.cos(toRadians(lat2)) *
+            Math.sin(dLng / 2) *
+            Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return earthRadiusMiles * c;
+};
+
+const getPickupCoordinates = (trip) => {
+    const coordinates = trip?.pickup?.coordinates;
+    if (hasValidCoordinatePair(coordinates)) {
+        return {
+            latitude: Number(coordinates.latitude),
+            longitude: Number(coordinates.longitude),
+        };
+    }
+    return null;
+};
+
+const toTimestampOrInfinity = (value) => {
+    if (!value) return Number.POSITIVE_INFINITY;
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+};
+
+const getRequestDistanceLimitMiles = (requestPool, scheduleType) => {
+    if (requestPool === REQUEST_POOLS.ASAP || requestPool === REQUEST_POOLS.SCHEDULED) {
+        return MAX_REQUEST_DISTANCE_BY_POOL_MILES[requestPool];
+    }
+    return scheduleType === REQUEST_POOLS.SCHEDULED
+        ? MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED]
+        : MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP];
+};
+
+const isTripOutsideScheduledWindow = (requirements, nowDate = new Date()) => {
+    if (requirements?.scheduleType !== REQUEST_POOLS.SCHEDULED) {
+        return false;
+    }
+
+    const scheduledAtMs = toTimestampOrInfinity(requirements?.scheduledTime);
+    if (!Number.isFinite(scheduledAtMs)) {
+        return false;
+    }
+
+    const nowMs = nowDate.getTime();
+    const minAllowedMs = nowMs - SCHEDULED_PAST_GRACE_MINUTES * 60 * 1000;
+    const maxAllowedMs = nowMs + SCHEDULED_LOOKAHEAD_HOURS * 60 * 60 * 1000;
+    return scheduledAtMs < minAllowedMs || scheduledAtMs > maxAllowedMs;
+};
+
+const isTripOutsideDistanceWindow = ({
+    trip,
+    requirements,
+    requestPool,
+    driverLocation,
+}) => {
+    if (!hasValidCoordinatePair(driverLocation)) {
+        return false;
+    }
+
+    const pickupCoordinates = getPickupCoordinates(trip);
+    const distanceMiles = distanceMilesBetweenPoints(driverLocation, pickupCoordinates);
+    if (!Number.isFinite(distanceMiles)) {
+        return false;
+    }
+
+    const maxDistanceMiles = getRequestDistanceLimitMiles(requestPool, requirements?.scheduleType);
+    return distanceMiles > maxDistanceMiles;
+};
+
+const sortTripsForPool = (trips, { requestPool = REQUEST_POOLS.ALL, driverLocation = null } = {}) => {
+    const normalizedPool = normalizeRequestPool(requestPool);
+    const sorted = [...trips];
+
+    if (normalizedPool === REQUEST_POOLS.SCHEDULED) {
+        sorted.sort((first, second) => {
+            const firstTime = toTimestampOrInfinity(
+                first?.dispatchRequirements?.scheduledTime || first?.scheduledTime
+            );
+            const secondTime = toTimestampOrInfinity(
+                second?.dispatchRequirements?.scheduledTime || second?.scheduledTime
+            );
+            if (firstTime !== secondTime) {
+                return firstTime - secondTime;
+            }
+
+            const firstDistance = distanceMilesBetweenPoints(
+                driverLocation,
+                getPickupCoordinates(first)
+            );
+            const secondDistance = distanceMilesBetweenPoints(
+                driverLocation,
+                getPickupCoordinates(second)
+            );
+            if (firstDistance !== secondDistance) {
+                return firstDistance - secondDistance;
+            }
+
+            const firstCreatedAt = new Date(first?.createdAt || 0).getTime();
+            const secondCreatedAt = new Date(second?.createdAt || 0).getTime();
+            return secondCreatedAt - firstCreatedAt;
+        });
+
+        return sorted;
+    }
+
+    sorted.sort((first, second) => {
+        const firstDistance = distanceMilesBetweenPoints(
+            driverLocation,
+            getPickupCoordinates(first)
+        );
+        const secondDistance = distanceMilesBetweenPoints(
+            driverLocation,
+            getPickupCoordinates(second)
+        );
+        const firstNormalizedDistance = Number.isFinite(firstDistance)
+            ? firstDistance
+            : Number.POSITIVE_INFINITY;
+        const secondNormalizedDistance = Number.isFinite(secondDistance)
+            ? secondDistance
+            : Number.POSITIVE_INFINITY;
+
+        if (firstNormalizedDistance !== secondNormalizedDistance) {
+            return firstNormalizedDistance - secondNormalizedDistance;
+        }
+
+        const firstCreatedAt = new Date(first?.createdAt || 0).getTime();
+        const secondCreatedAt = new Date(second?.createdAt || 0).getTime();
+        return firstCreatedAt - secondCreatedAt;
+    });
+    return sorted;
+};
 
 const ensureAuthenticatedUserId = async () => {
     const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -174,6 +429,14 @@ const isMissingRpcFunctionError = (error, functionName) => {
     );
 };
 
+const REQUEST_UNAVAILABLE_ERROR_CODE = 'REQUEST_UNAVAILABLE';
+
+const createRequestUnavailableError = (message = 'Request is no longer available') => {
+    const error = new Error(message);
+    error.code = REQUEST_UNAVAILABLE_ERROR_CODE;
+    return error;
+};
+
 const applyTripUpdateWithColumnFallback = async (requestId, rawUpdates = {}) => {
     const updates = { ...rawUpdates };
     const attemptedStatuses = new Set();
@@ -240,13 +503,22 @@ export const createPickupRequest = async (requestData, currentUser) => {
         console.log('Creating pickup request in Supabase...');
 
         const pricingData = requestData.pricing || null;
+        const createdAt = new Date().toISOString();
+        const dispatchRequirements = buildDispatchRequirementsFromRequest({
+            ...requestData,
+            createdAt,
+        });
 
         const tripData = {
             customer_id: currentUser.uid || currentUser.id,
             pickup_location: {
                 ...requestData.pickup,
-                details: requestData.pickupDetails || {},
+                details: {
+                    ...(requestData.pickupDetails || {}),
+                    dispatchRequirements,
+                },
                 pricing: pricingData,
+                dispatchRequirements,
             },
             dropoff_location: {
                 ...requestData.dropoff,
@@ -258,7 +530,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
             items: requestData.items || [],
             scheduled_time: requestData.scheduledTime || null,
             status: toDbTripStatus(TRIP_STATUS.PENDING),
-            created_at: new Date().toISOString(),
+            created_at: createdAt,
             // Insurance fields (nullable — only set when insured items exist)
             insurance_quote_id: requestData.insurance?.quoteId || null,
             insurance_booking_id: requestData.insurance?.bookingId || null,
@@ -313,12 +585,34 @@ export const getUserPickupRequests = async (currentUser) => {
 /**
  * Get available requests for drivers
  * @param {Object} currentUser - Current user object
+ * @param {Object} options - Request feed options
  * @returns {Promise<Array>} Array of available requests
  */
-export const getAvailableRequests = async (currentUser) => {
+export const getAvailableRequests = async (currentUser, options = {}) => {
     if (!currentUser) throw new Error('User not authenticated');
 
     try {
+        const requestPool = normalizeRequestPool(options?.requestPool);
+        const driverLocation = hasValidCoordinatePair(options?.driverLocation)
+            ? {
+                latitude: Number(options.driverLocation.latitude),
+                longitude: Number(options.driverLocation.longitude),
+            }
+            : null;
+
+        try {
+            const edgeRequests = await getAvailableRequestsFromEdge({
+                requestPool,
+                driverLocation,
+            });
+            return edgeRequests;
+        } catch (edgeError) {
+            console.warn(
+                'get-driver-request-pool edge function failed, falling back to client-side filtering:',
+                formatEdgeInvokeError(edgeError)
+            );
+        }
+
         const { data, error } = await supabase
             .from('trips')
             .select('*')
@@ -327,9 +621,122 @@ export const getAvailableRequests = async (currentUser) => {
         if (error) throw error;
 
         const trips = data.map(mapTripFromDb);
+        const driverId = currentUser?.uid || currentUser?.id;
+        let mergedPreferences = null;
+
+        if (driverId) {
+            const { data: driverProfile, error: driverError } = await supabase
+                .from('drivers')
+                .select('metadata')
+                .eq('id', driverId)
+                .maybeSingle();
+
+            if (driverError) {
+                console.warn('Unable to load driver preferences for request filtering:', driverError);
+            } else if (driverProfile?.metadata?.driverPreferences) {
+                mergedPreferences = mergeDriverPreferences(driverProfile.metadata.driverPreferences);
+            }
+        }
+
+        const hiddenReasonCounts = {};
+        const filteredTrips = [];
+        let filteredByPoolCount = 0;
+        let filteredByDistanceCount = 0;
+        let filteredByTimeWindowCount = 0;
+        let filteredByAssignedDriverCount = 0;
+        let filteredByPreferenceCount = 0;
+
+        trips.forEach((trip) => {
+            if (trip?.driverId && trip.driverId !== driverId) {
+                filteredByAssignedDriverCount += 1;
+                return;
+            }
+
+            const normalizedRequirements = resolveDispatchRequirements(trip);
+            const normalizedTrip = {
+                ...trip,
+                dispatchRequirements: normalizedRequirements,
+            };
+
+            if (
+                requestPool === REQUEST_POOLS.SCHEDULED &&
+                normalizedRequirements.scheduleType !== REQUEST_POOLS.SCHEDULED
+            ) {
+                filteredByPoolCount += 1;
+                return;
+            }
+            if (
+                requestPool === REQUEST_POOLS.ASAP &&
+                normalizedRequirements.scheduleType !== REQUEST_POOLS.ASAP
+            ) {
+                filteredByPoolCount += 1;
+                return;
+            }
+
+            if (isTripOutsideScheduledWindow(normalizedRequirements)) {
+                filteredByTimeWindowCount += 1;
+                return;
+            }
+
+            if (
+                isTripOutsideDistanceWindow({
+                    trip: normalizedTrip,
+                    requirements: normalizedRequirements,
+                    requestPool,
+                    driverLocation,
+                })
+            ) {
+                filteredByDistanceCount += 1;
+                return;
+            }
+
+            if (!mergedPreferences) {
+                filteredTrips.push(normalizedTrip);
+                return;
+            }
+
+            const evaluation = evaluateTripForDriverPreferences(normalizedTrip, mergedPreferences);
+            if (evaluation.eligible) {
+                filteredTrips.push({
+                    ...normalizedTrip,
+                    dispatchRequirements: evaluation.requirements,
+                });
+                return;
+            }
+
+            filteredByPreferenceCount += 1;
+            evaluation.hardReasons.forEach((reasonCode) => {
+                hiddenReasonCounts[reasonCode] = (hiddenReasonCounts[reasonCode] || 0) + 1;
+            });
+        });
+
+        if (mergedPreferences && filteredByPreferenceCount > 0) {
+            console.log(
+                `Filtered out ${filteredByPreferenceCount} requests by driver preferences`,
+                hiddenReasonCounts
+            );
+        }
+        if (
+            filteredByPoolCount > 0 ||
+            filteredByDistanceCount > 0 ||
+            filteredByTimeWindowCount > 0 ||
+            filteredByAssignedDriverCount > 0
+        ) {
+            console.log('Filtered requests by dispatch windows', {
+                filteredByPoolCount,
+                filteredByDistanceCount,
+                filteredByTimeWindowCount,
+                filteredByAssignedDriverCount,
+            });
+        }
+
+        const sortedTrips = sortTripsForPool(filteredTrips, {
+            requestPool,
+            driverLocation,
+        });
 
         // Fetch customer names for all trips
-        const customerIds = [...new Set(trips.map(t => t.customerId).filter(Boolean))];
+        const customerIds = [...new Set(sortedTrips.map(t => t.customerId).filter(Boolean))];
         let customerMap = {};
         if (customerIds.length > 0) {
             const { data: customers } = await supabase
@@ -346,7 +753,7 @@ export const getAvailableRequests = async (currentUser) => {
             }
         }
 
-        return trips
+        return sortedTrips
             .map((trip) => {
                 const customer = customerMap[trip.customerId] || {};
                 return {
@@ -369,12 +776,12 @@ export const getAvailableRequests = async (currentUser) => {
                     item: trip.item || null,
                     photos: trip.pickupPhotos || [],
                     scheduledTime: trip.scheduledTime || null,
+                    dispatchRequirements: trip.dispatchRequirements || null,
                     customerName: customer.name || 'Customer',
                     customerEmail: customer.email || null,
                     originalData: trip,
                 };
-            })
-            .sort((a, b) => new Date(b.originalData.createdAt || 0) - new Date(a.originalData.createdAt || 0));
+            });
 
     } catch (error) {
         console.error('Error fetching available requests:', error);
@@ -401,7 +808,7 @@ export const acceptRequest = async (requestId, currentUser) => {
 
         if (snapshotError) throw snapshotError;
         if (!requestSnapshot) {
-            throw new Error('Request is no longer available');
+            throw createRequestUnavailableError('Request is no longer available');
         }
 
         const normalizedStatus = normalizeTripStatus(requestSnapshot.status);
@@ -409,11 +816,11 @@ export const acceptRequest = async (requestId, currentUser) => {
             return mapTripFromDb(requestSnapshot);
         }
         if (normalizedStatus !== TRIP_STATUS.PENDING) {
-            throw new Error('Request is no longer pending');
+            throw createRequestUnavailableError('Request is no longer pending');
         }
 
         if (requestSnapshot.driver_id && requestSnapshot.driver_id !== driverId) {
-            throw new Error('Request already accepted by another driver');
+            throw createRequestUnavailableError('Request already accepted by another driver');
         }
 
         const acceptedAt = new Date().toISOString();
@@ -451,14 +858,14 @@ export const acceptRequest = async (requestId, currentUser) => {
             }
 
             if (!latestTrip) {
-                throw new Error('Request is no longer available');
+                throw createRequestUnavailableError('Request is no longer available');
             }
 
             const latestStatus = normalizeTripStatus(latestTrip.status);
             if (latestStatus === TRIP_STATUS.ACCEPTED && latestTrip.driver_id === driverId) {
                 acceptedRequest = latestTrip;
             } else {
-                throw new Error('Request is no longer pending');
+                throw createRequestUnavailableError('Request is no longer pending');
             }
         }
 

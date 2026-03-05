@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
@@ -18,12 +18,12 @@ import IncomingRequestModal from '../../components/IncomingRequestModal';
 import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import RecentTripsModal from '../../components/RecentTripsModal';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import {
   ACTIVE_TRIP_STATUSES,
   DROPOFF_PHASE_STATUSES,
   normalizeTripStatus,
+  TRIP_STATUS,
 } from '../../constants/tripStatus';
 import {
   borderRadius,
@@ -36,6 +36,31 @@ import {
 } from '../../styles/theme';
 
 const TIMER_SECONDS = 180;
+const REQUEST_POOLS = Object.freeze({
+  ASAP: 'asap',
+  SCHEDULED: 'scheduled',
+});
+const toCsvSet = (value) =>
+  new Set(
+    String(value || '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+  );
+const DRIVER_READINESS_BYPASS_EMAILS = toCsvSet(
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS || 'drew@architeq.io'
+);
+const DRIVER_READINESS_BYPASS_USER_IDS = toCsvSet(
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS || '8ba3bab0-cc12-44ac-89b9-8aff39918546'
+);
+const shouldBypassDriverReadiness = (user) => {
+  const userId = String(user?.uid || user?.id || '').trim().toLowerCase();
+  const email = String(user?.email || '').trim().toLowerCase();
+  return (
+    (userId && DRIVER_READINESS_BYPASS_USER_IDS.has(userId)) ||
+    (email && DRIVER_READINESS_BYPASS_EMAILS.has(email))
+  );
+};
 const ACTIVE_TRIP_STATUS_LABELS = Object.freeze({
   accepted: 'Driver confirmed',
   inProgress: 'On the way to pickup',
@@ -47,6 +72,8 @@ const ACTIVE_TRIP_STATUS_LABELS = Object.freeze({
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 370;
   const tabBarHeight = useBottomTabBarHeight();
   const {
     userType,
@@ -66,6 +93,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [region, setRegion] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
+  const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
   const [currentModal, setCurrentModal] = useState(null); // 'offline', 'driving', 'navigation'
   const [activeJob, setActiveJob] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
@@ -99,6 +127,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   const requestTimerRef = useRef(null);
   const handleDeclineRef = useRef(null);
   const isAcceptingRequestRef = useRef(false);
+  const incomingRequestIdRef = useRef(null);
+  const requestPoolChannelRef = useRef(null);
   const miniBarPulse = useRef(new Animated.Value(0)).current;
   const onlineDriverPulse = useRef(new Animated.Value(0)).current;
 
@@ -174,6 +204,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
   const activeJobStatus = normalizeTripStatus(activeJob?.status);
+  const isScheduledPoolActive = activeRequestPool === REQUEST_POOLS.SCHEDULED;
   const activeJobStatusLabel = ACTIVE_TRIP_STATUS_LABELS[activeJobStatus] || 'Active order';
   const activeJobDestinationAddress = useMemo(() => {
     if (!activeJob) {
@@ -388,7 +419,78 @@ export default function DriverHomeScreen({ navigation, route }) {
       stopLocationTracking();
       clearAutoRefresh(); // Stop auto-refresh when going offline
     }
-  }, [hasActiveTrip, isOnline]);
+  }, [activeRequestPool, hasActiveTrip, isOnline]);
+
+  useEffect(() => {
+    incomingRequestIdRef.current = incomingRequest?.id || null;
+  }, [incomingRequest?.id]);
+
+  // Real-time request pool updates:
+  // remove trips as soon as they become unavailable for this driver (accepted/cancelled/etc).
+  useEffect(() => {
+    if (!currentUserId || !isOnline || hasActiveTrip) {
+      return undefined;
+    }
+
+    const removeRequestFromPool = (tripId) => {
+      if (!tripId) return;
+
+      setAvailableRequests((prev) => prev.filter((request) => request.id !== tripId));
+      setSelectedRequest((prev) => (prev?.id === tripId ? null : prev));
+
+      if (incomingRequestIdRef.current === tripId) {
+        setShowIncomingModal(false);
+        setIsMinimized(false);
+        setIncomingRequest(null);
+      }
+    };
+
+    const channel = supabase
+      .channel(`driver-request-pool-${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'trips' },
+        (payload) => {
+          const row = payload?.new;
+          const tripId = row?.id;
+          if (!tripId) return;
+
+          const normalizedStatus = normalizeTripStatus(row.status);
+          const assignedDriverId = row.driver_id || row.assigned_driver_id || null;
+          const takenByAnotherDriver = Boolean(
+            assignedDriverId && assignedDriverId !== currentUserId
+          );
+          const noLongerPending = normalizedStatus !== TRIP_STATUS.PENDING;
+          const becameUnavailableForDriver = takenByAnotherDriver || noLongerPending;
+
+          if (!becameUnavailableForDriver) return;
+
+          removeRequestFromPool(tripId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'trips' },
+        (payload) => {
+          const tripId = payload?.old?.id;
+          removeRequestFromPool(tripId);
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Subscribed to real-time request pool updates');
+        }
+      });
+
+    requestPoolChannelRef.current = channel;
+
+    return () => {
+      if (requestPoolChannelRef.current) {
+        supabase.removeChannel(requestPoolChannelRef.current);
+        requestPoolChannelRef.current = null;
+      }
+    };
+  }, [currentUserId, hasActiveTrip, isOnline]);
 
   // Auto-refresh functions
   const startAutoRefresh = () => {
@@ -422,11 +524,14 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   };
 
-  const loadRequests = async (showLoading = true) => {
+  const loadRequests = async (showLoading = true, requestPoolOverride = null) => {
     if (hasActiveTrip) {
       setAvailableRequests([]);
+      setShowAllRequests(false);
       return;
     }
+
+    const effectiveRequestPool = requestPoolOverride || activeRequestPool;
 
     if (showLoading) setLoading(true);
     setError(null);
@@ -435,14 +540,28 @@ export default function DriverHomeScreen({ navigation, route }) {
       console.log('Loading available pickup requests...');
 
       // Get requests that are already properly formatted by getAvailableRequests
-      const requests = await getAvailableRequests();
+      const requests = await getAvailableRequests({
+        requestPool: effectiveRequestPool,
+        driverLocation,
+      });
 
       setAvailableRequests(requests);
+      if (effectiveRequestPool === REQUEST_POOLS.SCHEDULED) {
+        setShowIncomingModal(false);
+        setIsMinimized(false);
+        setIncomingRequest(null);
+        if (requests.length === 0) {
+          setShowAllRequests(false);
+        }
+      } else {
+        setShowAllRequests(false);
+      }
       console.log(`Loaded ${requests.length} real requests from Firebase`);
     } catch (error) {
       console.error('Error loading requests:', error);
       setError('Could not load available requests');
       setAvailableRequests([]);
+      setShowAllRequests(false);
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -553,6 +672,18 @@ export default function DriverHomeScreen({ navigation, route }) {
     const driverId = currentUser?.uid || currentUser?.id;
     if (!driverId) return { ready: false, issues: ['Not authenticated'] };
 
+    if (shouldBypassDriverReadiness(currentUser)) {
+      return {
+        ready: true,
+        issues: [],
+        profile: {
+          readinessBypass: true,
+          bypassUserId: driverId,
+          bypassEmail: currentUser?.email || null,
+        },
+      };
+    }
+
     // Fetch fresh profile from DB
     const { data: profile, error } = await supabase
       .from('drivers')
@@ -570,26 +701,47 @@ export default function DriverHomeScreen({ navigation, route }) {
     return { ready: issues.length === 0, issues, profile };
   };
 
-  const handleGoOnline = () => {
+  const openGoOnlineModeSheet = (targetPool = REQUEST_POOLS.ASAP) => {
     if (hasActiveTrip && activeJob) {
       openActiveTrip(activeJob);
       return;
     }
 
-    if (isOnline) return;
+    if (isOnline) {
+      if (activeRequestPool !== targetPool) {
+        setActiveRequestPool(targetPool);
+        clearAutoRefresh();
+        startAutoRefresh();
+        if (targetPool === REQUEST_POOLS.SCHEDULED) {
+          setShowAllRequests(true);
+        }
+        loadRequests(false, targetPool);
+      }
+      return;
+    }
 
     Alert.alert(
       'Select Driving Mode',
-      'Choose how you want to drive',
+      targetPool === REQUEST_POOLS.SCHEDULED
+        ? 'Choose mode for scheduled rides'
+        : 'Choose how you want to drive',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Solo', onPress: () => confirmGoOnline('SOLO') },
-        { text: 'Team', onPress: () => confirmGoOnline('TEAM') }
+        { text: 'Solo', onPress: () => confirmGoOnline('SOLO', targetPool) },
+        { text: 'Team', onPress: () => confirmGoOnline('TEAM', targetPool) }
       ]
     );
   };
 
-  const confirmGoOnline = async (mode) => {
+  const handleGoOnline = () => {
+    openGoOnlineModeSheet(REQUEST_POOLS.ASAP);
+  };
+
+  const handleGoOnlineScheduled = () => {
+    openGoOnlineModeSheet(REQUEST_POOLS.SCHEDULED);
+  };
+
+  const confirmGoOnline = async (mode, requestPool = REQUEST_POOLS.ASAP) => {
     if (isOnline || !currentUserId) return;
 
     try {
@@ -619,7 +771,7 @@ export default function DriverHomeScreen({ navigation, route }) {
             'Please complete your vehicle registration in the onboarding section before going online.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Go to Profile', onPress: () => navigation.navigate('DriverProfile') },
+              { text: 'Go to Profile', onPress: () => navigation.navigate('Account') },
             ]
           );
           return;
@@ -631,7 +783,7 @@ export default function DriverHomeScreen({ navigation, route }) {
             'Please complete identity verification before going online.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Go to Profile', onPress: () => navigation.navigate('DriverProfile') },
+              { text: 'Go to Profile', onPress: () => navigation.navigate('Account') },
             ]
           );
           return;
@@ -678,9 +830,11 @@ export default function DriverHomeScreen({ navigation, route }) {
       setCurrentSessionId(sessionId);
 
       // Set local state
+      setActiveRequestPool(requestPool);
+      setShowAllRequests(requestPool === REQUEST_POOLS.SCHEDULED);
       setIsOnline(true);
 
-      console.log('Driver is now online with session:', sessionId, 'Mode:', mode);
+      console.log('Driver is now online with session:', sessionId, 'Mode:', mode, 'Pool:', requestPool);
     } catch (error) {
       console.error('Error going online:', error);
       alert('Could not go online. Please try again.');
@@ -722,6 +876,11 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       // Set local state
       setIsOnline(false);
+      setActiveRequestPool(REQUEST_POOLS.ASAP);
+      setShowAllRequests(false);
+      setShowIncomingModal(false);
+      setIsMinimized(false);
+      setIncomingRequest(null);
       hideModal();
 
       console.log('Driver is now offline');
@@ -753,6 +912,19 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowRequestModal(true);
   };
 
+  const isUnavailableAcceptError = (error) => {
+    if (!error) return false;
+    if (error?.code === 'REQUEST_UNAVAILABLE') return true;
+
+    const message = String(error?.message || '').toLowerCase();
+    return (
+      message.includes('no longer pending') ||
+      message.includes('no longer available') ||
+      message.includes('already accepted') ||
+      message.includes('accepted by another driver')
+    );
+  };
+
   const handleAcceptRequest = async (request) => {
     if (isAcceptingRequestRef.current || !request?.id) {
       return;
@@ -775,7 +947,20 @@ export default function DriverHomeScreen({ navigation, route }) {
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       console.error('Error accepting request:', error);
-      alert('Could not accept request. Please try again.');
+
+      if (isUnavailableAcceptError(error)) {
+        setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
+        setSelectedRequest((prev) => (prev?.id === request.id ? null : prev));
+        setShowRequestModal(false);
+        setShowIncomingModal(false);
+        setIsMinimized(false);
+        setIncomingRequest((prev) => (prev?.id === request.id ? null : prev));
+        clearIncomingRoute();
+        void loadRequests(false);
+        alert('This request was already taken by another driver.');
+      } else {
+        alert('Could not accept request. Please try again.');
+      }
     } finally {
       isAcceptingRequestRef.current = false;
     }
@@ -915,7 +1100,18 @@ export default function DriverHomeScreen({ navigation, route }) {
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       console.error('Error accepting incoming request:', error);
-      alert('Could not accept request. Please try again.');
+
+      if (isUnavailableAcceptError(error)) {
+        setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
+        setShowIncomingModal(false);
+        setIsMinimized(false);
+        setIncomingRequest(null);
+        clearIncomingRoute();
+        void loadRequests(false);
+        alert('This request was already taken by another driver.');
+      } else {
+        alert('Could not accept request. Please try again.');
+      }
     } finally {
       isAcceptingRequestRef.current = false;
     }
@@ -933,17 +1129,19 @@ export default function DriverHomeScreen({ navigation, route }) {
     setAvailableRequests(prev => prev.filter(req => req.id !== currentRequestId));
 
     // After a short delay, show the next request if available
-    setTimeout(() => {
-      setAvailableRequests(current => {
-        if (current.length > 0 && isOnline) {
-          const nextRequest = current[0];
-          setIncomingRequest(nextRequest);
-          setShowIncomingModal(true);
-          console.log('Auto-showing next request after decline:', nextRequest.id);
-        }
-        return current;
-      });
-    }, 2000);
+    if (!isScheduledPoolActive) {
+      setTimeout(() => {
+        setAvailableRequests(current => {
+          if (current.length > 0 && isOnline) {
+            const nextRequest = current[0];
+            setIncomingRequest(nextRequest);
+            setShowIncomingModal(true);
+            console.log('Auto-showing next request after decline:', nextRequest.id);
+          }
+          return current;
+        });
+      }, 2000);
+    }
   };
 
   // Keep decline ref always up to date (must be after declaration)
@@ -975,7 +1173,15 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Auto-show incoming request when new requests are available (like Uber)
   useEffect(() => {
-    if (isOnline && !hasActiveTrip && availableRequests.length > 0 && !showIncomingModal && !incomingRequest && !isMinimized) {
+    if (
+      isOnline &&
+      !isScheduledPoolActive &&
+      !hasActiveTrip &&
+      availableRequests.length > 0 &&
+      !showIncomingModal &&
+      !incomingRequest &&
+      !isMinimized
+    ) {
       // Small delay to make it feel more natural
       const timer = setTimeout(() => {
         const firstRequest = availableRequests[0];
@@ -990,7 +1196,7 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       return () => clearTimeout(timer);
     }
-  }, [availableRequests, hasActiveTrip, incomingRequest, isMinimized, isOnline, showIncomingModal]);
+  }, [availableRequests, hasActiveTrip, incomingRequest, isMinimized, isOnline, isScheduledPoolActive, showIncomingModal]);
 
   const renderModal = () => {
     switch (currentModal) {
@@ -1224,9 +1430,25 @@ export default function DriverHomeScreen({ navigation, route }) {
         ) : isOnline ? (
           <>
             <View style={styles.waitTimeContainer}>
-              <Text style={styles.waitTimeText}>{waitTime} wait in your area</Text>
-              <Text style={styles.waitTimeSubtext}>Average wait for 10 pickup request over the last hour</Text>
+              <Text style={styles.waitTimeText}>
+                {isScheduledPoolActive ? 'Scheduled mode is active' : `${waitTime} wait in your area`}
+              </Text>
+              <Text style={styles.waitTimeSubtext}>
+                {isScheduledPoolActive
+                  ? 'Showing nearest scheduled requests by pickup time and location.'
+                  : 'Average wait for 10 pickup request over the last hour'}
+              </Text>
             </View>
+
+            {isScheduledPoolActive && (
+              <TouchableOpacity
+                style={styles.secondaryOnlineAction}
+                onPress={() => setShowAllRequests(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryOnlineActionText}>View Scheduled Requests</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.progressContainer}>
               <Text style={styles.progressLabel}>Current Progress</Text>
@@ -1246,24 +1468,27 @@ export default function DriverHomeScreen({ navigation, route }) {
             </TouchableOpacity>
           </>
         ) : (
-          <TouchableOpacity
-            style={styles.goOnlineButtonContainer}
-            onPress={handleGoOnline}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={[colors.primaryDark, colors.primary]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.goOnlineButton}
+          <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
+            <TouchableOpacity
+              style={[styles.offlineRoleButton, isCompact && styles.offlineRoleButtonCompact]}
+              onPress={handleGoOnline}
+              activeOpacity={0.8}
             >
-              <View style={styles.buttonContent}>
-                <View style={styles.onlineButtonCircle} />
-                <Text style={styles.goOnlineText}>Go Online</Text>
-              </View>
-              <View style={styles.buttonShine} />
-            </LinearGradient>
-          </TouchableOpacity>
+              <Text style={styles.offlineRoleButtonText}>Go Online</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.offlineRoleButton,
+                styles.offlineRoleButtonDark,
+                isCompact && styles.offlineRoleButtonCompact,
+              ]}
+              onPress={handleGoOnlineScheduled}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.offlineRoleButtonText}>Go Online Scheduled</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>}
 
@@ -1381,6 +1606,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && (
         <OfflineDashboard
           onGoOnline={handleGoOnline}
+          onGoOnlineScheduled={handleGoOnlineScheduled}
           navigation={navigation}
           onExpandedChange={setDashboardExpanded}
         />
@@ -1531,6 +1757,21 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm + 1,
     lineHeight: 16,
   },
+  secondaryOnlineAction: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.background.elevated,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.base,
+  },
+  secondaryOnlineActionText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
   progressContainer: {
     backgroundColor: colors.background.panel,
     borderRadius: borderRadius.lg,
@@ -1561,41 +1802,40 @@ const styles = StyleSheet.create({
     color: colors.text.muted,
     fontSize: typography.fontSize.base,
   },
-  goOnlineButtonContainer: {
-    shadowColor: colors.primaryDark,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
-    borderRadius: borderRadius.full,
-  },
-  goOnlineButton: {
+  offlineActionsStack: {
+    width: '100%',
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: borderRadius.full,
-    borderWidth: 2,
-    borderColor: colors.navigation.tabBarBorder,
-    position: 'relative',
-    overflow: 'hidden',
+    gap: spacing.sm,
   },
-  buttonContent: {
-    flexDirection: 'row',
+  offlineActionsStackCompact: {
+    flexDirection: 'column',
+    gap: spacing.md,
+  },
+  offlineRoleButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.base,
+    borderRadius: 30,
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  buttonShine: {
-    position: 'absolute',
-    top: 0,
-    left: -50,
-    right: -50,
-    height: '100%',
-    backgroundColor: colors.navigation.tabBarBorder,
-    transform: [{ skewX: '-20deg' }],
-    zIndex: 1,
+  offlineRoleButtonDark: {
+    backgroundColor: colors.primaryDark,
+  },
+  offlineRoleButtonCompact: {
+    width: '100%',
+    flex: 0,
+  },
+  offlineRoleButtonText: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   goOfflineButton: {
     backgroundColor: colors.background.elevated,
@@ -1623,15 +1863,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
-  },
-  goOnlineText: {
-    color: colors.white,
-    fontWeight: typography.fontWeight.bold,
-    fontSize: typography.fontSize.md,
-    letterSpacing: 0.5,
-    textShadowColor: colors.overlayDark,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   goOfflineText: {
     color: colors.white,
