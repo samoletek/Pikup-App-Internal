@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
 import { colors } from '../styles/theme';
+import { supabase } from '../config/supabase';
 import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -31,34 +32,66 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
  * - onVerified: (phoneNumber: string) => void — called after successful verification
  * - userId: string — current user ID
  * - userTable: 'customers' | 'drivers' — which table to update
+ * - requirePassword: boolean — require password re-auth before sending OTP
+ * - verifyAccountPassword: (password: string) => Promise<boolean>
+ * - flowType: 'verification' | 'phone_change' — adjusts copy for profile phone change
+ * - currentPhone: string — current linked phone (used to block same-number change)
  */
-export default function PhoneVerificationModal({ visible, onClose, onVerified, userId, userTable }) {
+export default function PhoneVerificationModal({
+    visible,
+    onClose,
+    onVerified,
+    userId,
+    userTable,
+    requirePassword = false,
+    verifyAccountPassword,
+    flowType = 'verification',
+    currentPhone = '',
+}) {
     const modalRef = useRef(null);
     const otpInputRef = useRef(null);
     const fadeAnim = useRef(new Animated.Value(1)).current;
+    const isPhoneChangeFlow = flowType === 'phone_change';
+    const initialStep = requirePassword ? 'password_confirm' : 'phone_input';
 
-    const [step, setStep] = useState('phone_input'); // 'phone_input' | 'phone_verify'
+    const [step, setStep] = useState(initialStep); // 'password_confirm' | 'phone_input' | 'phone_verify'
     const countryCode = '+1';
     const [phoneNumber, setPhoneNumber] = useState('');
     const [otpCode, setOtpCode] = useState('');
     const [phoneError, setPhoneError] = useState('');
     const [otpError, setOtpError] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+    const [accountPassword, setAccountPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [checkingPassword, setCheckingPassword] = useState(false);
     const [sendingOtp, setSendingOtp] = useState(false);
     const [verifyingOtp, setVerifyingOtp] = useState(false);
     const [resendTimer, setResendTimer] = useState(0);
 
+    const normalizePhone = (value) => {
+        const digits = String(value || '').replace(/[^\d]/g, '');
+        if (!digits) return '';
+        if (digits.length === 10) return `+1${digits}`;
+        if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+        return `+${digits}`;
+    };
+
     useEffect(() => {
         if (visible) {
-            setStep('phone_input');
+            setStep(initialStep);
             setPhoneNumber('');
             setOtpCode('');
             setPhoneError('');
             setOtpError('');
+            setPasswordError('');
+            setAccountPassword('');
+            setShowPassword(false);
+            setCheckingPassword(false);
             setSendingOtp(false);
             setVerifyingOtp(false);
             setResendTimer(0);
         }
-    }, [visible]);
+    }, [visible, initialStep]);
 
     // Resend timer countdown
     useEffect(() => {
@@ -94,18 +127,55 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
         });
     };
 
+    const handleVerifyPassword = async () => {
+        if (!requirePassword) {
+            animateStepChange('phone_input');
+            return;
+        }
+
+        if (!accountPassword) {
+            setPasswordError('Enter your account password.');
+            return;
+        }
+
+        if (typeof verifyAccountPassword !== 'function') {
+            setPasswordError('Password verification is unavailable. Please sign in again.');
+            return;
+        }
+
+        setCheckingPassword(true);
+        setPasswordError('');
+
+        try {
+            await verifyAccountPassword(accountPassword);
+            setAccountPassword('');
+            animateStepChange('phone_input');
+        } catch (error) {
+            setPasswordError(error?.message || 'Current password is incorrect.');
+        } finally {
+            setCheckingPassword(false);
+        }
+    };
+
     const handleSendOtp = async () => {
         if (!validatePhoneNumber(phoneNumber)) {
             setPhoneError('Please enter a valid phone number');
             return;
         }
 
-        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        const fullPhone = normalizePhone(phoneNumber);
+        const normalizedCurrentPhone = normalizePhone(currentPhone);
+
+        if (isPhoneChangeFlow && normalizedCurrentPhone && fullPhone === normalizedCurrentPhone) {
+            setPhoneError('This number is already linked to your account.');
+            return;
+        }
+
         setSendingOtp(true);
         setPhoneError('');
 
         try {
-            await sendPhoneOtp(fullPhone);
+            await sendPhoneOtp(fullPhone, { userId, userTable });
             setResendTimer(60);
             animateStepChange('phone_verify');
         } catch (err) {
@@ -121,7 +191,7 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
             return;
         }
 
-        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        const fullPhone = normalizePhone(phoneNumber);
         setVerifyingOtp(true);
         setOtpError('');
 
@@ -130,15 +200,17 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
             if (!result?.verified) throw new Error('Invalid verification code');
 
             // Update phone number and mark as verified in DB
-            if (userId && userTable) {
-                const { error: updateError } = await supabase
-                    .from(userTable)
-                    .update({ phone_number: fullPhone, phone_verified: true })
-                    .eq('id', userId);
+            if (!userId || !userTable) {
+                throw new Error('Could not link verification to your profile. Please sign in again.');
+            }
 
-                if (updateError) {
-                    console.error('Error updating phone_number:', updateError);
-                }
+            const { error: updateError } = await supabase
+                .from(userTable)
+                .update({ phone_number: fullPhone, phone_verified: true })
+                .eq('id', userId);
+
+            if (updateError) {
+                throw new Error(updateError.message || 'Failed to save verified phone number');
             }
 
             handleClose();
@@ -159,11 +231,11 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
     const handleResendOtp = async () => {
         if (resendTimer > 0) return;
 
-        const fullPhone = `${countryCode}${phoneNumber.replace(/[^\d]/g, '')}`;
+        const fullPhone = normalizePhone(phoneNumber);
         setSendingOtp(true);
 
         try {
-            await sendPhoneOtp(fullPhone);
+            await sendPhoneOtp(fullPhone, { userId, userTable });
             setResendTimer(60);
             setOtpError('');
             setOtpCode('');
@@ -177,23 +249,93 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
     const handleBack = () => {
         if (step === 'phone_verify') {
             animateStepChange('phone_input');
+        } else if (step === 'phone_input' && requirePassword) {
+            animateStepChange('password_confirm');
         } else {
             handleClose();
         }
     };
 
     const getTitle = () => {
-        return step === 'phone_input' ? 'Verify Phone Number' : 'Enter Code';
+        if (step === 'password_confirm') return 'Confirm Password';
+        if (step === 'phone_input') {
+            return isPhoneChangeFlow ? 'Verify New Number' : 'Verify Phone Number';
+        }
+        return 'Enter Code';
     };
 
     const getModalHeight = () => {
+        if (requirePassword) {
+            return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.52 : SCREEN_HEIGHT * 0.56;
+        }
         return Platform.OS === 'ios' ? SCREEN_HEIGHT * 0.45 : SCREEN_HEIGHT * 0.50;
     };
+
+    const renderPasswordConfirm = () => (
+        <>
+            <View style={styles.securityNotice}>
+                <View style={styles.securityIconWrap}>
+                    <Ionicons name="lock-closed-outline" size={15} color={colors.primary} />
+                </View>
+                <Text style={styles.securityNoticeText}>Security check required</Text>
+            </View>
+
+            <Text style={styles.stepDescription}>
+                Enter your account password before changing your phone number.
+            </Text>
+
+            <View style={[styles.passwordInputWrapper, passwordError && styles.inputError]}>
+                <RNTextInput
+                    style={styles.input}
+                    value={accountPassword}
+                    onChangeText={(value) => {
+                        setAccountPassword(value);
+                        setPasswordError('');
+                    }}
+                    placeholder="Current password"
+                    placeholderTextColor={colors.text.tertiary}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    textContentType="password"
+                    returnKeyType="done"
+                    onSubmitEditing={handleVerifyPassword}
+                />
+                <TouchableOpacity
+                    style={styles.passwordToggleButton}
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                    <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={18}
+                        color={colors.text.tertiary}
+                    />
+                </TouchableOpacity>
+            </View>
+            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+
+            <TouchableOpacity
+                style={[styles.btn, { backgroundColor: colors.primary, opacity: checkingPassword ? 0.6 : 1 }]}
+                onPress={handleVerifyPassword}
+                disabled={checkingPassword}
+            >
+                {checkingPassword ? (
+                    <ActivityIndicator color={colors.white} />
+                ) : (
+                    <Text style={[styles.btnText, { color: colors.white }]}>Continue</Text>
+                )}
+            </TouchableOpacity>
+        </>
+    );
 
     const renderPhoneInput = () => (
         <>
             <Text style={styles.stepDescription}>
-                Phone verification is required to continue. We'll send a code to confirm your number.
+                {isPhoneChangeFlow
+                    ? "Enter your new phone number. We'll send a one-time code to verify it."
+                    : "Phone verification is required to continue. We'll send a code to confirm your number."}
             </Text>
 
             <View style={styles.phoneInputRow}>
@@ -222,7 +364,9 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
                 {sendingOtp ? (
                     <ActivityIndicator color={colors.white} />
                 ) : (
-                    <Text style={[styles.btnText, { color: colors.white }]}>Send Verification Code</Text>
+                    <Text style={[styles.btnText, { color: colors.white }]}>
+                        {isPhoneChangeFlow ? 'Send Code to New Number' : 'Send Verification Code'}
+                    </Text>
                 )}
             </TouchableOpacity>
         </>
@@ -235,7 +379,9 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
         return (
             <>
                 <Text style={styles.stepDescription}>
-                    Enter the 6-digit code sent to {maskedPhone}
+                    {isPhoneChangeFlow
+                        ? `Enter the 6-digit code sent to your new number ${maskedPhone}`
+                        : `Enter the 6-digit code sent to ${maskedPhone}`}
                 </Text>
 
                 <TouchableOpacity
@@ -345,6 +491,7 @@ export default function PhoneVerificationModal({ visible, onClose, onVerified, u
                     contentContainerStyle={styles.scrollContent}
                 >
                     <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+                        {step === 'password_confirm' && renderPasswordConfirm()}
                         {step === 'phone_input' && renderPhoneInput()}
                         {step === 'phone_verify' && renderPhoneVerify()}
                     </Animated.View>
@@ -389,10 +536,48 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         lineHeight: 20,
     },
+    securityNotice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14,
+        gap: 8,
+    },
+    securityIconWrap: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background.brandTint,
+    },
+    securityNoticeText: {
+        fontSize: 13,
+        color: colors.text.secondary,
+        fontWeight: '600',
+    },
     phoneInputRow: {
         flexDirection: 'row',
         gap: 8,
         marginBottom: 12,
+    },
+    passwordInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.input,
+        borderWidth: 1,
+        borderColor: colors.border.light,
+        borderRadius: 30,
+        height: 52,
+        paddingHorizontal: 16,
+        marginBottom: 12,
+    },
+    passwordToggleButton: {
+        width: 28,
+        height: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: 8,
     },
     phoneInputWrapper: {
         flex: 1,

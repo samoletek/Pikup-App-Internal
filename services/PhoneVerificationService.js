@@ -21,14 +21,21 @@ const getEdgeFunctionErrorMessage = async (error) => {
 /**
  * Send OTP to phone number via Twilio (through Edge Function)
  * @param {string} phone - Full phone number with country code (e.g., "+12125551234")
+ * @param {Object} options
+ * @param {string} [options.userId] - Current user ID (for ownership checks)
+ * @param {'drivers'|'customers'} [options.userTable] - Current user table (for ownership checks)
  */
-export const sendPhoneOtp = async (phone) => {
+export const sendPhoneOtp = async (phone, options = {}) => {
     if (!phone || !phone.startsWith('+')) {
         throw new Error('Valid phone number with country code is required');
     }
 
     const { data, error } = await supabase.functions.invoke('send-phone-otp', {
-        body: { phone }
+        body: {
+            phone,
+            userId: options.userId || null,
+            userTable: options.userTable || null,
+        }
     });
 
     if (error) {
