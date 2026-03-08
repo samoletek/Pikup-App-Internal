@@ -92,6 +92,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
   };
 
   const renderRow = ({
+    rowKey,
     icon,
     label,
     onPress,
@@ -101,6 +102,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
     isExternal = false,
   }) => (
     <TouchableOpacity
+      key={rowKey}
       style={[styles.row, isLast && styles.rowLast]}
       onPress={onPress}
       accessibilityRole="button"
@@ -190,27 +192,32 @@ export default function CustomerSettingsScreen({ navigation, route }) {
     : isDriver
     ? [
         {
+          key: "driver-profile",
           icon: "person-outline",
           label: "Profile",
           onPress: () => navigation.navigate("PersonalInfoScreen"),
         },
         {
+          key: "driver-preferences",
           icon: "options-outline",
           label: "Preferences",
           onPress: () => navigation.navigate("DriverPreferencesScreen"),
         },
         {
+          key: "driver-payment",
           icon: "card-outline",
           label: "Payment",
           onPress: () => navigation.navigate("DriverPaymentSettingsScreen"),
         },
         {
+          key: "driver-notifications",
           icon: "notifications-outline",
           label: "Notifications",
           onPress: () =>
             navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
         },
         {
+          key: "driver-export-data",
           icon: "mail-outline",
           label: "Export My Data",
           onPress: handleDownloadMyData,
@@ -219,27 +226,32 @@ export default function CustomerSettingsScreen({ navigation, route }) {
       ]
     : [
         {
+          key: "customer-profile",
           icon: "person-outline",
           label: "Profile",
           onPress: () => navigation.navigate("PersonalInfoScreen"),
         },
         {
+          key: "customer-addresses",
           icon: "location-outline",
           label: "My Addresses",
           onPress: () => navigation.navigate("CustomerSavedAddressesScreen"),
         },
         {
+          key: "customer-payment",
           icon: "card-outline",
           label: "Payment",
           onPress: () => navigation.navigate("PaymentMethodsScreen"),
         },
         {
+          key: "customer-notifications",
           icon: "notifications-outline",
           label: "Notifications",
           onPress: () =>
             navigation.push("CustomerSettingsScreen", { notificationsOnly: true }),
         },
         {
+          key: "customer-export-data",
           icon: "mail-outline",
           label: "Export My Data",
           onPress: handleDownloadMyData,
@@ -271,6 +283,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
                 {accountRows.map((row, index) =>
                   renderRow({
                     ...row,
+                    rowKey: row.key,
                     isLast: index === accountRows.length - 1,
                   })
                 )}

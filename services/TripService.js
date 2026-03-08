@@ -164,9 +164,9 @@ const distanceMilesBetweenPoints = (first, second) => {
     const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(toRadians(lat1)) *
-            Math.cos(toRadians(lat2)) *
-            Math.sin(dLng / 2) *
-            Math.sin(dLng / 2);
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return earthRadiusMiles * c;
@@ -539,6 +539,16 @@ export const createPickupRequest = async (requestData, currentUser) => {
                 : null,
             insurance_status: requestData.insurance?.status || null,
         };
+
+        // Only include insurance fields when data exists (avoids column-missing errors on unmigrated DB)
+        if (requestData.insurance) {
+            tripData.insurance_quote_id = requestData.insurance.quoteId || null;
+            tripData.insurance_booking_id = requestData.insurance.bookingId || null;
+            tripData.insurance_premium = requestData.insurance.premium != null
+                ? parseFloat(requestData.insurance.premium)
+                : null;
+            tripData.insurance_status = requestData.insurance.status || null;
+        }
 
         const { data, error } = await supabase
             .from('trips')

@@ -24,9 +24,19 @@ interface RedkikTokenResponse {
   accessToken?: string
   access_token?: string
   token?: string
+  expires_in?: number
 }
 
+// Module-level token cache (persists across warm invocations)
+let cachedToken: string | null = null
+let tokenExpiresAt = 0
+
 async function getRedkikToken(): Promise<string> {
+  // Return cached token if still valid (with 60s safety buffer)
+  if (cachedToken && Date.now() < tokenExpiresAt) {
+    return cachedToken
+  }
+
   const tokenUrl = `${REDKIK_BASE_URL}/api/v2/user/oauth/token`
 
   const res = await fetch(tokenUrl, {
@@ -45,10 +55,21 @@ async function getRedkikToken(): Promise<string> {
   }
 
   const data: RedkikTokenResponse = await res.json()
+  console.log("[Redkik] Auth response keys:", Object.keys(data))
   const token = data.accessToken || data.access_token || data.token
   if (!token) {
+    console.error("[Redkik] Auth response (no token found):", JSON.stringify(data))
     throw new Error("Redkik auth response missing token")
   }
+
+  cachedToken = token
+  // Redkik returns expires_in in milliseconds (86400000 = 24h).
+  // If value > 10000 treat as ms, otherwise treat as seconds.
+  const expiresInMs = (data.expires_in || 3600000) > 10000
+    ? (data.expires_in || 3600000)
+    : (data.expires_in || 3600) * 1000
+  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 60s safety buffer
+
   return token
 }
 
@@ -117,7 +138,10 @@ async function requestQuote(token: string, params: QuoteParams) {
     throw new Error(`Redkik quote failed (${res.status}): ${text}`)
   }
 
-  return await res.json()
+  const quoteData = await res.json()
+  console.log("[Redkik] Quote response keys:", Object.keys(quoteData))
+  console.log("[Redkik] Quote response full:", JSON.stringify(quoteData))
+  return quoteData
 }
 
 async function purchaseQuote(token: string, offerId: string) {
@@ -137,7 +161,10 @@ async function purchaseQuote(token: string, offerId: string) {
     throw new Error(`Redkik purchase failed (${res.status}): ${text}`)
   }
 
-  return await res.json()
+  const purchaseData = await res.json()
+  console.log("[Redkik] Purchase response keys:", Object.keys(purchaseData))
+  console.log("[Redkik] Purchase response full:", JSON.stringify(purchaseData))
+  return purchaseData
 }
 
 // ----- Main handler -----
@@ -202,16 +229,33 @@ serve(async (req) => {
           quoteResponse.id ||
           quoteResponse.quoteId ||
           null
-        const premium =
-          quoteResponse.premium ||
-          quoteResponse.totalPremium ||
-          quoteResponse.price ||
-          quoteResponse.amount ||
+        const premium = Number(
+          quoteResponse.premium ??
+          quoteResponse.totalPremium ??
+          quoteResponse.price ??
+          quoteResponse.amount ??
           0
+        )
+
+        // Validate that we got meaningful data back
+        if (!offerId) {
+          console.error("Redkik quote response missing offerId:", JSON.stringify(quoteResponse))
+          return jsonResponse(
+            { error: "Insurance quote returned no offer identifier", code: "MISSING_OFFER_ID" },
+            502
+          )
+        }
+        if (premium <= 0) {
+          console.error("Redkik quote returned zero/negative premium:", JSON.stringify(quoteResponse))
+          return jsonResponse(
+            { error: "Insurance quote returned invalid premium", code: "INVALID_PREMIUM" },
+            502
+          )
+        }
 
         return jsonResponse({
           offerId,
-          premium: Number(premium),
+          premium,
           details: quoteResponse,
         })
       }
@@ -230,6 +274,14 @@ serve(async (req) => {
           purchaseResponse.id ||
           null
 
+        if (!bookingId) {
+          console.error("Redkik purchase response missing bookingId:", JSON.stringify(purchaseResponse))
+          return jsonResponse(
+            { error: "Insurance purchase returned no booking identifier", code: "MISSING_BOOKING_ID" },
+            502
+          )
+        }
+
         return jsonResponse({
           bookingId,
           details: purchaseResponse,
@@ -244,8 +296,9 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Redkik quote function error:", error)
+    const message = error instanceof Error ? error.message : "Insurance service error"
     return jsonResponse(
-      { error: error.message || "Insurance service error", code: "REDKIK_ERROR" },
+      { error: message, code: "REDKIK_ERROR" },
       500
     )
   }

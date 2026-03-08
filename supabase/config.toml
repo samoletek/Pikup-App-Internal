@@ -90,3 +90,13 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/get-driver-request-pool/deno.json"
 entrypoint = "./functions/get-driver-request-pool/index.ts"
+
+[functions.send-phone-otp]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-phone-otp/index.ts"
+
+[functions.verify-phone-otp]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/verify-phone-otp/index.ts"

@@ -89,6 +89,8 @@ export const createAuthActions = ({
 
   const changePassword = (currentPassword, newPassword) =>
     AuthService.changePassword(currentUser, currentPassword, newPassword);
+  const verifyAccountPassword = (password) =>
+    AuthService.verifyAccountPassword(currentUser, password);
 
   const resetPassword = (email) => AuthService.resetPassword(email);
 
@@ -253,6 +255,7 @@ export const createAuthActions = ({
     signInWithGoogle,
     deleteAccount,
     changePassword,
+    verifyAccountPassword,
     resetPassword,
     createPickupRequest,
     getUserPickupRequests,

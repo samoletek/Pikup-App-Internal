@@ -1,19 +1,46 @@
 import { supabase } from '../config/supabase';
 
+const getEdgeFunctionErrorMessage = async (error) => {
+    if (!error) return 'Request failed';
+
+    // Supabase Functions HTTP errors include a Response-like context with the real payload.
+    const context = error.context;
+    if (context && typeof context.json === 'function') {
+        try {
+            const payload = await context.json();
+            if (payload?.error) return payload.error;
+            if (payload?.message) return payload.message;
+        } catch (_) {
+            // fall back to generic message below
+        }
+    }
+
+    return error.message || 'Request failed';
+};
+
 /**
  * Send OTP to phone number via Twilio (through Edge Function)
  * @param {string} phone - Full phone number with country code (e.g., "+12125551234")
+ * @param {Object} options
+ * @param {string} [options.userId] - Current user ID (for ownership checks)
+ * @param {'drivers'|'customers'} [options.userTable] - Current user table (for ownership checks)
  */
-export const sendPhoneOtp = async (phone) => {
+export const sendPhoneOtp = async (phone, options = {}) => {
     if (!phone || !phone.startsWith('+')) {
         throw new Error('Valid phone number with country code is required');
     }
 
     const { data, error } = await supabase.functions.invoke('send-phone-otp', {
-        body: { phone }
+        body: {
+            phone,
+            userId: options.userId || null,
+            userTable: options.userTable || null,
+        }
     });
 
-    if (error) throw error;
+    if (error) {
+        throw new Error(await getEdgeFunctionErrorMessage(error));
+    }
     if (data?.error) throw new Error(data.error);
 
     return { success: true };
@@ -33,7 +60,9 @@ export const verifyPhoneOtp = async (phone, code) => {
         body: { phone, code }
     });
 
-    if (error) throw error;
+    if (error) {
+        throw new Error(await getEdgeFunctionErrorMessage(error));
+    }
     if (data?.error) throw new Error(data.error);
 
     return { success: true, verified: data?.verified === true };

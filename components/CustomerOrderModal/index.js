@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, Keyboard, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -143,6 +143,9 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [confirmCountdown, setConfirmCountdown] = useState(0);
+    const countdownTimerRef = useRef(null);
+    const countdownResolveRef = useRef(null);
     const { paymentMethods, defaultPaymentMethod } = usePayment();
 
     // Order Data State
@@ -176,6 +179,10 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     const [insuranceQuote, setInsuranceQuote] = useState(null);
     const [insuranceLoading, setInsuranceLoading] = useState(false);
     const [insuranceError, setInsuranceError] = useState(false);
+    const quoteRequestIdRef = useRef(0); // cancellation token for stale quote fetches
+
+    // Labor adjustment from ReviewStep (lifted state)
+    const [laborAdjustment, setLaborAdjustment] = useState(null);
 
     // ============================================
     // EFFECTS
@@ -210,6 +217,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         setInsuranceQuote(null);
         setInsuranceLoading(false);
         setInsuranceError(false);
+        setLaborAdjustment(null);
     };
 
     useEffect(() => {
@@ -516,7 +524,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
 
     const handleContinue = async () => {
         Keyboard.dismiss();
-        if (isSubmitting) return;
+        if (isSubmitting || confirmCountdown > 0) return;
         if (!validateStep()) return;
 
         const triggerVehicleRecommendation = async (itemsSnapshot) => {
@@ -649,6 +657,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     item => String(item.condition || '').toLowerCase() === 'new' && item.hasInsurance === true
                 );
                 if (insuredItems.length > 0) {
+                    const requestId = ++quoteRequestIdRef.current;
                     setInsuranceLoading(true);
                     setInsuranceError(false);
                     setInsuranceQuote(null);
@@ -658,15 +667,18 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         dropoff: orderData.dropoff,
                         scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
                     }).then(quote => {
-                        setInsuranceQuote(quote);
+                        if (quoteRequestIdRef.current !== requestId) return; // stale
+                        setInsuranceQuote(quote ? { ...quote, fetchedAt: Date.now() } : null);
                         setInsuranceLoading(false);
                         if (!quote) setInsuranceError(true);
                     }).catch(() => {
+                        if (quoteRequestIdRef.current !== requestId) return; // stale
                         setInsuranceQuote(null);
                         setInsuranceLoading(false);
                         setInsuranceError(true);
                     });
                 } else {
+                    quoteRequestIdRef.current++;
                     setInsuranceQuote(null);
                     setInsuranceLoading(false);
                     setInsuranceError(false);
@@ -675,16 +687,53 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             goToStep(currentStep + 1, 'forward');
         } else {
             const selectedPaymentMethod = paymentMethods?.find(method => method.id === orderData.selectedPaymentMethodId) || null;
-            const pricing = await calculatePricing();
+
+            // Re-fetch insurance quote if it's older than 10 minutes
+            const QUOTE_MAX_AGE_MS = 10 * 60 * 1000;
+            let activeInsuranceQuote = insuranceQuote;
+            if (insuranceQuote?.fetchedAt && (Date.now() - insuranceQuote.fetchedAt > QUOTE_MAX_AGE_MS)) {
+                const insuredItems = (orderData.items || []).filter(
+                    item => String(item.condition || '').toLowerCase() === 'new' && item.hasInsurance === true
+                );
+                if (insuredItems.length > 0) {
+                    const freshQuote = await RedkikService.getQuote({
+                        items: insuredItems,
+                        pickup: orderData.pickup,
+                        dropoff: orderData.dropoff,
+                        scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
+                    });
+                    activeInsuranceQuote = freshQuote ? { ...freshQuote, fetchedAt: Date.now() } : insuranceQuote;
+                    setInsuranceQuote(activeInsuranceQuote);
+                }
+            }
+
+            // Start from computed pricing
+            const rawPricing = previewPricing || await calculatePricing();
+
+            // Apply labor adjustment if user changed the slider in ReviewStep
+            let basePricing = rawPricing;
+            if (laborAdjustment !== null && rawPricing) {
+                const bufferMinutes = rawPricing.laborBufferMinutes || 0;
+                const billable = Math.max(0, laborAdjustment - bufferMinutes);
+                const newLaborFee = Math.round(billable * (rawPricing.laborPerMin || 0) * 100) / 100;
+                const laborDiff = newLaborFee - (rawPricing.laborFee || 0);
+                basePricing = {
+                    ...rawPricing,
+                    laborFee: newLaborFee,
+                    laborMinutes: laborAdjustment,
+                    laborBillableMinutes: billable,
+                    total: Math.round((rawPricing.total + laborDiff) * 100) / 100,
+                };
+            }
 
             // Override insurance premium with real Redkik quote when available
-            let finalPricing = pricing;
-            if (insuranceQuote?.premium > 0 && pricing?.mandatoryInsurance > 0) {
-                const pricingDiff = insuranceQuote.premium - (pricing.mandatoryInsurance || 0);
+            let finalPricing = basePricing;
+            if (activeInsuranceQuote?.premium > 0 && basePricing?.mandatoryInsurance > 0) {
+                const pricingDiff = activeInsuranceQuote.premium - (basePricing.mandatoryInsurance || 0);
                 finalPricing = {
-                    ...pricing,
-                    mandatoryInsurance: insuranceQuote.premium,
-                    total: Math.round((pricing.total + pricingDiff) * 100) / 100,
+                    ...basePricing,
+                    mandatoryInsurance: activeInsuranceQuote.premium,
+                    total: Math.round((basePricing.total + pricingDiff) * 100) / 100,
                 };
             }
 
@@ -692,8 +741,29 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 ...orderData,
                 pricing: finalPricing,
                 selectedPaymentMethod,
-                insuranceQuote,
+                insuranceQuote: activeInsuranceQuote,
             };
+
+            // Start cancellation countdown (5 seconds)
+            const COUNTDOWN_SECONDS = 5;
+            setConfirmCountdown(COUNTDOWN_SECONDS);
+
+            const wasCancelled = await new Promise((resolve) => {
+                countdownResolveRef.current = resolve;
+                let remaining = COUNTDOWN_SECONDS;
+
+                countdownTimerRef.current = setInterval(() => {
+                    remaining -= 1;
+                    setConfirmCountdown(remaining);
+                    if (remaining <= 0) {
+                        clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                        resolve(false); // not cancelled
+                    }
+                }, 1000);
+            });
+
+            if (wasCancelled) return;
 
             try {
                 setIsSubmitting(true);
@@ -709,6 +779,27 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             }
         }
     };
+
+    const cancelCountdown = useCallback(() => {
+        if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+        }
+        setConfirmCountdown(0);
+        if (countdownResolveRef.current) {
+            countdownResolveRef.current(true); // cancelled
+            countdownResolveRef.current = null;
+        }
+    }, []);
+
+    // Cleanup countdown on unmount
+    useEffect(() => {
+        return () => {
+            if (countdownTimerRef.current) {
+                clearInterval(countdownTimerRef.current);
+            }
+        };
+    }, []);
 
     // ============================================
     // PRICING CALCULATION
@@ -811,6 +902,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         insuranceQuote={insuranceQuote}
                         insuranceLoading={insuranceLoading}
                         insuranceError={insuranceError}
+                        onLaborAdjustmentChange={setLaborAdjustment}
                         onNavigateToStep={setCurrentStep}
                         paymentMethods={paymentMethods || []}
                         selectedPaymentMethod={selectedPaymentMethod}
@@ -869,22 +961,34 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     {renderCurrentStep()}
                 </Animated.View>
 
-                {/* Continue Button */}
+                {/* Continue / Countdown Button */}
                 <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : 12 }]}>
-                    <TouchableOpacity
-                        style={[
-                            styles.continueBtn,
-                            currentStep === 6 && { backgroundColor: colors.success },
-                            isSubmitting && styles.continueBtnDisabled,
-                        ]}
-                        onPress={handleContinue}
-                        disabled={isSubmitting}
-                    >
-                        <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }, isSubmitting && styles.continueBtnTextDisabled]}>
-                            {isSubmitting ? 'Processing...' : currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
-                        </Text>
-                        {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
-                    </TouchableOpacity>
+                    {confirmCountdown > 0 ? (
+                        <TouchableOpacity
+                            style={[styles.continueBtn, { backgroundColor: colors.warning }]}
+                            onPress={cancelCountdown}
+                        >
+                            <Ionicons name="close-circle" size={20} color={colors.white} />
+                            <Text style={[styles.continueBtnText, { color: colors.white, marginLeft: 8, marginRight: 0 }]}>
+                                Tap to Cancel ({confirmCountdown}s)
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={[
+                                styles.continueBtn,
+                                currentStep === 6 && { backgroundColor: colors.success },
+                                isSubmitting && styles.continueBtnDisabled,
+                            ]}
+                            onPress={handleContinue}
+                            disabled={isSubmitting}
+                        >
+                            <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }, isSubmitting && styles.continueBtnTextDisabled]}>
+                                {isSubmitting ? 'Processing...' : currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
+                            </Text>
+                            {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
             {renderPhoneVerification && renderPhoneVerification()}

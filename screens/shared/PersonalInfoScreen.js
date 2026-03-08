@@ -40,6 +40,7 @@ export default function PersonalInfoScreen({ navigation }) {
     updateUserProfile,
     deleteAccount,
     changePassword,
+    verifyAccountPassword,
   } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
@@ -51,13 +52,13 @@ export default function PersonalInfoScreen({ navigation }) {
   const [personalInfo, setPersonalInfo] = useState({
     firstName: "",
     lastName: "",
-    email: currentUser?.email || "user@example.com",
-    phone: "+1 (555) 123-4567",
-    dateOfBirth: "01/15/1990",
-    address: "123 Main Street, Apt 4B",
-    city: "New York",
-    state: "NY",
-    zipCode: "10001",
+    email: currentUser?.email || "",
+    phone: "",
+    dateOfBirth: "",
+    address: "",
+    city: "",
+    state: "",
+    zipCode: "",
   });
   const [privacySettings, setPrivacySettings] = useState({
     shareLocation: true,
@@ -516,39 +517,24 @@ export default function PersonalInfoScreen({ navigation }) {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Phone Number</Text>
-                {isDriver ? (
-                  <TouchableOpacity
-                    style={[styles.textInput, styles.phoneRow]}
-                    onPress={() => setPhoneVerifyVisible(true)}
-                    activeOpacity={0.7}
+                <TouchableOpacity
+                  style={[styles.textInput, styles.phoneRow]}
+                  onPress={() => setPhoneVerifyVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.phoneText,
+                      !personalInfo.phone && { color: colors.text.placeholder },
+                    ]}
                   >
-                    <Text
-                      style={[
-                        styles.phoneText,
-                        !personalInfo.phone && { color: colors.text.placeholder },
-                      ]}
-                    >
-                      {personalInfo.phone || "+1 (555) 123-4567"}
-                    </Text>
-                    <Ionicons name="create-outline" size={18} color={colors.text.muted} />
-                  </TouchableOpacity>
-                ) : (
-                  <TextInput
-                    style={styles.textInput}
-                    value={personalInfo.phone}
-                    onChangeText={(value) => updateField("phone", value)}
-                    keyboardType="phone-pad"
-                    textContentType="telephoneNumber"
-                    placeholder="+1 (555) 123-4567"
-                    placeholderTextColor={colors.text.placeholder}
-                    returnKeyType="next"
-                  />
-                )}
-                {isDriver && (
-                  <Text style={styles.inputNote}>
-                    Changing phone requires re-verification
+                    {personalInfo.phone || "Add phone number"}
                   </Text>
-                )}
+                  <Ionicons name="create-outline" size={18} color={colors.text.muted} />
+                </TouchableOpacity>
+                <Text style={styles.inputNote}>
+                  Changing phone requires re-verification
+                </Text>
               </View>
 
               <View style={[styles.inputGroup, styles.inputGroupLast]}>
@@ -838,25 +824,27 @@ export default function PersonalInfoScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {isDriver && (
-        <PhoneVerificationModal
-          visible={phoneVerifyVisible}
-          onClose={() => setPhoneVerifyVisible(false)}
-          onVerified={() => {
-            setPhoneVerifyVisible(false);
-            getUserProfile(userId).then((profile) => {
-              if (profile) {
-                setPersonalInfo((prev) => ({
-                  ...prev,
-                  phone: profile.phone || profile.phoneNumber || prev.phone,
-                }));
-              }
-            });
-          }}
-          userId={userId}
-          userTable="drivers"
-        />
-      )}
+      <PhoneVerificationModal
+        visible={phoneVerifyVisible}
+        onClose={() => setPhoneVerifyVisible(false)}
+        onVerified={() => {
+          setPhoneVerifyVisible(false);
+          getUserProfile(userId).then((profile) => {
+            if (profile) {
+              setPersonalInfo((prev) => ({
+                ...prev,
+                phone: profile.phone || profile.phoneNumber || prev.phone,
+              }));
+            }
+          });
+        }}
+        userId={userId}
+        userTable={isDriver ? "drivers" : "customers"}
+        requirePassword
+        verifyAccountPassword={verifyAccountPassword}
+        flowType="phone_change"
+        currentPhone={personalInfo.phone}
+      />
     </View>
   );
 }

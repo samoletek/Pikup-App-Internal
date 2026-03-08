@@ -582,13 +582,12 @@ export const signInWithGoogle = async (userRole = 'customer') => {
 };
 
 /**
- * Change current user password
+ * Re-authenticate current user with account password
  * @param {Object} currentUser - Current user object
- * @param {string} currentPassword - Current password
- * @param {string} newPassword - New password
+ * @param {string} password - Account password
  * @returns {Promise<boolean>} Success status
  */
-export const changePassword = async (currentUser, currentPassword, newPassword) => {
+export const verifyAccountPassword = async (currentUser, password) => {
     const userEmail = currentUser?.email;
 
     if (!currentUser?.id && !currentUser?.uid) {
@@ -596,21 +595,38 @@ export const changePassword = async (currentUser, currentPassword, newPassword) 
     }
 
     if (!userEmail) {
-        throw new Error('Cannot change password for this account.');
+        throw new Error('Password verification is unavailable for this account.');
     }
 
-    if (!currentPassword || !newPassword) {
-        throw new Error('Current and new password are required.');
+    if (!password) {
+        throw new Error('Password is required.');
     }
 
     const { error: reauthError } = await supabase.auth.signInWithPassword({
         email: userEmail,
-        password: currentPassword
+        password,
     });
 
     if (reauthError) {
         throw new Error('Current password is incorrect.');
     }
+
+    return true;
+};
+
+/**
+ * Change current user password
+ * @param {Object} currentUser - Current user object
+ * @param {string} currentPassword - Current password
+ * @param {string} newPassword - New password
+ * @returns {Promise<boolean>} Success status
+ */
+export const changePassword = async (currentUser, currentPassword, newPassword) => {
+    if (!currentPassword || !newPassword) {
+        throw new Error('Current and new password are required.');
+    }
+
+    await verifyAccountPassword(currentUser, currentPassword);
 
     const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword

@@ -31,11 +31,13 @@ export default function OfflineDashboard({
     const animatedHeight = useRef(new Animated.Value(COLLAPSED_HEIGHT)).current;
     const backdropOpacity = useRef(new Animated.Value(0)).current;
     const isExpandedRef = useRef(false); // For PanResponder
+    const onExpandedChangeRef = useRef(onExpandedChange);
+    onExpandedChangeRef.current = onExpandedChange;
 
     const expand = useCallback(() => {
         setIsExpanded(true);
         isExpandedRef.current = true;
-        onExpandedChange?.(true);
+        onExpandedChangeRef.current?.(true);
         Animated.parallel([
             Animated.spring(animatedHeight, {
                 toValue: EXPANDED_HEIGHT,
@@ -54,7 +56,7 @@ export default function OfflineDashboard({
     const collapse = useCallback(() => {
         setIsExpanded(false);
         isExpandedRef.current = false;
-        onExpandedChange?.(false);
+        onExpandedChangeRef.current?.(false);
         Animated.parallel([
             Animated.spring(animatedHeight, {
                 toValue: COLLAPSED_HEIGHT,
@@ -94,7 +96,7 @@ export default function OfflineDashboard({
                     // Expand
                     setIsExpanded(true);
                     isExpandedRef.current = true;
-                    onExpandedChange?.(true);
+                    onExpandedChangeRef.current?.(true);
                     Animated.parallel([
                         Animated.spring(animatedHeight, {
                             toValue: EXPANDED_HEIGHT,
@@ -112,7 +114,7 @@ export default function OfflineDashboard({
                     // Collapse - set state FIRST, then animate
                     setIsExpanded(false);
                     isExpandedRef.current = false;
-                    onExpandedChange?.(false);
+                    onExpandedChangeRef.current?.(false);
                     Animated.parallel([
                         Animated.spring(animatedHeight, {
                             toValue: COLLAPSED_HEIGHT,

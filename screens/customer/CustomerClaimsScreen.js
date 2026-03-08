@@ -48,6 +48,13 @@ export default function CustomerClaimsScreen({ navigation }) {
   const [ongoingClaims, setOngoingClaims] = useState([]);
   const [completedClaims, setCompletedClaims] = useState([]);
   const [pastTrips, setPastTrips] = useState([]);
+
+  // Load data on mount
+  useEffect(() => {
+    loadClaimsData();
+    loadPastTrips();
+    loadDocumentTypes();
+  }, []);
   const [documentTypes, setDocumentTypes] = useState([]);
 
   const loadClaimsData = async () => {
