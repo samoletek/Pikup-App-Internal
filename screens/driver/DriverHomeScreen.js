@@ -35,7 +35,7 @@ import {
   zIndex as zLayers,
 } from '../../styles/theme';
 
-const TIMER_SECONDS = 180;
+const DEFAULT_REQUEST_TIMER_SECONDS = 60;
 const REQUEST_POOLS = Object.freeze({
   ASAP: 'asap',
   SCHEDULED: 'scheduled',
@@ -48,10 +48,11 @@ const toCsvSet = (value) =>
       .filter(Boolean)
   );
 const DRIVER_READINESS_BYPASS_EMAILS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS || 'drew@architeq.io'
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS || 'drew@architeq.io,kerya@gmail.ru'
 );
 const DRIVER_READINESS_BYPASS_USER_IDS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS || '8ba3bab0-cc12-44ac-89b9-8aff39918546'
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS ||
+    '8ba3bab0-cc12-44ac-89b9-8aff39918546,1bdf2fc2-20ba-4102-ade0-56dc8cbf3e50'
 );
 const shouldBypassDriverReadiness = (user) => {
   const userId = String(user?.uid || user?.id || '').trim().toLowerCase();
@@ -69,6 +70,15 @@ const ACTIVE_TRIP_STATUS_LABELS = Object.freeze({
   enRouteToDropoff: 'On the way to destination',
   arrivedAtDropoff: 'Arrived at destination',
 });
+const resolveRequestOfferExpiry = (request) => {
+  const rawExpiry = request?.expiresAt || request?.dispatchOffer?.expiresAt;
+  if (!rawExpiry) {
+    return null;
+  }
+
+  const parsedExpiry = new Date(rawExpiry).getTime();
+  return Number.isFinite(parsedExpiry) ? parsedExpiry : null;
+};
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -80,6 +90,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     currentUser,
     getUserPickupRequests,
     getAvailableRequests,
+    declineRequestOffer,
     acceptRequest,
     checkExpiredRequests,
     updateDriverLocation,
@@ -124,8 +135,9 @@ export default function DriverHomeScreen({ navigation, route }) {
   // Minimize + timer state for incoming request
   const [isMinimized, setIsMinimized] = useState(false);
   const [requestTimeRemaining, setRequestTimeRemaining] = useState(0);
+  const [requestTimerTotal, setRequestTimerTotal] = useState(DEFAULT_REQUEST_TIMER_SECONDS);
   const requestTimerRef = useRef(null);
-  const handleDeclineRef = useRef(null);
+  const handleOfferTimeoutRef = useRef(null);
   const isAcceptingRequestRef = useRef(false);
   const incomingRequestIdRef = useRef(null);
   const requestPoolChannelRef = useRef(null);
@@ -271,9 +283,33 @@ export default function DriverHomeScreen({ navigation, route }) {
 
     try {
       const requests = await getUserPickupRequests();
+      let persistedOnlineStatus = null;
+
+      const { data: driverState, error: driverStateError } = await supabase
+        .from('drivers')
+        .select('is_online, metadata')
+        .eq('id', currentUserId)
+        .maybeSingle();
+
+      if (driverStateError && driverStateError.code !== 'PGRST116') {
+        console.warn('Unable to restore driver online state from profile:', driverStateError);
+      } else if (driverState) {
+        const metadataOnlineRaw = driverState?.metadata?.isOnline;
+        const hasColumnState = typeof driverState.is_online === 'boolean';
+        const hasMetadataState = typeof metadataOnlineRaw === 'boolean';
+        if (hasColumnState || hasMetadataState) {
+          persistedOnlineStatus = hasColumnState
+            ? Boolean(driverState.is_online)
+            : Boolean(metadataOnlineRaw);
+        }
+      }
+
       if (!Array.isArray(requests)) {
         setAcceptedRequestId(null);
         setActiveJob(null);
+        if (typeof persistedOnlineStatus === 'boolean') {
+          setIsOnline(persistedOnlineStatus);
+        }
         return null;
       }
 
@@ -298,6 +334,9 @@ export default function DriverHomeScreen({ navigation, route }) {
       if (!activeTrip) {
         setAcceptedRequestId(null);
         setActiveJob(null);
+        if (typeof persistedOnlineStatus === 'boolean') {
+          setIsOnline(persistedOnlineStatus);
+        }
         return null;
       }
 
@@ -340,6 +379,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     if (!currentUserId || userType !== 'driver') {
       setAcceptedRequestId(null);
       setActiveJob(null);
+      setIsOnline(false);
       setIsRestoringActiveTrip(false);
       return;
     }
@@ -476,6 +516,26 @@ export default function DriverHomeScreen({ navigation, route }) {
           removeRequestFromPool(tripId);
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'driver_request_offers',
+          filter: `driver_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const row = payload?.new;
+          const tripId = row?.trip_id;
+          const offerStatus = String(row?.status || '').trim().toLowerCase();
+          if (!tripId) return;
+
+          // Hide request immediately when this driver's offer is no longer active.
+          if (offerStatus && offerStatus !== 'offered') {
+            removeRequestFromPool(tripId);
+          }
+        }
+      )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('Subscribed to real-time request pool updates');
@@ -546,6 +606,21 @@ export default function DriverHomeScreen({ navigation, route }) {
       });
 
       setAvailableRequests(requests);
+
+      const visibleRequestIds = new Set(
+        (requests || []).map((item) => String(item?.id || '')).filter(Boolean)
+      );
+      const currentIncomingId = String(incomingRequestIdRef.current || '').trim();
+
+      // Safety net: if this incoming request is no longer in the server pool
+      // (accepted/cancelled/expired elsewhere), hide it immediately.
+      if (currentIncomingId && !visibleRequestIds.has(currentIncomingId)) {
+        setShowIncomingModal(false);
+        setIsMinimized(false);
+        setIncomingRequest(null);
+        clearIncomingRoute();
+      }
+
       if (effectiveRequestPool === REQUEST_POOLS.SCHEDULED) {
         setShowIncomingModal(false);
         setIsMinimized(false);
@@ -967,8 +1042,26 @@ export default function DriverHomeScreen({ navigation, route }) {
   };
 
   const handleViewRequestDetails = (request) => {
-    // Keep modal open and show request details (already shown in modal)
-    console.log('Viewing details for request:', request.id);
+    if (!request) return;
+
+    const scheduleText = request?.scheduledTime
+      ? new Date(request.scheduledTime).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      : 'ASAP';
+
+    const details = [
+      `Pickup: ${request?.pickup?.address || 'Not specified'}`,
+      `Drop-off: ${request?.dropoff?.address || 'Not specified'}`,
+      `Schedule: ${scheduleText}`,
+      `Vehicle: ${request?.vehicle?.type || 'Standard'}`,
+      `Payout: ${request?.driverPayout || request?.earnings || request?.price || '$0.00'}`,
+    ].join('\n');
+
+    Alert.alert('Request Details', details);
   };
 
   const handleMessageCustomer = (request) => {
@@ -983,7 +1076,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       const pickupCoords = request?.pickup?.coordinates;
       const dropoffCoords = request?.dropoff?.coordinates;
       if (!pickupCoords?.longitude || !pickupCoords?.latitude ||
-          !dropoffCoords?.longitude || !dropoffCoords?.latitude) {
+        !dropoffCoords?.longitude || !dropoffCoords?.latitude) {
         return;
       }
 
@@ -1031,26 +1124,49 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   // Timer management — starts when incomingRequest is set, persists across minimize/expand
   useEffect(() => {
+    if (requestTimerRef.current) {
+      clearInterval(requestTimerRef.current);
+      requestTimerRef.current = null;
+    }
+
     if (!incomingRequest) {
       setRequestTimeRemaining(0);
-      if (requestTimerRef.current) {
-        clearInterval(requestTimerRef.current);
-        requestTimerRef.current = null;
-      }
+      setRequestTimerTotal(DEFAULT_REQUEST_TIMER_SECONDS);
       return;
     }
 
-    setRequestTimeRemaining(TIMER_SECONDS);
+    const requestExpiresAtMs = resolveRequestOfferExpiry(incomingRequest);
+    const hasServerExpiry = Number.isFinite(requestExpiresAtMs);
+    const initialRemainingSeconds = hasServerExpiry
+      ? Math.max(0, Math.ceil((requestExpiresAtMs - Date.now()) / 1000))
+      : DEFAULT_REQUEST_TIMER_SECONDS;
+
+    setRequestTimeRemaining(initialRemainingSeconds);
+    setRequestTimerTotal(
+      hasServerExpiry
+        ? Math.max(initialRemainingSeconds, 1)
+        : DEFAULT_REQUEST_TIMER_SECONDS
+    );
+
+    if (initialRemainingSeconds <= 0) {
+      setTimeout(() => handleOfferTimeoutRef.current?.(), 0);
+      return;
+    }
 
     requestTimerRef.current = setInterval(() => {
-      setRequestTimeRemaining(prev => {
-        if (prev <= 1) {
+      setRequestTimeRemaining((prev) => {
+        const nextRemaining = hasServerExpiry
+          ? Math.max(0, Math.ceil((requestExpiresAtMs - Date.now()) / 1000))
+          : Math.max(0, prev - 1);
+
+        if (nextRemaining <= 0) {
           clearInterval(requestTimerRef.current);
           requestTimerRef.current = null;
-          setTimeout(() => handleDeclineRef.current?.(), 0);
+          setTimeout(() => handleOfferTimeoutRef.current?.(), 0);
           return 0;
         }
-        return prev - 1;
+
+        return nextRemaining;
       });
     }, 1000);
 
@@ -1119,6 +1235,18 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const handleIncomingRequestDecline = () => {
     const currentRequestId = incomingRequest?.id;
+    if (currentRequestId && typeof declineRequestOffer === 'function') {
+      void declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
+        .then((result) => {
+          if (!result?.success) {
+            console.warn('Failed to persist declined request offer:', result?.error || 'Unknown error');
+          }
+        })
+        .catch((declineError) => {
+          console.warn('Decline request offer call failed:', declineError);
+        });
+    }
+
     setShowIncomingModal(false);
     setIsMinimized(false);
     setIncomingRequest(null);
@@ -1144,8 +1272,24 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   };
 
-  // Keep decline ref always up to date (must be after declaration)
-  handleDeclineRef.current = handleIncomingRequestDecline;
+  const handleIncomingRequestTimeout = () => {
+    const currentRequestId = incomingRequest?.id;
+    setShowIncomingModal(false);
+    setIsMinimized(false);
+    setIncomingRequest(null);
+    clearIncomingRoute();
+    setAvailableRequests((prev) => prev.filter((req) => req.id !== currentRequestId));
+    console.log('Incoming request timed out:', currentRequestId);
+
+    if (!isScheduledPoolActive && isOnline && !hasActiveTrip) {
+      setTimeout(() => {
+        void loadRequests(false);
+      }, 1000);
+    }
+  };
+
+  // Keep timeout ref always up to date (must be after declaration)
+  handleOfferTimeoutRef.current = handleIncomingRequestTimeout;
 
   const handleIncomingRequestMinimize = () => {
     setShowIncomingModal(false);
@@ -1584,7 +1728,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         visible={showIncomingModal}
         request={incomingRequest}
         timeRemaining={requestTimeRemaining}
-        timerTotal={TIMER_SECONDS}
+        timerTotal={requestTimerTotal}
         onAccept={handleIncomingRequestAccept}
         onDecline={handleIncomingRequestDecline}
         onMinimize={handleIncomingRequestMinimize}

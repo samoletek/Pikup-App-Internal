@@ -683,7 +683,10 @@ export const getAvailableRequests = async (currentUser, options = {}) => {
                 return;
             }
 
-            if (isTripOutsideScheduledWindow(normalizedRequirements)) {
+            if (
+                requestPool !== REQUEST_POOLS.SCHEDULED &&
+                isTripOutsideScheduledWindow(normalizedRequirements)
+            ) {
                 filteredByTimeWindowCount += 1;
                 return;
             }
@@ -796,6 +799,54 @@ export const getAvailableRequests = async (currentUser, options = {}) => {
     } catch (error) {
         console.error('Error fetching available requests:', error);
         throw error;
+    }
+};
+
+/**
+ * Mark a trip offer as declined for the current driver.
+ * The edge function persists decline state so the same trip is not re-offered.
+ * @param {string} requestId - Trip/request ID
+ * @param {Object} currentUser - Current user object
+ * @param {Object} options - Additional options
+ * @returns {Promise<Object>} Decline result
+ */
+export const declineRequestOffer = async (requestId, currentUser, options = {}) => {
+    if (!currentUser) throw new Error('User not authenticated');
+
+    const normalizedRequestId = String(requestId || '').trim();
+    if (!normalizedRequestId) {
+        return { success: false, error: 'Request ID is required' };
+    }
+
+    const requestPool = normalizeRequestPool(options?.requestPool);
+
+    try {
+        const { data, error } = await supabase.functions.invoke(DRIVER_REQUEST_POOL_FUNCTION, {
+            body: {
+                action: 'decline',
+                tripId: normalizedRequestId,
+                requestPool,
+            },
+        });
+
+        if (error) {
+            throw new Error(formatEdgeInvokeError(error));
+        }
+
+        if (data?.error) {
+            throw new Error(String(data.error));
+        }
+
+        return {
+            success: true,
+            ...data,
+        };
+    } catch (error) {
+        console.error('Error declining request offer:', error);
+        return {
+            success: false,
+            error: error?.message || 'Failed to decline request offer',
+        };
     }
 };
 

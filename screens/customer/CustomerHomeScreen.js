@@ -101,6 +101,35 @@ const formatScheduleLabel = (scheduledTime) => {
   });
 };
 
+const RECENT_COMPLETION_PROMPT_WINDOW_MS = 10 * 60 * 1000;
+const ACTIVE_DELIVERY_POLL_INTERVAL_MS = 5000;
+const IDLE_DELIVERY_POLL_INTERVAL_MS = 30000;
+
+const getTripId = (trip) => {
+  const rawId = trip?.id || trip?.requestId || trip?.request_id || null;
+  if (!rawId) {
+    return null;
+  }
+  return String(rawId);
+};
+
+const getTripCompletionTimestampMs = (trip) => {
+  const rawCompletionDate =
+    trip?.completedAt ||
+    trip?.completed_at ||
+    trip?.updatedAt ||
+    trip?.updated_at ||
+    trip?.createdAt ||
+    trip?.created_at;
+
+  if (!rawCompletionDate) {
+    return Number.NaN;
+  }
+
+  const parsedTimestamp = new Date(rawCompletionDate).getTime();
+  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : Number.NaN;
+};
+
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -137,6 +166,8 @@ export default function CustomerHomeScreen({ navigation }) {
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
   const promptedTripIdsRef = useRef(new Set());
+  const lastActiveTripIdRef = useRef(null);
+  const lastActiveTripSnapshotRef = useRef(null);
 
   const floatingWidth = useMemo(
     () => Math.min(Math.max(width - spacing.lg * 2, 280), 560),
@@ -298,9 +329,76 @@ export default function CustomerHomeScreen({ navigation }) {
       const pendingRequest = customerRequests.find(
         (req) => normalizeTripStatus(req.status) === TRIP_STATUS.PENDING
       );
+      const previousActiveTripId = lastActiveTripIdRef.current;
+      const currentActiveTripId = getTripId(activeRequest);
+      let completedRequestForRating = null;
+
+      if (currentActiveTripId) {
+        lastActiveTripIdRef.current = currentActiveTripId;
+        lastActiveTripSnapshotRef.current = activeRequest;
+      } else if (previousActiveTripId) {
+        const transitionedRequest = customerRequests.find(
+          (req) =>
+            getTripId(req) === previousActiveTripId &&
+            normalizeTripStatus(req.status) === TRIP_STATUS.COMPLETED
+        );
+
+        if (transitionedRequest) {
+          const previousSnapshot = lastActiveTripSnapshotRef.current;
+          completedRequestForRating = {
+            ...previousSnapshot,
+            ...transitionedRequest,
+            assignedDriverId:
+              transitionedRequest?.assignedDriverId ||
+              transitionedRequest?.driverId ||
+              transitionedRequest?.driver_id ||
+              previousSnapshot?.assignedDriverId ||
+              previousSnapshot?.driverId ||
+              previousSnapshot?.driver_id ||
+              null,
+            assignedDriverEmail:
+              transitionedRequest?.assignedDriverEmail ||
+              transitionedRequest?.driverEmail ||
+              transitionedRequest?.driver_email ||
+              previousSnapshot?.assignedDriverEmail ||
+              previousSnapshot?.driverEmail ||
+              previousSnapshot?.driver_email ||
+              null,
+          };
+        }
+
+        lastActiveTripIdRef.current = null;
+        lastActiveTripSnapshotRef.current = null;
+      }
+
+      if (!completedRequestForRating && !currentActiveTripId) {
+        const latestCompletedRequest = customerRequests.find(
+          (req) => normalizeTripStatus(req.status) === TRIP_STATUS.COMPLETED
+        );
+        const latestCompletedRequestId = getTripId(latestCompletedRequest);
+        const latestCompletedTimestamp = getTripCompletionTimestampMs(latestCompletedRequest);
+
+        if (
+          latestCompletedRequestId &&
+          Number.isFinite(latestCompletedTimestamp) &&
+          Date.now() - latestCompletedTimestamp <= RECENT_COMPLETION_PROMPT_WINDOW_MS
+        ) {
+          completedRequestForRating = latestCompletedRequest;
+        }
+      }
 
       setActiveDelivery(activeRequest || null);
       setPendingBooking(activeRequest ? null : pendingRequest || null);
+
+      const completedRequestId = getTripId(completedRequestForRating);
+      if (
+        completedRequestId &&
+        !promptedTripIdsRef.current.has(completedRequestId)
+      ) {
+        promptedTripIdsRef.current.add(completedRequestId);
+        setCompletedTripForRating(completedRequestForRating);
+        setIsRatingModalVisible(true);
+      }
     } catch (error) {
       console.error("Error checking active deliveries:", error);
       setActiveDelivery(null);
@@ -310,14 +408,20 @@ export default function CustomerHomeScreen({ navigation }) {
 
   useEffect(() => {
     loadCurrentLocation();
+  }, [loadCurrentLocation]);
+
+  useEffect(() => {
     checkActiveDeliveries();
 
-    const intervalCheck = setInterval(checkActiveDeliveries, 30000);
+    const intervalMs = activeDelivery?.id
+      ? ACTIVE_DELIVERY_POLL_INTERVAL_MS
+      : IDLE_DELIVERY_POLL_INTERVAL_MS;
+    const intervalCheck = setInterval(checkActiveDeliveries, intervalMs);
 
     return () => {
       clearInterval(intervalCheck);
     };
-  }, [loadCurrentLocation, checkActiveDeliveries]);
+  }, [activeDelivery?.id, checkActiveDeliveries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -526,10 +630,12 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const handleDeliveryComplete = useCallback((deliveryData) => {
     setActiveDelivery(null);
-    const tripId = deliveryData?.id;
+    const tripId = getTripId(deliveryData);
     if (!tripId || promptedTripIdsRef.current.has(tripId)) {
       return;
     }
+    lastActiveTripIdRef.current = null;
+    lastActiveTripSnapshotRef.current = null;
     promptedTripIdsRef.current.add(tripId);
     setCompletedTripForRating(deliveryData);
     setIsRatingModalVisible(true);
