@@ -338,9 +338,12 @@ const ReviewStep = ({
                     <View style={styles.priceRow}>
                         <Text style={styles.totalLabel}>Total</Text>
                         <Text style={styles.totalValue}>
-                            ${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
-                                ? (Math.round((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) * 100) / 100).toFixed(2)
-                                : displayPricing?.total?.toFixed(2) || '0.00'
+                            {insuranceLoading
+                                ? '...'
+                                : `$${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
+                                    ? (Math.round((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) * 100) / 100).toFixed(2)
+                                    : displayPricing?.total?.toFixed(2) || '0.00'
+                                }`
                             }
                         </Text>
                     </View>

@@ -138,7 +138,7 @@ const buildItemsSummary = (items = []) => {
 // ============================================
 // MAIN COMPONENT
 // ============================================
-const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderPhoneVerification }) => {
+const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderPhoneVerification, customerEmail, customerName }) => {
     const insets = useSafeAreaInsets();
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
@@ -472,7 +472,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     } else if (firstErr.value) {
                         Alert.alert('Missing Info', 'Please enter a value for new items.');
                     } else if (firstErr.invoice) {
-                        Alert.alert('Missing Invoice', 'Please upload an invoice for insured items to confirm they are new.');
+                        Alert.alert('Missing Invoice', 'Please upload an invoice or receipt for insured items to verify their value.');
                     }
                     return false;
                 }
@@ -666,6 +666,9 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         pickup: orderData.pickup,
                         dropoff: orderData.dropoff,
                         scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
+                        durationMinutes: orderData.duration || null,
+                        customerEmail,
+                        customerName,
                     }).then(quote => {
                         if (quoteRequestIdRef.current !== requestId) return; // stale
                         setInsuranceQuote(quote ? { ...quote, fetchedAt: Date.now() } : null);
@@ -696,14 +699,25 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     item => String(item.condition || '').toLowerCase() === 'new' && item.hasInsurance === true
                 );
                 if (insuredItems.length > 0) {
-                    const freshQuote = await RedkikService.getQuote({
-                        items: insuredItems,
-                        pickup: orderData.pickup,
-                        dropoff: orderData.dropoff,
-                        scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
-                    });
-                    activeInsuranceQuote = freshQuote ? { ...freshQuote, fetchedAt: Date.now() } : insuranceQuote;
-                    setInsuranceQuote(activeInsuranceQuote);
+                    try {
+                        const freshQuote = await RedkikService.getQuote({
+                            items: insuredItems,
+                            pickup: orderData.pickup,
+                            dropoff: orderData.dropoff,
+                            scheduledTime: orderData.scheduleType === 'scheduled' ? orderData.scheduledDateTime : null,
+                            durationMinutes: orderData.duration || null,
+                            customerEmail,
+                            customerName,
+                        });
+                        if (freshQuote) {
+                            activeInsuranceQuote = { ...freshQuote, fetchedAt: Date.now() };
+                        } else {
+                            console.warn('[Insurance] Quote refresh returned null, keeping previous quote');
+                        }
+                        setInsuranceQuote(activeInsuranceQuote);
+                    } catch (err) {
+                        console.warn('[Insurance] Quote refresh failed, keeping previous quote:', err);
+                    }
                 }
             }
 
