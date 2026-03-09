@@ -778,6 +778,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
             insuranceData = {
               quoteId: orderData.insuranceQuote.offerId,
+              bookingId: null,
               premium: orderData.insuranceQuote.premium,
               status: 'purchase_failed',
             };
@@ -1132,6 +1133,8 @@ export default function CustomerHomeScreen({ navigation }) {
         onClose={() => setSearchModalVisible(false)}
         onConfirm={handleOrderConfirm}
         userLocation={userLocation}
+        customerEmail={currentUser?.email}
+        customerName={[currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(' ') || undefined}
         renderPhoneVerification={() => (
           <PhoneVerificationModal
             visible={phoneVerifyVisible}

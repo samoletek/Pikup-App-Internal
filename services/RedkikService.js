@@ -15,7 +15,7 @@ const RedkikService = {
    * @param {string|null} params.scheduledTime - ISO string or null
    * @returns {Promise<{ offerId: string, premium: number, details: Object } | null>}
    */
-  async getQuote({ items, pickup, dropoff, scheduledTime }) {
+  async getQuote({ items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName }) {
     try {
       const { data, error } = await supabase.functions.invoke('redkik-quote', {
         body: {
@@ -30,6 +30,9 @@ const RedkikService = {
           pickup,
           dropoff,
           scheduledTime: scheduledTime || null,
+          durationMinutes: durationMinutes || null,
+          customerEmail: customerEmail || null,
+          customerName: customerName || null,
         },
       });
 

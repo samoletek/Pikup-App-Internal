@@ -20,19 +20,10 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 // ----- Redkik API helpers -----
 
-interface RedkikTokenResponse {
-  accessToken?: string
-  access_token?: string
-  token?: string
-  expires_in?: number
-}
-
-// Module-level token cache (persists across warm invocations)
 let cachedToken: string | null = null
 let tokenExpiresAt = 0
 
 async function getRedkikToken(): Promise<string> {
-  // Return cached token if still valid (with 60s safety buffer)
   if (cachedToken && Date.now() < tokenExpiresAt) {
     return cachedToken
   }
@@ -54,9 +45,8 @@ async function getRedkikToken(): Promise<string> {
     throw new Error(`Redkik auth failed (${res.status}): ${text}`)
   }
 
-  const data: RedkikTokenResponse = await res.json()
-  console.log("[Redkik] Auth response keys:", Object.keys(data))
-  const token = data.accessToken || data.access_token || data.token
+  const data = await res.json()
+  const token = data.access_token || data.accessToken || data.token
   if (!token) {
     console.error("[Redkik] Auth response (no token found):", JSON.stringify(data))
     throw new Error("Redkik auth response missing token")
@@ -68,10 +58,13 @@ async function getRedkikToken(): Promise<string> {
   const expiresInMs = (data.expires_in || 3600000) > 10000
     ? (data.expires_in || 3600000)
     : (data.expires_in || 3600) * 1000
-  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 60s safety buffer
+  tokenExpiresAt = Date.now() + expiresInMs - 60_000
 
   return token
 }
+
+// Default commodity ID for "General Goods &/or Merchandise" from Redkik setup
+const DEFAULT_COMMODITY_ID = "ebe38cf9-df60-4f69-9210-a439981e6989"
 
 interface QuoteItem {
   name?: string
@@ -86,6 +79,9 @@ interface QuoteParams {
   pickup?: { address?: string; coordinates?: { lat?: number; lng?: number; latitude?: number; longitude?: number } }
   dropoff?: { address?: string; coordinates?: { lat?: number; lng?: number; latitude?: number; longitude?: number } }
   scheduledTime?: string | null
+  durationMinutes?: number | null
+  customerEmail?: string
+  customerName?: string
 }
 
 function buildQuotePayload(params: QuoteParams) {
@@ -94,35 +90,57 @@ function buildQuotePayload(params: QuoteParams) {
     0
   )
 
-  const pickupCoords = params.pickup?.coordinates
-  const dropoffCoords = params.dropoff?.coordinates
+  const now = new Date()
+  const startMs = params.scheduledTime
+    ? new Date(params.scheduledTime).getTime()
+    : now.getTime()
+  const startDate = new Date(startMs).toISOString()
+
+  // End date: trip duration (with 2h buffer) or fallback 6h from start
+  const tripDurationMs = params.durationMinutes
+    ? (params.durationMinutes + 120) * 60 * 1000
+    : 6 * 60 * 60 * 1000
+  const endDate = new Date(startMs + tripDurationMs).toISOString()
+
+  const commodityDescription = (params.items || [])
+    .map((i) => i.name || "Item")
+    .join(", ")
+
+  const fullName = (params.customerName || "").trim()
+  const nameParts = fullName.split(/\s+/).filter(Boolean)
+  const firstName = nameParts[0] || "Pikup"
+  const lastName = nameParts.slice(1).join(" ") || "Customer"
 
   return {
-    transportMode: "GROUND",
-    originAddress: params.pickup?.address || "",
-    originLatitude: pickupCoords?.lat ?? pickupCoords?.latitude ?? 0,
-    originLongitude: pickupCoords?.lng ?? pickupCoords?.longitude ?? 0,
-    destinationAddress: params.dropoff?.address || "",
-    destinationLatitude: dropoffCoords?.lat ?? dropoffCoords?.latitude ?? 0,
-    destinationLongitude: dropoffCoords?.lng ?? dropoffCoords?.longitude ?? 0,
-    commodityDescription: (params.items || [])
-      .map((i) => i.name || "Item")
-      .join(", "),
-    declaredValue: totalValue,
-    currency: "USD",
-    shipmentDate: params.scheduledTime || new Date().toISOString(),
-    items: (params.items || []).map((item) => ({
-      description: item.name || "Item",
-      value: Number(item.value) || 0,
-      weight: Number(item.weight) || 0,
-      weightUnit: "LBS",
-    })),
+    commodities: [{
+      commodityId: DEFAULT_COMMODITY_ID,
+      // Redkik expects insuredValue in smallest currency unit (cents for USD)
+      insuredValue: Math.max(Math.round(totalValue * 100), 100),
+      currencyId: "USD",
+    }],
+    commodityDescription,
+    origin: { formatted: params.pickup?.address || "" },
+    destination: { formatted: params.dropoff?.address || "" },
+    startDate,
+    endDate,
+    conveyanceType: "ROAD",
+    customer: {
+      type: "INDIVIDUAL",
+      email: params.customerEmail || "insurance@pikup-app.com",
+      individualFirstName: firstName,
+      individualLastName: lastName,
+      address: { formatted: params.pickup?.address || "" },
+    },
   }
 }
 
 async function requestQuote(token: string, params: QuoteParams) {
-  const quoteUrl = `${REDKIK_BASE_URL}/api/v2/quote/bookings/quote`
+  // Correct endpoint: /api/v2/quote/quotes/quote (NOT /bookings/quote)
+  const quoteUrl = `${REDKIK_BASE_URL}/api/v2/quote/quotes/quote`
   const payload = buildQuotePayload(params)
+
+  console.log("[Redkik] Quote request URL:", quoteUrl)
+  console.log("[Redkik] Quote request payload:", JSON.stringify(payload))
 
   const res = await fetch(quoteUrl, {
     method: "POST",
@@ -139,12 +157,12 @@ async function requestQuote(token: string, params: QuoteParams) {
   }
 
   const quoteData = await res.json()
-  console.log("[Redkik] Quote response keys:", Object.keys(quoteData))
-  console.log("[Redkik] Quote response full:", JSON.stringify(quoteData))
+  console.log("[Redkik] Quote response:", JSON.stringify(quoteData))
   return quoteData
 }
 
 async function purchaseQuote(token: string, offerId: string) {
+  // Purchase endpoint confirmed in Swagger: /api/v2/quote/bookings/purchase
   const purchaseUrl = `${REDKIK_BASE_URL}/api/v2/quote/bookings/purchase`
 
   const res = await fetch(purchaseUrl, {
@@ -162,8 +180,7 @@ async function purchaseQuote(token: string, offerId: string) {
   }
 
   const purchaseData = await res.json()
-  console.log("[Redkik] Purchase response keys:", Object.keys(purchaseData))
-  console.log("[Redkik] Purchase response full:", JSON.stringify(purchaseData))
+  console.log("[Redkik] Purchase response:", JSON.stringify(purchaseData))
   return purchaseData
 }
 
@@ -204,14 +221,18 @@ serve(async (req) => {
     const body = await req.json()
     const { action } = body
 
-    // Get Redkik auth token
     const token = await getRedkikToken()
 
     switch (action) {
       case "get-quote": {
-        const { items, pickup, dropoff, scheduledTime } = body
+        const { items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName } = body
         if (!items || !Array.isArray(items) || items.length === 0) {
           return jsonResponse({ error: "Items array is required" }, 400)
+        }
+
+        const totalItemValue = items.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0)
+        if (totalItemValue <= 0) {
+          return jsonResponse({ error: "Items must have a positive total value for insurance" }, 400)
         }
 
         const quoteResponse = await requestQuote(token, {
@@ -219,34 +240,36 @@ serve(async (req) => {
           pickup,
           dropoff,
           scheduledTime,
+          durationMinutes,
+          customerEmail,
+          customerName,
         })
 
-        // Extract key fields from Redkik response
-        // Adapt field names based on actual Redkik API response structure
-        const offerId =
-          quoteResponse.offerId ||
-          quoteResponse.offer_id ||
-          quoteResponse.id ||
-          quoteResponse.quoteId ||
-          null
-        const premium = Number(
-          quoteResponse.premium ??
-          quoteResponse.totalPremium ??
-          quoteResponse.price ??
-          quoteResponse.amount ??
-          0
-        )
+        // Response is an array of offers — take the first accepted one
+        const offers = Array.isArray(quoteResponse) ? quoteResponse : [quoteResponse]
+        const acceptedOffer = offers.find((o: any) => o.accepted) || offers[0]
 
-        // Validate that we got meaningful data back
+        if (!acceptedOffer) {
+          return jsonResponse(
+            { error: "No insurance offers returned", code: "NO_OFFERS" },
+            502
+          )
+        }
+
+        const offerId = acceptedOffer.id
+        // Prices are in cents — convert using currencyDivisionModifier (default 100)
+        const divider = acceptedOffer.currencyDivisionModifier || 100
+        const premium = Number(acceptedOffer.totalCost || 0) / divider
+
         if (!offerId) {
-          console.error("Redkik quote response missing offerId:", JSON.stringify(quoteResponse))
+          console.error("Redkik offer missing id:", JSON.stringify(acceptedOffer))
           return jsonResponse(
             { error: "Insurance quote returned no offer identifier", code: "MISSING_OFFER_ID" },
             502
           )
         }
         if (premium <= 0) {
-          console.error("Redkik quote returned zero/negative premium:", JSON.stringify(quoteResponse))
+          console.error("Redkik offer zero premium:", JSON.stringify(acceptedOffer))
           return jsonResponse(
             { error: "Insurance quote returned invalid premium", code: "INVALID_PREMIUM" },
             502
@@ -256,7 +279,15 @@ serve(async (req) => {
         return jsonResponse({
           offerId,
           premium,
-          details: quoteResponse,
+          details: {
+            insurerPremium: Number(acceptedOffer.insurerPremium || 0) / divider,
+            technologyFee: Number(acceptedOffer.technologyFee || 0) / divider,
+            bookingFee: Number(acceptedOffer.bookingFee || 0) / divider,
+            totalCost: premium,
+            deductibles: acceptedOffer.deductibles || [],
+            accepted: acceptedOffer.accepted,
+            currencySymbol: acceptedOffer.currencySymbol || "$",
+          },
         })
       }
 
@@ -269,9 +300,9 @@ serve(async (req) => {
         const purchaseResponse = await purchaseQuote(token, offerId)
 
         const bookingId =
+          purchaseResponse.id ||
           purchaseResponse.bookingId ||
           purchaseResponse.booking_id ||
-          purchaseResponse.id ||
           null
 
         if (!bookingId) {
