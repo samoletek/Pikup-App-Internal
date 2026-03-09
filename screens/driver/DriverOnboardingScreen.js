@@ -168,6 +168,7 @@ const formatLicensePlate = (value) => value.replace(/[^a-zA-Z0-9]/g, '').toUpper
 const ONBOARDING_VIDEO_WATCHED_KEY = 'driver_onboarding_video_watched';
 const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
 const VALID_VERIFICATION_STATUSES = ['pending', 'completed', 'failed', 'canceled'];
+const WEBSITE_URL = 'https://pikup-app.com/';
 
 const getDraftStorageKey = (userId) => `${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`;
 
@@ -274,6 +275,28 @@ export default function DriverOnboardingScreen({ navigation }) {
   const saveTimeoutRef = useRef(null);
   const lastSavedDraftRef = useRef(null);
   const lastRemoteSyncSignatureRef = useRef(null);
+  const isIdentityVerificationCompleted = verificationStatus === 'completed';
+  const isIdentityVerificationRejected = verificationStatus === 'failed';
+
+  const openWebsite = async () => {
+    try {
+      const supported = await Linking.canOpenURL(WEBSITE_URL);
+      if (!supported) {
+        throw new Error('Website URL is not supported');
+      }
+      await Linking.openURL(WEBSITE_URL);
+    } catch (error) {
+      console.error('Failed to open website URL:', error);
+      Alert.alert(
+        'Unable to Open Website',
+        'Please open pikup-app.com in your browser.'
+      );
+    }
+  };
+
+  const openSupport = () => {
+    navigation.navigate('CustomerHelpScreen');
+  };
 
   // MIGRATION: Payment Service replaced by stubs
   // const PAYMENT_SERVICE_URL = 'https://pikup-server.onrender.com';
@@ -343,20 +366,39 @@ export default function DriverOnboardingScreen({ navigation }) {
 
       if (error) {
         console.error('Error fetching verification data:', error);
+        let errorStatus = null;
+        if (error.context?.json) {
+          try {
+            const errorPayload = await error.context.json();
+            errorStatus = errorPayload?.status || null;
+          } catch (parseError) {
+            console.error('Failed to parse verification error payload:', parseError);
+          }
+        }
         setIsLoadingVerificationData(false);
-        return;
+        return { verified: false, status: errorStatus || 'error' };
       }
 
       if (data?.status === 'processing' && retryCount < MAX_RETRIES) {
         console.log(`Verification processing, retrying in ${RETRY_DELAY / 1000}s (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-        setTimeout(() => fetchVerificationData(sessionId, retryCount + 1), RETRY_DELAY);
-        return;
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+        return fetchVerificationData(sessionId, retryCount + 1);
       }
 
-      if (!data || data.status === 'processing' || data.error) {
+      if (data?.status === 'processing') {
+        setIsLoadingVerificationData(false);
+        return { verified: false, status: 'processing' };
+      }
+
+      if (data?.status && data.status !== 'verified') {
+        setIsLoadingVerificationData(false);
+        return { verified: false, status: data.status };
+      }
+
+      if (!data || data.error) {
         console.log('Verification data not available');
         setIsLoadingVerificationData(false);
-        return;
+        return { verified: false, status: 'error' };
       }
 
       setFormData(prev => {
@@ -386,10 +428,12 @@ export default function DriverOnboardingScreen({ navigation }) {
 
       setVerificationDataPopulated(true);
       setIsLoadingVerificationData(false);
+      return { verified: true, status: 'verified' };
 
     } catch (error) {
       console.error('Failed to fetch verification data:', error);
       setIsLoadingVerificationData(false);
+      return { verified: false, status: 'error' };
     }
   };
 
@@ -400,35 +444,69 @@ export default function DriverOnboardingScreen({ navigation }) {
     console.log('Stripe Identity status changed:', status);
 
     if (status === 'FlowCompleted') {
-      console.log('Verification completed successfully!');
-      setVerificationStatus('completed');
+      const finalizeIdentityVerification = async () => {
+        if (!verificationSessionId || !currentUser) {
+          setVerificationStatus('failed');
+          return;
+        }
 
-      if (verificationSessionId && currentUser) {
-        supabase
-          .from('drivers')
-          .update({
-            identity_verified: true,
-            verification_session_id: verificationSessionId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', currentUser.uid || currentUser.id)
-          .then(({ error }) => {
-            if (error) console.error('Failed to update driver verification status:', error);
-            else console.log('Driver verification status saved to DB');
-          });
+        const verificationResult = await fetchVerificationData(verificationSessionId);
 
-        // Fetch verified data from Stripe and auto-populate form
-        fetchVerificationData(verificationSessionId);
-      }
+        if (verificationResult?.verified) {
+          console.log('Verification completed successfully!');
+          setVerificationStatus('completed');
+
+          supabase
+            .from('drivers')
+            .update({
+              identity_verified: true,
+              verification_session_id: verificationSessionId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', currentUser.uid || currentUser.id)
+            .then(({ error }) => {
+              if (error) console.error('Failed to update driver verification status:', error);
+              else console.log('Driver verification status saved to DB');
+            });
+          return;
+        }
+
+        if (verificationResult?.status === 'processing') {
+          setVerificationStatus('pending');
+          Alert.alert(
+            'Verification In Progress',
+            'We are still reviewing your ID. Please wait a moment and try again.'
+          );
+          return;
+        }
+
+        setVerificationStatus('failed');
+        Alert.alert(
+          'Verification Failed',
+          'Your identity verification was not approved. Contact support or visit pikup-app.com.'
+        );
+      };
+
+      finalizeIdentityVerification();
     } else if (status === 'FlowCanceled') {
       console.log('⚠️ Verification was canceled by user');
       setVerificationStatus('canceled');
     } else if (status === 'FlowFailed') {
       console.log('❌ Verification failed');
       setVerificationStatus('failed');
-      Alert.alert('Verification Failed', 'Please try again or contact support.');
+      Alert.alert(
+        'Verification Failed',
+        'Your identity verification was not approved. Contact support or visit pikup-app.com.'
+      );
     }
   }, [status, verificationSessionId, currentUser]);
+
+  useEffect(() => {
+    if (currentStep > 1 && verificationStatus !== 'completed') {
+      setCurrentStep(1);
+      progressAnim.setValue(1 / (steps.length - 1));
+    }
+  }, [currentStep, verificationStatus, progressAnim]);
 
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -558,10 +636,12 @@ export default function DriverOnboardingScreen({ navigation }) {
           return;
         }
 
-        const restoredStep = normalizeStep(latestDraft.currentStep);
         const restoredVerificationStatus = normalizeVerificationStatus(
           latestDraft.verificationStatus
         );
+        const restoredStep = restoredVerificationStatus === 'completed'
+          ? normalizeStep(latestDraft.currentStep)
+          : Math.min(normalizeStep(latestDraft.currentStep), 1);
         const restoredFormData = {
           ...mergeFormDataWithDefaults(latestDraft.formData),
           ssn: '',
@@ -729,6 +809,8 @@ export default function DriverOnboardingScreen({ navigation }) {
 
   const validateStep = () => {
     switch (currentStep) {
+      case 1: // Identity Verification
+        return verificationStatus === 'completed';
       case 2: // Personal Info
         return (
           formData.firstName.length >= 2 &&
@@ -764,6 +846,15 @@ export default function DriverOnboardingScreen({ navigation }) {
     if (!validateStep()) {
       if (currentStep === 0) {
         Alert.alert('Watch the Video', 'Please watch the onboarding video before continuing.');
+      } else if (currentStep === 1) {
+        if (verificationStatus === 'failed') {
+          Alert.alert(
+            'Onboarding Declined',
+            'Identity verification was not approved. Contact support or visit pikup-app.com.'
+          );
+        } else {
+          Alert.alert('Identity Verification Required', 'Please complete identity verification to continue.');
+        }
       } else {
         Alert.alert('Missing Information', 'Please fill in all required fields correctly.');
       }
@@ -1078,6 +1169,30 @@ export default function DriverOnboardingScreen({ navigation }) {
         );
 
       case 1: // Identity Verification
+        if (isIdentityVerificationRejected) {
+          return (
+            <View style={styles.formContent}>
+              <View style={styles.verificationRejectedCard}>
+                <View style={styles.verificationRejectedHeader}>
+                  <Ionicons name="close-circle" size={26} color={colors.secondary} />
+                  <Text style={styles.verificationRejectedTitle}>Verification Failed</Text>
+                </View>
+                <Text style={styles.verificationRejectedText}>
+                  Verification was not approved. Please contact our{' '}
+                  <Text style={styles.verificationRejectedLink} onPress={openSupport}>
+                    support
+                  </Text>
+                  {' '}or visit{' '}
+                  <Text style={styles.verificationRejectedLink} onPress={openWebsite}>
+                    pikup-app.com
+                  </Text>
+                  .
+                </Text>
+              </View>
+            </View>
+          );
+        }
+
         return (
           <View style={styles.formContent}>
             <View style={styles.verificationFeatures}>
@@ -1125,7 +1240,7 @@ export default function DriverOnboardingScreen({ navigation }) {
                 verificationStatus === 'completed' && styles.verifyButtonSuccess
               ]}
               onPress={() => present()}
-              disabled={verificationStatus === 'completed' || identityLoading}
+              disabled={verificationStatus === 'completed' || verificationStatus === 'failed' || identityLoading}
             >
               {identityLoading ? (
                 <View style={styles.buttonLoadingContainer}>
@@ -1714,6 +1829,21 @@ export default function DriverOnboardingScreen({ navigation }) {
     );
   };
 
+  // Identity verification (step 2 / index 1) is a hard gate:
+  // users cannot progress beyond this step unless verification is completed.
+  const isIdentityStep = currentStep === 1;
+  const isBlockedByIdentity = isIdentityStep && !isIdentityVerificationCompleted;
+  const isNextDisabled = loading || (currentStep === 0 && !videoWatched) || isBlockedByIdentity;
+  const nextButtonLabel = loading
+    ? 'Setting up...'
+    : isIdentityStep && isIdentityVerificationRejected
+      ? 'Onboarding Declined'
+      : isBlockedByIdentity
+        ? 'Complete Verification'
+        : currentStep === steps.length - 1
+          ? 'Complete Setup'
+          : 'Continue';
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -1796,18 +1926,18 @@ export default function DriverOnboardingScreen({ navigation }) {
           style={[
             styles.nextButton,
             currentStep === 0 && styles.nextButtonFull,
-            (loading || (currentStep === 0 && !videoWatched)) && styles.nextButtonDisabled,
+            isNextDisabled && styles.nextButtonDisabled,
           ]}
           onPress={handleNext}
-          disabled={loading || (currentStep === 0 && !videoWatched)}
+          disabled={isNextDisabled}
         >
           {loading ? (
             <View style={styles.loadingContainer}>
-              <Text style={styles.nextButtonText}>Setting up...</Text>
+              <Text style={styles.nextButtonText}>{nextButtonLabel}</Text>
             </View>
           ) : (
             <Text style={styles.nextButtonText}>
-              {currentStep === steps.length - 1 ? 'Complete Setup' : 'Continue'}
+              {nextButtonLabel}
             </Text>
           )}
         </TouchableOpacity>
@@ -2184,6 +2314,36 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     marginLeft: spacing.sm,
+  },
+  verificationRejectedCard: {
+    backgroundColor: `${colors.secondary}12`,
+    borderWidth: 1,
+    borderColor: `${colors.secondary}33`,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  verificationRejectedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  verificationRejectedTitle: {
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.primary,
+  },
+  verificationRejectedText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    lineHeight: typography.fontSize.base * typography.lineHeight.relaxed,
+  },
+  verificationRejectedLink: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
+    fontWeight: typography.fontWeight.semibold,
   },
   loadingText: {
     color: colors.text.tertiary,

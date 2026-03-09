@@ -140,7 +140,7 @@ export const createAuthActions = ({
 
   const createPickupRequest = (requestData) => TripService.createPickupRequest(requestData, currentUser);
   const getUserPickupRequests = () => TripService.getUserPickupRequests(currentUser);
-  const getAvailableRequests = () => TripService.getAvailableRequests(currentUser);
+  const getAvailableRequests = (options = {}) => TripService.getAvailableRequests(currentUser, options);
   const acceptRequest = (requestId) => TripService.acceptRequest(requestId, currentUser);
   const updateRequestStatus = TripService.updateRequestStatus;
   const updateDriverStatus = TripService.updateDriverStatus;

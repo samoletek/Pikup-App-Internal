@@ -28,6 +28,7 @@ export default function TripRatingModal({
   submitLabel = 'Submit',
   cancelLabel = 'Later',
   submitting = false,
+  showBadges = true,
   onClose,
   onSubmit,
 }) {
@@ -92,42 +93,44 @@ export default function TripRatingModal({
 
           <Text style={styles.ratingLabel}>{getRatingLabel(rating)}</Text>
 
-          <View style={styles.badgesSection}>
-            <Text style={styles.badgesTitle}>What stood out?</Text>
-            <View style={styles.badgesRow}>
-              {badgeOptions.map((badge) => {
-                const isSelected = selectedBadges.includes(badge.id);
-                return (
-                  <TouchableOpacity
-                    key={badge.id}
-                    style={[
-                      styles.badgeButton,
-                      isSelected && {
-                        borderColor: badge.activeColor,
-                        backgroundColor: `${badge.activeColor}22`,
-                      },
-                    ]}
-                    onPress={() => toggleBadge(badge.id)}
-                    disabled={submitting}
-                  >
-                    <Ionicons
-                      name={badge.icon}
-                      size={20}
-                      color={isSelected ? badge.activeColor : colors.text.muted}
-                    />
-                    <Text
+          {showBadges && (
+            <View style={styles.badgesSection}>
+              <Text style={styles.badgesTitle}>What stood out?</Text>
+              <View style={styles.badgesRow}>
+                {badgeOptions.map((badge) => {
+                  const isSelected = selectedBadges.includes(badge.id);
+                  return (
+                    <TouchableOpacity
+                      key={badge.id}
                       style={[
-                        styles.badgeLabel,
-                        isSelected && { color: badge.activeColor },
+                        styles.badgeButton,
+                        isSelected && {
+                          borderColor: badge.activeColor,
+                          backgroundColor: `${badge.activeColor}22`,
+                        },
                       ]}
+                      onPress={() => toggleBadge(badge.id)}
+                      disabled={submitting}
                     >
-                      {badge.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      <Ionicons
+                        name={badge.icon}
+                        size={20}
+                        color={isSelected ? badge.activeColor : colors.text.muted}
+                      />
+                      <Text
+                        style={[
+                          styles.badgeLabel,
+                          isSelected && { color: badge.activeColor },
+                        ]}
+                      >
+                        {badge.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.footerRow}>
             <TouchableOpacity

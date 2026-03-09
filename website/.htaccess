@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Serve .well-known files with correct content type
+<IfModule mod_headers.c>
+  <FilesMatch "apple-app-site-association">
+    Header set Content-Type "application/json"
+  </FilesMatch>
+</IfModule>
+
+# Redirect /invite/CODE to homepage (fallback when app is not installed)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^invite/(.+)$ / [R=302,L]

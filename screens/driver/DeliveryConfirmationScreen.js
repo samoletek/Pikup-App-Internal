@@ -16,7 +16,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenHeader from '../../components/ScreenHeader';
-import TripRatingModal from '../../components/TripRatingModal';
 import {
   borderRadius,
   colors,
@@ -31,15 +30,13 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const { request, pickupPhotos, driverLocation } = route.params;
   const { finishDelivery, submitTripRating, refreshProfile } = useAuth();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
-  
+
   const [deliveryPhotos, setDeliveryPhotos] = useState([]);
   const [customerRating, setCustomerRating] = useState(5);
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-  const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
-  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  
+
   const scrollViewRef = useRef(null);
 
   const requestPermissions = async () => {
@@ -63,9 +60,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       const hasPermission = await requestPermissions();
       if (!hasPermission) return;
 
-          const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         exif: false,
@@ -77,9 +74,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
         };
-        
+
         setDeliveryPhotos(prev => [...prev, newPhoto]);
-        
+
         // Scroll to the end to show the new photo
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -99,9 +96,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
         return;
       }
 
-          const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
-      allowsEditing: true,
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
         exif: false,
@@ -113,9 +110,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           id: Date.now().toString(),
           timestamp: new Date().toISOString(),
         };
-        
+
         setDeliveryPhotos(prev => [...prev, newPhoto]);
-        
+
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -201,24 +198,42 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const handleCompleteDelivery = async () => {
     setIsCompleting(true);
     setIsUploadingPhotos(true);
-    
+
     try {
       console.log(`Completing delivery with ${deliveryPhotos.length} photos...`);
-      
+
       // Complete delivery with photos, location, and rating (photos are uploaded to Supabase Storage)
       await finishDelivery(
-        request.id, 
-        deliveryPhotos, 
-        driverLocation, 
+        request.id,
+        deliveryPhotos,
+        driverLocation,
         customerRating
       );
-      
+
       console.log('Delivery completed with photos uploaded to Supabase Storage');
       setIsUploadingPhotos(false);
-      
+
+      const customerId = request?.customerId || request?.customer_id || null;
+      if (customerId) {
+        try {
+          await submitTripRating({
+            requestId: request?.id,
+            toUserId: customerId,
+            toUserType: 'customer',
+            rating: customerRating,
+            badges: [],
+          });
+          await refreshProfile?.();
+        } catch (ratingError) {
+          console.warn('Failed to save driver rating after delivery completion:', ratingError);
+        }
+      } else {
+        console.warn('Skipping customer rating save: customer id is missing');
+      }
+
       console.log('Delivery completed successfully');
-      setIsRatingModalVisible(true);
-      
+      navigateToDriverTabs();
+
     } catch (error) {
       console.error('Error completing delivery:', error);
       setIsUploadingPhotos(false);
@@ -237,41 +252,6 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       index: 0,
       routes: [{ name: 'DriverTabs' }],
     });
-  };
-
-  const closeRatingModal = () => {
-    setIsRatingModalVisible(false);
-    navigateToDriverTabs();
-  };
-
-  const handleSubmitCustomerRating = async ({ rating, badges }) => {
-    const customerId = request?.customerId || request?.customer_id || null;
-
-    if (!customerId) {
-      Alert.alert('Customer not found', 'Rating could not be saved for this trip.');
-      closeRatingModal();
-      return;
-    }
-
-    try {
-      setIsSubmittingRating(true);
-      await submitTripRating({
-        requestId: request?.id,
-        toUserId: customerId,
-        toUserType: 'customer',
-        rating,
-        badges,
-      });
-      await refreshProfile?.();
-      Alert.alert('Thank you!', 'Your customer rating has been saved.', [
-        { text: 'Continue', onPress: closeRatingModal },
-      ]);
-    } catch (error) {
-      console.error('Error submitting driver trip rating:', error);
-      Alert.alert('Error', 'Failed to save customer rating. Please try again.');
-    } finally {
-      setIsSubmittingRating(false);
-    }
   };
 
   const customerName = request?.customerEmail?.split('@')[0] || 'Customer';
@@ -371,6 +351,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
               style={styles.photoScrollView}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoContainer}
+              clipsToBounds={false}
             >
               {/* Add Photo Button */}
               <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
@@ -385,8 +366,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
                   <TouchableOpacity
                     style={styles.removePhotoButton}
                     onPress={() => removePhoto(photo.id)}
+                    hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                   >
-                    <Ionicons name="close-circle" size={24} color={colors.error} />
+                    <Ionicons name="close-circle" size={30} color={colors.error} />
                   </TouchableOpacity>
                   <View style={styles.photoIndex}>
                     <Text style={styles.photoIndexText}>{index + 1}</Text>
@@ -394,14 +376,6 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
                 </View>
               ))}
             </ScrollView>
-
-            {deliveryPhotos.length === 0 && (
-              <View style={styles.noPhotosContainer}>
-                <Ionicons name="camera-outline" size={48} color={colors.text.muted} />
-                <Text style={styles.noPhotosText}>No delivery photos yet</Text>
-                <Text style={styles.noPhotosSubtext}>Take at least 1 photo to complete delivery</Text>
-              </View>
-            )}
           </View>
 
           {/* Final Instructions */}
@@ -429,9 +403,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
       {/* Bottom Action Button */}
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
-            styles.completeButton, 
+            styles.completeButton,
             { opacity: (deliveryPhotos.length === 0 || isCompleting) ? 0.6 : 1 }
           ]}
           onPress={completeDelivery}
@@ -443,28 +417,16 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
             <Ionicons name="checkmark-circle" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
           )}
           <Text style={styles.completeButtonText}>
-            {isUploadingPhotos ? 'Uploading Photos...' : 
-             isCompleting ? 'Completing Delivery...' : 
-             'Complete Delivery'}
+            {isUploadingPhotos ? 'Uploading Photos...' :
+              isCompleting ? 'Completing Delivery...' :
+                'Complete Delivery'}
           </Text>
         </TouchableOpacity>
-        
+
         {deliveryPhotos.length === 0 && (
           <Text style={styles.warningText}>⚠️ At least 1 delivery photo required</Text>
         )}
       </View>
-
-      <TripRatingModal
-        visible={isRatingModalVisible}
-        targetRole="customer"
-        targetName={customerName}
-        title="Rate your customer"
-        subtitle={`How was your delivery with ${customerName}?`}
-        submitLabel="Submit rating"
-        submitting={isSubmittingRating}
-        onClose={closeRatingModal}
-        onSubmit={handleSubmitCustomerRating}
-      />
     </View>
   );
 }
@@ -619,9 +581,11 @@ const styles = StyleSheet.create({
   },
   photoScrollView: {
     marginHorizontal: -spacing.base,
+    overflow: 'visible',
   },
   photoContainer: {
     paddingHorizontal: spacing.base,
+    paddingTop: 8,
     gap: spacing.md,
   },
   addPhotoButton: {
@@ -655,8 +619,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -8,
     right: -8,
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.circle,
+    zIndex: 10,
   },
   photoIndex: {
     position: 'absolute',

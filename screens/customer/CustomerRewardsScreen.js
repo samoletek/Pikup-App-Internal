@@ -23,7 +23,7 @@ import {
 const MILESTONE_TARGET = 5;
 const MILESTONE_REWARD = 15;
 
-export default function CustomerRewardsScreen({ navigation }) {
+export default function CustomerRewardsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { getUserPickupRequests, currentUser } = useAuth();
   const [completedTrips, setCompletedTrips] = useState(0);
@@ -31,6 +31,15 @@ export default function CustomerRewardsScreen({ navigation }) {
   const [promoStatus, setPromoStatus] = useState(null); // null | 'success' | 'error'
   const [credits, setCredits] = useState(0);
   const promoTimerRef = useRef(null);
+
+  // Handle referral code from deep link (pikup-app.com/invite/CODE)
+  const deepLinkCode = route?.params?.code;
+
+  useEffect(() => {
+    if (deepLinkCode) {
+      setPromoCode(deepLinkCode.toUpperCase());
+    }
+  }, [deepLinkCode]);
 
   useEffect(() => {
     loadTripCount();

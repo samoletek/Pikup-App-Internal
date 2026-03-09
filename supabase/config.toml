@@ -85,6 +85,12 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/download-user-data/index.ts"
 
+[functions.get-driver-request-pool]
+enabled = true
+verify_jwt = false
+import_map = "./functions/get-driver-request-pool/deno.json"
+entrypoint = "./functions/get-driver-request-pool/index.ts"
+
 [functions.send-phone-otp]
 enabled = true
 verify_jwt = false

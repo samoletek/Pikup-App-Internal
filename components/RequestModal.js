@@ -158,6 +158,15 @@ export default function RequestModal({
     const isSelected = index === selectedIndex;
     const displayPhotos = getDisplayPhotos(item);
     const earnings = item.driverPayout || item.earnings || item.price || '$0.00';
+    const hasScheduledTime = Boolean(item.scheduledTime);
+    const scheduledLabel = hasScheduledTime
+      ? new Date(item.scheduledTime).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : null;
 
     return (
       <Animated.View style={[
@@ -181,6 +190,12 @@ export default function RequestModal({
                 <View style={styles.vehicleTag}>
                   <Ionicons name="car-outline" size={14} color={colors.warning} />
                   <Text style={styles.vehicleType}>{item.vehicle.type}</Text>
+                </View>
+              )}
+              {hasScheduledTime && (
+                <View style={styles.scheduledTag}>
+                  <Ionicons name="calendar-outline" size={14} color={colors.primary} />
+                  <Text style={styles.scheduledTagText}>{scheduledLabel}</Text>
                 </View>
               )}
             </View>
@@ -635,6 +650,22 @@ const styles = StyleSheet.create({
   },
   vehicleType: {
     color: colors.warning,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs,
+  },
+  scheduledTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  scheduledTagText: {
+    color: colors.primary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     marginLeft: spacing.xs,

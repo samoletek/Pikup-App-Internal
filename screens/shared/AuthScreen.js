@@ -174,176 +174,176 @@ export default function AuthScreen({ navigation, route }) {
                                     {isLogin ? "Welcome Back" : "Create Account"}
                                 </Text>
 
-                            {!isLogin && (
-                                <View style={styles.nameRow}>
-                                    <View style={[styles.inputContainer, styles.halfInput]}>
-                                        <Ionicons name="person-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
-                                        <TextInput
-                                            style={[styles.input, nameError ? styles.inputError : null]}
-                                            placeholder="First Name"
-                                            value={firstName}
-                                            onChangeText={setFirstName}
-                                            autoCapitalize="words"
-                                        />
+                                {!isLogin && (
+                                    <View style={styles.nameRow}>
+                                        <View style={[styles.inputContainer, styles.halfInput]}>
+                                            <Ionicons name="person-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
+                                            <TextInput
+                                                style={[styles.input, nameError ? styles.inputError : null]}
+                                                placeholder="First Name"
+                                                value={firstName}
+                                                onChangeText={setFirstName}
+                                                autoCapitalize="words"
+                                            />
+                                        </View>
+                                        <View style={[styles.inputContainer, styles.halfInput]}>
+                                            <TextInput
+                                                style={[styles.input, nameError ? styles.inputError : null]}
+                                                placeholder="Last Name"
+                                                value={lastName}
+                                                onChangeText={setLastName}
+                                                autoCapitalize="words"
+                                            />
+                                        </View>
                                     </View>
-                                    <View style={[styles.inputContainer, styles.halfInput]}>
-                                        <TextInput
-                                            style={[styles.input, nameError ? styles.inputError : null]}
-                                            placeholder="Last Name"
-                                            value={lastName}
-                                            onChangeText={setLastName}
-                                            autoCapitalize="words"
-                                        />
-                                    </View>
-                                </View>
-                            )}
-                            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
+                                )}
+                                {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
 
-                            <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
-                                <Ionicons name="mail-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Email"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    keyboardType="email-address"
-                                    autoCapitalize="none"
-                                />
-                            </View>
-                            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-
-                            <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
-                                <Ionicons name="lock-closed-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Password"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry={!showPassword}
-                                />
-                                <TouchableOpacity
-                                    onPress={() => setShowPassword(!showPassword)}
-                                    style={styles.eyeIcon}
-                                >
-                                    <Ionicons
-                                        name={showPassword ? "eye-off-outline" : "eye-outline"}
-                                        size={20}
-                                        color={colors.text.placeholder}
+                                <View style={[styles.inputContainer, emailError ? styles.inputError : null]}>
+                                    <Ionicons name="mail-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Email"
+                                        value={email}
+                                        onChangeText={setEmail}
+                                        keyboardType="email-address"
+                                        autoCapitalize="none"
                                     />
-                                </TouchableOpacity>
-                            </View>
-                            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+                                </View>
+                                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
-                            {!isLogin && (
-                                <View style={[styles.inputContainer, confirmPasswordError ? styles.inputError : null]}>
+                                <View style={[styles.inputContainer, passwordError ? styles.inputError : null]}>
                                     <Ionicons name="lock-closed-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
                                     <TextInput
                                         style={styles.input}
-                                        placeholder="Confirm Password"
-                                        value={confirmPassword}
-                                        onChangeText={setConfirmPassword}
-                                        secureTextEntry={!showConfirmPassword}
+                                        placeholder="Password"
+                                        value={password}
+                                        onChangeText={setPassword}
+                                        secureTextEntry={!showPassword}
                                     />
                                     <TouchableOpacity
-                                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        onPress={() => setShowPassword(!showPassword)}
                                         style={styles.eyeIcon}
                                     >
                                         <Ionicons
-                                            name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                                            name={showPassword ? "eye-off-outline" : "eye-outline"}
                                             size={20}
                                             color={colors.text.placeholder}
                                         />
                                     </TouchableOpacity>
                                 </View>
-                            )}
-                            {confirmPasswordError ? (
-                                <Text style={styles.errorText}>{confirmPasswordError}</Text>
-                            ) : null}
+                                {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
-                                <View style={[styles.buttonContainer, isCompact && styles.buttonContainerCompact]}>
                                 {!isLogin && (
-                                    <View>
+                                    <View style={[styles.inputContainer, confirmPasswordError ? styles.inputError : null]}>
+                                        <Ionicons name="lock-closed-outline" size={20} color={colors.text.placeholder} style={styles.inputIcon} />
+                                        <TextInput
+                                            style={styles.input}
+                                            placeholder="Confirm Password"
+                                            value={confirmPassword}
+                                            onChangeText={setConfirmPassword}
+                                            secureTextEntry={!showConfirmPassword}
+                                        />
                                         <TouchableOpacity
-                                            style={styles.termsContainer}
-                                            onPress={() => setTermsAccepted(!termsAccepted)}
+                                            onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            style={styles.eyeIcon}
                                         >
                                             <Ionicons
-                                                name={termsAccepted ? "checkbox" : "square-outline"}
-                                                size={24}
-                                                color={termsAccepted ? colors.primary : colors.text.placeholder}
+                                                name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                                                size={20}
+                                                color={colors.text.placeholder}
                                             />
-                                            <View style={styles.termsTextContainer}>
-                                                <Text style={styles.termsText}>I accept the </Text>
-                                                <TouchableOpacity
-                                                    onPress={async () => {
-                                                        try {
-                                                            const supported = await Linking.canOpenURL(termsUrl);
-                                                            if (!supported) {
-                                                                Alert.alert("Error", `Cannot open this link: ${termsUrl}`);
-                                                                return;
-                                                            }
-                                                            await Linking.openURL(termsUrl);
-                                                        } catch (error) {
-                                                            Alert.alert("Error", "Failed to open Terms of Service.");
-                                                        }
-                                                    }}
-                                                >
-                                                    <Text style={styles.termsLink}>Terms of Service</Text>
-                                                </TouchableOpacity>
-                                                <Text style={styles.termsText}> & </Text>
-                                                <TouchableOpacity
-                                                    onPress={async () => {
-                                                        try {
-                                                            const supported = await Linking.canOpenURL(privacyUrl);
-                                                            if (!supported) {
-                                                                Alert.alert("Error", `Cannot open this link: ${privacyUrl}`);
-                                                                return;
-                                                            }
-                                                            await Linking.openURL(privacyUrl);
-                                                        } catch (error) {
-                                                            Alert.alert("Error", "Failed to open Privacy Policy.");
-                                                        }
-                                                    }}
-                                                >
-                                                    <Text style={styles.termsLink}>Privacy Policy</Text>
-                                                </TouchableOpacity>
-                                            </View>
                                         </TouchableOpacity>
-                                        {termsAcceptedError ? (
-                                            <Text style={styles.termsAcceptedErrorText}>{termsAcceptedError}</Text>
-                                        ) : null}
                                     </View>
                                 )}
+                                {confirmPasswordError ? (
+                                    <Text style={styles.errorText}>{confirmPasswordError}</Text>
+                                ) : null}
 
-                                <TouchableOpacity
-                                    style={styles.button}
-                                    onPress={handleAuth}
-                                    disabled={loading}
-                                >
-                                    <Text style={styles.buttonText}>
-                                        {loading ? "Loading..." : isLogin ? "Sign In" : "Sign Up"}
-                                    </Text>
-                                </TouchableOpacity>
+                                <View style={[styles.buttonContainer, isCompact && styles.buttonContainerCompact]}>
+                                    {!isLogin && (
+                                        <View>
+                                            <TouchableOpacity
+                                                style={styles.termsContainer}
+                                                onPress={() => setTermsAccepted(!termsAccepted)}
+                                            >
+                                                <Ionicons
+                                                    name={termsAccepted ? "checkbox" : "square-outline"}
+                                                    size={24}
+                                                    color={termsAccepted ? colors.primary : colors.text.placeholder}
+                                                />
+                                                <View style={styles.termsTextContainer}>
+                                                    <Text style={styles.termsText}>I accept the </Text>
+                                                    <TouchableOpacity
+                                                        onPress={async () => {
+                                                            try {
+                                                                const supported = await Linking.canOpenURL(termsUrl);
+                                                                if (!supported) {
+                                                                    Alert.alert("Error", `Cannot open this link: ${termsUrl}`);
+                                                                    return;
+                                                                }
+                                                                await Linking.openURL(termsUrl);
+                                                            } catch (error) {
+                                                                Alert.alert("Error", "Failed to open Terms of Service.");
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Text style={styles.termsLink}>Terms of Service</Text>
+                                                    </TouchableOpacity>
+                                                    <Text style={styles.termsText}> & </Text>
+                                                    <TouchableOpacity
+                                                        onPress={async () => {
+                                                            try {
+                                                                const supported = await Linking.canOpenURL(privacyUrl);
+                                                                if (!supported) {
+                                                                    Alert.alert("Error", `Cannot open this link: ${privacyUrl}`);
+                                                                    return;
+                                                                }
+                                                                await Linking.openURL(privacyUrl);
+                                                            } catch (error) {
+                                                                Alert.alert("Error", "Failed to open Privacy Policy.");
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Text style={styles.termsLink}>Privacy Policy</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </TouchableOpacity>
+                                            {termsAcceptedError ? (
+                                                <Text style={styles.termsAcceptedErrorText}>{termsAcceptedError}</Text>
+                                            ) : null}
+                                        </View>
+                                    )}
 
-                                {Platform.OS === 'ios' && (
-                                    <AppleAuthentication.AppleAuthenticationButton
-                                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-                                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-                                        cornerRadius={30}
-                                        style={styles.appleButton}
-                                        onPress={handleAppleSignIn}
-                                    />
-                                )}
+                                    <TouchableOpacity
+                                        style={styles.button}
+                                        onPress={handleAuth}
+                                        disabled={loading}
+                                    >
+                                        <Text style={styles.buttonText}>
+                                            {loading ? "Loading..." : isLogin ? "Sign In" : "Sign Up"}
+                                        </Text>
+                                    </TouchableOpacity>
 
-                                <TouchableOpacity
-                                    style={styles.googleButton}
-                                    onPress={handleGoogleSignIn}
-                                    disabled={loading}
-                                >
-                                    <Ionicons name="logo-google" size={20} color={colors.text.inverse} />
-                                    <Text style={styles.googleButtonText}>Sign in with Google</Text>
-                                </TouchableOpacity>
-                            </View>
+                                    {Platform.OS === 'ios' && (
+                                        <AppleAuthentication.AppleAuthenticationButton
+                                            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                                            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                                            cornerRadius={30}
+                                            style={styles.appleButton}
+                                            onPress={handleAppleSignIn}
+                                        />
+                                    )}
+
+                                    <TouchableOpacity
+                                        style={styles.googleButton}
+                                        onPress={handleGoogleSignIn}
+                                        disabled={loading}
+                                    >
+                                        <Ionicons name="logo-google" size={20} color={colors.text.inverse} />
+                                        <Text style={styles.googleButtonText}>Sign in with Google</Text>
+                                    </TouchableOpacity>
+                                </View>
 
                                 <View style={styles.toggleContainer}>
                                     <Text style={styles.toggleText}>

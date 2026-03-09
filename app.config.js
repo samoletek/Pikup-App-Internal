@@ -28,6 +28,7 @@ module.exports = {
       appleTeamId: "99LU49ANLX",
       bundleIdentifier: "io.architeq.pikup",
       googleServicesFile: "./GoogleService-Info.plist",
+      associatedDomains: ["applinks:pikup-app.com"],
       config: {
         googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
         mapboxPublicToken: process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
@@ -83,6 +84,20 @@ module.exports = {
       ],
       googleServicesFile: "./google-services.json",
       newArchEnabled: true,
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "pikup-app.com",
+              pathPrefix: "/invite",
+            },
+          ],
+          category: ["BROWSABLE", "DEFAULT"],
+        },
+      ],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,

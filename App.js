@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { LogBox, NativeModules, StyleSheet, TextInput, View, useColorScheme } from 'react-native';
+import { Linking, LogBox, NativeModules, StyleSheet, TextInput, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
@@ -11,6 +11,33 @@ import Navigation from './Navigation';
 import ErrorBoundary from './components/ErrorBoundary';
 import { appNavigationTheme } from './navigation/navigationTheme';
 import { colors } from './styles/theme';
+
+// Deep linking configuration
+const linking = {
+  prefixes: [
+    'pikup://',
+    'https://pikup-app.com',
+  ],
+  config: {
+    screens: {
+      // Customer flow -- referral deep link
+      CustomerTabs: {
+        screens: {},
+      },
+      CustomerRewardsScreen: 'invite/:code',
+    },
+  },
+  async getInitialURL() {
+    const url = await Linking.getInitialURL();
+    return url;
+  },
+  subscribe(listener) {
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      listener(url);
+    });
+    return () => subscription.remove();
+  },
+};
 
 // Suppress known Mapbox library warnings
 LogBox.ignoreLogs([
@@ -53,7 +80,7 @@ export default function App() {
     <SafeAreaProvider>
       <View style={styles.appRoot}>
         <ErrorBoundary>
-          <NavigationContainer theme={appNavigationTheme}>
+          <NavigationContainer theme={appNavigationTheme} linking={linking}>
             <StripeProvider
               publishableKey={STRIPE_PUBLISHABLE_KEY}
               merchantId={MERCHANT_ID}
