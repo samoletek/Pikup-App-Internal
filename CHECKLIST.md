@@ -254,32 +254,32 @@ NEW EDITS:
 
 ### Driver Flow - Home Screen
 - [x] #62 Large buttons for driver (use while driving) - khan
-- [ ] #63 Evaluate Map + Online toggle for scheduled moving - TBD
-- [ ] #64 Add button to open recent trips modal - erema
+- [x] #63 Evaluate Map + Online toggle for scheduled moving - TBD
+- [x] #64 Add button to open recent trips modal - erema
 
 ### Driver Flow - Earnings Screen
-- [ ] #65 Fix non-functional Earnings screen buttons - erema
-- [ ] #66 Realtime sync with Supabase - erema
+- [x] #65 Fix non-functional Earnings screen buttons - erema
+- [x] #66 Realtime sync with Supabase - erema
 
 ### Driver Flow - Order Notification
 - [x] #67 Popup modal for incoming orders with timer - khan
 - [x] #68 Show: pickup location, earnings, accept/decline time - khan
 
 ### Backend / Infrastructure
-- [ ] #69 Order matching algorithm (nearest driver + preferences) - adrei and drew
+- [x] #69 Order matching algorithm (nearest driver + preferences) - adrei and drew
 
 ### Summary Screen (Labor Time) *
 - [x] #117 Add Labor Time calculation display - khan
 - [x] #118 Show breakdown: "15 min @ $0.50/min = $7.50 (includes 10 min buffer)" - khan
 
 ### Insurance API
-- [ ] #81 Verify Redkik quote flow - erema
+- [-] #81 Verify Redkik quote flow - erema
 - [ ] #82 Test insurance logic end-to-end - erema
 
 ### Stripe Payments
-- [ ] #83 Customer payment flow testing - drew
+- [-] #83 Customer payment flow testing - drew
 - [ ] #84 Driver payout (Stripe Connect) - drew
-- [ ] #85 70% earnings calculation verification - drew
+- [-] #85 75% earnings calculation verification - drew (25/75)
 
 ### Milestone 4 Deliverables
 - [ ] Complete driver home screen with order notifications
