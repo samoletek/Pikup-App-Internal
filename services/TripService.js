@@ -3,7 +3,6 @@
 
 import { supabase } from '../config/supabase';
 import { compressImage, uploadToSupabase } from './StorageService';
-import { createConversation } from './MessagingService';
 import { TRIP_STATUS, normalizeTripStatus, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 import {
@@ -97,12 +96,36 @@ const SCHEDULED_PAST_GRACE_MINUTES = parseEnvNumber(
     5,
     { min: 0, max: 120 }
 );
+const pendingAcceptIdempotencyByTrip = new Map();
+const pendingDeclineIdempotencyByTrip = new Map();
 
 const normalizeRequestPool = (value) => {
     const pool = String(value || REQUEST_POOLS.ALL).trim().toLowerCase();
     if (pool === REQUEST_POOLS.ASAP) return REQUEST_POOLS.ASAP;
     if (pool === REQUEST_POOLS.SCHEDULED) return REQUEST_POOLS.SCHEDULED;
     return REQUEST_POOLS.ALL;
+};
+
+const createRequestActionIdempotencyKey = (action, requestId, userId) => {
+    const actionPart = String(action || 'action')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+    const requestPart = String(requestId || '')
+        .replace(/[^a-zA-Z0-9]+/g, '')
+        .slice(-16);
+    const userPart = String(userId || '')
+        .replace(/[^a-zA-Z0-9]+/g, '')
+        .slice(-12);
+    const timestampPart = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).slice(2, 10);
+    return [
+        actionPart || 'action',
+        requestPart || 'trip',
+        userPart || 'driver',
+        timestampPart,
+        randomPart,
+    ].join('_');
 };
 
 const formatEdgeInvokeError = (error) => {
@@ -381,6 +404,13 @@ const isTripStatusConstraintError = (error) => {
     const message = String(error?.message || '').toLowerCase();
     const details = String(error?.details || '').toLowerCase();
     return message.includes('trips_status_check') || details.includes('trips_status_check');
+};
+
+const isInvalidTripTransitionError = (error) => {
+    if (error?.code !== '23514') return false;
+    const message = String(error?.message || '').toLowerCase();
+    const details = String(error?.details || '').toLowerCase();
+    return message.includes('invalid trip status transition') || details.includes('invalid trip status transition');
 };
 
 const getAlternateTripStatusFormat = (status) => {
@@ -818,6 +848,17 @@ export const declineRequestOffer = async (requestId, currentUser, options = {}) 
         return { success: false, error: 'Request ID is required' };
     }
 
+    const driverId = currentUser.uid || currentUser.id;
+    if (!driverId) {
+        return { success: false, error: 'Driver ID is required' };
+    }
+
+    let declineIdempotencyKey = pendingDeclineIdempotencyByTrip.get(normalizedRequestId);
+    if (!declineIdempotencyKey) {
+        declineIdempotencyKey = createRequestActionIdempotencyKey('decline', normalizedRequestId, driverId);
+        pendingDeclineIdempotencyByTrip.set(normalizedRequestId, declineIdempotencyKey);
+    }
+
     const requestPool = normalizeRequestPool(options?.requestPool);
 
     try {
@@ -826,6 +867,7 @@ export const declineRequestOffer = async (requestId, currentUser, options = {}) 
                 action: 'decline',
                 tripId: normalizedRequestId,
                 requestPool,
+                idempotencyKey: declineIdempotencyKey,
             },
         });
 
@@ -847,6 +889,8 @@ export const declineRequestOffer = async (requestId, currentUser, options = {}) 
             success: false,
             error: error?.message || 'Failed to decline request offer',
         };
+    } finally {
+        pendingDeclineIdempotencyByTrip.delete(normalizedRequestId);
     }
 };
 
@@ -859,12 +903,27 @@ export const declineRequestOffer = async (requestId, currentUser, options = {}) 
 export const acceptRequest = async (requestId, currentUser) => {
     if (!currentUser) throw new Error('User not authenticated');
 
+    const normalizedRequestId = String(requestId || '').trim();
+    if (!normalizedRequestId) {
+        throw new Error('Request ID is required');
+    }
+
+    const driverId = currentUser.uid || currentUser.id;
+    if (!driverId) {
+        throw new Error('Driver ID is required');
+    }
+
+    let acceptIdempotencyKey = pendingAcceptIdempotencyByTrip.get(normalizedRequestId);
+    if (!acceptIdempotencyKey) {
+        acceptIdempotencyKey = createRequestActionIdempotencyKey('accept', normalizedRequestId, driverId);
+        pendingAcceptIdempotencyByTrip.set(normalizedRequestId, acceptIdempotencyKey);
+    }
+
     try {
-        const driverId = currentUser.uid || currentUser.id;
         const { data: requestSnapshot, error: snapshotError } = await supabase
             .from('trips')
             .select('*')
-            .eq('id', requestId)
+            .eq('id', normalizedRequestId)
             .maybeSingle();
 
         if (snapshotError) throw snapshotError;
@@ -884,34 +943,32 @@ export const acceptRequest = async (requestId, currentUser) => {
             throw createRequestUnavailableError('Request already accepted by another driver');
         }
 
-        const acceptedAt = new Date().toISOString();
         let acceptedRequest = null;
-        let rpcAccepted = false;
 
-        // Primary path: RPC with SECURITY DEFINER to bypass restrictive RLS during accept race.
+        // Single source of truth: server-side RPC performs atomic claim and side effects.
         const { data: rpcAcceptedRows, error: rpcAcceptError } = await supabase.rpc('accept_trip_request', {
-            p_trip_id: requestId,
-            p_driver_id: driverId
+            p_trip_id: normalizedRequestId,
+            p_driver_id: driverId,
+            p_idempotency_key: acceptIdempotencyKey,
         });
 
         if (rpcAcceptError) {
             if (isMissingRpcFunctionError(rpcAcceptError, 'accept_trip_request')) {
-                console.warn('accept_trip_request RPC is missing. Falling back to direct trips update.');
+                throw new Error('accept_trip_request RPC is missing. Apply the latest Supabase migrations and try again.');
             } else {
                 throw rpcAcceptError;
             }
-        } else {
-            rpcAccepted = true;
-            if (Array.isArray(rpcAcceptedRows) && rpcAcceptedRows.length > 0) {
-                acceptedRequest = rpcAcceptedRows[0];
-            }
         }
 
-        if (!acceptedRequest && rpcAccepted) {
+        if (Array.isArray(rpcAcceptedRows) && rpcAcceptedRows.length > 0) {
+            acceptedRequest = rpcAcceptedRows[0];
+        }
+
+        if (!acceptedRequest) {
             const { data: latestTrip, error: latestTripError } = await supabase
                 .from('trips')
                 .select('*')
-                .eq('id', requestId)
+                .eq('id', normalizedRequestId)
                 .maybeSingle();
 
             if (latestTripError) {
@@ -930,42 +987,6 @@ export const acceptRequest = async (requestId, currentUser) => {
             }
         }
 
-        if (!acceptedRequest && !rpcAccepted) {
-            const acceptedStatus = toDbTripStatus(TRIP_STATUS.ACCEPTED);
-            const updates = {
-                status: acceptedStatus,
-                driver_id: driverId,
-                updated_at: acceptedAt
-            };
-
-            const driverMatchOrNull = `driver_id.is.null,driver_id.eq.${driverId}`;
-            const { error: updateError } = await supabase
-                .from('trips')
-                .update(updates)
-                .eq('id', requestId)
-                .eq('status', toDbTripStatus(TRIP_STATUS.PENDING))
-                .or(driverMatchOrNull);
-
-            if (updateError) throw updateError;
-
-            acceptedRequest = {
-                ...requestSnapshot,
-                ...updates
-            };
-
-            const { data: refetchedRequest, error: refetchError } = await supabase
-                .from('trips')
-                .select('*')
-                .eq('id', requestId)
-                .maybeSingle();
-
-            if (refetchError) {
-                console.warn('Could not re-fetch accepted request after direct update:', refetchError);
-            } else if (refetchedRequest) {
-                acceptedRequest = refetchedRequest;
-            }
-        }
-
         if (
             normalizeTripStatus(acceptedRequest?.status) !== TRIP_STATUS.ACCEPTED ||
             acceptedRequest?.driver_id !== driverId
@@ -975,50 +996,13 @@ export const acceptRequest = async (requestId, currentUser) => {
 
         console.log('Request accepted successfully:', requestId);
 
-        // Create conversation
-        try {
-            const customerId =
-                requestSnapshot.customer_id ||
-                acceptedRequest?.customer_id ||
-                acceptedRequest?.customerId ||
-                null;
-
-            if (customerId) {
-                let customerName = 'Customer';
-                let driverName = 'Driver';
-
-                const { data: customerProfile } = await supabase
-                    .from('customers')
-                    .select('first_name, last_name, email')
-                    .eq('id', customerId)
-                    .maybeSingle();
-                if (customerProfile) {
-                    customerName = customerProfile.first_name || customerProfile.email?.split('@')[0] || 'Customer';
-                }
-
-                const { data: driverProfile } = await supabase
-                    .from('drivers')
-                    .select('first_name, last_name, email')
-                    .eq('id', driverId)
-                    .maybeSingle();
-                if (driverProfile) {
-                    driverName = driverProfile.first_name || driverProfile.email?.split('@')[0] || 'Driver';
-                }
-
-                await createConversation(requestId, customerId, driverId, customerName, driverName);
-                console.log('Conversation created for request:', requestId);
-            } else {
-                console.warn('Skipping conversation creation: missing customer id for request', requestId);
-            }
-        } catch (convError) {
-            console.error('Error creating conversation:', convError);
-        }
-
         return mapTripFromDb(acceptedRequest);
 
     } catch (error) {
         console.error('Error accepting request:', error);
         throw error;
+    } finally {
+        pendingAcceptIdempotencyByTrip.delete(normalizedRequestId);
     }
 };
 
@@ -1062,6 +1046,9 @@ export const updateRequestStatus = async (requestId, newStatus, additionalData =
         }
         return mapTripFromDb(data);
     } catch (error) {
+        if (isInvalidTripTransitionError(error)) {
+            throw new Error('Trip status update is out of sequence. Please refresh and try again.');
+        }
         console.error('Error updating request status:', error);
         throw error;
     }
@@ -1113,6 +1100,9 @@ export const updateDriverStatus = async (requestId, status, location = null, add
         }
         return mapTripFromDb(data);
     } catch (error) {
+        if (isInvalidTripTransitionError(error)) {
+            throw new Error('Trip status update is out of sequence. Please refresh and try again.');
+        }
         if (isNetworkRequestFailure(error)) {
             const { data: latestTrip, error: latestError } = await fetchTripByIdWithRetry(requestId);
             if (!latestError && latestTrip && hasReachedOrPassedStatus(latestTrip.status, normalizedStatus)) {

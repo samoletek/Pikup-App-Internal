@@ -170,6 +170,12 @@ const normalizeOfferAction = (value: unknown): string | null => {
   return null
 }
 
+const normalizeIdempotencyKey = (value: unknown): string | null => {
+  const normalized = String(value || "").trim()
+  if (!normalized) return null
+  return normalized.slice(0, 128)
+}
+
 const normalizeOfferStatus = (value: unknown): string => {
   return String(value || "").trim().toLowerCase()
 }
@@ -854,6 +860,9 @@ serve(async (req) => {
     const driverLocation = normalizeCoordinates(body.driverLocation)
     const offerAction = normalizeOfferAction(body.action)
     const actionTripId = String(body.tripId || body.requestId || "").trim()
+    const actionIdempotencyKey = normalizeIdempotencyKey(
+      body.idempotencyKey ?? body.idempotency_key
+    )
 
     const { data: driverProfile, error: driverProfileError } = await dbClient
       .from("drivers")
@@ -873,6 +882,120 @@ serve(async (req) => {
         return jsonResponse({ error: "tripId is required for decline action" }, 400)
       }
 
+      let idempotencyRecordId: string | null = null
+      const finalizeDeclineIdempotency = async (status: string) => {
+        if (!actionIdempotencyKey || !idempotencyRecordId) return
+        const nowIso = new Date().toISOString()
+        const { error: idempotencyUpdateError } = await dbClient
+          .from("driver_dispatch_idempotency")
+          .update({
+            response_status: status,
+            response_trip_id: actionTripId,
+            updated_at: nowIso,
+          })
+          .eq("id", idempotencyRecordId)
+          .eq("driver_id", user.id)
+          .eq("action", "decline")
+
+        if (idempotencyUpdateError) {
+          throw idempotencyUpdateError
+        }
+      }
+
+      const returnDeclineResponse = async ({
+        status,
+        noOp = false,
+        reason = null,
+        tripStatus = null,
+      }: {
+        status: string
+        noOp?: boolean
+        reason?: string | null
+        tripStatus?: string | null
+      }) => {
+        await finalizeDeclineIdempotency(status)
+
+        const payload: AnyRecord = {
+          success: true,
+          action: OFFER_ACTIONS.DECLINE,
+          tripId: actionTripId,
+          status,
+        }
+        if (noOp) payload.noOp = true
+        if (reason) payload.reason = reason
+        if (tripStatus != null) payload.tripStatus = tripStatus
+
+        return jsonResponse(payload)
+      }
+
+      if (actionIdempotencyKey) {
+        const nowIso = new Date().toISOString()
+
+        const { error: reserveIdempotencyError } = await dbClient
+          .from("driver_dispatch_idempotency")
+          .upsert(
+            {
+              driver_id: user.id,
+              trip_id: actionTripId,
+              action: "decline",
+              idempotency_key: actionIdempotencyKey,
+              response_status: "pending",
+              response_trip_id: null,
+              created_at: nowIso,
+              updated_at: nowIso,
+            },
+            {
+              onConflict: "driver_id,action,idempotency_key",
+              ignoreDuplicates: true,
+            }
+          )
+
+        if (reserveIdempotencyError) {
+          throw reserveIdempotencyError
+        }
+
+        const { data: idempotencyRow, error: idempotencyRowError } = await dbClient
+          .from("driver_dispatch_idempotency")
+          .select("id,trip_id,response_status")
+          .eq("driver_id", user.id)
+          .eq("action", "decline")
+          .eq("idempotency_key", actionIdempotencyKey)
+          .maybeSingle()
+
+        if (idempotencyRowError && idempotencyRowError.code !== "PGRST116") {
+          throw idempotencyRowError
+        }
+
+        if (idempotencyRow) {
+          idempotencyRecordId = String(idempotencyRow.id || "").trim() || null
+          const idempotencyTripId = String(idempotencyRow.trip_id || "").trim()
+          const idempotencyStatus = normalizeOfferStatus(idempotencyRow.response_status)
+
+          if (idempotencyTripId && idempotencyTripId !== actionTripId) {
+            return jsonResponse(
+              { error: "Idempotency key was already used for another trip" },
+              409
+            )
+          }
+
+          if (idempotencyStatus && idempotencyStatus !== "pending") {
+            const replayStatus =
+              idempotencyStatus === OFFER_STATUSES.DECLINED
+                ? OFFER_STATUSES.DECLINED
+                : idempotencyStatus
+
+            return jsonResponse({
+              success: true,
+              action: OFFER_ACTIONS.DECLINE,
+              tripId: actionTripId,
+              status: replayStatus || "ignored",
+              noOp: replayStatus !== OFFER_STATUSES.DECLINED,
+              reason: "idempotent_replay",
+            })
+          }
+        }
+      }
+
       const { data: existingOffer, error: existingOfferError } = await dbClient
         .from("driver_request_offers")
         .select("status")
@@ -886,10 +1009,7 @@ serve(async (req) => {
 
       const existingOfferStatus = normalizeOfferStatus(existingOffer?.status)
       if (existingOfferStatus && existingOfferStatus !== OFFER_STATUSES.OFFERED) {
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: existingOfferStatus,
           noOp: true,
           reason: "offer_already_finalized",
@@ -907,10 +1027,7 @@ serve(async (req) => {
       }
 
       if (!tripSnapshot) {
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: "ignored",
           noOp: true,
           reason: "trip_not_found",
@@ -919,10 +1036,7 @@ serve(async (req) => {
 
       const normalizedTripStatus = String(tripSnapshot.status || "").trim().toLowerCase()
       if (normalizedTripStatus !== "pending") {
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: "ignored",
           noOp: true,
           reason: "trip_not_pending",
@@ -931,10 +1045,7 @@ serve(async (req) => {
       }
 
       if (tripSnapshot.driver_id && String(tripSnapshot.driver_id) !== String(user.id)) {
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: "ignored",
           noOp: true,
           reason: "trip_assigned_to_other_driver",
@@ -942,10 +1053,7 @@ serve(async (req) => {
       }
 
       if (!existingOffer) {
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: "ignored",
           noOp: true,
           reason: "offer_not_active",
@@ -985,20 +1093,14 @@ serve(async (req) => {
         }
 
         const latestStatus = normalizeOfferStatus(latestOffer?.status) || "ignored"
-        return jsonResponse({
-          success: true,
-          action: OFFER_ACTIONS.DECLINE,
-          tripId: actionTripId,
+        return returnDeclineResponse({
           status: latestStatus,
           noOp: true,
           reason: "offer_status_changed",
         })
       }
 
-      return jsonResponse({
-        success: true,
-        action: OFFER_ACTIONS.DECLINE,
-        tripId: actionTripId,
+      return returnDeclineResponse({
         status: OFFER_STATUSES.DECLINED,
       })
     }

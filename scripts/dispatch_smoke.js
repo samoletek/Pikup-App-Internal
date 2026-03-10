@@ -21,6 +21,7 @@ Optional:
   --requestPool=asap|scheduled|all   (default: asap)
   --tripId=<uuid>                    (default: first overlap trip)
   --accept                           (mutates data: driver A accepts target trip)
+  --acceptRace                       (mutates data: driver A/B accept target trip concurrently)
   --allowSingleDriver                (allow accept test when trip is visible only to driver A)
   --customerEmail=... --customerPassword=...
                                      (optional: seed pending trip if pool is empty)
@@ -43,6 +44,11 @@ Examples:
     --driverAEmail=a@x.com --driverAPassword=*** \\
     --driverBEmail=b@x.com --driverBPassword=*** \\
     --accept --allowSingleDriver
+
+  node scripts/dispatch_smoke.js \\
+    --driverAEmail=a@x.com --driverAPassword=*** \\
+    --driverBEmail=b@x.com --driverBPassword=*** \\
+    --acceptRace --requestPool=asap
 `.trim();
 
 const parseArgs = (argv) => {
@@ -60,6 +66,15 @@ const parseArgs = (argv) => {
         options[key] = value;
     });
     return options;
+};
+
+const createIdempotencyKey = (action, tripId, driverId) => {
+    const actionPart = String(action || 'action').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const tripPart = String(tripId || '').replace(/[^a-zA-Z0-9]+/g, '').slice(-16);
+    const driverPart = String(driverId || '').replace(/[^a-zA-Z0-9]+/g, '').slice(-12);
+    const timestampPart = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).slice(2, 10);
+    return [actionPart || 'action', tripPart || 'trip', driverPart || 'driver', timestampPart, randomPart].join('_');
 };
 
 const readNumber = (value) => {
@@ -173,54 +188,27 @@ const invokeDriverPool = async (driver, requestPool, location = null) => {
     return { requests, meta };
 };
 
-const isMissingAcceptRpc = (error) => {
-    const message = String(error?.message || '').toLowerCase();
-    const details = String(error?.details || '').toLowerCase();
-    return (
-        error?.code === 'PGRST202' ||
-        message.includes('could not find the function') ||
-        details.includes('could not find the function') ||
-        message.includes('accept_trip_request') ||
-        details.includes('accept_trip_request')
-    );
-};
-
-const acceptTripAsDriver = async (driver, tripId) => {
+const acceptTripAsDriver = async (driver, tripId, options = {}) => {
     const driverId = driver.user.id;
+    const idempotencyKey = options.idempotencyKey || createIdempotencyKey('accept', tripId, driverId);
 
     const { data: rpcRows, error: rpcError } = await driver.client.rpc('accept_trip_request', {
         p_trip_id: tripId,
         p_driver_id: driverId,
+        p_idempotency_key: idempotencyKey,
     });
 
-    if (rpcError && !isMissingAcceptRpc(rpcError)) {
+    if (rpcError) {
         throw new Error(`accept_trip_request RPC failed: ${rpcError.message || rpcError.details || rpcError}`);
     }
 
-    if (!rpcError && Array.isArray(rpcRows) && rpcRows.length > 0) {
-        return 'rpc';
-    }
-
-    const updates = {
-        status: 'accepted',
-        driver_id: driverId,
-        updated_at: new Date().toISOString(),
-    };
-
-    const { data: updatedRows, error: updateError } = await driver.client
-        .from('trips')
-        .update(updates)
-        .eq('id', tripId)
-        .eq('status', 'pending')
-        .or(`driver_id.is.null,driver_id.eq.${driverId}`)
-        .select('id,status,driver_id');
-
-    if (updateError) {
-        throw new Error(`direct accept fallback failed: ${updateError.message || updateError.details || updateError}`);
-    }
-
-    if (Array.isArray(updatedRows) && updatedRows.length > 0) {
-        return 'direct_update';
+    if (Array.isArray(rpcRows) && rpcRows.length > 0) {
+        return {
+            outcome: 'accepted',
+            path: 'rpc_rows',
+            idempotencyKey,
+            trip: rpcRows[0],
+        };
     }
 
     const { data: latestTrip, error: latestError } = await driver.client
@@ -230,10 +218,21 @@ const acceptTripAsDriver = async (driver, tripId) => {
         .maybeSingle();
 
     if (!latestError && latestTrip?.status === 'accepted' && latestTrip?.driver_id === driverId) {
-        return 'already_accepted';
+        return {
+            outcome: 'accepted',
+            path: 'rpc_refetch',
+            idempotencyKey,
+            trip: latestTrip,
+        };
     }
 
-    throw new Error('trip was not accepted (likely already taken or no RLS permission)');
+    return {
+        outcome: 'unavailable',
+        path: latestError ? 'rpc_refetch_failed' : 'rpc_no_rows',
+        idempotencyKey,
+        trip: latestTrip || null,
+        error: latestError ? latestError.message || latestError.details || String(latestError) : null,
+    };
 };
 
 const toIds = (requests) => requests.map((request) => String(request?.id || '')).filter(Boolean);
@@ -361,12 +360,18 @@ const main = async () => {
     const visibleToDriverABefore = beforeAIds.includes(targetTripId);
     const visibleToDriverBBefore = beforeBIds.includes(targetTripId);
     const strictTwoDriverMode = !args.allowSingleDriver;
+    const shouldAccept = Boolean(args.accept);
+    const shouldAcceptRace = Boolean(args.acceptRace || args['accept-race']);
 
-    if (args.accept && !visibleToDriverABefore) {
+    if (shouldAccept && shouldAcceptRace) {
+        throw new Error('Use either --accept or --acceptRace, not both.');
+    }
+
+    if ((shouldAccept || shouldAcceptRace) && !visibleToDriverABefore) {
         throw new Error(`Target trip ${targetTripId} is not visible to driver A before accept.`);
     }
 
-    if (args.accept && strictTwoDriverMode && !visibleToDriverBBefore) {
+    if ((shouldAccept || shouldAcceptRace) && strictTwoDriverMode && !visibleToDriverBBefore) {
         console.log(
             JSON.stringify(
                 {
@@ -383,13 +388,73 @@ const main = async () => {
         process.exit(3);
     }
 
-    if (!args.accept) {
-        console.log('Dry-run complete. Re-run with --accept to validate disappearance after acceptance.');
+    if (!shouldAccept && !shouldAcceptRace) {
+        console.log('Dry-run complete. Re-run with --accept or --acceptRace to validate acceptance behavior.');
         process.exit(0);
     }
 
-    const acceptPath = await acceptTripAsDriver(driverA, targetTripId);
-    console.log(`Accepted trip ${targetTripId} via ${acceptPath}`);
+    if (shouldAcceptRace) {
+        const [acceptA, acceptB] = await Promise.all([
+            acceptTripAsDriver(driverA, targetTripId, {
+                idempotencyKey: createIdempotencyKey('accept', targetTripId, driverA.user.id),
+            }),
+            acceptTripAsDriver(driverB, targetTripId, {
+                idempotencyKey: createIdempotencyKey('accept', targetTripId, driverB.user.id),
+            }),
+        ]);
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
+        const { data: finalTrip, error: finalTripError } = await driverA.client
+            .from('trips')
+            .select('id,status,driver_id,updated_at')
+            .eq('id', targetTripId)
+            .maybeSingle();
+
+        if (finalTripError) {
+            throw new Error(`Failed to read final trip state: ${finalTripError.message || finalTripError.details || finalTripError}`);
+        }
+
+        const acceptedOutcomes = [acceptA, acceptB].filter((entry) => entry.outcome === 'accepted');
+        const winnerDriverId = finalTrip?.driver_id || null;
+        const expectedWinnerIds = new Set([driverA.user.id, driverB.user.id]);
+        const pass =
+            finalTrip?.status === 'accepted' &&
+            winnerDriverId &&
+            expectedWinnerIds.has(winnerDriverId) &&
+            acceptedOutcomes.length === 1;
+
+        const raceResult = {
+            phase: 'after_accept_race',
+            targetTripId,
+            before: {
+                visibleToDriverA: visibleToDriverABefore,
+                visibleToDriverB: visibleToDriverBBefore,
+            },
+            attemptA: {
+                driverId: driverA.user.id,
+                ...acceptA,
+            },
+            attemptB: {
+                driverId: driverB.user.id,
+                ...acceptB,
+            },
+            finalTrip: finalTrip || null,
+            pass,
+        };
+
+        console.log(JSON.stringify(raceResult, null, 2));
+        if (!pass) {
+            process.exit(2);
+        }
+        process.exit(0);
+    }
+
+    const acceptResult = await acceptTripAsDriver(driverA, targetTripId);
+    if (acceptResult.outcome !== 'accepted') {
+        throw new Error(`Driver A could not accept trip ${targetTripId}. Result: ${JSON.stringify(acceptResult)}`);
+    }
+    console.log(`Accepted trip ${targetTripId} via ${acceptResult.path}`);
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
 

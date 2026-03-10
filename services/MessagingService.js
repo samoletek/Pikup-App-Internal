@@ -13,6 +13,10 @@ const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)(\?|#|$)/i;
 const VIDEO_URL_PATTERN = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
 const CONVERSATIONS_FETCH_MAX_RETRIES = 3;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const normalizeUuid = (value) => (typeof value === 'string' ? value.trim() : '');
+const isValidUuid = (value) => UUID_PATTERN.test(normalizeUuid(value));
 
 const isNetworkRequestFailure = (error) => {
     const message = String(error?.message || '').toLowerCase();
@@ -454,11 +458,20 @@ export const subscribeToConversations = (userId, userType, callback) => {
  */
 export const sendMessage = async (conversationId, senderId, senderType, content, messageType = 'text') => {
     try {
+        const normalizedConversationId = normalizeUuid(conversationId);
+        if (!isValidUuid(normalizedConversationId)) {
+            throw new Error('Cannot send message: invalid conversation id.');
+        }
+
+        if (!senderId) {
+            throw new Error('Cannot send message: missing sender id.');
+        }
+
         // Insert message
         const { data: message, error } = await supabase
             .from('messages')
             .insert({
-                conversation_id: conversationId,
+                conversation_id: normalizedConversationId,
                 sender_id: senderId,
                 content: content,
                 message_type: messageType,
@@ -481,7 +494,7 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
         const { data: conv, error: convFetchError } = await supabase
             .from('conversations')
             .select('*')
-            .eq('id', conversationId)
+            .eq('id', normalizedConversationId)
             .maybeSingle();
 
         if (convFetchError) {
@@ -508,7 +521,7 @@ export const sendMessage = async (conversationId, senderId, senderType, content,
         const { error: convUpdateError } = await supabase
             .from('conversations')
             .update(updates)
-            .eq('id', conversationId);
+            .eq('id', normalizedConversationId);
 
         if (convUpdateError) {
             console.warn('Could not update conversation message preview/unread counters:', convUpdateError);
@@ -548,10 +561,15 @@ const mapMessageRow = (msg) => ({
  */
 export const getMessages = async (conversationId) => {
     try {
+        const normalizedConversationId = normalizeUuid(conversationId);
+        if (!isValidUuid(normalizedConversationId)) {
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('messages')
             .select('*')
-            .eq('conversation_id', conversationId)
+            .eq('conversation_id', normalizedConversationId)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -570,10 +588,15 @@ export const getMessages = async (conversationId) => {
  */
 export const getRecentMessages = async (conversationId, limit = PAGE_SIZE) => {
     try {
+        const normalizedConversationId = normalizeUuid(conversationId);
+        if (!isValidUuid(normalizedConversationId)) {
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('messages')
             .select('*')
-            .eq('conversation_id', conversationId)
+            .eq('conversation_id', normalizedConversationId)
             .order('created_at', { ascending: false })
             .limit(limit);
 
@@ -596,10 +619,15 @@ export const getRecentMessages = async (conversationId, limit = PAGE_SIZE) => {
  */
 export const loadOlderMessages = async (conversationId, beforeTimestamp, limit = PAGE_SIZE) => {
     try {
+        const normalizedConversationId = normalizeUuid(conversationId);
+        if (!isValidUuid(normalizedConversationId) || !beforeTimestamp) {
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('messages')
             .select('*')
-            .eq('conversation_id', conversationId)
+            .eq('conversation_id', normalizedConversationId)
             .lt('created_at', beforeTimestamp)
             .order('created_at', { ascending: false })
             .limit(limit);
@@ -622,19 +650,27 @@ export const loadOlderMessages = async (conversationId, beforeTimestamp, limit =
  * @returns {Function} Cleanup function to unsubscribe
  */
 export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage) => {
+    const normalizedConversationId = normalizeUuid(conversationId);
+    if (!isValidUuid(normalizedConversationId)) {
+        if (typeof onInitialLoad === 'function') {
+            onInitialLoad([]);
+        }
+        return () => {};
+    }
+
     // Support legacy single-callback usage: subscribeToMessages(id, callback)
     if (typeof onNewMessage !== 'function') {
         const legacyCallback = onInitialLoad;
-        getRecentMessages(conversationId).then(legacyCallback);
+        getRecentMessages(normalizedConversationId).then(legacyCallback);
 
-        const channel = supabase.channel(`public:messages:${conversationId}`)
+        const channel = supabase.channel(`public:messages:${normalizedConversationId}`)
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'messages',
-                filter: `conversation_id=eq.${conversationId}`
+                filter: `conversation_id=eq.${normalizedConversationId}`
             }, () => {
-                getRecentMessages(conversationId).then(legacyCallback);
+                getRecentMessages(normalizedConversationId).then(legacyCallback);
             })
             .subscribe();
 
@@ -642,14 +678,14 @@ export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage)
     }
 
     // Paginated usage
-    getRecentMessages(conversationId).then(onInitialLoad);
+    getRecentMessages(normalizedConversationId).then(onInitialLoad);
 
-    const channel = supabase.channel(`public:messages:${conversationId}`)
+    const channel = supabase.channel(`public:messages:${normalizedConversationId}`)
         .on('postgres_changes', {
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `conversation_id=eq.${conversationId}`
+            filter: `conversation_id=eq.${normalizedConversationId}`
         }, (payload) => {
             if (payload?.new) {
                 onNewMessage(mapMessageRow(payload.new));
@@ -669,13 +705,18 @@ export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage)
  */
 export const markMessageAsRead = async (conversationId, userType) => {
     try {
+        const normalizedConversationId = normalizeUuid(conversationId);
+        if (!isValidUuid(normalizedConversationId)) {
+            return;
+        }
+
         const updates = {};
         if (userType === 'customer') {
             updates.unread_by_customer = 0;
         } else {
             updates.unread_by_driver = 0;
         }
-        await supabase.from('conversations').update(updates).eq('id', conversationId);
+        await supabase.from('conversations').update(updates).eq('id', normalizedConversationId);
     } catch (error) {
         console.error('Error marking messages as read:', error);
     }
