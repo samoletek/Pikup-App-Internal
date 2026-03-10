@@ -49,6 +49,7 @@ export default function MessageScreen({ navigation, route }) {
   } = useAuth();
 
   const { conversationId, driverName, customerName, driverInfo } = route.params || {};
+  const hasConversationId = Boolean(conversationId);
   const title = driverName || customerName || driverInfo?.name || "Chat";
   const currentUserId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
@@ -67,6 +68,7 @@ export default function MessageScreen({ navigation, route }) {
   const [mediaNaturalSizeById, setMediaNaturalSizeById] = useState({});
   const messageListRef = useRef(null);
   const mediaSizeProbeInFlightRef = useRef(new Set());
+  const missingConversationAlertShownRef = useRef(false);
   const isKeyboardVisible = keyboardHeight > 0;
   const mediaMaxWidth = Math.round(Math.min(contentMaxWidth * 0.7, width * 0.72));
   const mediaMaxHeight = Math.round(Math.min(contentMaxWidth * 0.78, width * 0.8));
@@ -224,6 +226,19 @@ export default function MessageScreen({ navigation, route }) {
   }, [conversationId, currentUserId, subscribeToMessages, markMessageAsRead, userType]);
 
   useEffect(() => {
+    if (hasConversationId || missingConversationAlertShownRef.current) {
+      return;
+    }
+
+    missingConversationAlertShownRef.current = true;
+    Alert.alert(
+      "Chat unavailable",
+      "Could not open this chat. Please go back and try again.",
+      [{ text: "OK" }]
+    );
+  }, [hasConversationId]);
+
+  useEffect(() => {
     setMediaNaturalSizeById((prev) => {
       const activeIds = new Set(messages.map((message) => String(message.id)));
       let hasRemovedItems = false;
@@ -263,7 +278,7 @@ export default function MessageScreen({ navigation, route }) {
   // No initial scroll logic needed — inverted FlatList shows latest messages first
 
   const handleLoadOlder = useCallback(async () => {
-    if (loadingOlder || !hasMore || messages.length === 0) return;
+    if (!conversationId || loadingOlder || !hasMore || messages.length === 0) return;
 
     const oldestMessage = messages[0];
     if (!oldestMessage?.timestamp) return;
@@ -311,6 +326,11 @@ export default function MessageScreen({ navigation, route }) {
   }, [scrollToLatest]);
 
   const handleSend = async () => {
+    if (!conversationId) {
+      Alert.alert("Chat unavailable", "Conversation was not initialized.");
+      return;
+    }
+
     if (!messageText.trim() || sending || !currentUserId) {
       return;
     }
@@ -355,6 +375,11 @@ export default function MessageScreen({ navigation, route }) {
   };
 
   const handleAttachPress = () => {
+    if (!conversationId) {
+      Alert.alert("Chat unavailable", "Conversation was not initialized.");
+      return;
+    }
+
     Alert.alert(
       "Attach Photo",
       "Choose an option",
@@ -647,6 +672,12 @@ export default function MessageScreen({ navigation, route }) {
       />
 
       <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+        {!hasConversationId && (
+          <View style={[styles.systemBox, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
+            <Text style={styles.systemText}>Conversation is unavailable for this trip.</Text>
+          </View>
+        )}
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading messages...</Text>
@@ -686,9 +717,12 @@ export default function MessageScreen({ navigation, route }) {
         >
           {/* Paperclip/Attach Button */}
           <TouchableOpacity
-            style={[styles.attachButton, uploadingImage && styles.attachButtonDisabled]}
+            style={[
+              styles.attachButton,
+              (uploadingImage || !hasConversationId) && styles.attachButtonDisabled,
+            ]}
             onPress={handleAttachPress}
-            disabled={uploadingImage}
+            disabled={uploadingImage || !hasConversationId}
           >
             {uploadingImage ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -711,12 +745,13 @@ export default function MessageScreen({ navigation, route }) {
               multiline
               textAlignVertical="center"
               scrollEnabled={true}
+              editable={hasConversationId}
             />
             {messageText.trim().length > 0 && (
               <TouchableOpacity
                 onPress={handleSend}
-                style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
-                disabled={sending}
+                style={[styles.sendBtn, (sending || !hasConversationId) && styles.sendBtnDisabled]}
+                disabled={sending || !hasConversationId}
               >
                 <Ionicons
                   name={sending ? "hourglass-outline" : "arrow-up"}

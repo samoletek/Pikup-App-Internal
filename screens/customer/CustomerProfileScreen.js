@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -57,6 +58,35 @@ export default function CustomerProfileScreen({ navigation }) {
   useEffect(() => {
     loadCustomerProfile();
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`customer:profile:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "customers",
+          filter: `id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const nextProfile = payload?.new;
+          if (!nextProfile) return;
+
+          setCustomerProfile((prev) => ({ ...(prev || {}), ...nextProfile }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     loadAccountStats();

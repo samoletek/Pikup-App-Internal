@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
+import { supabase } from '../config/supabase';
 import { colors } from '../styles/theme';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -23,6 +24,62 @@ export default function DeliveryPhotosModal({
   initialTab = 'pickup'
 }) {
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  const resolvePhotoUri = (photo) => {
+    if (!photo) return null;
+
+    if (typeof photo === 'string') {
+      const raw = photo.trim();
+      if (!raw) return null;
+
+      if (raw.startsWith('{') || raw.startsWith('[')) {
+        try {
+          return resolvePhotoUri(JSON.parse(raw));
+        } catch (_) {
+          return null;
+        }
+      }
+
+      if (/^(https?:\/\/|file:\/\/|content:\/\/|ph:\/\/|asset:\/\/|data:image\/)/i.test(raw)) {
+        return raw;
+      }
+
+      const normalizedPath = raw.replace(/^\/+/, '').replace(/^trip_photos\//, '');
+      const { data } = supabase.storage.from('trip_photos').getPublicUrl(normalizedPath);
+      return data?.publicUrl || null;
+    }
+
+    if (Array.isArray(photo)) {
+      return resolvePhotoUri(photo[0]);
+    }
+
+    if (typeof photo === 'object') {
+      const candidates = [
+        photo.uri,
+        photo.url,
+        photo.photo_url,
+        photo.publicUrl,
+        photo.public_url,
+        photo.imageUrl,
+        photo.image_url,
+        photo.secure_url,
+        photo.path,
+        photo.storagePath,
+        photo.storage_path,
+        photo.filePath,
+        photo.file_path,
+        photo.source?.uri,
+        photo.asset?.uri,
+      ];
+
+      for (const candidate of candidates) {
+        const resolved = resolvePhotoUri(candidate);
+        if (resolved) return resolved;
+      }
+    }
+
+    return null;
+  };
 
   // Update active tab when visible or initialTab changes
   useEffect(() => {
@@ -49,6 +106,14 @@ export default function DeliveryPhotosModal({
       return renderNoPhotosMessage();
     }
 
+    const resolvedPhotos = photos
+      .map((photo) => resolvePhotoUri(photo))
+      .filter(Boolean);
+
+    if (resolvedPhotos.length === 0) {
+      return renderNoPhotosMessage();
+    }
+
     return (
       <View style={styles.photosWrapper}>
         <ScrollView
@@ -58,15 +123,15 @@ export default function DeliveryPhotosModal({
           style={styles.photoScroll}
           contentContainerStyle={styles.photoScrollContent}
         >
-          {photos.map((photo, index) => (
+          {resolvedPhotos.map((photoUri, index) => (
             <View key={index} style={styles.photoContainer}>
               <Image
-                source={{ uri: photo.uri || photo }}
+                source={{ uri: photoUri }}
                 style={styles.photo}
                 resizeMode="cover"
               />
               <View style={styles.photoOverlay}>
-                <Text style={styles.photoIndex}>{index + 1} / {photos.length}</Text>
+                <Text style={styles.photoIndex}>{index + 1} / {resolvedPhotos.length}</Text>
               </View>
             </View>
           ))}
@@ -89,10 +154,9 @@ export default function DeliveryPhotosModal({
       visible={visible}
       onClose={onClose}
       height={SCREEN_HEIGHT * 0.85}
-      backgroundColor={colors.background.secondary}
+      backgroundColor={colors.background.primary}
       renderHeader={renderHeader}
       showHandle={true}
-      handleStyle={{ backgroundColor: colors.border.strong }}
     >
       {() => (
         <View style={styles.content}>
@@ -224,7 +288,7 @@ const styles = StyleSheet.create({
   },
   mainContainer: {
     flex: 1,
-    backgroundColor: colors.black, // Black background for photos
+    backgroundColor: colors.background.primary,
   },
   photosWrapper: {
     flex: 1,
@@ -268,7 +332,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.primary,
   },
   emptyIconContainer: {
     width: 80,

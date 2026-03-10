@@ -24,17 +24,21 @@ import {
   typography,
 } from '../../styles/theme';
 
+const MAX_VERIFICATION_PHOTOS = 10;
+
 export default function PickupConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { request, driverLocation } = route.params;
-  const { confirmPickup, startDelivery } = useAuth();
+  const { confirmPickup, startDelivery, createConversation, getRequestById, currentUser } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
   const scrollViewRef = useRef(null);
 
@@ -60,32 +64,73 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     return true;
   };
 
-  const takePhoto = async () => {
+  const showMaxPhotosAlert = () => {
+    Alert.alert(
+      'Photo Limit Reached',
+      `You can add up to ${MAX_VERIFICATION_PHOTOS} verification photos.`
+    );
+  };
+
+  const mapAssetsToPhotos = (assets = [], startIndex = 0) => {
+    const timestamp = new Date().toISOString();
+    return (assets || [])
+      .filter((asset) => asset?.uri)
+      .map((asset, index) => ({
+        uri: asset.uri,
+        id: `${Date.now()}-${startIndex + index}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp,
+      }));
+  };
+
+  const appendPhotos = (newPhotos = []) => {
+    if (!Array.isArray(newPhotos) || newPhotos.length === 0) return;
+    setPhotos(prev => [...prev, ...newPhotos].slice(0, MAX_VERIFICATION_PHOTOS));
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  const takePhotoBatch = async () => {
     try {
+      if (photos.length >= MAX_VERIFICATION_PHOTOS) {
+        showMaxPhotosAlert();
+        return;
+      }
+
       const hasPermission = await requestPermissions();
       if (!hasPermission) return;
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        exif: false,
-      });
+      let remaining = MAX_VERIFICATION_PHOTOS - photos.length;
+      const capturedPhotos = [];
 
-      if (!result.canceled && result.assets[0]) {
-        const newPhoto = {
-          uri: result.assets[0].uri,
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-        };
+      while (remaining > 0) {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+          exif: false,
+        });
 
-        setPhotos(prev => [...prev, newPhoto]);
+        if (result.canceled || !result.assets?.length) {
+          break;
+        }
 
-        // Scroll to the end to show the new photo
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        const mappedPhotos = mapAssetsToPhotos(result.assets, capturedPhotos.length).slice(0, remaining);
+        if (mappedPhotos.length === 0) {
+          break;
+        }
+
+        capturedPhotos.push(...mappedPhotos);
+        remaining -= mappedPhotos.length;
+      }
+
+      if (capturedPhotos.length > 0) {
+        appendPhotos(capturedPhotos);
+      }
+
+      if (remaining <= 0) {
+        showMaxPhotosAlert();
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -95,6 +140,11 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 
   const selectFromGallery = async () => {
     try {
+      if (photos.length >= MAX_VERIFICATION_PHOTOS) {
+        showMaxPhotosAlert();
+        return;
+      }
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant access to your photo library.');
@@ -103,24 +153,21 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsMultipleSelection: true,
+        selectionLimit: MAX_VERIFICATION_PHOTOS - photos.length,
+        allowsEditing: false,
         quality: 0.8,
         exif: false,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const newPhoto = {
-          uri: result.assets[0].uri,
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-        };
+      if (!result.canceled && result.assets?.length) {
+        const remaining = MAX_VERIFICATION_PHOTOS - photos.length;
+        const selectedPhotos = mapAssetsToPhotos(result.assets).slice(0, remaining);
+        appendPhotos(selectedPhotos);
 
-        setPhotos(prev => [...prev, newPhoto]);
-
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        if (photos.length + selectedPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+          showMaxPhotosAlert();
+        }
       }
     } catch (error) {
       console.error('Error selecting photo:', error);
@@ -146,13 +193,20 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   };
 
   const showPhotoOptions = () => {
+    if (photos.length >= MAX_VERIFICATION_PHOTOS) {
+      showMaxPhotosAlert();
+      return;
+    }
+
+    const remaining = MAX_VERIFICATION_PHOTOS - photos.length;
+
     Alert.alert(
       'Add Photo',
-      'Choose how you want to add a photo',
+      `Add up to ${remaining} photos`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: takePhoto },
-        { text: 'Choose from Gallery', onPress: selectFromGallery }
+        { text: 'Take Photos (Camera)', onPress: takePhotoBatch },
+        { text: `Choose from Gallery (${remaining})`, onPress: selectFromGallery }
       ]
     );
   };
@@ -218,6 +272,84 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   };
 
   const customerName = request?.customerEmail?.split('@')[0] || 'Customer';
+  const isMaxPhotosReached = photos.length >= MAX_VERIFICATION_PHOTOS;
+
+  const openChat = async () => {
+    if (isCreatingChat) return;
+
+    setIsCreatingChat(true);
+    try {
+      const req = request || {};
+      const requestId = req.id || req.requestId || req.originalData?.id;
+      let customerId =
+        req.customerId ||
+        req.customer_id ||
+        req.originalData?.customerId ||
+        req.originalData?.customer_id ||
+        req.customerUid ||
+        req.customer?.uid ||
+        req.customer?.id ||
+        null;
+      let customerEmail =
+        req.customerEmail ||
+        req.customer_email ||
+        req.originalData?.customerEmail ||
+        req.originalData?.customer_email ||
+        req.customer?.email ||
+        '';
+
+      if (requestId && !customerId && typeof getRequestById === 'function') {
+        try {
+          const latestRequest = await getRequestById(requestId);
+          customerId =
+            latestRequest?.customerId ||
+            latestRequest?.customer_id ||
+            customerId;
+          customerEmail =
+            latestRequest?.customerEmail ||
+            latestRequest?.customer_email ||
+            customerEmail;
+        } catch (fetchError) {
+          console.warn('Failed to fetch latest request before opening chat:', fetchError);
+        }
+      }
+
+      const customerDisplayName =
+        req.customerName ||
+        req.customer?.name ||
+        req.customer?.displayName ||
+        (customerEmail ? customerEmail.split('@')[0] : 'Customer');
+
+      if (!requestId || !currentUserId) {
+        Alert.alert('Error', 'Could not open chat right now. Please try again.');
+        return;
+      }
+
+      const conversationId = await createConversation(
+        requestId,
+        customerId || null,
+        currentUserId,
+        customerDisplayName,
+        req.assignedDriverName || ''
+      );
+
+      if (!conversationId) {
+        Alert.alert('Error', 'Could not open chat right now. Please try again.');
+        return;
+      }
+
+      navigation.navigate('MessageScreen', {
+        conversationId,
+        requestId,
+        driverName: customerDisplayName,
+      });
+    } catch (error) {
+      console.error('openChat error', error);
+      Alert.alert('Error', 'Could not open chat right now. Please try again.');
+    } finally {
+      setIsCreatingChat(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -259,14 +391,15 @@ export default function PickupConfirmationScreen({ route, navigation }) {
               )}
               <Text style={styles.customerName}>{customerName}</Text>
               <TouchableOpacity
-                style={styles.chatButton}
-                onPress={() => navigation.navigate('MessageScreen', {
-                  recipientId: request?.customerId,
-                  recipientName: customerName,
-                  tripId: request?.id,
-                })}
+                style={[styles.chatButton, isCreatingChat && styles.chatButtonDisabled]}
+                onPress={openChat}
+                disabled={isCreatingChat}
               >
-                <Ionicons name="chatbubble-ellipses" size={20} color={colors.white} />
+                {isCreatingChat ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Ionicons name="chatbubble-ellipses" size={20} color={colors.white} />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -298,7 +431,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           <View style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <Text style={styles.cardTitle}>Pickup Verification Photos</Text>
-              <Text style={styles.photoCount}>{photos.length}/10</Text>
+              <Text style={styles.photoCount}>{photos.length}/{MAX_VERIFICATION_PHOTOS}</Text>
             </View>
             <Text style={styles.photoSubtitle}>
               Take photos to verify the items you're picking up
@@ -311,12 +444,20 @@ export default function PickupConfirmationScreen({ route, navigation }) {
               style={styles.photoScrollView}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoContainer}
-              clipsToBounds={false}
             >
               {/* Add Photo Button */}
-              <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.addPhotoButton,
+                  isMaxPhotosReached && styles.addPhotoButtonDisabled,
+                ]}
+                onPress={showPhotoOptions}
+                disabled={isMaxPhotosReached}
+              >
                 <Ionicons name="camera" size={32} color={colors.primary} />
-                <Text style={styles.addPhotoText}>Add Photo</Text>
+                <Text style={styles.addPhotoText}>
+                  {isMaxPhotosReached ? 'Max Reached' : 'Add Photo'}
+                </Text>
               </TouchableOpacity>
 
               {/* Photo Items */}
@@ -473,6 +614,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  chatButtonDisabled: {
+    opacity: 0.7,
+  },
   detailsCard: {
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.md,
@@ -523,11 +667,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   photoScrollView: {
-    marginHorizontal: -spacing.base,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   photoContainer: {
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: 0,
     paddingTop: 8,
     gap: spacing.md,
   },
@@ -541,6 +684,9 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  addPhotoButtonDisabled: {
+    opacity: 0.5,
   },
   addPhotoText: {
     color: colors.primary,
@@ -560,8 +706,8 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 4,
+    right: 4,
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.circle,
     zIndex: 10,

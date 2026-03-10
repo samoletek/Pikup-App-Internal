@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -63,6 +64,66 @@ export default function DriverProfileScreen({ navigation }) {
   useEffect(() => {
     loadDriverProfile();
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`driver:profile:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "drivers",
+          filter: `id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const nextProfile = payload?.new;
+          if (!nextProfile) return;
+
+          const metadata =
+            nextProfile?.metadata &&
+            typeof nextProfile.metadata === "object" &&
+            !Array.isArray(nextProfile.metadata)
+              ? nextProfile.metadata
+              : {};
+
+          setDriverProfile((prev) => ({
+            ...(prev || {}),
+            ...nextProfile,
+            metadata,
+            rating_count: Number.isFinite(Number(nextProfile?.rating_count))
+              ? Number(nextProfile.rating_count)
+              : Number(prev?.rating_count || 0),
+          }));
+
+          setOnboardingStatus({
+            connectAccountCreated: !!(
+              nextProfile?.stripe_account_id || metadata?.connectAccountId
+            ),
+            onboardingComplete: Boolean(
+              nextProfile?.onboarding_complete ??
+              metadata?.onboardingComplete ??
+              false
+            ),
+            documentsVerified: Boolean(metadata?.documentsVerified ?? false),
+            canReceivePayments: Boolean(
+              nextProfile?.can_receive_payments ??
+              metadata?.canReceivePayments ??
+              false
+            ),
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
 
   const loadDriverProfile = async () => {
     try {

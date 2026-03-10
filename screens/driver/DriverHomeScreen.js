@@ -35,7 +35,7 @@ import {
   zIndex as zLayers,
 } from '../../styles/theme';
 
-const DEFAULT_REQUEST_TIMER_SECONDS = 60;
+const DEFAULT_REQUEST_TIMER_SECONDS = 180;
 const REQUEST_POOLS = Object.freeze({
   ASAP: 'asap',
   SCHEDULED: 'scheduled',
