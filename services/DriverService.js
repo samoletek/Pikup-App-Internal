@@ -5,7 +5,7 @@ import { supabase } from '../config/supabase';
 import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
-import { getPlatformFees } from './PricingService';
+import { deriveDriverPayoutAmount, getPlatformFees } from './PricingService';
 
 // Payment service URL (imported from environment or config)
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
@@ -179,11 +179,30 @@ const fallbackHeartbeat = async (driverId, location) => {
  * @param {number} totalAmount - Total trip amount
  * @returns {Promise<number>} Driver earnings
  */
-export const calculateDriverEarnings = async (totalAmount) => {
+export const calculateDriverEarnings = async (totalAmount, pricing = null) => {
     const platformFees = await getPlatformFees();
-    const driverPercentage = platformFees.driverPayoutPercent || 0.75;
-    const calculatedEarnings = totalAmount * driverPercentage;
-    return Math.round(calculatedEarnings * 100) / 100;
+    const numericAmount = Number(totalAmount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        return 0;
+    }
+
+    const pricingSource =
+        pricing && typeof pricing === 'object'
+            ? pricing
+            : {};
+
+    const pricingForPayout = {
+        ...pricingSource,
+        customerTotal: numericAmount,
+        total: numericAmount,
+        driverGrossFare: Number(pricingSource?.driverGrossFare ?? numericAmount),
+        mandatoryInsurance: Number(pricingSource?.mandatoryInsurance ?? platformFees?.mandatoryInsurance ?? 12.99),
+        taxRate: Number(pricingSource?.taxRate ?? platformFees?.taxRate ?? platformFees?.serviceFeePercent ?? 0.25),
+        serviceFeePercent: Number(pricingSource?.serviceFeePercent ?? platformFees?.serviceFeePercent ?? 0.25),
+        driverPayoutPercent: Number(pricingSource?.driverPayoutPercent ?? platformFees?.driverPayoutPercent ?? 0.75),
+    };
+
+    return deriveDriverPayoutAmount(pricingForPayout, numericAmount, pricingForPayout.driverPayoutPercent);
 };
 
 /**
@@ -210,13 +229,31 @@ export const getDriverTrips = async (driverId) => {
         if (error) throw error;
 
         console.log(`Found ${data.length} completed trips for driver`);
+        const platformFees = await getPlatformFees();
+        const driverPayoutPercent = Number(platformFees?.driverPayoutPercent || 0.75);
 
-        return Promise.all(data.map(async (trip) => {
+        return data.map((trip) => {
             const mappedTrip = mapTripFromDb(trip);
-            const price = parseFloat(trip.price || 0);
-            const driverEarnings = await calculateDriverEarnings(price);
-            return { ...mappedTrip, driverEarnings, pricing: { total: price } };
-        }));
+            const customerTotal = Number(
+                (mappedTrip?.pricing?.customerTotal ?? mappedTrip?.pricing?.total ?? trip.price) || 0
+            );
+            const driverEarnings = deriveDriverPayoutAmount(
+                mappedTrip?.pricing || {},
+                customerTotal,
+                driverPayoutPercent
+            );
+            return {
+                ...mappedTrip,
+                driverEarnings,
+                pricing: {
+                    ...(mappedTrip?.pricing || {}),
+                    total: customerTotal,
+                    customerTotal,
+                    driverGrossFare: customerTotal,
+                    driverPayout: driverEarnings,
+                },
+            };
+        });
 
     } catch (error) {
         console.error('Error getting driver trips:', error);
@@ -326,7 +363,11 @@ export const getDriverStats = async (driverId) => {
 export const updateDriverEarnings = async (driverId, tripData) => {
     try {
         console.log('Updating driver earnings for:', driverId);
-        const tripEarnings = tripData.driverEarnings || await calculateDriverEarnings(tripData.pricing?.total || 0);
+        const pricing = tripData?.pricing || {};
+        const customerTotal = Number((pricing.customerTotal ?? pricing.total) || 0);
+        const tripEarnings = Number.isFinite(Number(tripData?.driverEarnings))
+            ? Number(tripData.driverEarnings)
+            : deriveDriverPayoutAmount(pricing, customerTotal);
 
         // Fetch current profile
         const { data: profile } = await supabase

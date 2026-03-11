@@ -16,6 +16,7 @@ import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
 import RecentTripsModal from "../../components/RecentTripsModal";
+import { deriveDriverPayoutAmount } from "../../services/PricingService";
 import {
   borderRadius,
   colors,
@@ -25,6 +26,15 @@ import {
 
 const HEADER_ROW_HEIGHT = 56;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
+const resolveTripPayoutAmount = (trip) => {
+  const explicitEarnings = Number(trip?.driverEarnings);
+  if (Number.isFinite(explicitEarnings) && explicitEarnings > 0) {
+    return explicitEarnings;
+  }
+
+  const customerTotal = Number((trip?.pricing?.customerTotal ?? trip?.pricing?.total) || 0);
+  return deriveDriverPayoutAmount(trip?.pricing || {}, customerTotal);
+};
 
 export default function DriverEarningsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -186,9 +196,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
         const tripDate = new Date(trip.completedAt || trip.timestamp);
         const weekIndex = Math.min(Math.floor((tripDate.getDate() - 1) / 7), 4);
         weekData[weekIndex].trips += 1;
-        weekData[weekIndex].earnings += parseFloat(
-          trip.driverEarnings || trip.pricing?.total * 0.7 || 0
-        );
+        weekData[weekIndex].earnings += resolveTripPayoutAmount(trip);
       });
 
       return weekData.filter((_, i) => {
@@ -213,9 +221,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
 
       if (dayIndex >= 0 && dayIndex < 7) {
         weekData[dayIndex].trips += 1;
-        weekData[dayIndex].earnings += parseFloat(
-          trip.driverEarnings || trip.pricing?.total * 0.7 || 0
-        );
+        weekData[dayIndex].earnings += resolveTripPayoutAmount(trip);
       }
     });
 
@@ -247,7 +253,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
         time: formatTripTime(trip.completedAt || trip.timestamp),
         pickup: trip.pickupAddress || trip.pickup?.address || "Pickup Location",
         dropoff: trip.dropoffAddress || trip.dropoff?.address || "Dropoff Location",
-        amount: Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0),
+        amount: resolveTripPayoutAmount(trip),
         distance: trip.distance || "0 mi",
         duration: trip.duration || "0 min",
       }));

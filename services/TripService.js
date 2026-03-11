@@ -12,6 +12,7 @@ import {
     mergeDriverPreferences,
     resolveDispatchRequirements,
 } from './DispatchMatchingService';
+import { deriveDriverPayoutAmount } from './PricingService';
 
 // Payment service URL
 const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
@@ -188,6 +189,8 @@ const toTimestampOrInfinity = (value) => {
     const parsed = new Date(value).getTime();
     return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 };
+const formatMoney = (value) => `$${Number(value || 0).toFixed(2)}`;
+const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 const getRequestDistanceLimitMiles = (requestPool, scheduleType) => {
     if (requestPool === REQUEST_POOLS.ASAP || requestPool === REQUEST_POOLS.SCHEDULED) {
@@ -525,7 +528,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
                 details: requestData.dropoffDetails || {},
             },
             vehicle_type: requestData.vehicle?.type || 'Standard',
-            price: parseFloat(requestData.pricing?.total || 0),
+            price: parseFloat((requestData.pricing?.customerTotal ?? requestData.pricing?.total) || 0),
             distance_miles: parseFloat(requestData.pricing?.distance || 0),
             items: requestData.items || [],
             scheduled_time: requestData.scheduledTime || null,
@@ -769,10 +772,22 @@ export const getAvailableRequests = async (currentUser, options = {}) => {
         return sortedTrips
             .map((trip) => {
                 const customer = customerMap[trip.customerId] || {};
+                const pricing = trip.pricing || {};
+                const customerTotal = Number((pricing.customerTotal ?? pricing.total) || 0);
+                const driverPayoutAmount = deriveDriverPayoutAmount(pricing, customerTotal);
+                const driverPayoutLabel = formatMoney(driverPayoutAmount);
                 return {
                     id: trip.id,
-                    price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
-                    pricing: trip.pricing || {},
+                    price: driverPayoutLabel,
+                    driverPayout: driverPayoutLabel,
+                    customerPrice: formatMoney(customerTotal),
+                    pricing: {
+                        ...pricing,
+                        total: round2(customerTotal),
+                        customerTotal: round2(customerTotal),
+                        driverGrossFare: round2(customerTotal),
+                        driverPayout: round2(driverPayoutAmount),
+                    },
                     type: 'Moves',
                     vehicle: { type: trip.vehicleType || 'Standard' },
                     pickup: {
@@ -1528,7 +1543,9 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
 
 export const getCancellationInfo = (orderData) => {
     const status = normalizeTripStatus(orderData.status);
-    const orderTotal = orderData.pricing?.total || 0;
+    const orderTotal = Number(
+        (orderData?.pricing?.customerTotal ?? orderData?.pricing?.total ?? orderData?.price) || 0
+    );
 
     switch (status) {
         case TRIP_STATUS.PENDING:

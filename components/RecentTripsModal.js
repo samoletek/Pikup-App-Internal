@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
 import { TRIP_STATUS } from '../constants/tripStatus';
+import { deriveDriverPayoutAmount } from '../services/PricingService';
 import {
   borderRadius,
   colors,
@@ -67,7 +68,11 @@ const TripItem = ({ trip }) => {
   const timestamp = trip.completedAt || trip.createdAt || trip.timestamp;
   const pickup = trip.pickupAddress || trip.pickup?.address || 'Pickup';
   const dropoff = trip.dropoffAddress || trip.dropoff?.address || 'Dropoff';
-  const amount = Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0);
+  const explicitEarnings = Number(trip.driverEarnings);
+  const customerTotal = Number((trip?.pricing?.customerTotal ?? trip?.pricing?.total) || 0);
+  const amount = Number.isFinite(explicitEarnings) && explicitEarnings > 0
+    ? explicitEarnings
+    : deriveDriverPayoutAmount(trip?.pricing || {}, customerTotal);
   const status = trip.status;
 
   return (

@@ -8,7 +8,12 @@ import LocationDetailsStep from '../order/LocationDetailsStep';
 import { styles, SCREEN_WIDTH, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 import { usePayment } from '../../contexts/PaymentContext';
-import { calculatePrice, getVehicleRates } from '../../services/PricingService';
+import {
+    applyLaborAdjustment,
+    calculatePrice,
+    deriveDriverPayoutAmount,
+    getVehicleRates
+} from '../../services/PricingService';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { recommendVehicleForItems } from '../../services/AIService';
 import RedkikService from '../../services/RedkikService';
@@ -24,6 +29,7 @@ import ReviewStep from './steps/ReviewStep';
 // ============================================
 const RECENT_ADDRESSES_KEY = '@pikup_recent_addresses';
 const MAX_RECENT_ADDRESSES = 5;
+const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 const STEPS = [
     { id: 1, title: 'Where to?' },
@@ -727,27 +733,31 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             // Apply labor adjustment if user changed the slider in ReviewStep
             let basePricing = rawPricing;
             if (laborAdjustment !== null && rawPricing) {
-                const bufferMinutes = rawPricing.laborBufferMinutes || 0;
-                const billable = Math.max(0, laborAdjustment - bufferMinutes);
-                const newLaborFee = Math.round(billable * (rawPricing.laborPerMin || 0) * 100) / 100;
-                const laborDiff = newLaborFee - (rawPricing.laborFee || 0);
-                basePricing = {
-                    ...rawPricing,
-                    laborFee: newLaborFee,
-                    laborMinutes: laborAdjustment,
-                    laborBillableMinutes: billable,
-                    total: Math.round((rawPricing.total + laborDiff) * 100) / 100,
-                };
+                basePricing = applyLaborAdjustment(rawPricing, laborAdjustment);
             }
 
             // Override insurance premium with real Redkik quote when available
             let finalPricing = basePricing;
             if (activeInsuranceQuote?.premium > 0 && basePricing?.mandatoryInsurance > 0) {
                 const pricingDiff = activeInsuranceQuote.premium - (basePricing.mandatoryInsurance || 0);
-                finalPricing = {
+                const nextCustomerTotal = round2(
+                    (basePricing.customerTotal ?? basePricing.total ?? 0) + pricingDiff
+                );
+                const pricingWithInsurance = {
                     ...basePricing,
                     mandatoryInsurance: activeInsuranceQuote.premium,
-                    total: Math.round((basePricing.total + pricingDiff) * 100) / 100,
+                    insuranceApplied: activeInsuranceQuote.premium > 0,
+                    total: nextCustomerTotal,
+                    customerTotal: nextCustomerTotal,
+                    customerPrice: nextCustomerTotal,
+                    driverGrossFare: nextCustomerTotal,
+                };
+                finalPricing = {
+                    ...pricingWithInsurance,
+                    driverPayout: deriveDriverPayoutAmount(
+                        { ...pricingWithInsurance, driverPayout: undefined },
+                        nextCustomerTotal
+                    ),
                 };
             }
 

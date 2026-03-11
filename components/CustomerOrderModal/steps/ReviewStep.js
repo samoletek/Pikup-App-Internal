@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles';
 import { colors, typography, spacing, borderRadius, sizing, hitSlopDefault } from '../../../styles/theme';
 import PaymentMethodsScreen from '../../../screens/customer/PaymentMethodsScreen';
-import { estimateLaborMinutes } from '../../../services/PricingService';
+import { applyLaborAdjustment, estimateLaborMinutes } from '../../../services/PricingService';
 
 const SLIDER_VALUE_MIN_WIDTH = 80;
 const BOTTOM_SPACER_HEIGHT = 100;
@@ -72,19 +72,7 @@ const ReviewStep = ({
 
     const adjustedPricing = useMemo(() => {
         if (!pricing || !laborSliderConfig || laborAdjustment === null) return pricing;
-
-        const bufferMinutes = laborSliderConfig.bufferMinutes;
-        const billable = Math.max(0, laborAdjustment - bufferMinutes);
-        const newLaborFee = Math.round(billable * (pricing.laborPerMin || 0) * 100) / 100;
-        const laborDiff = newLaborFee - (pricing.laborFee || 0);
-
-        return {
-            ...pricing,
-            laborFee: newLaborFee,
-            laborMinutes: laborAdjustment,
-            laborBillableMinutes: billable,
-            total: Math.round((pricing.total + laborDiff) * 100) / 100,
-        };
+        return applyLaborAdjustment(pricing, laborAdjustment);
     }, [pricing, laborSliderConfig, laborAdjustment]);
 
     const handleLaborStep = useCallback((direction) => {
@@ -341,8 +329,16 @@ const ReviewStep = ({
                             {insuranceLoading
                                 ? '...'
                                 : `$${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
-                                    ? (Math.round((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) * 100) / 100).toFixed(2)
-                                    : displayPricing?.total?.toFixed(2) || '0.00'
+                                    ? (
+                                        Math.round(
+                                            (
+                                                (displayPricing.customerTotal ?? displayPricing.total ?? 0) -
+                                                displayPricing.mandatoryInsurance +
+                                                insuranceQuote.premium
+                                            ) * 100
+                                        ) / 100
+                                    ).toFixed(2)
+                                    : (displayPricing?.customerTotal ?? displayPricing?.total)?.toFixed(2) || '0.00'
                                 }`
                             }
                         </Text>

@@ -19,6 +19,7 @@ import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius } from '../styles/theme';
+import { resolveDriverPayoutLabel } from '../services/PricingDisplay';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
@@ -157,7 +158,7 @@ export default function RequestModal({
   const renderRequestCard = ({ item, index }) => {
     const isSelected = index === selectedIndex;
     const displayPhotos = getDisplayPhotos(item);
-    const earnings = item.driverPayout || item.earnings || item.price || '$0.00';
+    const earnings = resolveDriverPayoutLabel(item);
     const hasScheduledTime = Boolean(item.scheduledTime);
     const scheduledLabel = hasScheduledTime
       ? new Date(item.scheduledTime).toLocaleString('en-US', {
@@ -440,7 +441,7 @@ export default function RequestModal({
                     styles.markerContainer,
                     selectedIndex === index && styles.selectedMarker
                   ]}>
-                    <Text style={styles.markerPrice}>{request.price}</Text>
+                    <Text style={styles.markerPrice}>{resolveDriverPayoutLabel(request)}</Text>
                     <View style={styles.markerArrow} />
                   </View>
                 </Mapbox.PointAnnotation>

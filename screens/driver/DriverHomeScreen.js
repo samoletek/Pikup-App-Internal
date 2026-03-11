@@ -19,6 +19,7 @@ import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import RecentTripsModal from '../../components/RecentTripsModal';
 import { Ionicons } from '@expo/vector-icons';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
+import { resolveDriverPayoutLabel } from '../../services/PricingDisplay';
 import {
   ACTIVE_TRIP_STATUSES,
   DROPOFF_PHASE_STATUSES,
@@ -48,11 +49,10 @@ const toCsvSet = (value) =>
       .filter(Boolean)
   );
 const DRIVER_READINESS_BYPASS_EMAILS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS || 'drew@architeq.io,kerya@gmail.ru'
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS
 );
 const DRIVER_READINESS_BYPASS_USER_IDS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS ||
-    '8ba3bab0-cc12-44ac-89b9-8aff39918546,1bdf2fc2-20ba-4102-ade0-56dc8cbf3e50'
+  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS
 );
 const shouldBypassDriverReadiness = (user) => {
   const userId = String(user?.uid || user?.id || '').trim().toLowerCase();
@@ -1058,7 +1058,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       `Drop-off: ${request?.dropoff?.address || 'Not specified'}`,
       `Schedule: ${scheduleText}`,
       `Vehicle: ${request?.vehicle?.type || 'Standard'}`,
-      `Payout: ${request?.driverPayout || request?.earnings || request?.price || '$0.00'}`,
+      `Payout: ${resolveDriverPayoutLabel(request)}`,
     ].join('\n');
 
     Alert.alert('Request Details', details);
@@ -1674,7 +1674,7 @@ export default function DriverHomeScreen({ navigation, route }) {
               </Text>
             </View>
             <Text style={styles.miniBarPrice} numberOfLines={1}>
-              {incomingRequest.driverPayout || incomingRequest.earnings || incomingRequest.price || '$0.00'}
+              {resolveDriverPayoutLabel(incomingRequest)}
             </Text>
             <View style={styles.miniBarExpand}>
               <Ionicons name="chevron-up" size={20} color={colors.text.primary} />

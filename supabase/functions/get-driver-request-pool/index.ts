@@ -140,6 +140,143 @@ const toNumber = (value: unknown, fallback = 0): number => {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
 }
+const round2 = (value: unknown): number => Math.round(toNumber(value, 0) * 100) / 100
+const formatMoney = (value: unknown): string => `$${toNumber(value, 0).toFixed(2)}`
+
+const resolveTaxRate = (pricing: AnyRecord = {}, fallback = 0.25): number => {
+  const fromTaxRate = toNumber(pricing.taxRate, Number.NaN)
+  if (Number.isFinite(fromTaxRate) && fromTaxRate >= 0) {
+    return fromTaxRate
+  }
+
+  const fromServiceFee = toNumber(pricing.serviceFeePercent, Number.NaN)
+  if (Number.isFinite(fromServiceFee) && fromServiceFee >= 0) {
+    return fromServiceFee
+  }
+
+  return fallback
+}
+
+const calculateDriverPayoutFromGrossFare = (params: {
+  grossFare: number
+  mandatoryInsurance: number
+  taxRate: number
+  taxAmount?: number
+  insuranceSpread?: number
+  payoutPercent: number
+}): { payout: number; taxAmount: number; tipAmount: number } => {
+  const normalizedGrossFare = Math.max(0, toNumber(params.grossFare, 0))
+  const normalizedInsurance = Math.max(0, toNumber(params.mandatoryInsurance, 12.99))
+  const normalizedTaxRate = Math.max(0, toNumber(params.taxRate, 0.25))
+  const explicitTaxAmount = toNumber(params.taxAmount, Number.NaN)
+  const normalizedInsuranceSpread = Math.max(0, toNumber(params.insuranceSpread, 0))
+  const normalizedTaxAmount = Number.isFinite(explicitTaxAmount)
+    ? Math.max(0, explicitTaxAmount)
+    : Math.max(
+      0,
+      ((normalizedGrossFare - normalizedInsurance) * normalizedTaxRate) + normalizedInsuranceSpread
+    )
+  const normalizedPayoutPercent = Math.max(0, toNumber(params.payoutPercent, 0.75))
+  // Ordered flow from finance: total -> minus taxes -> minus insurance -> apply 25% platform cut.
+  const afterTaxAmount = Math.max(0, normalizedGrossFare - normalizedTaxAmount)
+  const payoutTaxableFare = Math.max(0, afterTaxAmount - normalizedInsurance)
+  const payoutBase = payoutTaxableFare * normalizedPayoutPercent
+  const payout = payoutBase
+
+  return {
+    payout: round2(payout),
+    taxAmount: round2(normalizedTaxAmount),
+    tipAmount: 0,
+  }
+}
+
+const deriveDriverPayoutAmount = (
+  pricing: AnyRecord = {},
+  fallbackCustomerTotal = 0,
+  fallbackPayoutPercent = 0.75
+): number => {
+  const explicitPayout = toNumber(pricing.driverPayout, Number.NaN)
+
+  const payoutPercent = toNumber(pricing.driverPayoutPercent, fallbackPayoutPercent)
+  const mandatoryInsurance = toNumber(pricing.mandatoryInsurance, 12.99)
+  const taxRate = resolveTaxRate(pricing, 0.25)
+  const taxAmount = toNumber(pricing.taxAmount ?? pricing.serviceFee, Number.NaN)
+  const insuranceSpread = toNumber(pricing.insuranceSpread, 2)
+
+  const driverGrossFare = toNumber(
+    pricing.driverGrossFare ?? pricing.customerTotal ?? pricing.total ?? fallbackCustomerTotal,
+    Number.NaN
+  )
+  if (Number.isFinite(driverGrossFare) && driverGrossFare > 0) {
+    return calculateDriverPayoutFromGrossFare({
+      grossFare: driverGrossFare,
+      mandatoryInsurance,
+      taxRate,
+      taxAmount,
+      insuranceSpread,
+      payoutPercent,
+    }).payout
+  }
+
+  // Legacy fallback: reconstruct customer-side gross from ride fare fields.
+  const fareAfterSurge = toNumber(pricing.fareAfterSurge, Number.NaN)
+  if (Number.isFinite(fareAfterSurge) && fareAfterSurge > 0) {
+    const insuranceSpread = toNumber(pricing.insuranceSpread, 2)
+    const serviceFeePercent = toNumber(pricing.serviceFeePercent, 0.25)
+    const reconstructedTaxAmount = (fareAfterSurge * serviceFeePercent) + insuranceSpread
+    const customerGrossFromFare =
+      fareAfterSurge +
+      reconstructedTaxAmount +
+      mandatoryInsurance
+
+    return calculateDriverPayoutFromGrossFare({
+      grossFare: customerGrossFromFare,
+      mandatoryInsurance,
+      taxRate,
+      taxAmount: reconstructedTaxAmount,
+      payoutPercent,
+    }).payout
+  }
+
+  const grossFare = toNumber(pricing.grossFare, Number.NaN)
+  const surgeFee = toNumber(pricing.surgeFee, 0)
+  if (Number.isFinite(grossFare) && grossFare > 0) {
+    const legacyFareAfterSurge = grossFare + surgeFee
+    const insuranceSpread = toNumber(pricing.insuranceSpread, 2)
+    const serviceFeePercent = toNumber(pricing.serviceFeePercent, 0.25)
+    const reconstructedTaxAmount = (legacyFareAfterSurge * serviceFeePercent) + insuranceSpread
+    const customerGrossFromLegacy =
+      legacyFareAfterSurge +
+      reconstructedTaxAmount +
+      mandatoryInsurance
+
+    return calculateDriverPayoutFromGrossFare({
+      grossFare: customerGrossFromLegacy,
+      mandatoryInsurance,
+      taxRate,
+      taxAmount: reconstructedTaxAmount,
+      payoutPercent,
+    }).payout
+  }
+
+  const customerTotal = toNumber(pricing.customerTotal ?? pricing.total ?? fallbackCustomerTotal, 0)
+  if (customerTotal > 0) {
+    return calculateDriverPayoutFromGrossFare({
+      grossFare: customerTotal,
+      mandatoryInsurance,
+      taxRate,
+      taxAmount,
+      insuranceSpread,
+      payoutPercent,
+    }).payout
+  }
+
+  if (Number.isFinite(explicitPayout) && explicitPayout > 0) {
+    return round2(explicitPayout)
+  }
+
+  return 0
+}
 
 const normalizeRequestPool = (value: unknown): string => {
   const normalized = String(value || REQUEST_POOLS.ALL).trim().toLowerCase()
@@ -190,12 +327,22 @@ const mapTripFromDb = (tripRow: AnyRecord): AnyRecord => {
   const pickupPhotos = toArray(tripRow.pickup_photos || tripRow.pickupPhotos)
   const dropoffPhotos = toArray(tripRow.dropoff_photos || tripRow.dropoffPhotos)
   const pricingSource = toObject(tripRow.pricing || pickup?.pricing)
-  const pricing = Object.keys(pricingSource).length > 0
-    ? pricingSource
-    : {
-      total: toNumber(tripRow.price),
-      distance: toNumber(tripRow.distance_miles),
-    }
+  const fallbackPricing = {
+    total: toNumber(tripRow.price),
+    distance: toNumber(tripRow.distance_miles),
+  }
+  const customerTotal = toNumber(
+    pricingSource.customerTotal ?? pricingSource.total ?? fallbackPricing.total,
+    0
+  )
+  const pricing = {
+    ...fallbackPricing,
+    ...pricingSource,
+    total: customerTotal,
+    customerTotal,
+    driverGrossFare: customerTotal,
+    driverPayout: deriveDriverPayoutAmount(pricingSource, customerTotal),
+  }
   const items = toArray(tripRow.items)
   const dispatchRequirements =
     tripRow.dispatchRequirements ||
@@ -955,11 +1102,22 @@ serve(async (req) => {
         name: "Customer",
         email: null,
       }
+      const customerTotal = toNumber(trip?.pricing?.customerTotal ?? trip?.pricing?.total, 0)
+      const driverPayoutAmount = deriveDriverPayoutAmount(trip?.pricing || {}, customerTotal)
+      const driverPayoutLabel = formatMoney(driverPayoutAmount)
 
       return {
         id: trip.id,
-        price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
-        pricing: trip.pricing || {},
+        price: driverPayoutLabel,
+        driverPayout: driverPayoutLabel,
+        customerPrice: formatMoney(customerTotal),
+        pricing: {
+          ...(trip.pricing || {}),
+          total: round2(customerTotal),
+          customerTotal: round2(customerTotal),
+          driverGrossFare: round2(customerTotal),
+          driverPayout: round2(driverPayoutAmount),
+        },
         type: "Moves",
         vehicle: { type: trip.vehicleType || "Standard" },
         pickup: {

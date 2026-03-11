@@ -30,6 +30,7 @@ import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import TripRatingModal from "../../components/TripRatingModal";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import RedkikService from "../../services/RedkikService";
+import { deriveDriverPayoutAmount } from "../../services/PricingService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import {
   borderRadius,
@@ -245,7 +246,7 @@ export default function CustomerHomeScreen({ navigation }) {
     }
 
     const totalAmount =
-      Number(pendingBooking?.pricing?.total ?? pendingBooking?.price ?? 0) || 0;
+      Number((pendingBooking?.pricing?.customerTotal ?? pendingBooking?.pricing?.total ?? pendingBooking?.price) || 0) || 0;
     const itemsCount = Array.isArray(pendingBooking?.items)
       ? pendingBooking.items.length
       : pendingBooking?.item
@@ -725,7 +726,9 @@ export default function CustomerHomeScreen({ navigation }) {
       }
 
       const selectedPaymentMethod = orderData?.selectedPaymentMethod;
-      const totalAmount = Number(orderData?.pricing?.total || 0);
+      const totalAmount = Number(
+        orderData?.pricing?.customerTotal ?? orderData?.pricing?.total ?? 0
+      );
 
       if (!selectedPaymentMethod?.stripePaymentMethodId) {
         return {
@@ -834,17 +837,39 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
+        const insurancePremiumApplied =
+          insuranceData?.status === "purchased"
+            ? Number(
+                insuranceData?.premium ??
+                  orderData?.pricing?.mandatoryInsurance ??
+                  0
+              ) || 0
+            : orderData?.insuranceQuote?.offerId
+              ? 0
+              : Number(orderData?.pricing?.mandatoryInsurance || 0) || 0;
+
+        const requestPricing = {
+          ...(orderData?.pricing || {}),
+          total: finalAmount,
+          customerTotal: finalAmount,
+          customerPrice: finalAmount,
+          driverGrossFare: finalAmount,
+          mandatoryInsurance: insurancePremiumApplied,
+          insuranceApplied: insurancePremiumApplied > 0,
+          distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
+        };
+        requestPricing.driverPayout = deriveDriverPayoutAmount(
+          { ...requestPricing, driverPayout: undefined },
+          finalAmount
+        );
+
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,
           pickupDetails: orderData?.pickupDetails || {},
           dropoffDetails: orderData?.dropoffDetails || {},
           vehicle: orderData?.selectedVehicle,
-          pricing: {
-            ...(orderData?.pricing || {}),
-            total: finalAmount,
-            distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
-          },
+          pricing: requestPricing,
           items: orderData?.items || [],
           scheduledTime:
             orderData?.scheduleType === "scheduled"

@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../contexts/AuthContext';
 import ScreenHeader from '../../components/ScreenHeader';
+import { deriveDriverPayoutAmount } from '../../services/PricingService';
+import { formatMoney } from '../../services/PricingDisplay';
 import {
   borderRadius,
   colors,
@@ -38,6 +40,18 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   const scrollViewRef = useRef(null);
+  const parseMoneyValue = (value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+    const parsed = Number(String(value || '').replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const customerTotalFallback = parseMoneyValue(
+    request?.pricing?.customerTotal ?? request?.pricing?.total ?? request?.price
+  );
+  const payoutAmount = deriveDriverPayoutAmount(request?.pricing || {}, customerTotalFallback);
+  const payoutLabel = formatMoney(payoutAmount);
 
   const requestPermissions = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -299,8 +313,10 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
               <Text style={styles.summaryValue}>{pickupPhotos?.length || 0} photos</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Amount:</Text>
-              <Text style={[styles.summaryValue, styles.priceValue]}>${request?.pricing?.total || '0.00'}</Text>
+              <Text style={styles.summaryLabel}>Payout:</Text>
+              <Text style={[styles.summaryValue, styles.priceValue]}>
+                {payoutLabel}
+              </Text>
             </View>
           </View>
 

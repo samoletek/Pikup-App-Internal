@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, borderRadius } from '../styles/theme';
+import { formatMoney, resolveDriverPayoutLabel } from '../services/PricingDisplay';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -188,8 +189,15 @@ export default function IncomingRequestModal({
     : request.item ? [request.item] : [];
   const allPhotos = allItems.flatMap(i => Array.isArray(i.photos) ? i.photos : []);
   const displayPhotos = allPhotos.length > 0 ? allPhotos : Array.isArray(request.photos) ? request.photos : [];
-  const earnings = request.driverPayout || request.earnings || request.price || '$0.00';
+  const earnings = resolveDriverPayoutLabel(request);
   const pricing = request.pricing || {};
+  const baseFare = Number(pricing.baseFare ?? pricing.basePrice ?? 0);
+  const mileageFee = Number(pricing.mileageFee ?? pricing.distanceFare ?? 0);
+  const laborFee = Number(pricing.laborFee ?? 0);
+  const surgeFee = Number(pricing.surgeFee ?? 0);
+  const serviceFee = Number(pricing.serviceFee ?? 0);
+  const hasPricingBreakdown = [baseFare, mileageFee, laborFee, surgeFee, serviceFee]
+    .some((value) => Number.isFinite(value) && value > 0);
   const vehicleType = request.vehicle?.type || 'Standard';
   const scheduledTime = request.scheduledTime;
   const pickupDetails = request.pickup?.details || {};
@@ -446,35 +454,41 @@ export default function IncomingRequestModal({
             </View>
           </View>
 
-          {(pricing.basePrice || pricing.serviceFee || pricing.tax) && (
+          {hasPricingBreakdown && (
             <View style={styles.priceCard}>
               <Text style={styles.detailTitle}>Price Breakdown</Text>
-              {pricing.basePrice > 0 && (
+              {baseFare > 0 && (
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Base price</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.basePrice).toFixed(2)}</Text>
+                  <Text style={styles.priceVal}>{formatMoney(baseFare)}</Text>
                 </View>
               )}
-              {pricing.laborFee > 0 && (
+              {mileageFee > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Mileage</Text>
+                  <Text style={styles.priceVal}>{formatMoney(mileageFee)}</Text>
+                </View>
+              )}
+              {laborFee > 0 && (
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Labor fee</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.laborFee).toFixed(2)}</Text>
+                  <Text style={styles.priceVal}>{formatMoney(laborFee)}</Text>
                 </View>
               )}
-              {pricing.serviceFee > 0 && (
+              {surgeFee > 0 && (
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Service fee</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.serviceFee).toFixed(2)}</Text>
+                  <Text style={styles.priceLabel}>Surge</Text>
+                  <Text style={styles.priceVal}>{formatMoney(surgeFee)}</Text>
                 </View>
               )}
-              {pricing.tax > 0 && (
+              {serviceFee > 0 && (
                 <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Tax</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.tax).toFixed(2)}</Text>
+                  <Text style={styles.priceLabel}>Taxes & fees</Text>
+                  <Text style={styles.priceVal}>{formatMoney(serviceFee)}</Text>
                 </View>
               )}
               <View style={[styles.priceRow, styles.priceTotalRow]}>
-                <Text style={styles.priceTotalLabel}>Total</Text>
+                <Text style={styles.priceTotalLabel}>Your payout</Text>
                 <Text style={styles.priceTotalVal}>{earnings}</Text>
               </View>
             </View>
