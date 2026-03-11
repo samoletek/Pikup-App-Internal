@@ -4,7 +4,9 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Animated,
+  PanResponder,
   Dimensions,
   FlatList,
   Image,
@@ -12,7 +14,7 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
-  RefreshControl
+  Alert
 } from 'react-native';
 import MapboxMap from './mapbox/MapboxMap';
 import Mapbox from '@rnmapbox/maps';
@@ -23,7 +25,18 @@ import { colors, typography, spacing, borderRadius } from '../styles/theme';
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
 const CARD_HEIGHT = height * 0.35;
-const TIMER_DEFAULT = '4:00';
+const MODAL_DISMISS_DRAG_THRESHOLD = 80;
+
+const isScheduledRequest = (request = {}) =>
+  Boolean(
+    request?.scheduledTime ||
+    request?.scheduled_time ||
+    request?.dispatchRequirements?.scheduleType === 'scheduled' ||
+    request?.dispatch_requirements?.scheduleType === 'scheduled'
+  );
+
+const shouldRenderRequestTimer = (request = {}) =>
+  !isScheduledRequest(request) && Boolean(request?.expiresAt);
 
 export default function RequestModal({
   visible,
@@ -44,10 +57,55 @@ export default function RequestModal({
   const flatListRef = useRef(null);
   const mapRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(height)).current;
+  const dragTranslateY = useRef(new Animated.Value(0)).current;
   const timerInterval = useRef(null);
+  const routeRequestIdRef = useRef(null);
+  const routeCacheRef = useRef(new Map());
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [selectedRouteMarkers, setSelectedRouteMarkers] = useState(null);
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        gestureState.dy > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          dragTranslateY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy >= MODAL_DISMISS_DRAG_THRESHOLD) {
+          Animated.timing(dragTranslateY, {
+            toValue: height,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => {
+            dragTranslateY.setValue(0);
+            onClose?.();
+          });
+          return;
+        }
+
+        Animated.spring(dragTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 12,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragTranslateY, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 12,
+        }).start();
+      },
+    })
+  ).current;
 
   useEffect(() => {
     if (visible) {
+      dragTranslateY.setValue(0);
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -60,8 +118,11 @@ export default function RequestModal({
         duration: 300,
         useNativeDriver: true,
       }).start();
+      setSelectedRoute(null);
+      setSelectedRouteMarkers(null);
+      routeRequestIdRef.current = null;
     }
-  }, [visible]);
+  }, [visible, dragTranslateY, slideAnim]);
 
   useEffect(() => {
     if (selectedRequest && requests.length > 0) {
@@ -82,23 +143,92 @@ export default function RequestModal({
   }, [selectedRequest, requests]);
 
   useEffect(() => {
-    if (showMap && requests.length > 0 && mapRef.current) {
-      const currentRequest = requests[selectedIndex];
-      if (currentRequest?.pickup?.coordinates) {
-        mapRef.current?.setCamera({
-          centerCoordinate: [
-            currentRequest.pickup.coordinates.longitude,
-            currentRequest.pickup.coordinates.latitude
-          ],
-          zoomLevel: 11,
-          animationDuration: 500
-        });
-      }
+    if (!visible || !showMap || requests.length === 0) {
+      setSelectedRoute(null);
+      setSelectedRouteMarkers(null);
+      routeRequestIdRef.current = null;
+      return;
     }
-  }, [selectedIndex, showMap, requests]);
+
+    const currentRequest = requests[selectedIndex];
+    const pickup = currentRequest?.pickup?.coordinates;
+    const dropoff = currentRequest?.dropoff?.coordinates;
+    if (!pickup || !dropoff) {
+      setSelectedRoute(null);
+      setSelectedRouteMarkers(null);
+      routeRequestIdRef.current = null;
+      return;
+    }
+
+    const pickupPoint = [pickup.longitude, pickup.latitude];
+    const dropoffPoint = [dropoff.longitude, dropoff.latitude];
+    const fallbackRouteFeature = {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: [pickupPoint, dropoffPoint],
+      },
+    };
+
+    const requestId = String(currentRequest?.id || '');
+    routeRequestIdRef.current = requestId;
+    setSelectedRouteMarkers({ pickup: pickupPoint, dropoff: dropoffPoint });
+    const cachedRoute = routeCacheRef.current.get(requestId);
+    setSelectedRoute(cachedRoute || fallbackRouteFeature);
+
+    if (mapRef.current) {
+      const centerLongitude = (pickup.longitude + dropoff.longitude) / 2;
+      const centerLatitude = (pickup.latitude + dropoff.latitude) / 2;
+      mapRef.current.setCamera({
+        centerCoordinate: [centerLongitude, centerLatitude],
+        zoomLevel: 11.5,
+        animationDuration: 500,
+      });
+    }
+
+    const token = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+    if (!token) {
+      return;
+    }
+
+    let cancelled = false;
+    const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickup.longitude},${pickup.latitude};${dropoff.longitude},${dropoff.latitude}?geometries=geojson&overview=full&access_token=${token}`;
+
+    const fetchRoute = async () => {
+      try {
+        const response = await fetch(directionsUrl);
+        const data = await response.json();
+        const geometry = data?.routes?.[0]?.geometry;
+        if (!geometry || cancelled) {
+          return;
+        }
+        if (routeRequestIdRef.current !== requestId) {
+          return;
+        }
+        const resolvedRoute = {
+          type: 'Feature',
+          properties: {},
+          geometry,
+        };
+        routeCacheRef.current.set(requestId, resolvedRoute);
+        setSelectedRoute(resolvedRoute);
+      } catch (_error) {
+        // Keep the fallback straight line route when Directions API is unavailable.
+      }
+    };
+
+    void fetchRoute();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, showMap, requests, selectedIndex]);
 
   useEffect(() => {
-    if (visible && requests.length > 0) {
+    const hasTimedRequests = requests.some((request) => shouldRenderRequestTimer(request));
+
+    if (visible && requests.length > 0 && hasTimedRequests) {
       timerInterval.current = setInterval(() => {
         updateTimers();
       }, 1000);
@@ -123,19 +253,19 @@ export default function RequestModal({
     const now = new Date();
 
     requests.forEach(request => {
-      if (request.expiresAt) {
-        const expiryTime = new Date(request.expiresAt);
-        const timeLeft = Math.max(0, expiryTime - now);
+      if (!shouldRenderRequestTimer(request)) {
+        return;
+      }
 
-        if (timeLeft > 0) {
-          const minutes = Math.floor(timeLeft / (1000 * 60));
-          const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-          newTimers[request.id] = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        } else {
-          newTimers[request.id] = 'Expired';
-        }
+      const expiryTime = new Date(request.expiresAt);
+      const timeLeft = Math.max(0, expiryTime - now);
+
+      if (timeLeft > 0) {
+        const minutes = Math.floor(timeLeft / (1000 * 60));
+        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+        newTimers[request.id] = `${minutes}:${seconds.toString().padStart(2, '0')}`;
       } else {
-        newTimers[request.id] = TIMER_DEFAULT;
+        newTimers[request.id] = 'Expired';
       }
     });
 
@@ -161,12 +291,28 @@ export default function RequestModal({
     const hasScheduledTime = Boolean(item.scheduledTime);
     const scheduledLabel = hasScheduledTime
       ? new Date(item.scheduledTime).toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        })
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
       : null;
+    const timerValue = timers[item.id];
+    const shouldShowTimer = Boolean(timerValue) && !hasScheduledTime;
+    const handleViewDetails = () => {
+      if (typeof onViewDetails === 'function') {
+        onViewDetails(item);
+        return;
+      }
+
+      const details = [
+        `Pickup: ${item.pickup?.address || 'Not specified'}`,
+        `Drop-off: ${item.dropoff?.address || 'Not specified'}`,
+        hasScheduledTime ? `Scheduled: ${scheduledLabel}` : 'Type: ASAP',
+      ].join('\n');
+
+      Alert.alert('Request Details', details);
+    };
 
     return (
       <Animated.View style={[
@@ -199,15 +345,17 @@ export default function RequestModal({
                 </View>
               )}
             </View>
-            <View style={styles.timerContainer}>
-              <Ionicons name="timer-outline" size={16} color={colors.success} />
-              <Text style={[
-                styles.timerText,
-                timers[item.id] === 'Expired' && styles.expiredTimer
-              ]}>
-                {timers[item.id] || TIMER_DEFAULT}
-              </Text>
-            </View>
+            {shouldShowTimer && (
+              <View style={styles.timerContainer}>
+                <Ionicons name="timer-outline" size={16} color={colors.success} />
+                <Text style={[
+                  styles.timerText,
+                  timerValue === 'Expired' && styles.expiredTimer
+                ]}>
+                  {timerValue}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Item Type Badge */}
@@ -315,18 +463,20 @@ export default function RequestModal({
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.messageButton}
-              onPress={() => onMessage && onMessage(item)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
-              <Text style={styles.messageButtonText}>Message</Text>
-            </TouchableOpacity>
+            {!hasScheduledTime && (
+              <TouchableOpacity
+                style={styles.messageButton}
+                onPress={() => onMessage && onMessage(item)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
+                <Text style={styles.messageButtonText}>Message</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.detailsButton}
-              onPress={() => onViewDetails && onViewDetails(item)}
+              onPress={handleViewDetails}
               activeOpacity={0.8}
             >
               <Text style={styles.detailsButtonText}>View Details</Text>
@@ -372,13 +522,17 @@ export default function RequestModal({
         style={[
           styles.modalContainer,
           {
-            transform: [{ translateY: slideAnim }]
+            transform: [{ translateY: Animated.add(slideAnim, dragTranslateY) }]
           }
         ]}
       >
         {/* Header */}
         <View style={styles.modalHeader}>
-          <View style={styles.modalHandle} />
+          <TouchableWithoutFeedback onPress={onClose}>
+            <View style={styles.handleArea} {...panResponder.panHandlers}>
+              <View style={styles.modalHandle} />
+            </View>
+          </TouchableWithoutFeedback>
           <View style={styles.headerContent}>
             <Text style={styles.modalTitle}>Available Requests</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -409,41 +563,88 @@ export default function RequestModal({
             >
               {/* Current location marker */}
               {currentLocation && (
-                <Mapbox.PointAnnotation
+                <Mapbox.MarkerView
                   id="currentLocation"
                   coordinate={[currentLocation.longitude, currentLocation.latitude]}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  allowOverlap
                 >
                   <View style={styles.currentLocationMarker}>
                     <View style={styles.currentLocationDot} />
                   </View>
-                </Mapbox.PointAnnotation>
+                </Mapbox.MarkerView>
+              )}
+
+              {/* Selected request route */}
+              {selectedRoute && (
+                <Mapbox.ShapeSource id="scheduled-request-route-source" shape={selectedRoute}>
+                  <Mapbox.LineLayer
+                    id="scheduled-request-route-line"
+                    style={{
+                      lineColor: colors.primary,
+                      lineWidth: 5,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                      lineOpacity: 0.85,
+                    }}
+                  />
+                </Mapbox.ShapeSource>
+              )}
+
+              {/* Selected route markers */}
+              {selectedRouteMarkers?.pickup && (
+                <Mapbox.MarkerView
+                  id="scheduled-request-pickup"
+                  coordinate={selectedRouteMarkers.pickup}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  allowOverlap
+                >
+                  <View style={[styles.routeMarkerCircle, { backgroundColor: colors.primaryDark }]} />
+                </Mapbox.MarkerView>
+              )}
+              {selectedRouteMarkers?.dropoff && (
+                <Mapbox.MarkerView
+                  id="scheduled-request-dropoff"
+                  coordinate={selectedRouteMarkers.dropoff}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  allowOverlap
+                >
+                  <View style={[styles.routeMarkerCircle, { backgroundColor: colors.success }]} />
+                </Mapbox.MarkerView>
               )}
 
               {/* Request markers */}
               {requests.map((request, index) => (
-                <Mapbox.PointAnnotation
+                <Mapbox.MarkerView
                   key={request.id}
-                  id={request.id}
+                  id={`request-marker-${request.id}`}
                   coordinate={[request.pickup.coordinates.longitude, request.pickup.coordinates.latitude]}
-                  onSelected={() => {
-                    setSelectedIndex(index);
-                    if (flatListRef.current) {
-                      flatListRef.current.scrollToIndex({
-                        index,
-                        animated: true,
-                        viewPosition: 0.5
-                      });
-                    }
-                  }}
+                  anchor={{ x: 0.5, y: 0.5 }}
+                  allowOverlap
                 >
-                  <View style={[
-                    styles.markerContainer,
-                    selectedIndex === index && styles.selectedMarker
-                  ]}>
-                    <Text style={styles.markerPrice}>{request.price}</Text>
-                    <View style={styles.markerArrow} />
-                  </View>
-                </Mapbox.PointAnnotation>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedIndex(index);
+                      if (flatListRef.current) {
+                        flatListRef.current.scrollToIndex({
+                          index,
+                          animated: true,
+                          viewPosition: 0.5
+                        });
+                      }
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <View
+                      style={[
+                        styles.markerCircle,
+                        selectedIndex === index && styles.selectedMarkerCircle,
+                      ]}
+                    >
+                      <View style={styles.markerCircleInner} />
+                    </View>
+                  </TouchableOpacity>
+                </Mapbox.MarkerView>
               ))}
             </MapboxMap>
 
@@ -493,14 +694,16 @@ export default function RequestModal({
               snapToInterval={CARD_WIDTH + spacing.lg}
               snapToAlignment="center"
               decelerationRate="fast"
+              directionalLockEnabled
+              scrollEnabled={requests.length > 1}
+              bounces={false}
+              alwaysBounceHorizontal={false}
+              alwaysBounceVertical={false}
               contentContainerStyle={styles.cardsList}
               keyExtractor={(item) => item.id}
               renderItem={renderRequestCard}
               onScroll={handleScroll}
               scrollEventThrottle={16}
-              refreshControl={
-                <RefreshControl refreshing={loading} onRefresh={onRefresh} />
-              }
             />
           ) : (
             <View style={styles.emptyState}>
@@ -559,12 +762,14 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: spacing.md,
-    marginBottom: spacing.base,
+    marginBottom: spacing.sm,
+  },
+  handleArea: {
+    paddingBottom: spacing.xs,
   },
   modalHeader: {
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.strong,
+    borderBottomWidth: 0,
     paddingBottom: spacing.base,
   },
   headerContent: {
@@ -919,38 +1124,45 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   // Marker styles
-  markerContainer: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  selectedMarker: {
-    backgroundColor: colors.primary,
+  markerCircle: {
+    width: spacing.xxl,
+    height: spacing.xxl,
+    borderRadius: spacing.base,
+    backgroundColor: colors.primaryDark,
+    borderWidth: 2,
     borderColor: colors.white,
-    transform: [{ scale: 1.1 }],
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: spacing.xs,
+    elevation: 4,
   },
-  markerPrice: {
-    color: colors.white,
-    fontWeight: typography.fontWeight.bold,
-    fontSize: typography.fontSize.sm,
+  selectedMarkerCircle: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.5,
+    transform: [{ scale: 1.05 }],
   },
-  markerArrow: {
-    position: 'absolute',
-    bottom: -8,
-    left: '50%',
-    marginLeft: -8,
-    width: 0,
-    height: 0,
-    backgroundColor: colors.transparent,
-    borderStyle: 'solid',
-    borderLeftWidth: 8,
-    borderRightWidth: 8,
-    borderTopWidth: 8,
-    borderLeftColor: colors.transparent,
-    borderRightColor: colors.transparent,
-    borderTopColor: colors.background.tertiary,
+  markerCircleInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.white,
+    opacity: 0.92,
+  },
+  routeMarkerCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.white,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: spacing.xs,
+    elevation: 3,
   },
   currentLocationMarker: {
     width: spacing.xl,

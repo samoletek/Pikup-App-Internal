@@ -880,8 +880,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     try {
       if (requestData?.id) {
         await arriveAtPickup(requestData.id, driverLocation);
-        Alert.alert('Success', 'You have arrived at the pickup location!');
-        
+
         // Navigate to pickup confirmation screen
         navigation.navigate('PickupConfirmationScreen', { request: requestData, driverLocation });
       }

@@ -8,7 +8,6 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +23,8 @@ import {
   typography,
 } from '../../styles/theme';
 
+const MAX_VERIFICATION_PHOTOS = 10;
+
 export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -32,8 +33,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
   const [deliveryPhotos, setDeliveryPhotos] = useState([]);
-  const [customerRating, setCustomerRating] = useState(5);
-  const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [customerRating, setCustomerRating] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
@@ -55,32 +55,73 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     return true;
   };
 
-  const takePhoto = async () => {
+  const showMaxPhotosAlert = () => {
+    Alert.alert(
+      'Photo Limit Reached',
+      `You can add up to ${MAX_VERIFICATION_PHOTOS} verification photos.`
+    );
+  };
+
+  const mapAssetsToPhotos = (assets = [], startIndex = 0) => {
+    const timestamp = new Date().toISOString();
+    return (assets || [])
+      .filter((asset) => asset?.uri)
+      .map((asset, index) => ({
+        uri: asset.uri,
+        id: `${Date.now()}-${startIndex + index}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp,
+      }));
+  };
+
+  const appendPhotos = (newPhotos = []) => {
+    if (!Array.isArray(newPhotos) || newPhotos.length === 0) return;
+    setDeliveryPhotos(prev => [...prev, ...newPhotos].slice(0, MAX_VERIFICATION_PHOTOS));
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  const takePhotoBatch = async () => {
     try {
+      if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+        showMaxPhotosAlert();
+        return;
+      }
+
       const hasPermission = await requestPermissions();
       if (!hasPermission) return;
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        exif: false,
-      });
+      let remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
+      const capturedPhotos = [];
 
-      if (!result.canceled && result.assets[0]) {
-        const newPhoto = {
-          uri: result.assets[0].uri,
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-        };
+      while (remaining > 0) {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: 'images',
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+          exif: false,
+        });
 
-        setDeliveryPhotos(prev => [...prev, newPhoto]);
+        if (result.canceled || !result.assets?.length) {
+          break;
+        }
 
-        // Scroll to the end to show the new photo
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        const mappedPhotos = mapAssetsToPhotos(result.assets, capturedPhotos.length).slice(0, remaining);
+        if (mappedPhotos.length === 0) {
+          break;
+        }
+
+        capturedPhotos.push(...mappedPhotos);
+        remaining -= mappedPhotos.length;
+      }
+
+      if (capturedPhotos.length > 0) {
+        appendPhotos(capturedPhotos);
+      }
+
+      if (remaining <= 0) {
+        showMaxPhotosAlert();
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -90,6 +131,11 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
   const selectFromGallery = async () => {
     try {
+      if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+        showMaxPhotosAlert();
+        return;
+      }
+
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant access to your photo library.');
@@ -98,24 +144,21 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsMultipleSelection: true,
+        selectionLimit: MAX_VERIFICATION_PHOTOS - deliveryPhotos.length,
+        allowsEditing: false,
         quality: 0.8,
         exif: false,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const newPhoto = {
-          uri: result.assets[0].uri,
-          id: Date.now().toString(),
-          timestamp: new Date().toISOString(),
-        };
+      if (!result.canceled && result.assets?.length) {
+        const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
+        const selectedPhotos = mapAssetsToPhotos(result.assets).slice(0, remaining);
+        appendPhotos(selectedPhotos);
 
-        setDeliveryPhotos(prev => [...prev, newPhoto]);
-
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        if (deliveryPhotos.length + selectedPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+          showMaxPhotosAlert();
+        }
       }
     } catch (error) {
       console.error('Error selecting photo:', error);
@@ -141,13 +184,20 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   };
 
   const showPhotoOptions = () => {
+    if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+      showMaxPhotosAlert();
+      return;
+    }
+
+    const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
+
     Alert.alert(
       'Add Delivery Photo',
-      'Take a photo to verify successful delivery',
+      `Add up to ${remaining} photos`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: takePhoto },
-        { text: 'Choose from Gallery', onPress: selectFromGallery }
+        { text: 'Take Photos (Camera)', onPress: takePhotoBatch },
+        { text: `Choose from Gallery (${remaining})`, onPress: selectFromGallery }
       ]
     );
   };
@@ -172,6 +222,15 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     );
   };
 
+  const getRatingLabel = (rating) => {
+    if (rating === 5) return 'Excellent';
+    if (rating === 4) return 'Very Good';
+    if (rating === 3) return 'Good';
+    if (rating === 2) return 'Fair';
+    if (rating === 1) return 'Poor';
+    return '';
+  };
+
   const completeDelivery = async () => {
     if (deliveryPhotos.length === 0) {
       Alert.alert(
@@ -181,18 +240,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       );
       return;
     }
-
-    Alert.alert(
-      'Complete Delivery',
-      'Confirm that all items have been successfully delivered?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Complete Delivery',
-          onPress: handleCompleteDelivery
-        }
-      ]
-    );
+    await handleCompleteDelivery();
   };
 
   const handleCompleteDelivery = async () => {
@@ -214,7 +262,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
       setIsUploadingPhotos(false);
 
       const customerId = request?.customerId || request?.customer_id || null;
-      if (customerId) {
+      if (customerId && customerRating > 0) {
         try {
           await submitTripRating({
             requestId: request?.id,
@@ -227,6 +275,8 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
         } catch (ratingError) {
           console.warn('Failed to save driver rating after delivery completion:', ratingError);
         }
+      } else if (customerId) {
+        console.log('Skipping customer rating save: rating was not selected');
       } else {
         console.warn('Skipping customer rating save: customer id is missing');
       }
@@ -255,6 +305,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   };
 
   const customerName = request?.customerEmail?.split('@')[0] || 'Customer';
+  const isMaxPhotosReached = deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS;
 
   return (
     <View style={styles.container}>
@@ -309,36 +360,16 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
             <Text style={styles.cardTitle}>Rate Your Experience</Text>
             <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
             {renderStars()}
-            <Text style={styles.ratingText}>
-              {customerRating === 5 && 'Excellent'}
-              {customerRating === 4 && 'Very Good'}
-              {customerRating === 3 && 'Good'}
-              {customerRating === 2 && 'Fair'}
-              {customerRating === 1 && 'Poor'}
-            </Text>
-          </View>
-
-          {/* Delivery Notes */}
-          <View style={styles.notesCard}>
-            <Text style={styles.cardTitle}>Delivery Notes (Optional)</Text>
-            <TextInput
-              style={styles.notesInput}
-              placeholder="Add any notes about the delivery..."
-              placeholderTextColor={colors.text.placeholder}
-              multiline
-              numberOfLines={3}
-              value={deliveryNotes}
-              onChangeText={setDeliveryNotes}
-              maxLength={200}
-            />
-            <Text style={styles.charCount}>{deliveryNotes.length}/200</Text>
+            {customerRating > 0 ? (
+              <Text style={styles.ratingText}>{getRatingLabel(customerRating)}</Text>
+            ) : null}
           </View>
 
           {/* Photo Section */}
           <View style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <Text style={styles.cardTitle}>Delivery Verification Photos</Text>
-              <Text style={styles.photoCount}>{deliveryPhotos.length}/10</Text>
+              <Text style={styles.photoCount}>{deliveryPhotos.length}/{MAX_VERIFICATION_PHOTOS}</Text>
             </View>
             <Text style={styles.photoSubtitle}>
               Take photos to confirm successful delivery
@@ -351,12 +382,20 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
               style={styles.photoScrollView}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoContainer}
-              clipsToBounds={false}
             >
               {/* Add Photo Button */}
-              <TouchableOpacity style={styles.addPhotoButton} onPress={showPhotoOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.addPhotoButton,
+                  isMaxPhotosReached && styles.addPhotoButtonDisabled,
+                ]}
+                onPress={showPhotoOptions}
+                disabled={isMaxPhotosReached}
+              >
                 <Ionicons name="camera" size={32} color={colors.success} />
-                <Text style={styles.addPhotoText}>Add Photo</Text>
+                <Text style={styles.addPhotoText}>
+                  {isMaxPhotosReached ? 'Max Reached' : 'Add Photo'}
+                </Text>
               </TouchableOpacity>
 
               {/* Photo Items */}
@@ -530,31 +569,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
   },
-  notesCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-  },
-  notesInput: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.base,
-    textAlignVertical: 'top',
-    minHeight: 80,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  charCount: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.xs,
-    textAlign: 'right',
-    marginTop: spacing.xs,
-  },
   photoCard: {
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.md,
@@ -580,11 +594,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   photoScrollView: {
-    marginHorizontal: -spacing.base,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   photoContainer: {
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: 0,
     paddingTop: 8,
     gap: spacing.md,
   },
@@ -599,6 +612,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  addPhotoButtonDisabled: {
+    opacity: 0.5,
+  },
   addPhotoText: {
     color: colors.success,
     fontSize: typography.fontSize.xs + 1,
@@ -609,6 +625,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 120,
     height: 120,
+    overflow: 'visible',
   },
   photoImage: {
     width: '100%',

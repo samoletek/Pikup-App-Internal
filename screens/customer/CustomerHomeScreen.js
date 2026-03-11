@@ -462,7 +462,9 @@ export default function CustomerHomeScreen({ navigation }) {
     const updateUnreadState = (userConversations = []) => {
       if (isDisposed) return;
       const unreadConversations = userConversations.filter(
-        (conversation) => Number(conversation?.unreadByCustomer || 0) > 0
+        (conversation) =>
+          Number(conversation?.unreadByCustomer || 0) > 0 &&
+          Boolean(conversation?.lastMessageAt || conversation?.lastMessage)
       );
 
       const hasTripMatchUnread = unreadConversations.some(
@@ -473,8 +475,8 @@ export default function CustomerHomeScreen({ navigation }) {
         )
       );
 
-      // Fallback for legacy conversations where request/participant linkage may be inconsistent.
-      setHasUnreadDeliveryChat(hasTripMatchUnread || unreadConversations.length > 0);
+      // Delivery tracker badge should reflect only active-delivery chat unread state.
+      setHasUnreadDeliveryChat(hasTripMatchUnread);
     };
 
     const refreshUnread = async () => {

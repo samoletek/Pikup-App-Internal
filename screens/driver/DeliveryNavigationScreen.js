@@ -714,8 +714,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     try {
       if (requestData?.id) {
         await arriveAtDropoff(requestData.id, driverLocation);
-        Alert.alert('Success', 'You have arrived at the dropoff location!');
-        
+
         // Navigate to delivery confirmation screen
         navigation.navigate('DeliveryConfirmationScreen', { 
           request: requestData,
@@ -826,17 +825,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       });
   };
 
-  const showPickupPhotos = () => {
-    if (!pickupPhotos || pickupPhotos.length === 0) {
-      Alert.alert('No Photos', 'No pickup photos available to view');
-      return;
-    }
-    
-    // Navigate to a screen to view photos
-    // This would depend on your app's navigation structure
-    Alert.alert('View Photos', 'Navigate to photo viewer (to be implemented)');
-  };
-
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -935,16 +923,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
                 >
                   <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
                   {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.photoSection}>
-                <TouchableOpacity 
-                  style={styles.photoButton}
-                  onPress={showPickupPhotos}
-                >
-                  <Ionicons name="images" size={18} color={colors.primary} />
-                  <Text style={styles.photoButtonText}>View Pickup Photos</Text>
                 </TouchableOpacity>
               </View>
               
@@ -1106,16 +1084,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               >
                 <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
                 {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.photoSection}>
-              <TouchableOpacity 
-                style={styles.photoButton}
-                onPress={showPickupPhotos}
-              >
-                <Ionicons name="images" size={18} color={colors.primary} />
-                <Text style={styles.photoButtonText}>View Pickup Photos</Text>
               </TouchableOpacity>
             </View>
             
@@ -1320,23 +1288,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
     borderWidth: 1,
     borderColor: colors.background.secondary,
-  },
-  photoSection: {
-    marginBottom: spacing.base - 1,
-  },
-  photoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primaryLight,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md + spacing.xs,
-    borderRadius: 10,
-  },
-  photoButtonText: {
-    marginLeft: spacing.sm,
-    color: colors.primary,
-    fontWeight: typography.fontWeight.semibold,
   },
   actionContainer: {
     alignItems: 'center',

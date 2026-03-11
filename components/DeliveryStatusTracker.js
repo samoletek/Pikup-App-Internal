@@ -69,17 +69,17 @@ export default function DeliveryStatusTracker({
     const animation =
       type === 'collapse'
         ? Animated.timing(sheetHeightAnim, {
-            toValue,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
-          })
+          toValue,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        })
         : Animated.spring(sheetHeightAnim, {
-            toValue,
-            useNativeDriver: false,
-            tension: 100,
-            friction: 12,
-          });
+          toValue,
+          useNativeDriver: false,
+          tension: 100,
+          friction: 12,
+        });
 
     sheetAnimationRef.current = animation;
     animation.start(({ finished }) => {
@@ -298,6 +298,14 @@ export default function DeliveryStatusTracker({
     return 'Delivered';
   };
 
+  const isScheduledDelivery = Boolean(
+    requestData?.scheduledTime ||
+    requestData?.scheduled_time ||
+    requestData?.scheduleType === 'scheduled' ||
+    requestData?.dispatchRequirements?.scheduleType === 'scheduled' ||
+    requestData?.dispatch_requirements?.scheduleType === 'scheduled'
+  );
+
   const renderCompactView = () => {
     if (!requestData) return null;
 
@@ -353,7 +361,7 @@ export default function DeliveryStatusTracker({
                 </View>
               </TouchableOpacity>
 
-              {typeof onOpenChat === 'function' && (
+              {typeof onOpenChat === 'function' && !isScheduledDelivery && (
                 <TouchableOpacity
                   style={styles.chatActionButton}
                   onPress={() => onOpenChat(requestData)}
@@ -542,7 +550,7 @@ export default function DeliveryStatusTracker({
       <View style={styles.header}>
         <Text style={styles.title}>Delivery Status</Text>
         <View style={styles.headerButtons}>
-          {typeof onOpenChat === 'function' && (
+          {typeof onOpenChat === 'function' && !isScheduledDelivery && (
             <TouchableOpacity
               style={styles.chatHeaderButton}
               onPress={() => onOpenChat(requestData)}
