@@ -24,9 +24,9 @@ import {
   TRIP_STATUS,
   normalizeTripStatus,
 } from "../../constants/tripStatus";
+import { getCustomerTripProgressStep } from "../../constants/customerTripProgress";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
-import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
 import TripRatingModal from "../../components/TripRatingModal";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import RedkikService from "../../services/RedkikService";
@@ -132,7 +132,7 @@ const getTripCompletionTimestampMs = (trip) => {
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
   const {
     currentUser,
@@ -141,10 +141,6 @@ export default function CustomerHomeScreen({ navigation }) {
     createPickupRequest,
     cancelOrder,
     submitTripRating,
-    createConversation,
-    getRequestById,
-    getConversations,
-    subscribeToConversations,
   } = useAuth();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const { createPaymentIntent, confirmPayment } = usePayment();
@@ -155,14 +151,12 @@ export default function CustomerHomeScreen({ navigation }) {
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [isSearchSheetExpanded, setIsSearchSheetExpanded] = useState(false);
-  const [isActiveDeliverySheetExpanded, setIsActiveDeliverySheetExpanded] = useState(false);
   const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
   const [completedTripForRating, setCompletedTripForRating] = useState(null);
   const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
-  const [hasUnreadDeliveryChat, setHasUnreadDeliveryChat] = useState(false);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
   const promptedTripIdsRef = useRef(new Set());
@@ -182,11 +176,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const floatingBottomOffset = useMemo(
     () => insets.bottom + spacing.lg,
     [insets.bottom]
-  );
-
-  const trackerMaxExpandedHeight = useMemo(
-    () => Math.max(320, height - insets.top - tabBarHeight - spacing.xxl),
-    [height, insets.top, tabBarHeight]
   );
 
   const canCreateOrder = !activeDelivery && !pendingBooking;
@@ -263,6 +252,13 @@ export default function CustomerHomeScreen({ navigation }) {
       totalAmountLabel: `$${totalAmount.toFixed(2)}`,
     };
   }, [pendingBooking]);
+
+  const activeDeliveryStep = useMemo(() => {
+    if (!activeDelivery) {
+      return null;
+    }
+    return getCustomerTripProgressStep(activeDelivery.status);
+  }, [activeDelivery]);
 
   const mapCenterCoordinate = useMemo(() => {
     if (pendingBooking && searchingMarkerCoordinate) {
@@ -436,80 +432,6 @@ export default function CustomerHomeScreen({ navigation }) {
   }, [activeDelivery, pendingBooking, searchModalVisible]);
 
   useEffect(() => {
-    if (!activeDelivery?.id) {
-      setIsActiveDeliverySheetExpanded(false);
-      setHasUnreadDeliveryChat(false);
-    }
-  }, [activeDelivery?.id]);
-
-  useEffect(() => {
-    const activeRequestId =
-      activeDelivery?.id || activeDelivery?.requestId || activeDelivery?.request_id || null;
-    if (!activeDelivery || !currentUserId || typeof subscribeToConversations !== "function") {
-      setHasUnreadDeliveryChat(false);
-      return undefined;
-    }
-
-    const requestIdString = activeRequestId ? String(activeRequestId) : "";
-    const activeDriverId = String(
-      activeDelivery?.assignedDriverId ||
-      activeDelivery?.driverId ||
-      activeDelivery?.driver_id ||
-      ""
-    );
-    let isDisposed = false;
-
-    const updateUnreadState = (userConversations = []) => {
-      if (isDisposed) return;
-      const unreadConversations = userConversations.filter(
-        (conversation) =>
-          Number(conversation?.unreadByCustomer || 0) > 0 &&
-          Boolean(conversation?.lastMessageAt || conversation?.lastMessage)
-      );
-
-      const hasTripMatchUnread = unreadConversations.some(
-        (conversation) =>
-        (
-          (requestIdString && String(conversation?.requestId || "") === requestIdString) ||
-          (activeDriverId && String(conversation?.driverId || "") === activeDriverId)
-        )
-      );
-
-      // Delivery tracker badge should reflect only active-delivery chat unread state.
-      setHasUnreadDeliveryChat(hasTripMatchUnread);
-    };
-
-    const refreshUnread = async () => {
-      if (typeof getConversations !== "function" || isDisposed) return;
-      const conversations = await getConversations(currentUserId, "customer");
-      updateUnreadState(Array.isArray(conversations) ? conversations : []);
-    };
-
-    refreshUnread();
-    const pollInterval = setInterval(refreshUnread, 2500);
-
-    const unsubscribe = subscribeToConversations(
-      currentUserId,
-      "customer",
-      updateUnreadState
-    );
-
-    return () => {
-      isDisposed = true;
-      clearInterval(pollInterval);
-      unsubscribe?.();
-    };
-  }, [
-    activeDelivery?.id,
-    activeDelivery?.assignedDriverId,
-    activeDelivery?.driverId,
-    activeDelivery?.driver_id,
-    currentUserId,
-    getConversations,
-    subscribeToConversations,
-  ]);
-
-  useEffect(() => {
     if (!pendingBooking) {
       setIsSearchSheetExpanded(false);
     }
@@ -630,87 +552,21 @@ export default function CustomerHomeScreen({ navigation }) {
     [completedTripForRating, closeRatingModal, refreshProfile, submitTripRating]
   );
 
-  const handleDeliveryComplete = useCallback((deliveryData) => {
-    setActiveDelivery(null);
-    const tripId = getTripId(deliveryData);
-    if (!tripId || promptedTripIdsRef.current.has(tripId)) {
+  const handleOpenActiveTripDetails = useCallback(() => {
+    if (!activeDelivery) {
       return;
     }
-    lastActiveTripIdRef.current = null;
-    lastActiveTripSnapshotRef.current = null;
-    promptedTripIdsRef.current.add(tripId);
-    setCompletedTripForRating(deliveryData);
-    setIsRatingModalVisible(true);
-  }, []);
+    const activeTripId = getTripId(activeDelivery);
+    if (!activeTripId) {
+      return;
+    }
 
-  const handleOpenDeliveryChat = useCallback(
-    async (deliveryData) => {
-      const requestId = deliveryData?.id || activeDelivery?.id;
-      if (!requestId || !currentUserId) {
-        return;
-      }
-
-      setHasUnreadDeliveryChat(false);
-
-      try {
-        let driverId =
-          deliveryData?.assignedDriverId ||
-          deliveryData?.driverId ||
-          deliveryData?.driver_id ||
-          activeDelivery?.assignedDriverId ||
-          activeDelivery?.driverId ||
-          activeDelivery?.driver_id ||
-          null;
-
-        let driverName =
-          deliveryData?.assignedDriverEmail ||
-          deliveryData?.driverEmail ||
-          activeDelivery?.assignedDriverEmail ||
-          activeDelivery?.driverEmail ||
-          "Driver";
-
-        if (!driverId && typeof getRequestById === "function") {
-          const latestRequest = await getRequestById(requestId);
-          driverId =
-            latestRequest?.assignedDriverId ||
-            latestRequest?.driverId ||
-            latestRequest?.driver_id ||
-            null;
-
-          if (!driverName || driverName === "Driver") {
-            driverName =
-              latestRequest?.assignedDriverEmail ||
-              latestRequest?.driverEmail ||
-              driverName;
-          }
-        }
-
-        if (!driverId) {
-          Alert.alert("Chat unavailable", "Driver details are not available yet.");
-          return;
-        }
-
-        const conversationId = await createConversation(requestId, currentUserId, driverId);
-
-        navigation.navigate("MessageScreen", {
-          conversationId,
-          requestId,
-          driverName: driverName || "Driver",
-        });
-      } catch (chatError) {
-        console.error("Error opening delivery chat:", chatError);
-        Alert.alert("Error", "Could not open chat right now. Please try again.");
-      }
-    },
-    [
-      activeDelivery,
-      createConversation,
-      currentUserId,
-      getRequestById,
-      navigation,
-      setHasUnreadDeliveryChat,
-    ]
-  );
+    navigation.navigate("CustomerTripDetailsScreen", {
+      tripId: activeTripId,
+      tripSummary: activeDelivery,
+      tripSnapshot: activeDelivery,
+    });
+  }, [activeDelivery, navigation]);
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
@@ -960,26 +816,33 @@ export default function CustomerHomeScreen({ navigation }) {
         />
       </View>
 
-      {activeDelivery && (
+      {activeDelivery && activeDeliveryStep && (
         <View
           style={[
-            styles.activeDeliverySheetContainer,
+            styles.floatingTriggerContainer,
             {
-              bottom: 0,
+              paddingBottom: floatingBottomOffset,
+              width: floatingWidth,
             },
           ]}
         >
-          <DeliveryStatusTracker
-            requestId={activeDelivery.id}
-            onDeliveryComplete={handleDeliveryComplete}
-            expanded={isActiveDeliverySheetExpanded}
-            onExpandedChange={setIsActiveDeliverySheetExpanded}
-            onOpenChat={handleOpenDeliveryChat}
-            hasUnreadChat={hasUnreadDeliveryChat}
-            variant="sheet"
-            bottomInset={insets.bottom}
-            maxExpandedHeight={trackerMaxExpandedHeight}
-          />
+          <TouchableOpacity
+            style={styles.floatingTrigger}
+            onPress={handleOpenActiveTripDetails}
+            activeOpacity={0.9}
+          >
+            <View style={styles.triggerIconCircle}>
+              <Ionicons name={activeDeliveryStep.icon} size={20} color={colors.text.primary} />
+            </View>
+
+            <Text style={styles.floatingTriggerText} numberOfLines={1}>
+              {activeDeliveryStep.label}
+            </Text>
+
+            <View style={styles.activeTripOpenIndicator}>
+              <Ionicons name="chevron-forward" size={14} color={colors.text.secondary} />
+            </View>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1191,17 +1054,6 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     ...shadows.lg,
   },
-  activeDeliverySheetContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    width: "100%",
-    bottom: 0,
-    zIndex: 24,
-    overflow: "hidden",
-    marginHorizontal: 0,
-    paddingHorizontal: 0,
-  },
   floatingTriggerContainer: {
     position: "absolute",
     bottom: 0,
@@ -1261,6 +1113,14 @@ const styles = StyleSheet.create({
   },
   timeIconRight: {
     marginLeft: 4,
+  },
+  activeTripOpenIndicator: {
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background.secondary,
   },
   searchingMarkerContainer: {
     width: 136,

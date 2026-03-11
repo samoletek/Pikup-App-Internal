@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,7 +16,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import ScreenHeader from "../../components/ScreenHeader";
 import { useAuth } from "../../contexts/AuthContext";
+import { supabase } from "../../config/supabase";
 import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
+import {
+  CUSTOMER_TRIP_PROGRESS_STEPS,
+  getCustomerTripProgressIndex,
+  getCustomerTripProgressStep,
+} from "../../constants/customerTripProgress";
+import { DRIVER_RATING_BADGES } from "../../constants/ratingBadges";
 import {
   borderRadius,
   colors,
@@ -32,6 +42,32 @@ const ROUTE_DIVIDER_HEIGHT = spacing.lg - 2;
 const BODY_LINE_HEIGHT = Math.round(
   typography.fontSize.base * typography.lineHeight.normal
 );
+const STAR_SIZE = 32;
+const PHOTO_PREVIEW_SIZE = 112;
+
+const toArray = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+  }
+
+  return [];
+};
 
 const formatAmount = (value) => {
   if (typeof value === "string" && value.includes("$")) {
@@ -99,12 +135,87 @@ const formatReason = (value) => {
     .join(" ");
 };
 
+const getRatingLabel = (rating) => {
+  if (rating >= 5) return "Excellent";
+  if (rating >= 4) return "Great";
+  if (rating >= 3) return "Good";
+  if (rating >= 2) return "Fair";
+  return "Needs improvement";
+};
+
+const resolvePhotoUri = (photo) => {
+  if (!photo) {
+    return null;
+  }
+
+  if (typeof photo === "string") {
+    const raw = photo.trim();
+    if (!raw) {
+      return null;
+    }
+
+    if (raw.startsWith("{") || raw.startsWith("[")) {
+      try {
+        return resolvePhotoUri(JSON.parse(raw));
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (/^(https?:\/\/|file:\/\/|content:\/\/|ph:\/\/|asset:\/\/|data:image\/)/i.test(raw)) {
+      return raw;
+    }
+
+    const normalizedPath = raw.replace(/^\/+/, "").replace(/^trip_photos\//, "");
+    const { data } = supabase.storage.from("trip_photos").getPublicUrl(normalizedPath);
+    return data?.publicUrl || null;
+  }
+
+  if (Array.isArray(photo)) {
+    return resolvePhotoUri(photo[0]);
+  }
+
+  if (typeof photo === "object") {
+    const candidates = [
+      photo.uri,
+      photo.url,
+      photo.photo_url,
+      photo.publicUrl,
+      photo.public_url,
+      photo.imageUrl,
+      photo.image_url,
+      photo.secure_url,
+      photo.path,
+      photo.storagePath,
+      photo.storage_path,
+      photo.filePath,
+      photo.file_path,
+      photo.source?.uri,
+      photo.asset?.uri,
+    ];
+
+    for (const candidate of candidates) {
+      const resolved = resolvePhotoUri(candidate);
+      if (resolved) {
+        return resolved;
+      }
+    }
+  }
+
+  return null;
+};
+
+const resolvePhotoUris = (photos = []) => {
+  return toArray(photos).map(resolvePhotoUri).filter(Boolean);
+};
+
 const statusMeta = (status) => {
   const normalized = normalizeTripStatus(status);
+  const progressStep = getCustomerTripProgressStep(normalized);
 
   if (normalized === TRIP_STATUS.COMPLETED) {
     return {
-      label: "Completed",
+      label: "Delivered",
       icon: "checkmark-circle",
       textColor: colors.success,
       chipBackground: colors.successLight,
@@ -117,6 +228,15 @@ const statusMeta = (status) => {
       icon: "close-circle",
       textColor: colors.error,
       chipBackground: colors.errorLight,
+    };
+  }
+
+  if (progressStep) {
+    return {
+      label: progressStep.label,
+      icon: progressStep.icon,
+      textColor: colors.primary,
+      chipBackground: colors.primaryLight,
     };
   }
 
@@ -163,22 +283,37 @@ const toDisplayTrip = (trip, fallback) => {
 
   const status = normalizeTripStatus(source.status);
   const meta = statusMeta(status);
-  const id = source.id || fallback?.id || "Unknown";
+  const rawId = source.id || fallback?.id || "Unknown";
+  const id = String(rawId);
 
   const driverNameRaw = firstText(
     source.driver,
     source.assignedDriverEmail,
-    source.driverEmail
+    source.driverEmail,
+    source.driver_email
   );
   const driverName = driverNameRaw
     ? driverNameRaw.includes("@")
       ? driverNameRaw.split("@")[0]
       : driverNameRaw
     : "Not assigned";
+  const driverId =
+    source.assignedDriverId ||
+    source.driverId ||
+    source.driver_id ||
+    source.assigned_driver_id ||
+    null;
+
+  const pickupPhotos = toArray(source.pickupPhotos || source.pickup_photos);
+  const dropoffPhotos = toArray(source.dropoffPhotos || source.dropoff_photos);
+  const progressIndex = getCustomerTripProgressIndex(status);
+  const currentStep = progressIndex >= 0
+    ? CUSTOMER_TRIP_PROGRESS_STEPS[progressIndex]
+    : null;
 
   return {
     id,
-    idShort: String(id).slice(0, 8).toUpperCase(),
+    idShort: id.slice(0, 8).toUpperCase(),
     status,
     statusLabel: meta.label,
     statusIcon: meta.icon,
@@ -193,14 +328,46 @@ const toDisplayTrip = (trip, fallback) => {
     itemsCount,
     itemDescription: primaryItem,
     driverName,
+    driverId,
+    pickupPhotos,
+    dropoffPhotos,
+    progressIndex,
+    progressStep: currentStep,
     cancelledAt: source.cancelledAt || source.cancelled_at || null,
     cancellationReason: source.cancellationReason || source.cancellation_reason || null,
   };
 };
 
+const PhotoGallerySection = ({ title, photos, emptyLabel }) => {
+  return (
+    <View style={styles.sectionCard}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+
+      {photos.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.photoScrollContent}
+        >
+          {photos.map((photoUri, index) => (
+            <View key={`${title}-${index}`} style={styles.photoTile}>
+              <Image source={{ uri: photoUri }} style={styles.photoTileImage} resizeMode="cover" />
+              <View style={styles.photoTileBadge}>
+                <Text style={styles.photoTileBadgeText}>{index + 1}</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={styles.sectionHint}>{emptyLabel}</Text>
+      )}
+    </View>
+  );
+};
+
 export default function CustomerTripDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { getRequestById } = useAuth();
+  const { getRequestById, submitTripRating, refreshProfile } = useAuth();
 
   const tripSummary = route?.params?.tripSummary || null;
   const initialSnapshot = route?.params?.tripSnapshot || tripSummary || null;
@@ -210,11 +377,27 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   const [tripData, setTripData] = useState(initialSnapshot);
   const [loading, setLoading] = useState(!isMockTrip && Boolean(tripId));
   const [refreshing, setRefreshing] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [selectedBadges, setSelectedBadges] = useState([]);
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [isRatingSubmitted, setIsRatingSubmitted] = useState(false);
 
   const displayTrip = useMemo(
     () => toDisplayTrip(tripData, tripSummary),
     [tripData, tripSummary]
   );
+
+  const pickupPhotoUris = useMemo(
+    () => resolvePhotoUris(displayTrip.pickupPhotos),
+    [displayTrip.pickupPhotos]
+  );
+  const dropoffPhotoUris = useMemo(
+    () => resolvePhotoUris(displayTrip.dropoffPhotos),
+    [displayTrip.dropoffPhotos]
+  );
+
+  const canRateDriver =
+    displayTrip.status === TRIP_STATUS.COMPLETED && Boolean(displayTrip.driverId);
 
   const loadTrip = useCallback(
     async ({ refresh = false } = {}) => {
@@ -249,6 +432,74 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   useEffect(() => {
     loadTrip();
   }, [loadTrip]);
+
+  useEffect(() => {
+    setRating(0);
+    setSelectedBadges([]);
+    setIsRatingSubmitted(false);
+  }, [displayTrip.id]);
+
+  const toggleBadge = useCallback(
+    (badgeId) => {
+      if (isRatingSubmitted) {
+        return;
+      }
+
+      setSelectedBadges((prev) => {
+        if (prev.includes(badgeId)) {
+          return prev.filter((id) => id !== badgeId);
+        }
+        return [...prev, badgeId];
+      });
+    },
+    [isRatingSubmitted]
+  );
+
+  const submitDriverRating = useCallback(async () => {
+    if (!canRateDriver || !displayTrip.id || !displayTrip.driverId) {
+      Alert.alert("Rating unavailable", "Driver details are missing for this trip.");
+      return;
+    }
+
+    if (rating < 1) {
+      Alert.alert("Select rating", "Please tap at least one star.");
+      return;
+    }
+
+    try {
+      setIsSubmittingRating(true);
+      const result = await submitTripRating({
+        requestId: displayTrip.id,
+        toUserId: displayTrip.driverId,
+        toUserType: "driver",
+        rating,
+        badges: selectedBadges,
+      });
+
+      await refreshProfile?.();
+      setIsRatingSubmitted(true);
+
+      if (result?.alreadySubmitted) {
+        Alert.alert("Rating already submitted", "You already rated this trip.");
+        return;
+      }
+
+      Alert.alert("Thanks for your feedback", "Your rating has been saved.");
+    } catch (error) {
+      console.error("Error submitting trip rating from details:", error);
+      Alert.alert("Error", "Failed to submit rating. Please try again.");
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  }, [
+    canRateDriver,
+    displayTrip.driverId,
+    displayTrip.id,
+    rating,
+    refreshProfile,
+    selectedBadges,
+    submitTripRating,
+  ]);
 
   if (loading && !tripData && !tripSummary) {
     return (
@@ -333,6 +584,83 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
           </LinearGradient>
 
           <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Trip Status</Text>
+
+            {displayTrip.progressStep ? (
+              <>
+                <View style={styles.currentStepCard}>
+                  <View style={styles.currentStepIconWrap}>
+                    <Ionicons
+                      name={displayTrip.progressStep.icon}
+                      size={ICON_SIZE_BASE}
+                      color={colors.white}
+                    />
+                  </View>
+                  <View style={styles.currentStepTextWrap}>
+                    <Text style={styles.currentStepTitle}>{displayTrip.progressStep.label}</Text>
+                    <Text style={styles.currentStepSubtitle}>
+                      {displayTrip.progressStep.description}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.progressList}>
+                  {CUSTOMER_TRIP_PROGRESS_STEPS.map((step, index) => {
+                    const isCompleted = displayTrip.progressIndex > index;
+                    const isCurrent = displayTrip.progressIndex === index;
+                    const isReached = displayTrip.progressIndex >= index;
+
+                    return (
+                      <View key={step.key} style={styles.progressStepRow}>
+                        <View style={styles.progressStepRail}>
+                          <View
+                            style={[
+                              styles.progressStepIconWrap,
+                              isReached && styles.progressStepIconWrapReached,
+                              isCurrent && styles.progressStepIconWrapCurrent,
+                            ]}
+                          >
+                            <Ionicons
+                              name={step.icon}
+                              size={14}
+                              color={isReached ? colors.white : colors.text.muted}
+                            />
+                          </View>
+                          {index < CUSTOMER_TRIP_PROGRESS_STEPS.length - 1 && (
+                            <View
+                              style={[
+                                styles.progressConnector,
+                                isCompleted && styles.progressConnectorReached,
+                              ]}
+                            />
+                          )}
+                        </View>
+
+                        <View style={styles.progressStepTextWrap}>
+                          <Text
+                            style={[
+                              styles.progressStepLabel,
+                              isReached && styles.progressStepLabelReached,
+                              isCurrent && styles.progressStepLabelCurrent,
+                            ]}
+                          >
+                            {step.label}
+                          </Text>
+                          <Text style={styles.progressStepDescription}>{step.description}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            ) : (
+              <Text style={styles.sectionHint}>
+                Detailed step tracking is unavailable for this status.
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Route</Text>
             <View style={styles.routeRow}>
               <Ionicons
@@ -366,6 +694,111 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Primary Item</Text>
             <Text style={styles.itemDescription}>{displayTrip.itemDescription}</Text>
+          </View>
+
+          <PhotoGallerySection
+            title={`Pickup Photos (${pickupPhotoUris.length})`}
+            photos={pickupPhotoUris}
+            emptyLabel="Driver has not uploaded pickup photos yet."
+          />
+
+          <PhotoGallerySection
+            title={`Delivery Photos (${dropoffPhotoUris.length})`}
+            photos={dropoffPhotoUris}
+            emptyLabel="Driver has not uploaded delivery photos yet."
+          />
+
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionTitle}>Rate Your Driver</Text>
+
+            {canRateDriver ? (
+              <>
+                <Text style={styles.ratingSubtitle}>
+                  How was your trip with {displayTrip.driverName}?
+                </Text>
+
+                <View style={styles.starsContainer}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const isSelected = star <= rating;
+                    return (
+                      <TouchableOpacity
+                        key={star}
+                        style={styles.starButton}
+                        onPress={() => setRating(star)}
+                        disabled={isRatingSubmitted || isSubmittingRating}
+                      >
+                        <Ionicons
+                          name={isSelected ? "star" : "star-outline"}
+                          size={STAR_SIZE}
+                          color={isSelected ? colors.warning : colors.text.muted}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {rating > 0 && <Text style={styles.ratingLabel}>{getRatingLabel(rating)}</Text>}
+
+                <Text style={styles.badgesTitle}>Badges</Text>
+                <View style={styles.badgesRow}>
+                  {DRIVER_RATING_BADGES.map((badge) => {
+                    const isSelected = selectedBadges.includes(badge.id);
+
+                    return (
+                      <TouchableOpacity
+                        key={badge.id}
+                        style={[
+                          styles.badgeButton,
+                          isSelected && {
+                            borderColor: badge.activeColor,
+                            backgroundColor: `${badge.activeColor}22`,
+                          },
+                        ]}
+                        onPress={() => toggleBadge(badge.id)}
+                        disabled={isRatingSubmitted || isSubmittingRating}
+                      >
+                        <Ionicons
+                          name={badge.icon}
+                          size={18}
+                          color={isSelected ? badge.activeColor : colors.text.muted}
+                        />
+                        <Text
+                          style={[
+                            styles.badgeLabel,
+                            isSelected && { color: badge.activeColor },
+                          ]}
+                        >
+                          {badge.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.submitRatingButton,
+                    (isRatingSubmitted || isSubmittingRating || rating < 1) &&
+                    styles.submitRatingButtonDisabled,
+                  ]}
+                  onPress={submitDriverRating}
+                  activeOpacity={0.9}
+                  disabled={isRatingSubmitted || isSubmittingRating || rating < 1}
+                >
+                  {isSubmittingRating ? (
+                    <ActivityIndicator size="small" color={colors.white} />
+                  ) : (
+                    <Text style={styles.submitRatingButtonText}>
+                      {isRatingSubmitted ? "Rating Submitted" : "Submit Rating"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.sectionHint}>
+                Rating becomes available after the trip is completed.
+              </Text>
+            )}
           </View>
 
           {displayTrip.status === TRIP_STATUS.CANCELLED && (
@@ -471,6 +904,104 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.sm,
   },
+  sectionHint: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    lineHeight: BODY_LINE_HEIGHT,
+  },
+  currentStepCard: {
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.base,
+  },
+  currentStepIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: borderRadius.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    marginRight: spacing.sm,
+  },
+  currentStepTextWrap: {
+    flex: 1,
+  },
+  currentStepTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  currentStepSubtitle: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+  },
+  progressList: {
+    paddingTop: spacing.xs,
+  },
+  progressStepRow: {
+    flexDirection: "row",
+  },
+  progressStepRail: {
+    width: 20,
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  progressStepIconWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: borderRadius.circle,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background.elevated,
+  },
+  progressStepIconWrapReached: {
+    backgroundColor: colors.primaryDark,
+    borderColor: colors.primaryDark,
+  },
+  progressStepIconWrapCurrent: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  progressConnector: {
+    marginTop: spacing.xs,
+    width: 2,
+    flex: 1,
+    minHeight: spacing.base,
+    backgroundColor: colors.border.strong,
+  },
+  progressConnectorReached: {
+    backgroundColor: colors.primary,
+  },
+  progressStepTextWrap: {
+    flex: 1,
+    paddingBottom: spacing.base,
+  },
+  progressStepLabel: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  progressStepLabelReached: {
+    color: colors.text.primary,
+  },
+  progressStepLabelCurrent: {
+    color: colors.primary,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  progressStepDescription: {
+    marginTop: spacing.xs,
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    lineHeight: Math.round(typography.fontSize.sm * typography.lineHeight.normal),
+  },
   routeRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -513,5 +1044,101 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize.base,
     lineHeight: BODY_LINE_HEIGHT,
+  },
+  photoScrollContent: {
+    paddingVertical: spacing.xs,
+    paddingRight: spacing.sm,
+  },
+  photoTile: {
+    width: PHOTO_PREVIEW_SIZE,
+    height: PHOTO_PREVIEW_SIZE,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    marginRight: spacing.sm,
+  },
+  photoTileImage: {
+    width: "100%",
+    height: "100%",
+  },
+  photoTileBadge: {
+    position: "absolute",
+    left: spacing.xs,
+    bottom: spacing.xs,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+  },
+  photoTileBadgeText: {
+    color: colors.white,
+    fontSize: typography.fontSize.xs + 1,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  ratingSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    lineHeight: BODY_LINE_HEIGHT,
+  },
+  starsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: spacing.base,
+  },
+  starButton: {
+    paddingHorizontal: spacing.xs,
+  },
+  ratingLabel: {
+    marginTop: spacing.sm,
+    textAlign: "center",
+    color: colors.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  badgesTitle: {
+    marginTop: spacing.lg,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  badgesRow: {
+    marginTop: spacing.sm,
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  badgeButton: {
+    flex: 1,
+    alignItems: "center",
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.background.primary,
+  },
+  badgeLabel: {
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.xs + 1,
+    textAlign: "center",
+    color: colors.text.muted,
+    fontWeight: typography.fontWeight.medium,
+  },
+  submitRatingButton: {
+    marginTop: spacing.lg,
+    height: 46,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  submitRatingButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitRatingButtonText: {
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
 });
