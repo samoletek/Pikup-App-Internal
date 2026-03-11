@@ -26,8 +26,6 @@ import {
 } from "../../constants/tripStatus";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
-import DeliveryStatusTracker from "../../components/DeliveryStatusTracker";
-import TripRatingModal from "../../components/TripRatingModal";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import RedkikService from "../../services/RedkikService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
@@ -101,7 +99,39 @@ const formatScheduleLabel = (scheduledTime) => {
   });
 };
 
-const RECENT_COMPLETION_PROMPT_WINDOW_MS = 10 * 60 * 1000;
+const ACTIVE_DELIVERY_STEP_META = Object.freeze({
+  [TRIP_STATUS.ACCEPTED]: {
+    label: "Delivery Confirmed",
+    icon: "checkmark-circle",
+  },
+  [TRIP_STATUS.IN_PROGRESS]: {
+    label: "On the way to you",
+    icon: "car-sport",
+  },
+  [TRIP_STATUS.ARRIVED_AT_PICKUP]: {
+    label: "Driver arrived",
+    icon: "location",
+  },
+  [TRIP_STATUS.PICKED_UP]: {
+    label: "Package collected",
+    icon: "cube",
+  },
+  [TRIP_STATUS.EN_ROUTE_TO_DROPOFF]: {
+    label: "On the way to destination",
+    icon: "navigate",
+  },
+  [TRIP_STATUS.ARRIVED_AT_DROPOFF]: {
+    label: "Arrived at destination",
+    icon: "home",
+  },
+  [TRIP_STATUS.COMPLETED]: {
+    label: "Delivered",
+    icon: "checkmark-circle",
+  },
+});
+
+const ACTIVE_TRIP_BUTTON_COLOR = "#F6C74A";
+
 const ACTIVE_DELIVERY_POLL_INTERVAL_MS = 5000;
 const IDLE_DELIVERY_POLL_INTERVAL_MS = 30000;
 
@@ -111,23 +141,6 @@ const getTripId = (trip) => {
     return null;
   }
   return String(rawId);
-};
-
-const getTripCompletionTimestampMs = (trip) => {
-  const rawCompletionDate =
-    trip?.completedAt ||
-    trip?.completed_at ||
-    trip?.updatedAt ||
-    trip?.updated_at ||
-    trip?.createdAt ||
-    trip?.created_at;
-
-  if (!rawCompletionDate) {
-    return Number.NaN;
-  }
-
-  const parsedTimestamp = new Date(rawCompletionDate).getTime();
-  return Number.isFinite(parsedTimestamp) ? parsedTimestamp : Number.NaN;
 };
 
 export default function CustomerHomeScreen({ navigation }) {
@@ -140,7 +153,6 @@ export default function CustomerHomeScreen({ navigation }) {
     getUserPickupRequests,
     createPickupRequest,
     cancelOrder,
-    submitTripRating,
     createConversation,
     getRequestById,
     getConversations,
@@ -159,15 +171,10 @@ export default function CustomerHomeScreen({ navigation }) {
   const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
-  const [completedTripForRating, setCompletedTripForRating] = useState(null);
-  const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
-  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [hasUnreadDeliveryChat, setHasUnreadDeliveryChat] = useState(false);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
+  const activeTripPulseAnim = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
-  const promptedTripIdsRef = useRef(new Set());
-  const lastActiveTripIdRef = useRef(null);
-  const lastActiveTripSnapshotRef = useRef(null);
 
   const floatingWidth = useMemo(
     () => Math.min(Math.max(width - spacing.lg * 2, 280), 560),
@@ -194,6 +201,16 @@ export default function CustomerHomeScreen({ navigation }) {
   const searchingPulseSize = searchingPinPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [24, 96],
+  });
+
+  const activeTripPulseScale = activeTripPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.025],
+  });
+
+  const activeTripPulseOpacity = activeTripPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1],
   });
 
   const searchingPulseRingOpacity = searchingPinPulse.interpolate({
@@ -264,6 +281,15 @@ export default function CustomerHomeScreen({ navigation }) {
     };
   }, [pendingBooking]);
 
+  const activeDeliveryStep = useMemo(() => {
+    if (!activeDelivery) {
+      return null;
+    }
+
+    const normalizedStatus = normalizeTripStatus(activeDelivery.status);
+    return ACTIVE_DELIVERY_STEP_META[normalizedStatus] || null;
+  }, [activeDelivery]);
+
   const mapCenterCoordinate = useMemo(() => {
     if (pendingBooking && searchingMarkerCoordinate) {
       return searchingMarkerCoordinate;
@@ -305,11 +331,6 @@ export default function CustomerHomeScreen({ navigation }) {
       return;
     }
 
-    // Don't update delivery state while customer is rating the trip
-    if (isRatingModalVisible) {
-      return;
-    }
-
     try {
       const requests = await getUserPickupRequests?.();
       if (!Array.isArray(requests)) {
@@ -329,82 +350,15 @@ export default function CustomerHomeScreen({ navigation }) {
       const pendingRequest = customerRequests.find(
         (req) => normalizeTripStatus(req.status) === TRIP_STATUS.PENDING
       );
-      const previousActiveTripId = lastActiveTripIdRef.current;
-      const currentActiveTripId = getTripId(activeRequest);
-      let completedRequestForRating = null;
-
-      if (currentActiveTripId) {
-        lastActiveTripIdRef.current = currentActiveTripId;
-        lastActiveTripSnapshotRef.current = activeRequest;
-      } else if (previousActiveTripId) {
-        const transitionedRequest = customerRequests.find(
-          (req) =>
-            getTripId(req) === previousActiveTripId &&
-            normalizeTripStatus(req.status) === TRIP_STATUS.COMPLETED
-        );
-
-        if (transitionedRequest) {
-          const previousSnapshot = lastActiveTripSnapshotRef.current;
-          completedRequestForRating = {
-            ...previousSnapshot,
-            ...transitionedRequest,
-            assignedDriverId:
-              transitionedRequest?.assignedDriverId ||
-              transitionedRequest?.driverId ||
-              transitionedRequest?.driver_id ||
-              previousSnapshot?.assignedDriverId ||
-              previousSnapshot?.driverId ||
-              previousSnapshot?.driver_id ||
-              null,
-            assignedDriverEmail:
-              transitionedRequest?.assignedDriverEmail ||
-              transitionedRequest?.driverEmail ||
-              transitionedRequest?.driver_email ||
-              previousSnapshot?.assignedDriverEmail ||
-              previousSnapshot?.driverEmail ||
-              previousSnapshot?.driver_email ||
-              null,
-          };
-        }
-
-        lastActiveTripIdRef.current = null;
-        lastActiveTripSnapshotRef.current = null;
-      }
-
-      if (!completedRequestForRating && !currentActiveTripId) {
-        const latestCompletedRequest = customerRequests.find(
-          (req) => normalizeTripStatus(req.status) === TRIP_STATUS.COMPLETED
-        );
-        const latestCompletedRequestId = getTripId(latestCompletedRequest);
-        const latestCompletedTimestamp = getTripCompletionTimestampMs(latestCompletedRequest);
-
-        if (
-          latestCompletedRequestId &&
-          Number.isFinite(latestCompletedTimestamp) &&
-          Date.now() - latestCompletedTimestamp <= RECENT_COMPLETION_PROMPT_WINDOW_MS
-        ) {
-          completedRequestForRating = latestCompletedRequest;
-        }
-      }
 
       setActiveDelivery(activeRequest || null);
       setPendingBooking(activeRequest ? null : pendingRequest || null);
-
-      const completedRequestId = getTripId(completedRequestForRating);
-      if (
-        completedRequestId &&
-        !promptedTripIdsRef.current.has(completedRequestId)
-      ) {
-        promptedTripIdsRef.current.add(completedRequestId);
-        setCompletedTripForRating(completedRequestForRating);
-        setIsRatingModalVisible(true);
-      }
     } catch (error) {
       console.error("Error checking active deliveries:", error);
       setActiveDelivery(null);
       setPendingBooking(null);
     }
-  }, [currentUserId, getUserPickupRequests, isRatingModalVisible]);
+  }, [currentUserId, getUserPickupRequests]);
 
   useEffect(() => {
     loadCurrentLocation();
@@ -556,6 +510,39 @@ export default function CustomerHomeScreen({ navigation }) {
   }, [pendingBooking, searchingPinPulse]);
 
   useEffect(() => {
+    if (!activeDeliveryStep) {
+      activeTripPulseAnim.stopAnimation();
+      activeTripPulseAnim.setValue(0);
+      return;
+    }
+
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(activeTripPulseAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(activeTripPulseAnim, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseAnimation.start();
+
+    return () => {
+      pulseAnimation.stop();
+      activeTripPulseAnim.stopAnimation();
+      activeTripPulseAnim.setValue(0);
+    };
+  }, [activeDeliveryStep, activeTripPulseAnim]);
+
+  useEffect(() => {
     if (!pendingBooking) {
       setSearchElapsedSeconds(0);
       return;
@@ -571,77 +558,6 @@ export default function CustomerHomeScreen({ navigation }) {
 
     return () => clearInterval(timerId);
   }, [pendingBooking, searchingStartedAtMs]);
-
-  const completedDriverName = useMemo(() => {
-    if (!completedTripForRating) return "your driver";
-    const rawName = completedTripForRating.assignedDriverName ||
-      completedTripForRating.driverName ||
-      completedTripForRating.assignedDriverEmail ||
-      completedTripForRating.driverEmail;
-    if (!rawName) return "your driver";
-    return rawName.includes("@") ? rawName.split("@")[0] : rawName;
-  }, [completedTripForRating]);
-
-  const closeRatingModal = useCallback(() => {
-    setIsRatingModalVisible(false);
-    setCompletedTripForRating(null);
-  }, []);
-
-  const handleSubmitTripRating = useCallback(
-    async ({ rating, badges }) => {
-      if (!completedTripForRating?.id) {
-        closeRatingModal();
-        return;
-      }
-
-      const tripId = completedTripForRating.id;
-      const driverId =
-        completedTripForRating.assignedDriverId ||
-        completedTripForRating.driverId ||
-        completedTripForRating.driver_id ||
-        null;
-
-      if (!driverId) {
-        Alert.alert("Rating unavailable", "Driver details are missing for this trip.");
-        closeRatingModal();
-        return;
-      }
-
-      try {
-        setIsSubmittingRating(true);
-        await submitTripRating({
-          requestId: tripId,
-          toUserId: driverId,
-          toUserType: "driver",
-          rating,
-          badges,
-        });
-        await refreshProfile?.();
-        closeRatingModal();
-        Alert.alert("Thank you!", "Your rating has been saved.");
-      } catch (error) {
-        console.error("Error submitting customer trip rating:", error);
-        promptedTripIdsRef.current.delete(tripId);
-        Alert.alert("Error", "Failed to save your rating. Please try again.");
-      } finally {
-        setIsSubmittingRating(false);
-      }
-    },
-    [completedTripForRating, closeRatingModal, refreshProfile, submitTripRating]
-  );
-
-  const handleDeliveryComplete = useCallback((deliveryData) => {
-    setActiveDelivery(null);
-    const tripId = getTripId(deliveryData);
-    if (!tripId || promptedTripIdsRef.current.has(tripId)) {
-      return;
-    }
-    lastActiveTripIdRef.current = null;
-    lastActiveTripSnapshotRef.current = null;
-    promptedTripIdsRef.current.add(tripId);
-    setCompletedTripForRating(deliveryData);
-    setIsRatingModalVisible(true);
-  }, []);
 
   const handleOpenDeliveryChat = useCallback(
     async (deliveryData) => {
@@ -711,6 +627,23 @@ export default function CustomerHomeScreen({ navigation }) {
       setHasUnreadDeliveryChat,
     ]
   );
+
+  const handleOpenActiveTripDetails = useCallback(() => {
+    if (!activeDelivery) {
+      return;
+    }
+
+    const activeTripId = getTripId(activeDelivery);
+    if (!activeTripId) {
+      return;
+    }
+
+    navigation.navigate("CustomerTripDetailsScreen", {
+      tripId: activeTripId,
+      tripSummary: activeDelivery,
+      tripSnapshot: activeDelivery,
+    });
+  }, [activeDelivery, navigation]);
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
@@ -960,26 +893,52 @@ export default function CustomerHomeScreen({ navigation }) {
         />
       </View>
 
-      {activeDelivery && (
+      {activeDelivery && activeDeliveryStep && (
         <View
           style={[
-            styles.activeDeliverySheetContainer,
-            {
-              bottom: 0,
-            },
+            styles.floatingTriggerContainer,
+            { paddingBottom: floatingBottomOffset, width: floatingWidth },
           ]}
         >
-          <DeliveryStatusTracker
-            requestId={activeDelivery.id}
-            onDeliveryComplete={handleDeliveryComplete}
-            expanded={isActiveDeliverySheetExpanded}
-            onExpandedChange={setIsActiveDeliverySheetExpanded}
-            onOpenChat={handleOpenDeliveryChat}
-            hasUnreadChat={hasUnreadDeliveryChat}
-            variant="sheet"
-            bottomInset={insets.bottom}
-            maxExpandedHeight={trackerMaxExpandedHeight}
-          />
+          <Animated.View
+            style={[
+              styles.activeTripPulseWrap,
+              {
+                opacity: activeTripPulseOpacity,
+                transform: [{ scale: activeTripPulseScale }],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.activeTripTrigger}
+              onPress={handleOpenActiveTripDetails}
+              activeOpacity={0.95}
+            >
+              <View style={styles.activeTripSideSlot}>
+                <View style={styles.activeTripIconCircle}>
+                  <Ionicons
+                    name={activeDeliveryStep.icon}
+                    size={20}
+                    color={colors.background.primary}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.activeTripTriggerText} numberOfLines={1}>
+                {activeDeliveryStep.label}
+              </Text>
+
+              <View style={styles.activeTripSideSlot}>
+                <View style={styles.activeTripOpenIndicator}>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color={colors.background.primary}
+                  />
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       )}
 
@@ -1150,18 +1109,6 @@ export default function CustomerHomeScreen({ navigation }) {
           />
         )}
       />
-
-      <TripRatingModal
-        visible={isRatingModalVisible}
-        targetRole="driver"
-        targetName={completedDriverName}
-        title="Rate your driver"
-        subtitle={`How was your delivery with ${completedDriverName}?`}
-        submitLabel="Submit rating"
-        submitting={isSubmittingRating}
-        onClose={closeRatingModal}
-        onSubmit={handleSubmitTripRating}
-      />
     </View>
   );
 }
@@ -1261,6 +1208,54 @@ const styles = StyleSheet.create({
   },
   timeIconRight: {
     marginLeft: 4,
+  },
+  activeTripPulseWrap: {
+    width: "100%",
+  },
+  activeTripTrigger: {
+    backgroundColor: ACTIVE_TRIP_BUTTON_COLOR,
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    height: 56,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.base,
+    shadowColor: ACTIVE_TRIP_BUTTON_COLOR,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.42,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  activeTripSideSlot: {
+    width: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeTripIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.circle,
+    backgroundColor: "rgba(255,255,255,0.52)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeTripTriggerText: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.background.primary,
+    flex: 1,
+    textAlign: "center",
+    paddingHorizontal: spacing.xs,
+  },
+  activeTripOpenIndicator: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.circle,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(10,10,31,0.14)",
   },
   searchingMarkerContainer: {
     width: 136,
