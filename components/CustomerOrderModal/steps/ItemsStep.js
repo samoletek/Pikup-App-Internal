@@ -13,7 +13,15 @@ const ANALYSIS_IMAGE_QUALITY = 0.4;
 import * as ImageManipulator from 'expo-image-manipulator';
 import { analyzeImages } from '../../../services/AIService';
 
-const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId, itemErrors, setItemErrors }) => {
+const ItemsStep = ({
+    orderData,
+    setOrderData,
+    expandedItemId,
+    setExpandedItemId,
+    itemErrors,
+    setItemErrors,
+    pendingAttentionCount = 0,
+}) => {
     const [isAnalyzing, setIsAnalyzing] = React.useState(false);
     const [showAIModal, setShowAIModal] = React.useState(false);
 
@@ -102,7 +110,6 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                             category: aiItem.category || 'Other',
                             weightEstimate: aiItem.estimated_weight_lbs,
                             addedByAI: true,
-                            isConfirmed: false,
                         };
 
                         newItems.push(newItem);
@@ -130,24 +137,6 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
             setIsAnalyzing(false);
             setShowAIModal(false);
         }
-    };
-
-    const handleAddItem = () => {
-        const newItem = {
-            id: generateItemId(),
-            name: '',
-            description: '',
-            photos: [],
-            isFragile: false,
-            condition: '',
-            hasInsurance: false,
-            value: '',
-            invoicePhoto: null,
-            weightEstimate: 0,
-            isConfirmed: false,
-        };
-        setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
-        setExpandedItemId(newItem.id);
     };
 
     const handleUpdateItem = (updatedItem) => {
@@ -178,14 +167,20 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
         ]);
     };
 
+    const hasPendingAttention = pendingAttentionCount > 0;
+    const pendingAttentionText = pendingAttentionCount === 1
+        ? '1 item still needs your review before continuing.'
+        : `${pendingAttentionCount} items still need your review before continuing.`;
+
     return (
         <>
             <ScrollView
                 style={styles.stepContent}
                 contentContainerStyle={styles.itemsStepContentContainer}
                 showsVerticalScrollIndicator={false}
+                stickyHeaderIndices={[0]}
             >
-                <View style={styles.aiActionsSection}>
+                <View style={styles.itemsStickyHeader}>
                     <TouchableOpacity
                         style={[styles.aiPrimaryBtn, isAnalyzing && { opacity: 0.7 }]}
                         onPress={() => setShowAIModal(true)}
@@ -200,21 +195,16 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                         </View>
                         <View style={styles.aiActionTextContainer}>
                             <Text style={styles.aiPrimaryTitle}>
-                                {isAnalyzing ? `Analyzing Items...` : 'Add Multiple Item'}
+                                {isAnalyzing ? 'Analyzing Items...' : 'Add Items'}
                             </Text>
                             <Text style={styles.aiActionSubtitle}>
                                 {isAnalyzing ? 'Identifying item details...' : '✦ Powered by Gemini'}
                             </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+                        <View style={styles.addItemsPill}>
+                            <Text style={styles.addItemsPillText}>Add Items</Text>
+                        </View>
                     </TouchableOpacity>
-
-                </View>
-
-                <View style={styles.manualSectionRow}>
-                    <View style={styles.manualSectionLine} />
-                    <Text style={styles.manualSectionText}>Or add items manually</Text>
-                    <View style={styles.manualSectionLine} />
                 </View>
 
                 {orderData.items.length === 0 ? (
@@ -237,12 +227,17 @@ const ItemsStep = ({ orderData, setOrderData, expandedItemId, setExpandedItemId,
                     ))
                 )}
 
-                <TouchableOpacity style={styles.addItemBtn} onPress={handleAddItem}>
-                    <Ionicons name="add-circle" size={24} color={colors.primary} />
-                    <Text style={styles.addItemBtnText}>
-                        {orderData.items.length > 0 ? 'Add Another Item' : 'Add item'}
-                    </Text>
-                </TouchableOpacity>
+                {orderData.items.length > 0 && hasPendingAttention && (
+                    <View style={styles.itemsDisclaimerBox}>
+                        <Ionicons
+                            name="information-circle-outline"
+                            size={18}
+                            color={colors.warning}
+                            style={styles.itemsDisclaimerIcon}
+                        />
+                        <Text style={styles.itemsDisclaimerText}>{pendingAttentionText}</Text>
+                    </View>
+                )}
 
                 <View style={styles.itemsBottomSpacer} />
             </ScrollView>
