@@ -36,15 +36,9 @@ const OrderItemCard = ({
     const remainingSlots = MAX_PHOTOS - item.photos.length;
     const hasPhotoError = !!errors?.photos;
     const isInsuranceActive = normalizedCondition === 'new' && item.hasInsurance;
-    const hasRequiredName = !!item.name?.trim();
-    const hasRequiredPhotos = Array.isArray(item.photos) && item.photos.length > 0;
-    const hasValidCondition = normalizedCondition === 'new' || normalizedCondition === 'used';
-    const hasRequiredValue = normalizedCondition !== 'new' || !!String(item.value || '').trim();
-    const hasRequiredInvoice = !isInsuranceActive || !!item.invoicePhoto;
-    const canConfirmItem = hasRequiredName && hasRequiredPhotos && hasValidCondition && hasRequiredValue && hasRequiredInvoice;
 
     const updateItemDraft = (patch) => {
-        onUpdate({ ...item, ...patch, isConfirmed: false });
+        onUpdate({ ...item, ...patch });
     };
 
     const openPhotoPicker = () => {
@@ -87,42 +81,42 @@ const OrderItemCard = ({
         onToggleExpand();
     };
 
-    const handleConfirmItem = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        onUpdate({ ...item, isConfirmed: true });
-        onToggleExpand();
-    };
-
     return (
         <View style={styles.card}>
             {/* Collapsed Header */}
-            <TouchableOpacity style={styles.cardHeader} onPress={handleToggleExpand}>
-                <View style={styles.cardHeaderLeft}>
-                    {item.photos.length > 0 ? (
-                        <Image source={{ uri: item.photos[0] }} style={styles.thumbnail} />
-                    ) : (
-                        <View style={styles.placeholderThumb}>
-                            <Ionicons name="cube-outline" size={24} color={colors.text.placeholder} />
-                        </View>
-                    )}
-                    <View style={styles.cardHeaderInfo}>
-                        <Text style={styles.itemName} numberOfLines={1}>
-                            {item.name || 'Unnamed Item'}
-                        </Text>
-                        <View style={styles.badges}>
-                            {item.isFragile && (
-                                <View style={[styles.badge, styles.badgeFragile]}>
-                                    <Text style={styles.badgeText}>Fragile</Text>
-                                </View>
-                            )}
-                            {isInsuranceActive && (
-                                <View style={[styles.badge, styles.badgeInsured]}>
-                                    <Text style={styles.badgeText}>Insured</Text>
-                                </View>
-                            )}
+            <View style={styles.cardHeader}>
+                <TouchableOpacity
+                    style={styles.cardHeaderMain}
+                    onPress={handleToggleExpand}
+                    activeOpacity={0.85}
+                >
+                    <View style={styles.cardHeaderLeft}>
+                        {item.photos.length > 0 ? (
+                            <Image source={{ uri: item.photos[0] }} style={styles.thumbnail} />
+                        ) : (
+                            <View style={styles.placeholderThumb}>
+                                <Ionicons name="cube-outline" size={24} color={colors.text.placeholder} />
+                            </View>
+                        )}
+                        <View style={styles.cardHeaderInfo}>
+                            <Text style={styles.itemName} numberOfLines={1}>
+                                {item.name || 'Unnamed Item'}
+                            </Text>
+                            <View style={styles.badges}>
+                                {item.isFragile && (
+                                    <View style={[styles.badge, styles.badgeFragile]}>
+                                        <Text style={styles.badgeText}>Fragile</Text>
+                                    </View>
+                                )}
+                                {isInsuranceActive && (
+                                    <View style={[styles.badge, styles.badgeInsured]}>
+                                        <Text style={styles.badgeText}>Insured</Text>
+                                    </View>
+                                )}
+                            </View>
                         </View>
                     </View>
-                </View>
+                </TouchableOpacity>
                 <View style={styles.cardHeaderActions}>
                     <TouchableOpacity
                         style={styles.headerActionButton}
@@ -133,13 +127,13 @@ const OrderItemCard = ({
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={styles.headerActionButton}
-                        onPress={(e) => { e.stopPropagation?.(); onDelete(); }}
+                        onPress={onDelete}
                         hitSlop={hitSlopDefault}
                     >
                         <Ionicons name="trash-outline" size={22} color={colors.error} />
                     </TouchableOpacity>
                 </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Expanded Content */}
             {isExpanded && (
@@ -253,49 +247,40 @@ const OrderItemCard = ({
                         </View>
                     )}
 
-                    {/* Toggles */}
-                    <View style={styles.toggleRow}>
-                        <TouchableOpacity
-                            style={[styles.toggleBtn, item.isFragile && styles.toggleBtnActive]}
-                            onPress={() => updateItemDraft({ isFragile: !item.isFragile })}
-                        >
-                            <Ionicons
-                                name="warning-outline"
-                                size={20}
-                                color={item.isFragile ? colors.text.primary : colors.text.muted}
-                            />
-                            <Text style={[styles.toggleText, item.isFragile && styles.toggleTextActive]}>
-                                Fragile
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.toggleBtn,
-                                isInsuranceActive && styles.toggleBtnActive,
-                                normalizedCondition !== 'new' && styles.toggleBtnDisabled
-                            ]}
-                            disabled
-                            activeOpacity={1}
-                        >
-                            <Ionicons
-                                name={isInsuranceActive ? "shield-checkmark" : "shield-checkmark-outline"}
-                                size={20}
-                                color={
-                                    normalizedCondition !== 'new'
-                                        ? colors.border.light
-                                        : (isInsuranceActive ? colors.text.primary : colors.text.muted)
-                                }
-                            />
-                            <Text style={[
-                                styles.toggleText,
-                                isInsuranceActive && styles.toggleTextActive,
-                                normalizedCondition !== 'new' && styles.toggleTextDisabled
-                            ]}>
-                                Insurance
-                            </Text>
-                        </TouchableOpacity>
+                    {/* Fragile Yes/No */}
+                    <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Fragile</Text>
+                        <View style={styles.booleanBtnGroup}>
+                            <TouchableOpacity
+                                style={[styles.booleanBtn, item.isFragile === true && styles.booleanBtnActive]}
+                                onPress={() => updateItemDraft({ isFragile: true })}
+                            >
+                                <Text style={[styles.booleanBtnText, item.isFragile === true && styles.booleanBtnTextActive]}>
+                                    Yes
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.booleanBtn, item.isFragile === false && styles.booleanBtnActive]}
+                                onPress={() => updateItemDraft({ isFragile: false })}
+                            >
+                                <Text style={[styles.booleanBtnText, item.isFragile === false && styles.booleanBtnTextActive]}>
+                                    No
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
+
+                    {isInsuranceActive && (
+                        <View style={styles.coverageInfoBox}>
+                            <View style={styles.coverageInfoHeader}>
+                                <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                                <Text style={styles.coverageInfoTitle}>Full Coverage Applied</Text>
+                            </View>
+                            <Text style={styles.coverageInfoBody}>
+                                This item is fully protected during transit. Coverage is valid for new, store-bought products with a physical or digital receipt.
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Invoice Upload (if insurance is enabled) */}
                     {isInsuranceActive && (
@@ -324,26 +309,6 @@ const OrderItemCard = ({
                         </View>
                     )}
 
-                    {/* Footer Actions */}
-                    <View style={styles.footerActions}>
-                        <TouchableOpacity style={[styles.footerActionBtn, styles.deleteActionBtn]} onPress={onDelete}>
-                            <Ionicons name="trash-outline" size={18} color={colors.error} />
-                            <Text style={[styles.footerActionText, styles.deleteActionText]}>Delete Item</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[
-                                styles.footerActionBtn,
-                                styles.addActionBtn,
-                                !canConfirmItem && styles.addActionBtnDisabled,
-                            ]}
-                            onPress={handleConfirmItem}
-                            disabled={!canConfirmItem}
-                        >
-                            <Ionicons name="checkmark-circle-outline" size={18} color={colors.text.primary} />
-                            <Text style={[styles.footerActionText, styles.addActionText]}>Add</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
             )}
 
@@ -375,6 +340,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: spacing.base
+    },
+    cardHeaderMain: {
+        flex: 1,
     },
     cardHeaderLeft: {
         flexDirection: 'row',
@@ -527,11 +495,6 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         marginBottom: spacing.base
     },
-    toggleRow: {
-        flexDirection: 'row',
-        marginTop: spacing.sm,
-        gap: spacing.sm // Use gap for consistent spacing
-    },
     // ... (skipping condition styles) ...
     conditionBtnGroup: {
         flexDirection: 'row',
@@ -558,33 +521,54 @@ const styles = StyleSheet.create({
     conditionBtnTextActive: {
         color: colors.white
     },
-    // ...
-    toggleBtn: {
-        flex: 1,
+    booleanBtnGroup: {
         flexDirection: 'row',
+        backgroundColor: colors.background.input,
+        borderRadius: borderRadius.full,
+        padding: 2,
+        gap: spacing.xs,
+    },
+    booleanBtn: {
+        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: colors.background.input,
-        borderRadius: borderRadius.md,
-        paddingVertical: 14
-        // Removed marginRight, handled by gap in parent
+        paddingVertical: spacing.md,
+        borderRadius: borderRadius.xl,
     },
-    toggleBtnActive: {
+    booleanBtnActive: {
         backgroundColor: colors.primary
     },
-    toggleText: {
+    booleanBtnText: {
         color: colors.text.muted,
-        fontWeight: typography.fontWeight.semibold,
-        marginLeft: spacing.sm
+        fontWeight: typography.fontWeight.semibold
     },
-    toggleTextActive: {
+    booleanBtnTextActive: {
         color: colors.white
     },
-    toggleBtnDisabled: {
-        // No background change, just disable interaction visual via text/icon
+    coverageInfoBox: {
+        marginTop: spacing.base,
+        marginBottom: spacing.sm,
+        backgroundColor: colors.primaryLight,
+        borderWidth: 1,
+        borderColor: colors.primary,
+        borderRadius: borderRadius.md,
+        padding: spacing.base,
     },
-    toggleTextDisabled: {
-        color: colors.border.light
+    coverageInfoHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: spacing.xs,
+    },
+    coverageInfoTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
+        marginLeft: spacing.xs,
+    },
+    coverageInfoBody: {
+        color: colors.text.secondary,
+        fontSize: typography.fontSize.xs,
+        lineHeight: 16,
     },
     invoiceSection: {
         marginTop: spacing.base,
@@ -630,42 +614,6 @@ const styles = StyleSheet.create({
         color: colors.primary,
         fontWeight: typography.fontWeight.semibold,
         marginLeft: spacing.sm
-    },
-    footerActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-        marginTop: spacing.base
-    },
-    footerActionBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.md,
-        borderWidth: 1
-    },
-    deleteActionBtn: {
-        borderColor: colors.error,
-        backgroundColor: colors.errorLight
-    },
-    addActionBtn: {
-        borderColor: colors.success,
-        backgroundColor: colors.success
-    },
-    addActionBtnDisabled: {
-        opacity: 0.45,
-    },
-    footerActionText: {
-        fontWeight: typography.fontWeight.semibold,
-        marginLeft: spacing.xs
-    },
-    deleteActionText: {
-        color: colors.error,
-    },
-    addActionText: {
-        color: colors.text.primary,
     },
     errorBorder: {
         borderWidth: 1,

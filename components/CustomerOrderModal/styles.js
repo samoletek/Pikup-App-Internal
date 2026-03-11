@@ -206,8 +206,10 @@ export const styles = StyleSheet.create({
     itemsStepContentContainer: {
         paddingBottom: spacing.xxxl + spacing.xl,
     },
-    aiActionsSection: {
-        marginBottom: spacing.lg,
+    itemsStickyHeader: {
+        backgroundColor: colors.background.secondary,
+        paddingBottom: spacing.base,
+        marginBottom: spacing.sm,
     },
     aiPrimaryBtn: {
         flexDirection: 'row',
@@ -217,6 +219,18 @@ export const styles = StyleSheet.create({
         padding: spacing.base,
         borderWidth: 1,
         borderColor: colors.primary,
+    },
+    addItemsPill: {
+        backgroundColor: colors.primary,
+        borderRadius: borderRadius.full,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.base,
+        marginLeft: spacing.sm,
+    },
+    addItemsPillText: {
+        color: colors.white,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
     },
     aiPrimaryIconContainer: {
         width: AI_ACTION_ICON_SIZE,
@@ -278,37 +292,31 @@ export const styles = StyleSheet.create({
         fontSize: typography.fontSize.xs,
         marginLeft: spacing.xs,
     },
-    manualSectionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.base,
-    },
-    manualSectionLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: colors.border.default,
-    },
-    manualSectionText: {
-        color: colors.text.muted,
-        fontSize: typography.fontSize.sm,
-        marginHorizontal: spacing.sm,
-    },
     emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
     emptyStateText: { color: colors.text.primary, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.semibold, marginTop: spacing.base },
     emptyStateSubtext: { color: colors.text.placeholder, fontSize: typography.fontSize.base, marginTop: spacing.sm },
-    addItemBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.background.tertiary,
+    itemsDisclaimerBox: {
+        marginTop: spacing.base,
+        marginBottom: spacing.sm,
+        borderWidth: 1,
+        borderColor: colors.warning,
+        backgroundColor: colors.warningLight,
         borderRadius: borderRadius.lg,
-        borderWidth: 2,
-        borderColor: colors.primary,
-        borderStyle: 'dashed',
-        padding: spacing.lg,
-        marginTop: spacing.sm
+        paddingHorizontal: spacing.base,
+        paddingVertical: spacing.md,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
     },
-    addItemBtnText: { color: colors.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginLeft: spacing.sm },
+    itemsDisclaimerIcon: {
+        marginTop: 1,
+        marginRight: spacing.sm,
+    },
+    itemsDisclaimerText: {
+        color: colors.warning,
+        fontSize: typography.fontSize.sm,
+        lineHeight: 18,
+        flex: 1,
+    },
     itemsBottomSpacer: { height: spacing.xxxl },
 
     // Step 5 Styles - Vehicle Selection

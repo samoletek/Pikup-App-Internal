@@ -371,6 +371,26 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         return parseInt(floorMatch[1], 10);
     };
 
+    const getItemValidationErrors = (item) => {
+        const itemErr = {};
+        const normalizedCondition = String(item.condition || '').trim().toLowerCase();
+        const hasValidCondition = normalizedCondition === 'new' || normalizedCondition === 'used';
+        const insuranceEnabledForNew = normalizedCondition === 'new' && item.hasInsurance === true;
+
+        if (!item.name?.trim()) itemErr.name = true;
+        if (!Array.isArray(item.photos) || item.photos.length === 0) itemErr.photos = true;
+        if (!hasValidCondition) itemErr.condition = true;
+        if (normalizedCondition === 'new' && !String(item.value || '').trim()) itemErr.value = true;
+        if (insuranceEnabledForNew && !item.invoicePhoto) itemErr.invoice = true;
+
+        return itemErr;
+    };
+
+    const pendingItemAttentionCount = orderData.items.reduce((count, item) => {
+        const itemErrorsMap = getItemValidationErrors(item);
+        return Object.keys(itemErrorsMap).length > 0 ? count + 1 : count;
+    }, 0);
+
     const validateLocationDetails = (locationDetails, label) => {
         const rawLocationType = locationDetails.locationType || 'store';
         const locationType = rawLocationType === 'house_other' ? 'residential_other' : rawLocationType;
@@ -441,16 +461,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 let firstErrorItemId = null;
 
                 orderData.items.forEach(item => {
-                    const itemErr = {};
-                    const normalizedCondition = String(item.condition || '').trim().toLowerCase();
-                    const hasValidCondition = normalizedCondition === 'new' || normalizedCondition === 'used';
-                    const insuranceEnabledForNew = normalizedCondition === 'new' && item.hasInsurance === true;
-
-                    if (!item.name?.trim()) itemErr.name = true;
-                    if (!Array.isArray(item.photos) || item.photos.length === 0) itemErr.photos = true;
-                    if (!hasValidCondition) itemErr.condition = true;
-                    if (normalizedCondition === 'new' && !String(item.value || '').trim()) itemErr.value = true;
-                    if (insuranceEnabledForNew && !item.invoicePhoto) itemErr.invoice = true;
+                    const itemErr = getItemValidationErrors(item);
 
                     if (Object.keys(itemErr).length > 0) {
                         errors[item.id] = itemErr;
@@ -474,13 +485,6 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     } else if (firstErr.invoice) {
                         Alert.alert('Missing Invoice', 'Please upload an invoice or receipt for insured items to verify their value.');
                     }
-                    return false;
-                }
-
-                const firstUnconfirmedItem = orderData.items.find(item => item.isConfirmed !== true);
-                if (firstUnconfirmedItem) {
-                    setExpandedItemId(firstUnconfirmedItem.id);
-                    Alert.alert('Confirm Items', 'Please tap "Add" on every item card before continuing.');
                     return false;
                 }
 
@@ -622,25 +626,6 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
             triggerVehicleRecommendation(itemsSnapshot);
             goToStep(currentStep + 1, 'forward');
         };
-
-        // Show AI review prompt when leaving step 2 with AI-detected items
-        if (currentStep === 2 && orderData.items.some(item => item.addedByAI)) {
-            Alert.alert(
-                'Review AI Results',
-                'We recommend reviewing the items detected by AI before continuing.',
-                [
-                    {
-                        text: 'Review',
-                        style: 'cancel',
-                    },
-                    {
-                        text: 'Continue',
-                        onPress: continueAfterStepTwo,
-                    }
-                ]
-            );
-            return;
-        }
 
         if (currentStep === 2) {
             continueAfterStepTwo();
@@ -859,6 +844,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         setExpandedItemId={setExpandedItemId}
                         itemErrors={itemErrors}
                         setItemErrors={setItemErrors}
+                        pendingAttentionCount={pendingItemAttentionCount}
                     />
                 );
             case 3:
