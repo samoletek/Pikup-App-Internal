@@ -129,6 +129,7 @@ async function getSetupData(token: string): Promise<SetupData> {
   const res = await fetch(setupUrl, {
     method: "GET",
     headers: {
+      "Content-Type": "application/json",
       "Accept": "application/json",
       Authorization: `Bearer ${token}`,
     },
