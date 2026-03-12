@@ -13,6 +13,7 @@ const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)(\?|#|$)/i;
 const VIDEO_URL_PATTERN = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
 const CONVERSATIONS_FETCH_MAX_RETRIES = 3;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const TRIP_STATUS_FETCH_CHUNK_SIZE = 100;
 
 const isNetworkRequestFailure = (error) => {
     const message = String(error?.message || '').toLowerCase();
@@ -100,6 +101,53 @@ const dedupeConversationsByRequest = (rows = []) => {
     }
 
     return deduped;
+};
+
+const chunkArray = (values = [], chunkSize = TRIP_STATUS_FETCH_CHUNK_SIZE) => {
+    if (!Array.isArray(values) || values.length === 0) return [];
+
+    const normalizedChunkSize = Math.max(1, Number(chunkSize) || TRIP_STATUS_FETCH_CHUNK_SIZE);
+    const chunks = [];
+
+    for (let index = 0; index < values.length; index += normalizedChunkSize) {
+        chunks.push(values.slice(index, index + normalizedChunkSize));
+    }
+
+    return chunks;
+};
+
+const getTripStatusMapByRequestIds = async (requestIds = []) => {
+    const uniqueRequestIds = Array.from(
+        new Set(
+            (Array.isArray(requestIds) ? requestIds : [])
+                .map((id) => String(id || '').trim())
+                .filter(Boolean)
+        )
+    );
+
+    if (uniqueRequestIds.length === 0) return {};
+
+    const statusByTripId = {};
+    const requestIdChunks = chunkArray(uniqueRequestIds, TRIP_STATUS_FETCH_CHUNK_SIZE);
+
+    for (const requestIdChunk of requestIdChunks) {
+        const { data, error } = await supabase
+            .from('trips')
+            .select('id, status, completed_at, cancelled_at')
+            .in('id', requestIdChunk);
+
+        if (error) {
+            throw error;
+        }
+
+        (data || []).forEach((trip) => {
+            const tripId = String(trip?.id || '').trim();
+            if (!tripId) return;
+            statusByTripId[tripId] = trip;
+        });
+    }
+
+    return statusByTripId;
 };
 
 /**
@@ -277,11 +325,51 @@ export const getConversations = async (userId, userType) => {
             const { data, error } = await query;
             if (!error) {
                 const dedupedConversations = dedupeConversationsByRequest(data || []);
+                const requestIds = dedupedConversations
+                    .map((conversation) => conversation?.request_id)
+                    .filter(Boolean);
+
+                let tripStatusMap = {};
+                if (requestIds.length > 0) {
+                    try {
+                        tripStatusMap = await getTripStatusMapByRequestIds(requestIds);
+                    } catch (tripStatusError) {
+                        console.warn('Could not load trip statuses for conversations:', tripStatusError);
+                    }
+                }
+
                 return dedupedConversations.map(conv => ({
+                    ...(conv?.request_id ? (tripStatusMap[String(conv.request_id)] || {}) : {}),
                     id: conv.id,
                     requestId: conv.request_id,
                     customerId: conv.customer_id,
                     driverId: conv.driver_id,
+                    requestStatus:
+                        tripStatusMap[String(conv.request_id)]?.status ||
+                        conv.request_status ||
+                        conv.requestStatus ||
+                        null,
+                    tripStatus:
+                        tripStatusMap[String(conv.request_id)]?.status ||
+                        conv.trip_status ||
+                        conv.tripStatus ||
+                        null,
+                    completedAt:
+                        tripStatusMap[String(conv.request_id)]?.completed_at ||
+                        conv.completed_at ||
+                        conv.completedAt ||
+                        null,
+                    cancelledAt:
+                        tripStatusMap[String(conv.request_id)]?.cancelled_at ||
+                        conv.cancelled_at ||
+                        conv.cancelledAt ||
+                        null,
+                    archivedAt:
+                        tripStatusMap[String(conv.request_id)]?.completed_at ||
+                        tripStatusMap[String(conv.request_id)]?.cancelled_at ||
+                        conv.archived_at ||
+                        conv.archivedAt ||
+                        null,
                     lastMessage: getConversationPreviewText(conv.last_message, conv.last_message_type),
                     lastMessageAt: conv.last_message_at,
                     unreadByCustomer: conv.unread_by_customer,
