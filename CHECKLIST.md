@@ -321,6 +321,8 @@ NEW EDITS:
 - [ ] Advanced analytics dashboard for drivers
 - [ ] Referral program (enhanced)
 
+- [ ] Add sceletons to all screens
+- [ ] Delete Spacing on the bottom (check all screens)
 ---
 
 ## Completed Work (Original Contract)
