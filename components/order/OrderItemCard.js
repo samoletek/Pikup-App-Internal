@@ -171,10 +171,9 @@ const OrderItemCard = ({
                                     <TouchableOpacity
                                         style={styles.removePhotoBtn}
                                         onPress={() => handleRemovePhoto(index)}
+                                        hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                                     >
-                                        <View style={styles.removePhotoIconBg}>
-                                            <Ionicons name="close" size={14} color={colors.text.primary} />
-                                        </View>
+                                        <Ionicons name="close-circle" size={30} color={colors.error} />
                                     </TouchableOpacity>
                                 </View>
                             ))}
@@ -294,10 +293,9 @@ const OrderItemCard = ({
                                     <TouchableOpacity
                                         style={styles.removePhotoBtn}
                                         onPress={() => updateItemDraft({ invoicePhoto: null })}
+                                        hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
                                     >
-                                        <View style={styles.removePhotoIconBg}>
-                                            <Ionicons name="close" size={14} color={colors.text.primary} />
-                                        </View>
+                                        <Ionicons name="close-circle" size={30} color={colors.error} />
                                     </TouchableOpacity>
                                 </View>
                             ) : (
@@ -449,19 +447,11 @@ const styles = StyleSheet.create({
     },
     removePhotoBtn: {
         position: 'absolute',
-        top: -6,
-        right: -6,
+        top: -8,
+        right: -8,
+        backgroundColor: colors.background.secondary,
+        borderRadius: borderRadius.circle,
         zIndex: 10
-    },
-    removePhotoIconBg: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: colors.error,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1.5,
-        borderColor: colors.background.tertiary // Matches card bg to create "cutout" effect
     },
     addPhotoBtnTop: {
         flexDirection: 'row',

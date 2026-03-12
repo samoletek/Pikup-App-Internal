@@ -171,7 +171,7 @@ const CameraScreen = ({ visible, onCapture, onClose, alreadyCount = 0, maxPhotos
                                             onPress={() => handleRemove(index)}
                                             hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
                                         >
-                                            <Ionicons name="close-circle" size={18} color={colors.error} />
+                                            <Ionicons name="close-circle" size={30} color={colors.error} />
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -310,10 +310,11 @@ const styles = StyleSheet.create({
     },
     thumbRemove: {
         position: 'absolute',
-        top: 2,
-        right: 2,
-        backgroundColor: 'rgba(0,0,0,0.35)',
+        top: -8,
+        right: -8,
+        backgroundColor: colors.background.secondary,
         borderRadius: borderRadius.circle,
+        zIndex: 10,
     },
 
     // Bottom controls row

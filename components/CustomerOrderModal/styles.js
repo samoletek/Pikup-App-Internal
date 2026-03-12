@@ -207,14 +207,15 @@ export const styles = StyleSheet.create({
         paddingBottom: spacing.xxxl + spacing.xl,
     },
     itemsStickyHeader: {
-        backgroundColor: colors.background.secondary,
+        backgroundColor: colors.transparent,
+        paddingTop: spacing.sm,
         paddingBottom: spacing.base,
         marginBottom: spacing.sm,
     },
     aiPrimaryBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.primaryLight,
+        backgroundColor: colors.background.brandTint,
         borderRadius: borderRadius.lg,
         padding: spacing.base,
         borderWidth: 1,
