@@ -1293,6 +1293,24 @@ export const finishDelivery = async (requestId, photos = [], driverLocation = nu
             completed_by: currentUser?.id
         });
 
+        // Close insurance booking in Redkik after successful delivery
+        try {
+            const trip = await getRequestById(requestId);
+            const bookingId = trip?.insurance?.bookingId || trip?.insurance_booking_id;
+            if (bookingId) {
+                const RedkikService = (await import('./RedkikService')).default;
+                const result = await RedkikService.completeBooking(bookingId);
+                if (result?.success) {
+                    console.log('[TripService] Insurance booking completed:', bookingId);
+                } else {
+                    console.warn('[TripService] Insurance booking complete returned null for:', bookingId);
+                }
+            }
+        } catch (insuranceErr) {
+            // Insurance completion must never block delivery — log and continue
+            console.warn('[TripService] Failed to complete insurance booking:', insuranceErr);
+        }
+
         return { success: true };
     } catch (error) {
         console.error('Error finishing delivery:', error);
@@ -1517,6 +1535,22 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
             .eq('id', orderId);
 
         if (error) throw error;
+
+        // Cancel insurance booking in Redkik if one exists
+        const bookingId = orderData?.insurance?.bookingId || orderData?.insurance_booking_id;
+        if (bookingId) {
+            try {
+                const RedkikService = (await import('./RedkikService')).default;
+                const result = await RedkikService.cancelBooking(bookingId);
+                if (result?.success) {
+                    console.log('[TripService] Insurance booking cancelled:', bookingId);
+                } else {
+                    console.warn('[TripService] Insurance booking cancel returned null for:', bookingId);
+                }
+            } catch (insuranceErr) {
+                console.warn('[TripService] Failed to cancel insurance booking:', insuranceErr);
+            }
+        }
 
         return { success: true };
 
