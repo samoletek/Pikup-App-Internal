@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1170" height="2532" viewBox="0 0 1170 2532">
+  <defs>
+    <style>
+      .bg { fill: #0E1320; }
+      .title { fill: #F3F6FF; font: 700 40px Arial, Helvetica, sans-serif; }
+      .stepTitle { fill: #F3F6FF; font: 700 56px Arial, Helvetica, sans-serif; }
+      .sub { fill: #97A4BF; font: 400 34px Arial, Helvetica, sans-serif; }
+      .cardTitle { fill: #F8FBFF; font: 700 46px Arial, Helvetica, sans-serif; }
+      .body { fill: #D4DEEF; font: 400 34px Arial, Helvetica, sans-serif; }
+      .link { fill: #4DA3FF; font: 700 34px Arial, Helvetica, sans-serif; }
+      .btn { fill: #F2F6FF; font: 700 38px Arial, Helvetica, sans-serif; }
+      .btn2 { fill: #E3E9F5; font: 700 38px Arial, Helvetica, sans-serif; }
+      .small { fill: #98A5BF; font: 400 30px Arial, Helvetica, sans-serif; }
+      .helper { fill: #7F8CA4; font: 400 24px Arial, Helvetica, sans-serif; }
+      .iconText { fill: #FF4B5C; font: 700 90px Arial, Helvetica, sans-serif; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1170" height="2532"/>
+
+  <!-- Header -->
+  <text x="56" y="182" class="title">←</text>
+  <text x="585" y="188" text-anchor="middle" class="title">Identity Verification</text>
+  <text x="1110" y="182" text-anchor="end" class="title">✕</text>
+
+  <!-- Progress -->
+  <rect x="56" y="252" width="1058" height="14" rx="7" fill="#2A3346"/>
+  <rect x="56" y="252" width="353" height="14" rx="7" fill="#2B89FF"/>
+  <text x="585" y="330" text-anchor="middle" class="small">2 of 6</text>
+
+  <!-- Icon -->
+  <circle cx="585" cy="536" r="80" fill="#2F1620"/>
+  <text x="585" y="566" text-anchor="middle" class="iconText">✖</text>
+
+  <!-- Main Titles -->
+  <text x="585" y="740" text-anchor="middle" class="stepTitle">Identity Verification</text>
+  <text x="585" y="822" text-anchor="middle" class="sub">We need to verify your identity to ensure safety</text>
+
+  <!-- Rejected card -->
+  <rect x="70" y="910" width="1030" height="520" rx="30" fill="#2A1821" stroke="#6B2A3A" stroke-width="3"/>
+
+  <circle cx="136" cy="975" r="26" fill="#4A1F2C"/>
+  <text x="136" y="988" text-anchor="middle" fill="#FF4B5C" style="font: 700 42px Arial, Helvetica, sans-serif;">✖</text>
+
+  <text x="180" y="990" class="cardTitle">Verification Failed</text>
+
+  <text x="110" y="1090" class="body">Verification was not approved.</text>
+
+  <text x="110" y="1158" class="body">Please contact our</text>
+  <text x="407" y="1158" class="link">support</text>
+  <line x1="407" y1="1167" x2="520" y2="1167" stroke="#4DA3FF" stroke-width="2"/>
+
+  <text x="540" y="1158" class="body">or visit</text>
+  <text x="664" y="1158" class="link">pikup-app.com</text>
+  <line x1="664" y1="1167" x2="884" y2="1167" stroke="#4DA3FF" stroke-width="2"/>
+  <text x="897" y="1158" class="body">.</text>
+
+  <!-- Bottom action area -->
+  <line x1="0" y1="2322" x2="1170" y2="2322" stroke="#1D2739" stroke-width="2"/>
+  <text x="585" y="2348" text-anchor="middle" class="helper">Continue is disabled after a rejected ID verification.</text>
+
+  <rect x="70" y="2380" width="310" height="92" rx="46" fill="#3A4358"/>
+  <text x="225" y="2441" text-anchor="middle" class="btn">Back</text>
+
+  <rect x="406" y="2380" width="694" height="92" rx="46" fill="#596171"/>
+  <text x="753" y="2441" text-anchor="middle" class="btn2">Onboarding Declined</text>
+</svg>

@@ -706,8 +706,8 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: -8,
+    right: -8,
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.circle,
     zIndex: 10,
