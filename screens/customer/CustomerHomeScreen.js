@@ -174,7 +174,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const [orderModalKey, setOrderModalKey] = useState(0);
   const [hasUnreadDeliveryChat, setHasUnreadDeliveryChat] = useState(false);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
-  const activeTripPulseAnim = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
 
   const floatingWidth = useMemo(
@@ -202,16 +201,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const searchingPulseSize = searchingPinPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [24, 96],
-  });
-
-  const activeTripPulseScale = activeTripPulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.025],
-  });
-
-  const activeTripPulseOpacity = activeTripPulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.92, 1],
   });
 
   const searchingPulseRingOpacity = searchingPinPulse.interpolate({
@@ -511,39 +500,6 @@ export default function CustomerHomeScreen({ navigation }) {
   }, [pendingBooking, searchingPinPulse]);
 
   useEffect(() => {
-    if (!activeDeliveryStep) {
-      activeTripPulseAnim.stopAnimation();
-      activeTripPulseAnim.setValue(0);
-      return;
-    }
-
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(activeTripPulseAnim, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(activeTripPulseAnim, {
-          toValue: 0,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    pulseAnimation.start();
-
-    return () => {
-      pulseAnimation.stop();
-      activeTripPulseAnim.stopAnimation();
-      activeTripPulseAnim.setValue(0);
-    };
-  }, [activeDeliveryStep, activeTripPulseAnim]);
-
-  useEffect(() => {
     if (!pendingBooking) {
       setSearchElapsedSeconds(0);
       return;
@@ -784,11 +740,11 @@ export default function CustomerHomeScreen({ navigation }) {
               const photoUri = item.photos[j];
               if (photoUri && !photoUri.startsWith("http")) {
                 try {
-                  const filename = \`order_items/\${currentUserId}/\${orderIdTimestamp}/item_\${i}_photo_\${j}.jpg\`;
+                  const filename = `order_items/${currentUserId}/${orderIdTimestamp}/item_${i}_photo_${j}.jpg`;
                   const url = await uploadToSupabase(photoUri, "trip_photos", filename);
                   if (url) uploadedPhotos.push(url);
                 } catch (err) {
-                  console.error(\`Failed to upload photo for item \${i}:\`, err);
+                  console.error(`Failed to upload photo for item ${i}:`, err);
                   // fallback to original uri if upload fails
                   uploadedPhotos.push(photoUri);
                 }
@@ -802,11 +758,11 @@ export default function CustomerHomeScreen({ navigation }) {
           let uploadedInvoicePhoto = item.invoicePhoto;
           if (uploadedInvoicePhoto && !uploadedInvoicePhoto.startsWith("http")) {
             try {
-              const filename = \`order_items/\${currentUserId}/\${orderIdTimestamp}/item_\${i}_invoice.jpg\`;
+              const filename = `order_items/${currentUserId}/${orderIdTimestamp}/item_${i}_invoice.jpg`;
               const url = await uploadToSupabase(uploadedInvoicePhoto, "trip_photos", filename);
               if (url) uploadedInvoicePhoto = url;
             } catch (err) {
-              console.error(\`Failed to upload invoice for item \${i}:\`, err);
+              console.error(`Failed to upload invoice for item ${i}:`, err);
             }
           }
           
@@ -949,21 +905,13 @@ export default function CustomerHomeScreen({ navigation }) {
             { paddingBottom: floatingBottomOffset, width: floatingWidth },
           ]}
         >
-          <Animated.View
-            style={[
-              styles.activeTripPulseWrap,
-              {
-                opacity: activeTripPulseOpacity,
-                transform: [{ scale: activeTripPulseScale }],
-              },
-            ]}
-          >
+          <View style={styles.activeTripPulseWrap}>
             <TouchableOpacity
               style={styles.activeTripTrigger}
               onPress={handleOpenActiveTripDetails}
               activeOpacity={0.95}
             >
-              <View style={styles.activeTripSideSlot}>
+              <View style={[styles.activeTripSideSlot, styles.activeTripSideSlotLeft]}>
                 <View style={styles.activeTripIconCircle}>
                   <Ionicons
                     name={activeDeliveryStep.icon}
@@ -977,7 +925,7 @@ export default function CustomerHomeScreen({ navigation }) {
                 {activeDeliveryStep.label}
               </Text>
 
-              <View style={styles.activeTripSideSlot}>
+              <View style={[styles.activeTripSideSlot, styles.activeTripSideSlotRight]}>
                 <View style={styles.activeTripOpenIndicator}>
                   <Ionicons
                     name="chevron-forward"
@@ -987,7 +935,7 @@ export default function CustomerHomeScreen({ navigation }) {
                 </View>
               </View>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         </View>
       )}
 
@@ -1268,7 +1216,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 56,
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: spacing.sm,
     shadowColor: ACTIVE_TRIP_BUTTON_COLOR,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.42,
@@ -1278,9 +1226,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
   activeTripSideSlot: {
-    width: 40,
-    alignItems: "center",
+    width: 34,
     justifyContent: "center",
+  },
+  activeTripSideSlotLeft: {
+    alignItems: "flex-start",
+  },
+  activeTripSideSlotRight: {
+    alignItems: "flex-end",
   },
   activeTripIconCircle: {
     width: 32,
@@ -1296,7 +1249,7 @@ const styles = StyleSheet.create({
     color: colors.background.primary,
     flex: 1,
     textAlign: "center",
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.xxs,
   },
   activeTripOpenIndicator: {
     width: 32,

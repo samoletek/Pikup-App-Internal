@@ -7,6 +7,7 @@ export { default as DriverOnboardingScreen } from './DriverOnboardingScreen';
 export { default as DriverOnboardingCompleteScreen } from './DriverOnboardingCompleteScreen';
 export { default as DriverPaymentSettingsScreen } from './DriverPaymentSettingsScreen';
 export { default as DriverPreferencesScreen } from './DriverPreferencesScreen';
+export { default as DriverRequestDetailsScreen } from './DriverRequestDetailsScreen';
 export { default as EnRouteToPickupScreen } from './EnRouteToPickupScreen';
 export { default as GpsNavigationScreen } from './GpsNavigationScreen';
 export { default as PickupConfirmationScreen } from './PickupConfirmationScreen';

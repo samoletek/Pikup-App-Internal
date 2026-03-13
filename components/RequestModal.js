@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Animated,
   PanResponder,
   Dimensions,
@@ -65,15 +64,17 @@ export default function RequestModal({
   const [selectedRouteMarkers, setSelectedRouteMarkers] = useState(null);
   const panResponder = useRef(
     PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) =>
         gestureState.dy > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          dragTranslateY.setValue(gestureState.dy);
-        }
+        dragTranslateY.setValue(Math.max(0, gestureState.dy));
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy >= MODAL_DISMISS_DRAG_THRESHOLD) {
+        const shouldDismiss =
+          gestureState.dy >= MODAL_DISMISS_DRAG_THRESHOLD || gestureState.vy > 1.2;
+
+        if (shouldDismiss) {
           Animated.timing(dragTranslateY, {
             toValue: height,
             duration: 180,
@@ -528,11 +529,9 @@ export default function RequestModal({
       >
         {/* Header */}
         <View style={styles.modalHeader}>
-          <TouchableWithoutFeedback onPress={onClose}>
-            <View style={styles.handleArea} {...panResponder.panHandlers}>
-              <View style={styles.modalHandle} />
-            </View>
-          </TouchableWithoutFeedback>
+          <View style={styles.handleArea} {...panResponder.panHandlers}>
+            <View style={styles.modalHandle} />
+          </View>
           <View style={styles.headerContent}>
             <Text style={styles.modalTitle}>Available Requests</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -765,7 +764,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   handleArea: {
+    paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
+    width: '100%',
   },
   modalHeader: {
     paddingHorizontal: spacing.lg,

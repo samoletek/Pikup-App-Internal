@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -74,6 +74,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
   });
   const [downloadingData, setDownloadingData] = useState(false);
   const isDriver = userType === "driver";
+  const rootTabsRoute = isDriver ? "DriverTabs" : "CustomerTabs";
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const appVersion =
     Constants.expoConfig?.version ||
@@ -259,11 +260,20 @@ export default function CustomerSettingsScreen({ navigation, route }) {
         },
       ];
 
+  const handleBackPress = useCallback(() => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate(rootTabsRoute, { screen: "Account" });
+  }, [navigation, rootTabsRoute]);
+
   return (
     <View style={styles.container}>
       <ScreenHeader
         title={notificationsOnly ? "Notifications" : "Settings"}
-        onBack={() => navigation.goBack()}
+        onBack={handleBackPress}
         topInset={insets.top}
       />
 

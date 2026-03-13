@@ -45,6 +45,7 @@ import DeliveryConfirmationScreen from "./screens/driver/DeliveryConfirmationScr
 import DriverOnboardingScreen from "./screens/driver/DriverOnboardingScreen";
 import DriverOnboardingCompleteScreen from "./screens/driver/DriverOnboardingCompleteScreen";
 import DriverPaymentSettingsScreen from "./screens/driver/DriverPaymentSettingsScreen";
+import DriverRequestDetailsScreen from "./screens/driver/DriverRequestDetailsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -107,6 +108,7 @@ const DriverStack = () => (
     <Stack.Screen name="PickupConfirmationScreen" component={PickupConfirmationScreen} />
     <Stack.Screen name="DeliveryNavigationScreen" component={DeliveryNavigationScreen} />
     <Stack.Screen name="DeliveryConfirmationScreen" component={DeliveryConfirmationScreen} />
+    <Stack.Screen name="DriverRequestDetailsScreen" component={DriverRequestDetailsScreen} />
 
     {/* Onboarding */}
     <Stack.Screen name="DriverOnboardingScreen" component={DriverOnboardingScreen} />
