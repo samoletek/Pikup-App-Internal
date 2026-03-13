@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 56,
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: spacing.sm,
     shadowColor: ACTIVE_TRIP_BUTTON_COLOR,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.42,
@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
   activeTripSideSlot: {
-    width: 40,
+    width: 34,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1254,7 +1254,7 @@ const styles = StyleSheet.create({
     color: colors.background.primary,
     flex: 1,
     textAlign: "center",
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 0,
   },
   activeTripOpenIndicator: {
     width: 32,
