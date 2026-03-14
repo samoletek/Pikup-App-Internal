@@ -26,6 +26,30 @@ import {
   typography,
 } from "../../styles/theme";
 
+const PASSWORD_FIELD_CONFIG = [
+  {
+    key: "currentPassword",
+    label: "Current Password",
+    placeholder: "Enter current password",
+    textContentType: "password",
+    returnKeyType: "next",
+  },
+  {
+    key: "newPassword",
+    label: "New Password",
+    placeholder: "Enter new password",
+    textContentType: "newPassword",
+    returnKeyType: "next",
+  },
+  {
+    key: "confirmPassword",
+    label: "Repeat New Password",
+    placeholder: "Repeat new password",
+    textContentType: "newPassword",
+    returnKeyType: "done",
+  },
+];
+
 export default function PersonalInfoScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -602,110 +626,48 @@ export default function PersonalInfoScreen({ navigation }) {
           <View style={styles.sectionBlock}>
             <Text style={styles.sectionLabel}>CHANGE PASSWORD</Text>
             <View style={styles.card}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Password</Text>
-                <View style={styles.passwordInputRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.passwordTextInput]}
-                    value={passwordData.currentPassword}
-                    onChangeText={(value) => updatePasswordField("currentPassword", value)}
-                    placeholder="Enter current password"
-                    placeholderTextColor={colors.text.placeholder}
-                    textContentType="password"
-                    secureTextEntry={!passwordVisibility.currentPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                  <TouchableOpacity
-                    style={styles.passwordVisibilityButton}
-                    onPress={() => togglePasswordVisibility("currentPassword")}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      passwordVisibility.currentPassword ? "Hide password" : "Show password"
-                    }
-                  >
-                    <Ionicons
-                      name={passwordVisibility.currentPassword ? "eye-off-outline" : "eye-outline"}
-                      size={18}
-                      color={colors.text.tertiary}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {passwordErrors.currentPassword ? (
-                  <Text style={styles.errorText}>{passwordErrors.currentPassword}</Text>
-                ) : null}
-              </View>
+              {PASSWORD_FIELD_CONFIG.map((fieldConfig, index) => {
+                const fieldKey = fieldConfig.key;
+                const isLastField = index === PASSWORD_FIELD_CONFIG.length - 1;
+                const isVisible = Boolean(passwordVisibility[fieldKey]);
+                const errorMessage = passwordErrors[fieldKey];
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>New Password</Text>
-                <View style={styles.passwordInputRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.passwordTextInput]}
-                    value={passwordData.newPassword}
-                    onChangeText={(value) => updatePasswordField("newPassword", value)}
-                    placeholder="Enter new password"
-                    placeholderTextColor={colors.text.placeholder}
-                    textContentType="newPassword"
-                    secureTextEntry={!passwordVisibility.newPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                  <TouchableOpacity
-                    style={styles.passwordVisibilityButton}
-                    onPress={() => togglePasswordVisibility("newPassword")}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      passwordVisibility.newPassword ? "Hide password" : "Show password"
-                    }
+                return (
+                  <View
+                    key={fieldKey}
+                    style={[styles.inputGroup, isLastField && styles.inputGroupLast]}
                   >
-                    <Ionicons
-                      name={passwordVisibility.newPassword ? "eye-off-outline" : "eye-outline"}
-                      size={18}
-                      color={colors.text.tertiary}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {passwordErrors.newPassword ? (
-                  <Text style={styles.errorText}>{passwordErrors.newPassword}</Text>
-                ) : null}
-              </View>
-
-              <View style={[styles.inputGroup, styles.inputGroupLast]}>
-                <Text style={styles.inputLabel}>Repeat New Password</Text>
-                <View style={styles.passwordInputRow}>
-                  <TextInput
-                    style={[styles.textInput, styles.passwordTextInput]}
-                    value={passwordData.confirmPassword}
-                    onChangeText={(value) => updatePasswordField("confirmPassword", value)}
-                    placeholder="Repeat new password"
-                    placeholderTextColor={colors.text.placeholder}
-                    textContentType="newPassword"
-                    secureTextEntry={!passwordVisibility.confirmPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                  />
-                  <TouchableOpacity
-                    style={styles.passwordVisibilityButton}
-                    onPress={() => togglePasswordVisibility("confirmPassword")}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      passwordVisibility.confirmPassword ? "Hide password" : "Show password"
-                    }
-                  >
-                    <Ionicons
-                      name={passwordVisibility.confirmPassword ? "eye-off-outline" : "eye-outline"}
-                      size={18}
-                      color={colors.text.tertiary}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {passwordErrors.confirmPassword ? (
-                  <Text style={styles.errorText}>{passwordErrors.confirmPassword}</Text>
-                ) : null}
-              </View>
+                    <Text style={styles.inputLabel}>{fieldConfig.label}</Text>
+                    <View style={styles.passwordInputRow}>
+                      <TextInput
+                        style={[styles.textInput, styles.passwordTextInput]}
+                        value={passwordData[fieldKey]}
+                        onChangeText={(value) => updatePasswordField(fieldKey, value)}
+                        placeholder={fieldConfig.placeholder}
+                        placeholderTextColor={colors.text.placeholder}
+                        textContentType={fieldConfig.textContentType}
+                        secureTextEntry={!isVisible}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        returnKeyType={fieldConfig.returnKeyType}
+                      />
+                      <TouchableOpacity
+                        style={styles.passwordVisibilityButton}
+                        onPress={() => togglePasswordVisibility(fieldKey)}
+                        accessibilityRole="button"
+                        accessibilityLabel={isVisible ? "Hide password" : "Show password"}
+                      >
+                        <Ionicons
+                          name={isVisible ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                          color={colors.text.tertiary}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                  </View>
+                );
+              })}
 
               {passwordErrors.general ? (
                 <Text style={styles.errorText}>{passwordErrors.general}</Text>
