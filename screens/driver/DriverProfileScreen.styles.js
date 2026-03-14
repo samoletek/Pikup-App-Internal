@@ -1,0 +1,291 @@
+import { StyleSheet } from 'react-native';
+import { borderRadius, colors, sizing, spacing, typography } from '../../styles/theme';
+
+const HEADER_ROW_HEIGHT = 56;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.primary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  largeTitleSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: "center",
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background.primary,
+    zIndex: 2,
+  },
+  largeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxxl,
+    fontWeight: typography.fontWeight.bold,
+  },
+  profileCard: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  profileTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+  avatarContainer: {
+    position: "relative",
+  },
+  avatarImage: {
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
+    borderRadius: borderRadius.xl,
+  },
+  avatarGradient: {
+    width: sizing.avatarLg,
+    height: sizing.avatarLg,
+    borderRadius: borderRadius.xl,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarInitials: {
+    color: colors.white,
+    fontSize: sizing.avatarInitialsFontSize,
+    fontWeight: typography.fontWeight.bold,
+  },
+  verifiedBadge: {
+    position: "absolute",
+    bottom: -sizing.verificationBadgeOffset,
+    right: -sizing.verificationBadgeOffset,
+    width: sizing.verificationBadgeSize,
+    height: sizing.verificationBadgeSize,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.success,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: sizing.verificationBadgeBorderWidth,
+    borderColor: colors.background.secondary,
+  },
+  verifiedBadgePending: {
+    backgroundColor: colors.warning,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: sizing.profileNameFontSize,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textTransform: "capitalize",
+    marginBottom: spacing.xs,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  verifiedText: {
+    fontSize: typography.fontSize.sm,
+    color: colors.success,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
+  },
+  verifiedTextPending: {
+    color: colors.warning,
+  },
+  editProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: sizing.compactGap,
+    paddingHorizontal: spacing.md,
+    paddingVertical: sizing.compactButtonVerticalPadding,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  editProfileText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.primary,
+  },
+  statsBar: {
+    flexDirection: "row",
+    marginTop: spacing.xl,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: spacing.md,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+  },
+  statLabel: {
+    fontSize: sizing.statLabelFontSize,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.text.muted,
+    marginTop: sizing.statLabelMarginTop,
+    letterSpacing: sizing.statLabelLetterSpacing,
+  },
+  statDividerVertical: {
+    width: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
+  },
+  badgesBar: {
+    flexDirection: "row",
+    marginTop: spacing.base,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
+  },
+  badgeItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm + 1,
+  },
+  badgeDividerVertical: {
+    width: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.sm,
+  },
+  badgeInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  badgeLabel: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xs + 1,
+    fontWeight: typography.fontWeight.medium,
+  },
+  badgeChipCount: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeChipCountText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  statusCard: {
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  statusLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  statusText: {
+    marginLeft: spacing.sm,
+    flex: 1,
+  },
+  statusTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  statusSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    marginTop: 2,
+  },
+  statusCta: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  statusCtaText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  menuSections: {
+    backgroundColor: colors.background.secondary,
+    marginBottom: spacing.base,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    overflow: "hidden",
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.strong,
+  },
+  sectionLabel: {
+    marginLeft: spacing.xs,
+    marginBottom: spacing.sm,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 0.8,
+    color: colors.text.muted,
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  menuItemTitle: {
+    fontSize: typography.fontSize.md,
+    color: colors.text.primary,
+    marginLeft: spacing.md,
+  },
+  menuItemTitleDisabled: {
+    color: colors.text.muted,
+  },
+  logoutButton: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingVertical: spacing.base,
+    alignItems: "center",
+  },
+  logoutText: {
+    color: colors.error,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  bottomSpacing: {
+    height: spacing.xl,
+  },
+});
+
+export default styles;
