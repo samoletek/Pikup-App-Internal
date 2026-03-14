@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Alert, Easing, useWindowDimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Animated, Alert, Easing, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
@@ -7,7 +7,7 @@ import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../config/supabase';
-import OfflineDashboard, { COLLAPSED_HEIGHT } from '../../components/OfflineDashboard';
+import OfflineDashboard from '../../components/OfflineDashboard';
 import DriverHomeBottomPanel from '../../components/driver/DriverHomeBottomPanel';
 import RequestModal from '../../components/RequestModal';
 import IncomingRequestModal from '../../components/IncomingRequestModal';
@@ -15,6 +15,7 @@ import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import RecentTripsModal from '../../components/RecentTripsModal';
 import { Ionicons } from '@expo/vector-icons';
 import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
+import styles from './DriverHomeScreen.styles';
 import {
   ACTIVE_TRIP_STATUSES,
   DROPOFF_PHASE_STATUSES,
@@ -22,13 +23,8 @@ import {
   TRIP_STATUS,
 } from '../../constants/tripStatus';
 import {
-  borderRadius,
   colors,
-  shadows,
-  sizing,
   spacing,
-  typography,
-  zIndex as zLayers,
 } from '../../styles/theme';
 import { appConfig, isDriverReadinessBypassEnabled } from '../../config/appConfig';
 
@@ -1578,190 +1574,3 @@ export default function DriverHomeScreen({ navigation, route }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  logoImage: {
-    width: 106,
-    height: 20,
-    resizeMode: 'contain',
-    ...shadows.lg,
-  },
-  requestMarker: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: spacing.xs,
-    elevation: 4,
-    alignItems: 'center',
-  },
-  requestMarkerCircle: {
-    width: spacing.xxl,
-    height: spacing.xxl,
-    borderRadius: spacing.base,
-    backgroundColor: colors.primaryDark,
-    borderWidth: 2,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: spacing.xs,
-    elevation: 4,
-  },
-  selectedMarker: {
-    backgroundColor: colors.primary,
-    borderColor: colors.white,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.5,
-  },
-  selectedMarkerArrow: {},
-  requestMarkerPrice: {
-    color: colors.text.primary,
-    fontWeight: typography.fontWeight.bold,
-    fontSize: typography.fontSize.sm,
-  },
-  requestMarkerArrow: {
-    display: 'none',
-  },
-  onlineDriverMarkerContainer: {
-    width: 136,
-    height: 136,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  onlineDriverMarkerPulse: {
-    backgroundColor: colors.transparent,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: 999,
-  },
-  onlineDriverMarkerCore: {
-    position: 'absolute',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primaryDark,
-    borderWidth: 2,
-    borderColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  onlineDriverMarkerIcon: {
-    width: 24,
-    height: 14,
-  },
-  routeMarker: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: spacing.xxl,
-    height: spacing.xxl,
-    borderRadius: spacing.base,
-    backgroundColor: colors.background.secondary,
-    borderWidth: 2,
-    borderColor: colors.white,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: spacing.xs,
-    elevation: 4,
-  },
-  routeMarkerDot: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  routeMarkerLabel: {
-    color: colors.white,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-  },
-  miniBar: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
-    borderColor: 'rgba(125,95,255,0.5)',
-    shadowColor: 'rgba(125,95,255,0.45)',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 50,
-  },
-  miniBarInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-  },
-  miniBarLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  miniBarTimer: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold,
-    marginLeft: spacing.xs,
-  },
-  miniBarPrice: {
-    flex: 1,
-    textAlign: 'center',
-    color: colors.text.primary,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  },
-  miniBarExpand: {
-    width: spacing.xxl,
-    height: spacing.xxl,
-    borderRadius: spacing.base,
-    backgroundColor: colors.background.elevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floatingRecentTripsBtn: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: COLLAPSED_HEIGHT + spacing.xs,
-    width: sizing.touchTargetMin,
-    height: sizing.touchTargetMin,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: zLayers.toast + 1,
-  },
-});
