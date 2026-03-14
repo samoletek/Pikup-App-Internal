@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../config/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
+
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  CLAIM_WORKFLOW_LABELS,
+  CLAIM_WORKFLOW_STATUS,
+  fetchClaimsForUser,
+  mapEligibleTripsForClaims,
+  submitClaimRequest,
+} from '../../services/ClaimsService';
 import {
   borderRadius,
   colors,
@@ -29,14 +35,37 @@ import ScreenHeader from '../../components/ScreenHeader';
 import ClaimFlowModal from '../../components/ClaimFlowModal';
 
 const MIN_REFRESH_SPINNER_MS = 700;
-
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getClaimStatusColor = (workflowStatus) => {
+  switch (workflowStatus) {
+    case CLAIM_WORKFLOW_STATUS.FILED:
+      return colors.primary;
+    case CLAIM_WORKFLOW_STATUS.PROCESSING:
+      return colors.warning;
+    case CLAIM_WORKFLOW_STATUS.REVIEW:
+      return colors.info;
+    case CLAIM_WORKFLOW_STATUS.COMPLETED:
+      return colors.success;
+    default:
+      return colors.text.tertiary;
+  }
+};
+
+const getClaimResolutionText = (claim) => {
+  if (claim.resolution) return claim.resolution;
+  if (String(claim.status || '').toUpperCase() === 'COMPLETED') {
+    return 'Claim processed successfully';
+  }
+  return 'Claim reviewed';
+};
 
 export default function CustomerClaimsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { currentUser, getUserPickupRequests } = useAuth();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+
   const [activeTab, setActiveTab] = useState('ongoing');
   const [claimFlowVisible, setClaimFlowVisible] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -48,74 +77,52 @@ export default function CustomerClaimsScreen({ navigation }) {
   const [submitting, setSubmitting] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState([]);
 
-  // Real claims data from insurance API
   const [ongoingClaims, setOngoingClaims] = useState([]);
   const [completedClaims, setCompletedClaims] = useState([]);
   const [pastTrips, setPastTrips] = useState([]);
 
-  // Load data on mount
-  useEffect(() => {
-    loadClaimsData({ withInitialLoader: true });
-    loadPastTrips();
-  }, []);
+  const currentUserId = currentUser?.uid || currentUser?.id;
 
-  const loadClaimsData = async ({ withInitialLoader = false } = {}) => {
+  const loadClaimsData = useCallback(async ({ withInitialLoader = false } = {}) => {
+    if (!currentUserId) {
+      setOngoingClaims([]);
+      setCompletedClaims([]);
+      if (withInitialLoader) setInitialLoading(false);
+      return;
+    }
+
     try {
       if (withInitialLoader) setInitialLoading(true);
+      const result = await fetchClaimsForUser(currentUserId);
 
-      const { data: claims, error } = await supabase
-        .from('claims')
-        .select('*')
-        .eq('user_id', currentUser.uid || currentUser.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      if (claims) {
-        // Separate ongoing and completed claims
-        const ongoing = [];
-        const completed = [];
-
-        claims.forEach(claim => {
-          const claimItem = {
-            id: claim.id,
-            bookingId: claim.booking_id,
-            date: new Date(claim.created_at || claim.loss_date).toLocaleDateString(),
-            status: claim.status, // Assuming status matches app expectation or needs mapping
-            item: claim.loss_description || 'Item', // Schema might differ slightly
-            description: claim.loss_description,
-            amount: claim.estimated_value ? `$${claim.estimated_value}` : 'Pending',
-            lossDate: claim.loss_date,
-            progress: getClaimProgress({ status: claim.status }),
-            claimantName: claim.claimant_name,
-            claimantEmail: claim.claimant_email,
-            rawClaim: claim,
-          };
-
-          if (claim.status === 'COMPLETED' || claim.status === 'CLOSED') {
-            completed.push({
-              ...claimItem,
-              resolution: claim.resolution || 'Resolved',
-              completedDate: new Date(claim.updated_at || claim.created_at).toLocaleDateString(),
-            });
-          } else {
-            ongoing.push(claimItem);
-          }
-        });
-
-        setOngoingClaims(ongoing);
-        setCompletedClaims(completed);
-      } else {
+      if (!result.success) {
         setOngoingClaims([]);
         setCompletedClaims([]);
+        return;
       }
-    } catch (error) {
-      console.error('Error loading claims:', error);
-      // Alert.alert('Error', 'Failed to load claims history');
+
+      setOngoingClaims(result.ongoingClaims);
+      setCompletedClaims(result.completedClaims);
     } finally {
       if (withInitialLoader) setInitialLoading(false);
     }
-  };
+  }, [currentUserId]);
+
+  const loadPastTrips = useCallback(async () => {
+    try {
+      const requests = await getUserPickupRequests();
+      const tripsWithInsurance = mapEligibleTripsForClaims(requests);
+      setPastTrips(tripsWithInsurance);
+    } catch (error) {
+      console.error('Error loading past trips:', error);
+      Alert.alert('Error', 'Failed to load past trips');
+    }
+  }, [getUserPickupRequests]);
+
+  useEffect(() => {
+    loadClaimsData({ withInitialLoader: true });
+    loadPastTrips();
+  }, [loadClaimsData, loadPastTrips]);
 
   const handleRefreshClaims = async () => {
     if (refreshing) return;
@@ -131,103 +138,6 @@ export default function CustomerClaimsScreen({ navigation }) {
         await wait(MIN_REFRESH_SPINNER_MS - elapsed);
       }
       setRefreshing(false);
-    }
-  };
-
-  const loadPastTrips = async () => {
-    try {
-      // Get user's completed pickup requests that had insurance
-      const requests = await getUserPickupRequests();
-
-      const tripsWithInsurance = requests
-        .filter(request =>
-          normalizeTripStatus(request.status) === TRIP_STATUS.COMPLETED &&
-          request.insurance &&
-          request.insurance.included &&
-          request.insurance.bookingId // Must have actual insurance booking ID
-        )
-        .map(request => {
-          const parsedInsuranceValue = Number(request.itemValue);
-          const insuranceValue = Number.isFinite(parsedInsuranceValue) && parsedInsuranceValue > 0
-            ? parsedInsuranceValue
-            : null;
-
-          return {
-            id: request.id,
-            date: new Date(request.completedAt || request.createdAt).toLocaleDateString(),
-            pickup: request.pickup?.address || 'Pickup Location',
-            dropoff: request.dropoff?.address || 'Dropoff Location',
-            item: request.item?.description || 'Items',
-            driver: 'Driver',
-            amount: `${request.pricing?.total || '0.00'}`,
-            insuranceValue,
-            // Use the actual insurance booking ID (from purchase response)
-            bookingId: request.insurance.bookingId,
-            quoteId: request.insurance.quoteId,
-          };
-        });
-
-      setPastTrips(tripsWithInsurance);
-    } catch (error) {
-      console.error('Error loading past trips:', error);
-      Alert.alert('Error', 'Failed to load past trips');
-    }
-  };
-
-  const getClaimStatus = (claim) => {
-    if (!claim.status) return 'filed';
-
-    switch (claim.status.toUpperCase()) {
-      case 'SUBMITTED':
-      case 'PENDING':
-        return 'filed';
-      case 'IN_PROGRESS':
-      case 'INVESTIGATING':
-        return 'processing';
-      case 'UNDER_REVIEW':
-        return 'review';
-      case 'COMPLETED':
-      case 'CLOSED':
-        return 'completed';
-      default:
-        return 'filed';
-    }
-  };
-
-  const getClaimProgress = (claim) => {
-    const status = getClaimStatus(claim);
-    switch (status) {
-      case 'filed': return 20;
-      case 'processing': return 50;
-      case 'review': return 75;
-      case 'completed': return 100;
-      default: return 20;
-    }
-  };
-
-  const getResolutionText = (claim) => {
-    if (claim.resolution) return claim.resolution;
-    if (claim.status === 'COMPLETED') return 'Claim processed successfully';
-    return 'Claim reviewed';
-  };
-
-  const getClaimStatusText = (status) => {
-    switch (status) {
-      case 'filed': return 'Claim Filed';
-      case 'processing': return 'Processing';
-      case 'review': return 'Under Review';
-      case 'completed': return 'Completed';
-      default: return 'Unknown';
-    }
-  };
-
-  const getClaimStatusColor = (status) => {
-    switch (status) {
-      case 'filed': return colors.primary;
-      case 'processing': return colors.warning;
-      case 'review': return colors.info;
-      case 'completed': return colors.success;
-      default: return colors.text.tertiary;
     }
   };
 
@@ -247,7 +157,8 @@ export default function CustomerClaimsScreen({ navigation }) {
 
     setSelectedTrip({
       ...trip,
-      setupData: { claimsEnabled: true } // Stub
+      // TODO(remove): legacy flag, no longer required by current ClaimFlowModal.
+      setupData: { claimsEnabled: true },
     });
 
     return true;
@@ -259,18 +170,6 @@ export default function CustomerClaimsScreen({ navigation }) {
     setClaimDescription('');
     setClaimType('DAMAGED_GOODS');
     setSelectedDocuments([]);
-  };
-
-  const handleAddDocument = async () => {
-    Alert.alert(
-      'Add Document',
-      'Choose document type',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: takePhoto },
-        { text: 'Choose File', onPress: pickDocument },
-      ]
-    );
   };
 
   const takePhoto = async () => {
@@ -297,7 +196,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           size: result.assets[0].fileSize || 0,
           documentType: 'PHOTOS_DAMAGE',
         };
-        setSelectedDocuments([...selectedDocuments, document]);
+        setSelectedDocuments((prev) => [...prev, document]);
       }
     } catch (error) {
       console.error('Error taking photo:', error);
@@ -321,7 +220,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           size: result.assets[0].size,
           documentType: 'OTHER',
         };
-        setSelectedDocuments([...selectedDocuments, document]);
+        setSelectedDocuments((prev) => [...prev, document]);
       }
     } catch (error) {
       console.error('Error picking document:', error);
@@ -329,8 +228,16 @@ export default function CustomerClaimsScreen({ navigation }) {
     }
   };
 
+  const handleAddDocument = async () => {
+    Alert.alert('Add Document', 'Choose document type', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Take Photo', onPress: takePhoto },
+      { text: 'Choose File', onPress: pickDocument },
+    ]);
+  };
+
   const removeDocument = (documentId) => {
-    setSelectedDocuments(selectedDocuments.filter(doc => doc.id !== documentId));
+    setSelectedDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
   };
 
   const handleSubmitClaim = async () => {
@@ -347,57 +254,41 @@ export default function CustomerClaimsScreen({ navigation }) {
     setSubmitting(true);
 
     try {
-      console.log('Submitting claim via Edge Function...');
-
-      const { data, error } = await supabase.functions.invoke('submit-claim', {
-        body: {
-          bookingId: selectedTrip.bookingId,
-          lossType: claimType,
-          lossDate: new Date().toISOString().split('T')[0],
-          lossDescription: claimDescription,
-          lossEstimatedClaimValue: Number.isFinite(Number(selectedTrip.insuranceValue))
-            ? Number(selectedTrip.insuranceValue)
-            : null,
-          claimantName: currentUser.displayName || currentUser.email,
-          claimantEmail: currentUser.email,
-          documentTypes: selectedDocuments.map(doc => doc.documentType),
-          // TODO: Files should ideally be uploaded to Supabase Storage first and URLs sent.
-          // For now, only metadata is sent to the function.
-          // Real implementation requires client-side upload logic.
-        }
+      const result = await submitClaimRequest({
+        selectedTrip,
+        claimType,
+        claimDescription,
+        currentUser,
+        selectedDocuments,
       });
 
-      if (error) throw error;
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to submit claim. Please try again.');
+        return;
+      }
 
-      console.log('Claim submitted successfully:', data);
-
-      // Reset form
       setClaimDescription('');
       setClaimType('DAMAGED_GOODS');
       setSelectedDocuments([]);
       setClaimFlowVisible(false);
       setSelectedTrip(null);
 
-      // Reload claims data
       await loadClaimsData();
 
-      Alert.alert(
-        'Claim Submitted',
-        'Your claim has been submitted successfully.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Error submitting claim:', error);
-      Alert.alert('Error', 'Failed to submit claim. Please try again.');
+      Alert.alert('Claim Submitted', 'Your claim has been submitted successfully.', [{ text: 'OK' }]);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const activeClaims = useMemo(
+    () => (activeTab === 'ongoing' ? ongoingClaims : completedClaims),
+    [activeTab, ongoingClaims, completedClaims]
+  );
+
   const renderClaimItem = ({ item }) => {
-    const claimStatus = getClaimStatus(item);
-    const statusText = getClaimStatusText(claimStatus);
-    const statusColor = getClaimStatusColor(claimStatus);
+    const statusText = CLAIM_WORKFLOW_LABELS[item.workflowStatus] || 'Unknown';
+    const statusColor = getClaimStatusColor(item.workflowStatus);
 
     return (
       <View style={styles.claimCard}>
@@ -418,17 +309,17 @@ export default function CustomerClaimsScreen({ navigation }) {
             <View
               style={[
                 styles.progressFill,
-                { width: `${item.progress}%`, backgroundColor: statusColor }
+                { width: `${item.progress}%`, backgroundColor: statusColor },
               ]}
             />
           </View>
           <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
         </View>
 
-        {claimStatus === 'completed' && (
+        {item.workflowStatus === CLAIM_WORKFLOW_STATUS.COMPLETED && (
           <View style={styles.resolutionContainer}>
             <Text style={styles.resolutionLabel}>Resolution:</Text>
-            <Text style={styles.resolutionText}>{getResolutionText(item)}</Text>
+            <Text style={styles.resolutionText}>{getClaimResolutionText(item)}</Text>
             <Text style={styles.completedDate}>Completed on {item.completedDate}</Text>
           </View>
         )}
@@ -440,8 +331,6 @@ export default function CustomerClaimsScreen({ navigation }) {
       </View>
     );
   };
-
-  const activeClaims = activeTab === 'ongoing' ? ongoingClaims : completedClaims;
 
   const headerActions = (
     <View style={styles.headerActions}>
@@ -487,7 +376,6 @@ export default function CustomerClaimsScreen({ navigation }) {
       />
 
       <View style={[styles.topSection, { maxWidth: contentMaxWidth }]}>
-        {/* Tab Selector */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'ongoing' && styles.activeTab]}
@@ -508,7 +396,6 @@ export default function CustomerClaimsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Claims List */}
       <FlatList
         data={activeClaims}
         renderItem={renderClaimItem}
@@ -531,9 +418,7 @@ export default function CustomerClaimsScreen({ navigation }) {
           <View style={styles.emptyState}>
             <Ionicons name="document-text-outline" size={48} color={colors.text.subtle} />
             <Text style={styles.emptyStateText}>
-              {activeTab === 'ongoing'
-                ? 'No ongoing claims'
-                : 'No completed claims'}
+              {activeTab === 'ongoing' ? 'No ongoing claims' : 'No completed claims'}
             </Text>
             <Text style={styles.emptyStateSubtext}>
               Claims can only be filed for deliveries with insurance coverage
@@ -550,7 +435,7 @@ export default function CustomerClaimsScreen({ navigation }) {
         onPress={handleStartClaim}
       >
         <Ionicons name="add-circle" size={20} color={colors.white} />
-        <Text style={styles.startClaimText}>File New Claim</Text>
+        <Text style={styles.startClaimText}>New Claim</Text>
       </TouchableOpacity>
 
       <Modal
@@ -615,7 +500,6 @@ export default function CustomerClaimsScreen({ navigation }) {
   );
 }
 
-// Comprehensive styles for the component
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -871,306 +755,5 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
     marginLeft: spacing.sm,
-  },
-  pastTripsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md + spacing.xs,
-    backgroundColor: colors.background.secondary,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  pastTripsTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.white,
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tripsList: {
-    paddingHorizontal: spacing.base,
-    paddingBottom: spacing.xl + spacing.xs,
-  },
-  tripsListEmpty: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
-  tripCard: {
-    backgroundColor: colors.background.panel,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  tripHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  tripDate: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-  },
-  tripAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.success,
-  },
-  tripDetails: {
-    gap: 8,
-  },
-  tripLocationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  tripLocations: {
-    flex: 1,
-    marginLeft: 8,
-  },
-  tripLocation: {
-    fontSize: 14,
-    color: colors.white,
-    lineHeight: 20,
-  },
-  tripItemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  tripItemText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    marginLeft: 8,
-  },
-  insuranceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  insuranceText: {
-    fontSize: 14,
-    color: colors.success,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlayDark,
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.background.secondary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '90%',
-    width: '100%',
-    maxWidth: layout.sheetMaxWidth,
-    alignSelf: 'center',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.strong,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.white,
-  },
-  modalCloseButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalScroll: {
-    maxHeight: '70%',
-  },
-  tripSummary: {
-    backgroundColor: colors.background.panel,
-    margin: spacing.base,
-    padding: 16,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  tripSummaryTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.white,
-    marginBottom: 12,
-  },
-  tripSummaryDate: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-    marginBottom: 8,
-  },
-  tripSummaryItem: {
-    fontSize: 16,
-    color: colors.white,
-    marginBottom: 12,
-  },
-  tripSummaryRoute: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  tripSummaryRouteText: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    marginLeft: 8,
-  },
-  insuranceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  insuranceInfoText: {
-    fontSize: 14,
-    color: colors.success,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  claimTypeContainer: {
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.lg,
-  },
-  claimTypeLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.white,
-    marginBottom: 12,
-  },
-  claimTypeOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  claimTypeOption: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: colors.background.panel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    alignItems: 'center',
-  },
-  claimTypeSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  claimTypeText: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-    fontWeight: '500',
-  },
-  claimTypeTextSelected: {
-    color: colors.white,
-  },
-  inputContainer: {
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.lg,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.white,
-    marginBottom: 8,
-  },
-  textInput: {
-    backgroundColor: colors.background.panel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: 16,
-    color: colors.white,
-    fontSize: 16,
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
-  documentsContainer: {
-    paddingHorizontal: spacing.base,
-    marginBottom: spacing.lg,
-  },
-  documentsLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.white,
-    marginBottom: 12,
-  },
-  documentsList: {
-    marginBottom: 12,
-  },
-  documentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background.panel,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  documentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  documentName: {
-    fontSize: 14,
-    color: colors.white,
-    marginLeft: 8,
-    flex: 1,
-  },
-  removeDocumentButton: {
-    padding: 4,
-  },
-  addDocumentButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background.panel,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-  },
-  addDocumentText: {
-    fontSize: 14,
-    color: colors.primary,
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  submitButton: {
-    backgroundColor: colors.primary,
-    margin: spacing.base,
-    paddingVertical: 16,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-  },
-  submitButtonDisabled: {
-    backgroundColor: colors.text.subtle,
-  },
-  submittingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
   },
 });
