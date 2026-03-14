@@ -30,6 +30,10 @@ export const appConfig = {
   mapbox: {
     publicToken: readEnv("EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN"),
   },
+  supabase: {
+    url: readEnv("EXPO_PUBLIC_SUPABASE_URL"),
+    anonKey: readEnv("EXPO_PUBLIC_SUPABASE_ANON_KEY"),
+  },
   ai: {
     geminiApiKey: readEnv("EXPO_PUBLIC_GEMINI_API_KEY"),
   },
