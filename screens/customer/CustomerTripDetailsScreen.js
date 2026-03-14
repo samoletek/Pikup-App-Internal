@@ -41,6 +41,7 @@ const BODY_LINE_HEIGHT = Math.round(
 const STAR_SIZE = 32;
 const PHOTO_PREVIEW_SIZE = 112;
 const PHOTO_URL_TTL_SECONDS = 60 * 60 * 6;
+const TRIP_DETAILS_AUTO_SYNC_INTERVAL_MS = 5000;
 
 const STATUS_STEPS = Object.freeze([
   {
@@ -568,28 +569,28 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     !isSubmittingRating;
 
   const loadTrip = useCallback(
-    async ({ refresh = false } = {}) => {
+    async ({ refresh = false, silent = false } = {}) => {
       if (!tripId || isMockTrip) {
         return;
       }
 
       if (refresh) {
         setRefreshing(true);
-      } else {
+      } else if (!silent) {
         setLoading(true);
       }
 
       try {
         const latest = await getRequestById(tripId);
         if (latest) {
-          setTripData(latest);
+          setTripData((prev) => ({ ...(prev || {}), ...latest }));
         }
       } catch (error) {
         console.error("Error loading trip details:", error);
       } finally {
         if (refresh) {
           setRefreshing(false);
-        } else {
+        } else if (!silent) {
           setLoading(false);
         }
       }
@@ -600,6 +601,72 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   useEffect(() => {
     loadTrip();
   }, [loadTrip]);
+
+  useEffect(() => {
+    if (!tripId || isMockTrip) {
+      return undefined;
+    }
+
+    let refreshTimer = null;
+    const scheduleRefresh = (delayMs = 120) => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+      refreshTimer = setTimeout(() => {
+        loadTrip({ silent: true });
+      }, delayMs);
+    };
+
+    const channel = supabase
+      .channel(`customer-trip-details-${tripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+          filter: `id=eq.${tripId}`,
+        },
+        (payload) => {
+          const nextTrip = payload?.new;
+          if (nextTrip && typeof nextTrip === "object") {
+            setTripData((prev) => ({ ...(prev || {}), ...nextTrip }));
+          }
+          scheduleRefresh();
+        }
+      )
+      .subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn(`Trip details realtime ${status.toLowerCase()} for ${tripId}`);
+        }
+      });
+
+    return () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+      supabase.removeChannel(channel);
+    };
+  }, [tripId, isMockTrip, loadTrip]);
+
+  useEffect(() => {
+    if (!tripId || isMockTrip) {
+      return undefined;
+    }
+
+    const normalizedStatus = normalizeTripStatus(displayTrip.status);
+    if (normalizedStatus === TRIP_STATUS.COMPLETED || normalizedStatus === TRIP_STATUS.CANCELLED) {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      loadTrip({ silent: true });
+    }, TRIP_DETAILS_AUTO_SYNC_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [tripId, isMockTrip, displayTrip.status, loadTrip]);
 
   const loadExistingTripFeedback = useCallback(async () => {
     if (!isTripCompleted || !displayTrip.id || !currentUserId) {

@@ -174,7 +174,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const [orderModalKey, setOrderModalKey] = useState(0);
   const [hasUnreadDeliveryChat, setHasUnreadDeliveryChat] = useState(false);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
-  const activeTripPulseAnim = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
 
   const floatingWidth = useMemo(
@@ -202,16 +201,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const searchingPulseSize = searchingPinPulse.interpolate({
     inputRange: [0, 1],
     outputRange: [24, 96],
-  });
-
-  const activeTripPulseScale = activeTripPulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.025],
-  });
-
-  const activeTripPulseOpacity = activeTripPulseAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.92, 1],
   });
 
   const searchingPulseRingOpacity = searchingPinPulse.interpolate({
@@ -511,39 +500,6 @@ export default function CustomerHomeScreen({ navigation }) {
   }, [pendingBooking, searchingPinPulse]);
 
   useEffect(() => {
-    if (!activeDeliveryStep) {
-      activeTripPulseAnim.stopAnimation();
-      activeTripPulseAnim.setValue(0);
-      return;
-    }
-
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(activeTripPulseAnim, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(activeTripPulseAnim, {
-          toValue: 0,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-
-    pulseAnimation.start();
-
-    return () => {
-      pulseAnimation.stop();
-      activeTripPulseAnim.stopAnimation();
-      activeTripPulseAnim.setValue(0);
-    };
-  }, [activeDeliveryStep, activeTripPulseAnim]);
-
-  useEffect(() => {
     if (!pendingBooking) {
       setSearchElapsedSeconds(0);
       return;
@@ -748,7 +704,7 @@ export default function CustomerHomeScreen({ navigation }) {
           }
         }
 
-        // Step 2: Charge the correct amount (with or without insurance)
+        // Step 2: Validate the final charge amount.
         const finalAmountInCents = Math.round(finalAmount * 100);
         if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
           return {
@@ -757,6 +713,62 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
+        // Step 3: Upload item photos/invoices first, so we never persist local `file://` URIs.
+        const storageUserId = String(currentUserId || "").trim();
+        if (!storageUserId) {
+          return {
+            success: false,
+            error: "Session expired. Please sign in again.",
+          };
+        }
+
+        const isRemoteUrl = (value) =>
+          typeof value === "string" && /^https?:\/\//i.test(value.trim());
+
+        const orderIdTimestamp = Date.now();
+        const uploadItemMedia = async (uri, suffix) => {
+          const normalizedUri = String(uri || "").trim();
+          if (!normalizedUri) return null;
+          if (isRemoteUrl(normalizedUri)) return normalizedUri;
+
+          const filename = `${storageUserId}/order_items/${orderIdTimestamp}/${suffix}.jpg`;
+          const uploadedUrl = await uploadToSupabase(normalizedUri, "trip_photos", filename);
+          if (!isRemoteUrl(uploadedUrl)) {
+            throw new Error("Could not upload item media. Please try again.");
+          }
+
+          return uploadedUrl;
+        };
+
+        const uploadedItems = [];
+        for (let i = 0; i < (orderData?.items || []).length; i++) {
+          const item = orderData.items[i];
+          const uploadedPhotos = [];
+
+          if (Array.isArray(item.photos)) {
+            for (let j = 0; j < item.photos.length; j++) {
+              const photoUri = item.photos[j];
+              if (!photoUri) continue;
+              const uploadedPhotoUrl = await uploadItemMedia(photoUri, `item_${i}_photo_${j}`);
+              if (uploadedPhotoUrl) {
+                uploadedPhotos.push(uploadedPhotoUrl);
+              }
+            }
+          }
+
+          let uploadedInvoicePhoto = null;
+          if (item.invoicePhoto) {
+            uploadedInvoicePhoto = await uploadItemMedia(item.invoicePhoto, `item_${i}_invoice`);
+          }
+
+          uploadedItems.push({
+            ...item,
+            photos: uploadedPhotos,
+            invoicePhoto: uploadedInvoicePhoto,
+          });
+        }
+
+        // Step 4: Charge the correct amount (with or without insurance).
         const rideDetails = {
           scheduleType: orderData?.scheduleType,
           scheduledDateTime: orderData?.scheduledDateTime,
@@ -875,11 +887,13 @@ export default function CustomerHomeScreen({ navigation }) {
     },
     [
       currentUser?.phone_verified,
+      currentUserId,
       activeDelivery,
       pendingBooking,
       createPaymentIntent,
       confirmPayment,
       createPickupRequest,
+      uploadToSupabase,
       checkActiveDeliveries,
     ]
   );
@@ -970,15 +984,7 @@ export default function CustomerHomeScreen({ navigation }) {
             { paddingBottom: floatingBottomOffset, width: floatingWidth },
           ]}
         >
-          <Animated.View
-            style={[
-              styles.activeTripPulseWrap,
-              {
-                opacity: activeTripPulseOpacity,
-                transform: [{ scale: activeTripPulseScale }],
-              },
-            ]}
-          >
+          <View style={styles.activeTripPulseWrap}>
             <TouchableOpacity
               style={styles.activeTripTrigger}
               onPress={handleOpenActiveTripDetails}
@@ -1008,7 +1014,7 @@ export default function CustomerHomeScreen({ navigation }) {
                 </View>
               </View>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         </View>
       )}
 
@@ -1289,7 +1295,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 56,
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: spacing.sm,
     shadowColor: ACTIVE_TRIP_BUTTON_COLOR,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.42,
@@ -1299,7 +1305,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.18)",
   },
   activeTripSideSlot: {
-    width: 40,
+    width: 34,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1317,7 +1323,7 @@ const styles = StyleSheet.create({
     color: colors.background.primary,
     flex: 1,
     textAlign: "center",
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 0,
   },
   activeTripOpenIndicator: {
     width: 32,

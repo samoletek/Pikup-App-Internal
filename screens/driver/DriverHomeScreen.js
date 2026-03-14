@@ -604,11 +604,12 @@ export default function DriverHomeScreen({ navigation, route }) {
         requestPool: effectiveRequestPool,
         driverLocation,
       });
+      const normalizedRequests = Array.isArray(requests) ? requests : [];
 
-      setAvailableRequests(requests);
+      setAvailableRequests(normalizedRequests);
 
       const visibleRequestIds = new Set(
-        (requests || []).map((item) => String(item?.id || '')).filter(Boolean)
+        normalizedRequests.map((item) => String(item?.id || '')).filter(Boolean)
       );
       const currentIncomingId = String(incomingRequestIdRef.current || '').trim();
 
@@ -625,18 +626,17 @@ export default function DriverHomeScreen({ navigation, route }) {
         setShowIncomingModal(false);
         setIsMinimized(false);
         setIncomingRequest(null);
-        if (requests.length === 0) {
-          setShowAllRequests(false);
-        }
       } else {
         setShowAllRequests(false);
       }
-      console.log(`Loaded ${requests.length} real requests from Firebase`);
+      console.log(`Loaded ${normalizedRequests.length} real requests from Firebase`);
     } catch (error) {
       console.error('Error loading requests:', error);
       setError('Could not load available requests');
       setAvailableRequests([]);
-      setShowAllRequests(false);
+      if (effectiveRequestPool !== REQUEST_POOLS.SCHEDULED) {
+        setShowAllRequests(false);
+      }
     } finally {
       if (showLoading) setLoading(false);
     }
