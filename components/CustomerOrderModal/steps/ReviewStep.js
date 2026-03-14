@@ -321,7 +321,7 @@ const ReviewStep = ({
                                 <Text style={styles.priceValue}>
                                     {insuranceLoading
                                         ? '...'
-                                        : `$${(insuranceQuote?.premium || displayPricing.mandatoryInsurance || 0).toFixed(2)}`
+                                        : `$${(displayPricing.mandatoryInsurance || 0).toFixed(2)}`
                                     }
                                 </Text>
                             </View>
@@ -340,10 +340,7 @@ const ReviewStep = ({
                         <Text style={styles.totalValue}>
                             {insuranceLoading
                                 ? '...'
-                                : `$${insuranceQuote?.premium > 0 && displayPricing?.mandatoryInsurance > 0
-                                    ? (Math.round((displayPricing.total - displayPricing.mandatoryInsurance + insuranceQuote.premium) * 100) / 100).toFixed(2)
-                                    : displayPricing?.total?.toFixed(2) || '0.00'
-                                }`
+                                : `$${displayPricing?.total?.toFixed(2) || '0.00'}`
                             }
                         </Text>
                     </View>

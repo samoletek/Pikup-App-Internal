@@ -184,6 +184,22 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
     // Labor adjustment from ReviewStep (lifted state)
     const [laborAdjustment, setLaborAdjustment] = useState(null);
 
+    // Update previewPricing when Redkik quote arrives (replace flat $12.99 with real Redkik premium)
+    useEffect(() => {
+        if (!previewPricing || !insuranceQuote?.premium || !previewPricing.insuranceApplied) return;
+        const redkikPremium = insuranceQuote.premium;
+        const oldInsurance = previewPricing.mandatoryInsurance || 0;
+        if (Math.abs(redkikPremium - oldInsurance) < 0.01) return; // already up to date
+        setPreviewPricing(prev => {
+            const prevOld = prev.mandatoryInsurance || 0;
+            return {
+                ...prev,
+                mandatoryInsurance: redkikPremium,
+                total: Math.round((prev.total - prevOld + redkikPremium) * 100) / 100,
+            };
+        });
+    }, [insuranceQuote]);
+
     // ============================================
     // EFFECTS
     // ============================================
@@ -725,14 +741,17 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 };
             }
 
-            // Override insurance premium with real Redkik quote when available
+            // Replace static insurance with Redkik premium + Pikup commission
             let finalPricing = basePricing;
-            if (activeInsuranceQuote?.premium > 0 && basePricing?.mandatoryInsurance > 0) {
-                const pricingDiff = activeInsuranceQuote.premium - (basePricing.mandatoryInsurance || 0);
+            if (activeInsuranceQuote?.premium > 0 && basePricing?.insuranceApplied) {
+                // Replace flat $12.99 with actual Redkik premium.
+                // Technology fee inside the premium is Pikup's revenue — no extra markup.
+                const redkikPremium = activeInsuranceQuote.premium;
+                const oldInsurance = basePricing.mandatoryInsurance || 0;
                 finalPricing = {
                     ...basePricing,
-                    mandatoryInsurance: activeInsuranceQuote.premium,
-                    total: Math.round((basePricing.total + pricingDiff) * 100) / 100,
+                    mandatoryInsurance: redkikPremium,
+                    total: Math.round((basePricing.total - oldInsurance + redkikPremium) * 100) / 100,
                 };
             }
 
