@@ -1,18 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   Alert,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AppSwitch from '../../components/AppSwitch';
 import ScreenHeader from '../../components/ScreenHeader';
+import AppSwitch from '../../components/AppSwitch';
+import AppButton from '../../components/ui/AppButton';
+import ScreenState from '../../components/ui/ScreenState';
+import { useDriverPayoutActions } from '../../hooks/useDriverPayoutActions';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   borderRadius,
   colors,
@@ -20,277 +24,199 @@ import {
   typography,
 } from '../../styles/theme';
 
+const toMoney = (value) => {
+  const amount = Number(value) || 0;
+  return `$${amount.toFixed(2)}`;
+};
+
 export default function DriverPaymentSettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuth();
-  // TODO(cleanup): Replace demo paymentData with real backend-driven payment state.
-  const [paymentData, setPaymentData] = useState({
-    instantPay: false,
-    weeklyDeposit: true,
-    bankAccount: {
-      last4: '1234',
-      bankName: 'Chase Bank',
-      isDefault: true,
-    },
-    stripeAccount: {
-      connected: true,
-      last4: '5678',
-      cardBrand: 'visa',
-    },
-    earnings: {
-      weeklyTotal: 847.50,
-      availableBalance: 125.30,
-      pendingBalance: 45.20,
-    },
-    instantPayEnabled: true,
-    notificationsEnabled: true,
-    taxDocuments: true,
-  });
+  const {
+    getDriverProfile,
+    getDriverStats,
+    getDriverPayouts,
+    requestInstantPayout,
+    createDriverConnectAccount,
+    getDriverOnboardingLink,
+    updateDriverPaymentProfile,
+  } = useDriverPayoutActions();
 
-  const [loading, setLoading] = useState(false);
+  const currentUserId = currentUser?.uid || currentUser?.id;
+  const [loading, setLoading] = useState(true);
+  const [processingPayout, setProcessingPayout] = useState(false);
+  const [refreshingOnboarding, setRefreshingOnboarding] = useState(false);
+  const [paymentData, setPaymentData] = useState(null);
+
+  const loadPaymentData = useCallback(async () => {
+    if (!currentUserId) {
+      setLoading(false);
+      setPaymentData(null);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const [profile, stats, payoutsResult] = await Promise.all([
+        getDriverProfile?.(currentUserId),
+        getDriverStats?.(currentUserId),
+        getDriverPayouts?.(currentUserId),
+      ]);
+
+      const metadata = profile?.metadata || {};
+      const connectAccountId = profile?.connectAccountId || profile?.stripe_account_id || metadata.connectAccountId || null;
+      const canReceivePayments = Boolean(profile?.canReceivePayments || profile?.can_receive_payments || metadata.canReceivePayments);
+      const onboardingComplete = Boolean(profile?.onboardingComplete || profile?.onboarding_complete || metadata.onboardingComplete);
+
+      setPaymentData({
+        connectAccountId,
+        onboardingComplete,
+        canReceivePayments,
+        instantPay: metadata.instantPay !== false,
+        notificationsEnabled: metadata.notificationsEnabled !== false,
+        weeklyTotal: Number(stats?.weeklyEarnings || 0),
+        availableBalance: Number(stats?.availableBalance || 0),
+        pendingBalance: Math.max(0, Number(stats?.totalEarnings || 0) - Number(stats?.availableBalance || 0)),
+        totalPayouts: Number(stats?.totalPayouts || payoutsResult?.totalPayouts || 0),
+        payouts: Array.isArray(payoutsResult?.payouts) ? payoutsResult.payouts : [],
+      });
+    } catch (error) {
+      Alert.alert('Payment Settings', error?.message || 'Failed to load payment data.');
+      setPaymentData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    currentUserId,
+    getDriverProfile,
+    getDriverStats,
+    getDriverPayouts,
+  ]);
 
   useEffect(() => {
-    // TODO(cleanup): Wire loadPaymentData to real payment service.
-    loadPaymentData();
-  }, []);
+    void loadPaymentData();
+  }, [loadPaymentData]);
 
-  const loadPaymentData = async () => {
+  const onboardingStatusText = useMemo(() => {
+    if (!paymentData?.connectAccountId) return 'Not started';
+    if (paymentData.canReceivePayments) return 'Active';
+    if (paymentData.onboardingComplete) return 'Under review';
+    return 'Incomplete';
+  }, [paymentData]);
+
+  const saveToggle = async (field, value) => {
+    if (!currentUserId) return;
+
+    setPaymentData((prev) => (prev ? { ...prev, [field]: value } : prev));
+
     try {
-      // In production, fetch from your payment service
-      console.log('Loading payment data...');
+      await updateDriverPaymentProfile?.(currentUserId, {
+        [field]: value,
+      });
     } catch (error) {
-      console.error('Error loading payment data:', error);
+      Alert.alert('Payment Settings', error?.message || 'Unable to save setting.');
+      setPaymentData((prev) => (prev ? { ...prev, [field]: !value } : prev));
     }
   };
 
-  const handleInstantPayToggle = async (value) => {
-    setPaymentData(prev => ({ ...prev, instantPay: value }));
-    // In production, update the setting via API
+  const ensureStripeOnboarding = async () => {
+    if (!currentUserId) return;
+
+    setRefreshingOnboarding(true);
+    try {
+      let connectAccountId = paymentData?.connectAccountId || null;
+
+      if (!connectAccountId) {
+        const createResult = await createDriverConnectAccount?.({
+          driverId: currentUserId,
+          email: currentUser?.email,
+        });
+
+        if (!createResult?.success || !createResult?.connectAccountId) {
+          throw new Error(createResult?.error || 'Could not create Stripe account');
+        }
+
+        connectAccountId = createResult.connectAccountId;
+
+        if (createResult.onboardingUrl) {
+          await Linking.openURL(createResult.onboardingUrl);
+          await loadPaymentData();
+          return;
+        }
+      }
+
+      const linkResult = await getDriverOnboardingLink?.(connectAccountId);
+      if (!linkResult?.success || !linkResult?.onboardingUrl) {
+        throw new Error(linkResult?.error || 'Could not get onboarding link');
+      }
+
+      await Linking.openURL(linkResult.onboardingUrl);
+      await loadPaymentData();
+    } catch (error) {
+      Alert.alert('Stripe Onboarding', error?.message || 'Unable to start onboarding.');
+    } finally {
+      setRefreshingOnboarding(false);
+    }
   };
 
-  const handleNotificationsToggle = async (value) => {
-    setPaymentData(prev => ({ ...prev, notificationsEnabled: value }));
-    // In production, update the setting via API
-  };
+  const handleInstantPayout = async () => {
+    if (!currentUserId || !paymentData) return;
 
-  const handleAddBankAccount = () => {
-    Alert.alert(
-      'Add Bank Account',
-      'You will be redirected to Stripe to securely add your bank account.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', onPress: () => console.log('Open Stripe Connect') }
-      ]
-    );
-  };
+    if (!paymentData.connectAccountId) {
+      Alert.alert('Setup Required', 'Complete Stripe onboarding first.');
+      return;
+    }
 
-  const handleInstantPayout = () => {
-    if (!paymentData.instantPayEnabled) {
-      Alert.alert(
-        'Instant Pay Unavailable',
-        'Instant Pay is not available for your account. Please try again later.',
-        [{ text: 'OK' }]
-      );
+    if (!paymentData.canReceivePayments) {
+      Alert.alert('Account Under Review', 'Your payout account is not ready yet.');
+      return;
+    }
+
+    if (paymentData.availableBalance <= 0) {
+      Alert.alert('No Balance', 'No available balance for payout.');
       return;
     }
 
     Alert.alert(
       'Instant Payout',
-      `Transfer $${paymentData.earnings.availableBalance.toFixed(2)} to your bank account?\n\nFee: $0.50`,
+      `Transfer ${toMoney(paymentData.availableBalance)} now?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Transfer', 
-          onPress: () => {
-            setLoading(true);
-            // Simulate instant payout
-            setTimeout(() => {
-              setLoading(false);
-              Alert.alert('Success', 'Your payout is being processed!');
-            }, 2000);
-          }
-        }
+        {
+          text: 'Transfer',
+          onPress: async () => {
+            setProcessingPayout(true);
+            try {
+              const result = await requestInstantPayout?.(currentUserId, paymentData.availableBalance);
+              if (!result?.success) {
+                throw new Error(result?.error || 'Payout failed');
+              }
+              Alert.alert('Success', 'Payout submitted successfully.');
+              await loadPaymentData();
+            } catch (error) {
+              Alert.alert('Payout Error', error?.message || 'Unable to process payout.');
+            } finally {
+              setProcessingPayout(false);
+            }
+          },
+        },
       ]
     );
   };
 
-  const handleViewTaxDocs = () => {
-    Alert.alert(
-      'Tax Documents',
-      'Your tax documents will be available at the end of the tax year.',
-      [{ text: 'OK' }]
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ScreenHeader
+          title="Payment Settings"
+          onBack={() => navigation.goBack()}
+          topInset={insets.top}
+          showBack
+        />
+        <ScreenState loading title="Loading payment settings" subtitle="Syncing Stripe account and payout data." />
+      </View>
     );
-  };
-
-  const renderEarningsCard = () => (
-    <View style={styles.earningsCard}>
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.earningsGradient}
-      >
-        <View style={styles.earningsHeader}>
-          <Text style={styles.earningsTitle}>Weekly Earnings</Text>
-          <Ionicons name="trending-up" size={24} color={colors.white} />
-        </View>
-        
-        <Text style={styles.earningsAmount}>
-          ${paymentData.earnings.weeklyTotal.toFixed(2)}
-        </Text>
-        
-        <View style={styles.earningsBreakdown}>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Available</Text>
-            <Text style={styles.earningsValue}>
-              ${paymentData.earnings.availableBalance.toFixed(2)}
-            </Text>
-          </View>
-          <View style={styles.earningsRow}>
-            <Text style={styles.earningsLabel}>Pending</Text>
-            <Text style={styles.earningsValue}>
-              ${paymentData.earnings.pendingBalance.toFixed(2)}
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
-    </View>
-  );
-
-  const renderPaymentMethod = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Payment Method</Text>
-      
-      <View style={styles.paymentMethodCard}>
-        <View style={styles.paymentMethodLeft}>
-          <View style={styles.bankIcon}>
-            <Ionicons name="card-outline" size={24} color={colors.success} />
-          </View>
-          <View style={styles.paymentMethodInfo}>
-            <Text style={styles.paymentMethodName}>
-              {paymentData.bankAccount.bankName}
-            </Text>
-            <Text style={styles.paymentMethodDetails}>
-              •••• {paymentData.bankAccount.last4}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.paymentMethodRight}>
-          <View style={styles.defaultBadge}>
-            <Text style={styles.defaultBadgeText}>Default</Text>
-          </View>
-          <TouchableOpacity style={styles.editButton}>
-            <Ionicons name="pencil" size={16} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <TouchableOpacity style={styles.addButton} onPress={handleAddBankAccount}>
-        <Ionicons name="add" size={20} color={colors.primary} />
-        <Text style={styles.addButtonText}>Add Bank Account</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderInstantPay = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Instant Pay</Text>
-      
-      <View style={styles.instantPayCard}>
-        <View style={styles.instantPayHeader}>
-          <View style={styles.instantPayLeft}>
-            <View style={styles.instantPayIcon}>
-              <Ionicons name="flash" size={20} color={colors.success} />
-            </View>
-            <View>
-              <Text style={styles.instantPayTitle}>Cash Out Instantly</Text>
-              <Text style={styles.instantPaySubtitle}>
-                Available: ${paymentData.earnings.availableBalance.toFixed(2)}
-              </Text>
-            </View>
-          </View>
-          
-          <TouchableOpacity 
-            style={[
-              styles.instantPayButton,
-              !paymentData.instantPayEnabled && styles.instantPayButtonDisabled
-            ]}
-            onPress={handleInstantPayout}
-            disabled={loading || !paymentData.instantPayEnabled}
-          >
-            <Text style={[
-              styles.instantPayButtonText,
-              !paymentData.instantPayEnabled && styles.instantPayButtonTextDisabled
-            ]}>
-              {loading ? 'Processing...' : 'Cash Out'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-        
-        <Text style={styles.instantPayFee}>
-          Small fee applies ($0.50). Money arrives in minutes.
-        </Text>
-      </View>
-    </View>
-  );
-
-  const renderSettings = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Settings</Text>
-      
-      <View style={styles.settingsCard}>
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <Ionicons name="flash-outline" size={20} color={colors.primary} />
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Instant Pay</Text>
-              <Text style={styles.settingSubtitle}>
-                Get paid instantly after each delivery
-              </Text>
-            </View>
-          </View>
-          <AppSwitch
-            value={paymentData.instantPay}
-            onValueChange={handleInstantPayToggle}
-          />
-        </View>
-
-        <View style={styles.settingDivider} />
-
-        <View style={styles.settingRow}>
-          <View style={styles.settingLeft}>
-            <Ionicons name="notifications-outline" size={20} color={colors.primary} />
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Payment Notifications</Text>
-              <Text style={styles.settingSubtitle}>
-                Get notified when you receive payments
-              </Text>
-            </View>
-          </View>
-          <AppSwitch
-            value={paymentData.notificationsEnabled}
-            onValueChange={handleNotificationsToggle}
-          />
-        </View>
-
-        <View style={styles.settingDivider} />
-
-        <TouchableOpacity style={styles.settingRow} onPress={handleViewTaxDocs}>
-          <View style={styles.settingLeft}>
-            <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Tax Documents</Text>
-              <Text style={styles.settingSubtitle}>
-                View and download tax forms
-              </Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  }
 
   return (
     <View style={styles.container}>
@@ -301,20 +227,132 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         showBack
       />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Earnings Card */}
-        {renderEarningsCard()}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.base,
+          paddingTop: spacing.base,
+          paddingBottom: insets.bottom + spacing.xxl,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.section}>
+          <LinearGradient
+            colors={[colors.primary, colors.primaryDark]}
+            style={styles.heroCard}
+          >
+            <Text style={styles.heroLabel}>Weekly Earnings</Text>
+            <Text style={styles.heroAmount}>{toMoney(paymentData?.weeklyTotal)}</Text>
+            <Text style={styles.heroSubtext}>
+              Available: {toMoney(paymentData?.availableBalance)}
+            </Text>
+            <Text style={styles.heroSubtext}>
+              Total payouts: {toMoney(paymentData?.totalPayouts)}
+            </Text>
+          </LinearGradient>
+        </View>
 
-        {/* Payment Method */}
-        {renderPaymentMethod()}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Stripe Connect</Text>
+          <View style={styles.card}>
+            <View style={styles.rowBetween}>
+              <View style={styles.rowLeft}>
+                <Ionicons name="card" size={20} color={colors.primary} />
+                <Text style={styles.rowTitle}>Account status</Text>
+              </View>
+              <Text style={styles.badge}>{onboardingStatusText}</Text>
+            </View>
 
-        {/* Instant Pay */}
-        {renderInstantPay()}
+            <Text style={styles.rowSubtitle}>
+              {paymentData?.connectAccountId
+                ? `Account: ${paymentData.connectAccountId}`
+                : 'No Stripe Connect account yet'}
+            </Text>
 
-        {/* Settings */}
-        {renderSettings()}
+            <AppButton
+              title={
+                refreshingOnboarding
+                  ? 'Opening...'
+                  : paymentData?.connectAccountId
+                    ? 'Continue Onboarding'
+                    : 'Start Stripe Onboarding'
+              }
+              onPress={ensureStripeOnboarding}
+              loading={refreshingOnboarding}
+              style={styles.topButton}
+            />
+          </View>
+        </View>
 
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Payouts</Text>
+          <View style={styles.card}>
+            <Text style={styles.metricLabel}>Available Balance</Text>
+            <Text style={styles.metricValue}>{toMoney(paymentData?.availableBalance)}</Text>
+
+            <AppButton
+              title={processingPayout ? 'Processing...' : 'Cash Out Now'}
+              onPress={handleInstantPayout}
+              loading={processingPayout}
+              disabled={processingPayout || Number(paymentData?.availableBalance || 0) <= 0}
+              style={styles.topButton}
+            />
+
+            <Text style={styles.noteText}>
+              Instant payout sends your available balance to Stripe Connect.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          <View style={styles.card}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextBlock}>
+                <Text style={styles.settingTitle}>Instant Pay</Text>
+                <Text style={styles.settingSubtitle}>Enable instant payout controls</Text>
+              </View>
+              <AppSwitch
+                value={paymentData?.instantPay !== false}
+                onValueChange={(value) => saveToggle('instantPay', value)}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextBlock}>
+                <Text style={styles.settingTitle}>Payment Notifications</Text>
+                <Text style={styles.settingSubtitle}>Receive payout updates and alerts</Text>
+              </View>
+              <AppSwitch
+                value={paymentData?.notificationsEnabled !== false}
+                onValueChange={(value) => saveToggle('notificationsEnabled', value)}
+              />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Payouts</Text>
+          <View style={styles.card}>
+            {Array.isArray(paymentData?.payouts) && paymentData.payouts.length > 0 ? (
+              paymentData.payouts.slice(0, 5).map((payout) => (
+                <View style={styles.payoutRow} key={payout.id || payout.createdAt}>
+                  <View>
+                    <Text style={styles.payoutAmount}>{toMoney(payout.amount)}</Text>
+                    <Text style={styles.payoutDate}>
+                      {new Date(payout.createdAt).toLocaleString()}
+                    </Text>
+                  </View>
+                  <Text style={styles.payoutStatus}>{payout.status || 'processed'}</Text>
+                </View>
+              ))
+            ) : (
+              <ScreenState title="No payouts yet" subtitle="Your payout history will appear here." />
+            )}
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
@@ -327,249 +365,130 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    paddingTop: spacing.base,
-  },
-  earningsCard: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  earningsGradient: {
-    padding: 24,
-  },
-  earningsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  earningsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    opacity: 0.9,
-  },
-  earningsAmount: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.white,
-    marginBottom: 20,
-  },
-  earningsBreakdown: {
-    gap: 8,
-  },
-  earningsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  earningsLabel: {
-    fontSize: 14,
-    color: colors.white,
-    opacity: 0.8,
-  },
-  earningsValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
   },
   section: {
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 12,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.sm,
   },
-  paymentMethodCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: 16,
-    padding: 20,
+  heroCard: {
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+  },
+  heroLabel: {
+    color: colors.white,
+    opacity: 0.9,
+    fontSize: typography.fontSize.base,
+  },
+  heroAmount: {
+    color: colors.white,
+    fontSize: 32,
+    fontWeight: typography.fontWeight.bold,
+    marginTop: spacing.sm,
+  },
+  heroSubtext: {
+    color: colors.white,
+    opacity: 0.9,
+    marginTop: spacing.xs,
+    fontSize: typography.fontSize.base,
+  },
+  card: {
+    backgroundColor: colors.background.panel,
     borderWidth: 1,
     borderColor: colors.border.strong,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+  },
+  rowBetween: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
   },
-  paymentMethodLeft: {
+  rowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: spacing.sm,
   },
-  bankIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.successLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
+  rowTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
-  paymentMethodInfo: {
-    flex: 1,
+  rowSubtitle: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
-  paymentMethodName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 4,
-  },
-  paymentMethodDetails: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-  },
-  paymentMethodRight: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  defaultBadge: {
-    backgroundColor: colors.successLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  defaultBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+  badge: {
     color: colors.success,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
-  editButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
+  topButton: {
+    marginTop: spacing.base,
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background.secondary,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    borderStyle: 'dashed',
+  metricLabel: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-    marginLeft: 8,
+  metricValue: {
+    marginTop: spacing.xs,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xxl,
+    fontWeight: typography.fontWeight.bold,
   },
-  instantPayCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  instantPayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  instantPayLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  instantPayIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.successLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  instantPayTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 4,
-  },
-  instantPaySubtitle: {
-    fontSize: 14,
-    color: colors.text.tertiary,
-  },
-  instantPayButton: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  instantPayButtonDisabled: {
-    backgroundColor: colors.text.subtle,
-    shadowOpacity: 0,
-  },
-  instantPayButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  instantPayButtonTextDisabled: {
-    color: colors.text.subtle,
-  },
-  instantPayFee: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    textAlign: 'center',
-  },
-  settingsCard: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    overflow: 'hidden',
+  noteText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
   settingRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
   },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  settingTextBlock: {
     flex: 1,
-  },
-  settingInfo: {
-    marginLeft: 12,
-    flex: 1,
+    paddingRight: spacing.base,
   },
   settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-    marginBottom: 4,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   settingSubtitle: {
-    fontSize: 14,
-    color: colors.text.tertiary,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
   },
-  settingDivider: {
+  divider: {
     height: 1,
     backgroundColor: colors.border.strong,
-    marginHorizontal: 20,
+    marginVertical: spacing.base,
   },
-  bottomSpacing: {
-    height: 40,
+  payoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
   },
-}); 
+  payoutAmount: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  payoutDate: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+  },
+  payoutStatus: {
+    color: colors.success,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+});

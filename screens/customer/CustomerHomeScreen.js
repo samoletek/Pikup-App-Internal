@@ -803,54 +803,6 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
-        // --- NEW: Upload Item Photos and Invoices ---
-        const uploadedItems = [];
-        const orderIdTimestamp = Date.now();
-        
-        for (let i = 0; i < (orderData?.items || []).length; i++) {
-          const item = orderData.items[i];
-          const uploadedPhotos = [];
-          
-          // Upload Item Photos
-          if (Array.isArray(item.photos)) {
-            for (let j = 0; j < item.photos.length; j++) {
-              const photoUri = item.photos[j];
-              if (photoUri && !photoUri.startsWith("http")) {
-                try {
-                  const filename = `order_items/${currentUserId}/${orderIdTimestamp}/item_${i}_photo_${j}.jpg`;
-                  const url = await uploadToSupabase(photoUri, "trip_photos", filename);
-                  if (url) uploadedPhotos.push(url);
-                } catch (err) {
-                  console.error(`Failed to upload photo for item ${i}:`, err);
-                  // fallback to original uri if upload fails
-                  uploadedPhotos.push(photoUri);
-                }
-              } else {
-                uploadedPhotos.push(photoUri);
-              }
-            }
-          }
-          
-          // Upload Invoice Photo
-          let uploadedInvoicePhoto = item.invoicePhoto;
-          if (uploadedInvoicePhoto && !uploadedInvoicePhoto.startsWith("http")) {
-            try {
-              const filename = `order_items/${currentUserId}/${orderIdTimestamp}/item_${i}_invoice.jpg`;
-              const url = await uploadToSupabase(uploadedInvoicePhoto, "trip_photos", filename);
-              if (url) uploadedInvoicePhoto = url;
-            } catch (err) {
-              console.error(`Failed to upload invoice for item ${i}:`, err);
-            }
-          }
-          
-          uploadedItems.push({
-            ...item,
-            photos: uploadedPhotos,
-            invoicePhoto: uploadedInvoicePhoto,
-          });
-        }
-        // ---------------------------------------------
-
         const createdRequest = await createPickupRequest({
           pickup: orderData?.pickup,
           dropoff: orderData?.dropoff,

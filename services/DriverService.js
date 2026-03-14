@@ -6,9 +6,10 @@ import { DRIVER_RATING_BADGES } from '../constants/ratingBadges';
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 import { getPlatformFees } from './PricingService';
+import { appConfig } from '../config/appConfig';
 
 // Payment service URL (imported from environment or config)
-const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
+const PAYMENT_SERVICE_URL = appConfig.paymentService.baseUrl;
 const NETWORK_TIMEOUT_MS = 8000;
 const DEFAULT_DRIVER_BADGE_STATS = Object.freeze(
     DRIVER_RATING_BADGES.reduce((acc, badge) => {
@@ -287,13 +288,18 @@ export const getDriverStats = async (driverId) => {
         const ratingCount = Number.isFinite(parsedRatingCount) ? parsedRatingCount : 0;
         const parsedRating = Number(driverProfile.rating);
         const rating = ratingCount > 0 && Number.isFinite(parsedRating) ? parsedRating : 0;
+        const totalPayouts = Number(driverProfile.totalPayouts || 0);
+        const calculatedAvailableBalance = Number.isFinite(Number(driverProfile.availableBalance))
+            ? Number(driverProfile.availableBalance)
+            : Math.max(0, totalEarnings - totalPayouts);
 
         const stats = {
             currentWeekTrips,
             weeklyEarnings,
             totalTrips,
             totalEarnings,
-            availableBalance: driverProfile.availableBalance || totalEarnings,
+            availableBalance: calculatedAvailableBalance,
+            totalPayouts,
             rating,
             acceptanceRate,
             lastTripCompletedAt: completedTrips.length > 0 ? completedTrips[0].created_at : null
@@ -338,10 +344,14 @@ export const updateDriverEarnings = async (driverId, tripData) => {
         const currentMeta = profile?.metadata || {};
         const currentEarnings = currentMeta.totalEarnings || 0;
         const currentTrips = currentMeta.totalTrips || 0;
+        const currentPayouts = currentMeta.totalPayouts || 0;
+        const nextTotalEarnings = Number((currentEarnings + tripEarnings).toFixed(2));
+        const nextAvailableBalance = Number((Math.max(0, nextTotalEarnings - currentPayouts)).toFixed(2));
 
         const newMeta = {
             ...currentMeta,
-            totalEarnings: currentEarnings + tripEarnings,
+            totalEarnings: nextTotalEarnings,
+            availableBalance: nextAvailableBalance,
             totalTrips: currentTrips + 1,
             lastTripEarnings: tripEarnings,
             lastTripCompletedAt: new Date().toISOString()

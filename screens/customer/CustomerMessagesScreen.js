@@ -23,8 +23,10 @@ import {
   spacing,
   typography,
 } from "../../styles/theme";
+import { appConfig } from "../../config/appConfig";
 
 const FILTERS = ["all", "active", "archive"];
+const ENABLE_DEV_MOCK_MESSAGES = appConfig.devMocks.enabled;
 
 // TODO(cleanup): Remove mock conversations/profiles when backend data is stable.
 // ======== MOCK DATA FOR UI DEVELOPMENT ========
@@ -243,12 +245,18 @@ export default function CustomerMessagesScreen({ navigation }) {
 
       if (validConversations.length > 0) {
         setConversations(validConversations);
+      } else if (ENABLE_DEV_MOCK_MESSAGES) {
+        setConversations(MOCK_CONVERSATIONS);
       } else {
         setConversations([]);
       }
     } catch (error) {
       console.error("Error loading conversations:", error);
-      Alert.alert("Unable to Load Messages", "Please try again later.");
+      if (ENABLE_DEV_MOCK_MESSAGES) {
+        setConversations(MOCK_CONVERSATIONS);
+      } else {
+        Alert.alert("Unable to Load Messages", "Please try again later.");
+      }
     } finally {
       setLoading(false);
     }
@@ -283,6 +291,9 @@ export default function CustomerMessagesScreen({ navigation }) {
           return [id, profile];
         } catch (error) {
           console.error("Error loading peer profile:", id, error);
+          if (ENABLE_DEV_MOCK_MESSAGES) {
+            return [id, MOCK_PEER_PROFILES[id] || null];
+          }
           return [id, null];
         }
       })

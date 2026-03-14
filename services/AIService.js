@@ -1,4 +1,6 @@
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+import { appConfig } from "../config/appConfig";
+
+const GEMINI_API_KEY = appConfig.ai.geminiApiKey;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 const VEHICLE_IDS = ['midsize_suv', 'fullsize_pickup', 'fullsize_truck', 'cargo_truck'];
 

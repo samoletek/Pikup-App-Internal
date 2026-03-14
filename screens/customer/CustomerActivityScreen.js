@@ -27,6 +27,7 @@ import {
   TRIP_STATUS,
   normalizeTripStatus,
 } from "../../constants/tripStatus";
+import { appConfig } from "../../config/appConfig";
 
 const HEADER_ROW_HEIGHT = 56;
 
@@ -89,6 +90,7 @@ const MOCK_TRIPS = [
     timestamp: "2026-01-05T13:20:00Z",
   },
 ];
+const ENABLE_DEV_MOCK_ACTIVITY = appConfig.devMocks.enabled;
 const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TOTAL_COLLAPSE_DISTANCE =
@@ -194,7 +196,13 @@ export default function CustomerActivityScreen({ navigation }) {
         });
 
       // TODO(cleanup): Remove MOCK_TRIPS fallback and show proper empty state only.
-      setTrips(normalizedTrips.length > 0 ? normalizedTrips : MOCK_TRIPS);
+      setTrips(
+        normalizedTrips.length > 0
+          ? normalizedTrips
+          : ENABLE_DEV_MOCK_ACTIVITY
+            ? MOCK_TRIPS
+            : []
+      );
     } catch (error) {
       console.error("Error fetching trips:", error);
       Alert.alert("Unable to Load Activity", "Please try again later.");

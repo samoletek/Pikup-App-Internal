@@ -147,7 +147,9 @@ export default function ClaimFlowModal({
 
         <View style={styles.tripRow}>
           <Ionicons name="location-outline" size={16} color={colors.primary} />
-          <Text style={styles.tripRouteText}>{item.pickup} -> {item.dropoff}</Text>
+          <Text style={styles.tripRouteText}>
+            {item.pickup} {"->"} {item.dropoff}
+          </Text>
         </View>
 
         <View style={styles.tripRow}>
@@ -257,7 +259,9 @@ export default function ClaimFlowModal({
                 <Text style={styles.summaryItem}>{selectedTrip?.item}</Text>
                 <View style={styles.tripRow}>
                   <Ionicons name="location-outline" size={16} color={colors.primary} />
-                  <Text style={styles.tripRouteText}>{selectedTrip?.pickup} -> {selectedTrip?.dropoff}</Text>
+                  <Text style={styles.tripRouteText}>
+                    {selectedTrip?.pickup} {"->"} {selectedTrip?.dropoff}
+                  </Text>
                 </View>
               </View>
 

@@ -180,13 +180,17 @@ export const createAuthActions = ({
   const getDriverSessionStats = (driverId, date) =>
     DriverService.getDriverSessionStats(driverId, date, authFetch);
 
-  const createDriverConnectAccount = PaymentService.createDriverConnectAccount;
-  const getDriverOnboardingLink = PaymentService.getDriverOnboardingLink;
+  const createDriverConnectAccount = (driverInfo = {}) =>
+    PaymentService.createDriverConnectAccount(driverInfo, currentUser);
+  const getDriverOnboardingLink = (connectAccountId, refreshUrl, returnUrl) =>
+    PaymentService.getDriverOnboardingLink(connectAccountId, refreshUrl, returnUrl, currentUser);
   const updateDriverPaymentProfile = PaymentService.updateDriverPaymentProfile;
-  const checkDriverOnboardingStatus = PaymentService.checkDriverOnboardingStatus;
+  const checkDriverOnboardingStatus = (connectAccountId = null) =>
+    PaymentService.checkDriverOnboardingStatus(connectAccountId, currentUser);
   const getDriverEarningsHistory = PaymentService.getDriverEarningsHistory;
   const getDriverPayouts = PaymentService.getDriverPayouts;
-  const requestInstantPayout = PaymentService.requestInstantPayout;
+  const requestInstantPayout = (driverId, amount) =>
+    PaymentService.requestInstantPayout(driverId, amount, currentUser);
   const processTripPayout = PaymentService.processTripPayout;
   const createVerificationSession = (userData) =>
     PaymentService.createVerificationSession(userData, currentUser);

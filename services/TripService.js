@@ -6,6 +6,7 @@ import { compressImage, uploadToSupabase } from './StorageService';
 import { createConversation } from './MessagingService';
 import { TRIP_STATUS, normalizeTripStatus, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
+import { appConfig } from '../config/appConfig';
 import {
     buildDispatchRequirementsFromRequest,
     evaluateTripForDriverPreferences,
@@ -14,7 +15,7 @@ import {
 } from './DispatchMatchingService';
 
 // Payment service URL
-const PAYMENT_SERVICE_URL = process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL || 'https://api.pikup.app';
+const PAYMENT_SERVICE_URL = appConfig.paymentService.baseUrl;
 
 const STATUS_TIMESTAMP_FIELDS = Object.freeze({
     [TRIP_STATUS.IN_PROGRESS]: 'in_progress_at',
@@ -72,28 +73,28 @@ const REQUEST_POOLS = Object.freeze({
 const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
 const MAX_REQUEST_DISTANCE_BY_POOL_MILES = Object.freeze({
     [REQUEST_POOLS.ASAP]: parseEnvNumber(
-        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES,
+        appConfig.dispatch.maxDistanceAsapMiles,
         15,
         { min: 1, max: 500 }
     ),
     [REQUEST_POOLS.SCHEDULED]: parseEnvNumber(
-        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES,
+        appConfig.dispatch.maxDistanceScheduledMiles,
         35,
         { min: 1, max: 1000 }
     ),
     [REQUEST_POOLS.ALL]: parseEnvNumber(
-        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES,
+        appConfig.dispatch.maxDistanceScheduledMiles,
         35,
         { min: 1, max: 1000 }
     ),
 });
 const SCHEDULED_LOOKAHEAD_HOURS = parseEnvNumber(
-    process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS,
+    appConfig.dispatch.scheduledLookaheadHours,
     72,
     { min: 1, max: 24 * 30 }
 );
 const SCHEDULED_PAST_GRACE_MINUTES = parseEnvNumber(
-    process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES,
+    appConfig.dispatch.scheduledPastGraceMinutes,
     5,
     { min: 0, max: 120 }
 );

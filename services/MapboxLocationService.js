@@ -1,7 +1,8 @@
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appConfig } from '../config/appConfig';
 
-const MAPBOX_ACCESS_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+const MAPBOX_ACCESS_TOKEN = appConfig.mapbox.publicToken;
 const LAST_LOCATION_KEY = '@pikup_last_location';
 
 class MapboxLocationService {

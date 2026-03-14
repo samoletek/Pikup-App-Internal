@@ -7,6 +7,7 @@ import {
   ScrollView,
   Animated,
   Alert,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,12 +26,19 @@ const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
 
 export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, updateDriverPaymentProfile } = useAuth();
+  const {
+    currentUser,
+    updateDriverPaymentProfile,
+    checkDriverOnboardingStatus,
+    getDriverOnboardingLink,
+  } = useAuth();
   const { connectAccountId } = route.params || {};
   const userId = currentUser?.uid || currentUser?.id;
   
   const [isLoading, setIsLoading] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState('processing');
+  const pollTimeoutRef = useRef(null);
+  const pollAttemptsRef = useRef(0);
   
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -42,24 +50,36 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     // Start animations
     startAnimations();
     
-    // Check actual verification status (or simulate for testing)
+    // Check actual verification status from Stripe Connect
     checkVerificationStatus();
+    return () => {
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+      }
+    };
   }, []);
 
   const checkVerificationStatus = async () => {
     try {
       if (connectAccountId) {
-        console.log('Checking verification status for account:', connectAccountId);
-        
-        // For real implementation, you would call your backend to check Stripe Connect status
-        // const statusResult = await checkDriverOnboardingStatus(connectAccountId);
-        
-        // For now, simulate a delay then set as verified
-        // In production, you'd check the actual status from your backend
-        setTimeout(() => {
+        const statusResult = await checkDriverOnboardingStatus?.(connectAccountId);
+        if (!statusResult?.success) {
+          throw new Error(statusResult?.error || 'Could not verify Stripe Connect status');
+        }
+
+        if (statusResult.status === 'verified' || statusResult.canReceivePayments) {
           setVerificationStatus('verified');
           startCheckmarkAnimation();
-        }, 3000); // Slightly longer delay to show the processing state
+          return;
+        }
+
+        setVerificationStatus('processing');
+        if (pollAttemptsRef.current < 20) {
+          pollAttemptsRef.current += 1;
+          pollTimeoutRef.current = setTimeout(checkVerificationStatus, 5000);
+        } else {
+          setVerificationStatus('error');
+        }
       } else {
         // No connect account ID, something went wrong
         setVerificationStatus('error');
@@ -150,6 +170,23 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResumeOnboarding = async () => {
+    try {
+      if (!connectAccountId) {
+        throw new Error('Missing Stripe Connect account ID');
+      }
+
+      const result = await getDriverOnboardingLink?.(connectAccountId);
+      if (!result?.success || !result?.onboardingUrl) {
+        throw new Error(result?.error || 'Unable to open onboarding link');
+      }
+
+      await Linking.openURL(result.onboardingUrl);
+    } catch (error) {
+      Alert.alert('Onboarding Error', error?.message || 'Could not reopen onboarding.');
     }
   };
 
@@ -338,6 +375,12 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
 
         {/* Next Steps */}
         {verificationStatus === 'verified' && renderNextSteps()}
+        {verificationStatus === 'error' && (
+          <TouchableOpacity style={styles.retryButton} onPress={handleResumeOnboarding}>
+            <Ionicons name="refresh" size={16} color={colors.primary} />
+            <Text style={styles.retryButtonText}>Resume Stripe Onboarding</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Feature Highlights */}
         {renderFeatureHighlights()}
@@ -610,6 +653,20 @@ const styles = StyleSheet.create({
   },
   continueButtonTextDisabled: {
     color: colors.text.subtle,
+  },
+  retryButton: {
+    marginTop: spacing.base,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+  },
+  retryButtonText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   bottomSpacing: {
     height: 40,

@@ -22,10 +22,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
 import { colors } from '../styles/theme';
 import { sendPhoneOtp, verifyPhoneOtp, formatPhoneForDisplay, validatePhoneNumber } from '../services/PhoneVerificationService';
+import { links } from '../constants/links';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const TERMS_URL = 'https://pikup-app.com/pikup-app-terms-of-service/';
-const PRIVACY_URL = 'https://pikup-app.com/pikup-app-privacy-policy/';
+const TERMS_URL = links.terms;
+const PRIVACY_URL = links.privacy;
 
 // --- Simple Reusable Components (Inline for portability) ---
 

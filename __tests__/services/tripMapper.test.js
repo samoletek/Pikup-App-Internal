@@ -1,0 +1,55 @@
+import { mapTripFromDb } from "../../services/tripMapper";
+
+describe("mapTripFromDb", () => {
+  test("returns null for null input", () => {
+    expect(mapTripFromDb(null)).toBeNull();
+  });
+
+  test("maps legacy DB trip row to normalized app shape", () => {
+    const trip = {
+      id: "trip_1",
+      status: "in_progress",
+      created_at: "2026-01-01T00:00:00.000Z",
+      pickup_location: JSON.stringify({
+        address: "Pickup Address",
+      }),
+      dropoff_location: {
+        formatted_address: "Dropoff Address",
+      },
+      pickup_photos: ["https://example.com/a.jpg"],
+      pricing: {
+        total: 44.2,
+        distance: 11.3,
+      },
+      items: [
+        { value: 30 },
+        { value: "20.5" },
+      ],
+      insurance_booking_id: "ins_1",
+      insurance_status: "purchased",
+      insurance_premium: "4.25",
+      customer_id: "customer_1",
+      driver_id: "driver_1",
+    };
+
+    const result = mapTripFromDb(trip);
+
+    expect(result).not.toBeNull();
+    expect(result.id).toBe("trip_1");
+    expect(result.status).toBe("inProgress");
+    expect(result.pickupAddress).toBe("Pickup Address");
+    expect(result.dropoffAddress).toBe("Dropoff Address");
+    expect(result.pickupPhotos).toEqual(["https://example.com/a.jpg"]);
+    expect(result.itemValue).toBe(50.5);
+    expect(result.customerId).toBe("customer_1");
+    expect(result.driverId).toBe("driver_1");
+    expect(result.insurance).toEqual({
+      included: true,
+      purchaseFailed: false,
+      bookingId: "ins_1",
+      quoteId: null,
+      premium: 4.25,
+      status: "purchased",
+    });
+  });
+});

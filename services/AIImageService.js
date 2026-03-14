@@ -1,10 +1,11 @@
 // services/AIImageService.js - Fixed Version
 import * as ImagePicker from "expo-image-picker";
+import { appConfig } from "../config/appConfig";
 
 class AIImageService {
   constructor() {
     this.apiKey =
-      process.env.EXPO_PUBLIC_GEMINI_API_KEY || "your-gemini-api-key-here";
+      appConfig.ai.geminiApiKey || "your-gemini-api-key-here";
     this.endpoint =
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
     

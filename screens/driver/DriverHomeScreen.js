@@ -5,9 +5,6 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
-
-// Configure Mapbox with your token
-Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN);
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../config/supabase';
 import OfflineDashboard, { COLLAPSED_HEIGHT } from '../../components/OfflineDashboard';
@@ -34,33 +31,15 @@ import {
   typography,
   zIndex as zLayers,
 } from '../../styles/theme';
+import { appConfig, isDriverReadinessBypassEnabled } from '../../config/appConfig';
 
 const DEFAULT_REQUEST_TIMER_SECONDS = 180;
 const REQUEST_POOLS = Object.freeze({
   ASAP: 'asap',
   SCHEDULED: 'scheduled',
 });
-const toCsvSet = (value) =>
-  new Set(
-    String(value || '')
-      .split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean)
-  );
-const DRIVER_READINESS_BYPASS_EMAILS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS || 'drew@architeq.io,kerya@gmail.ru'
-);
-const DRIVER_READINESS_BYPASS_USER_IDS = toCsvSet(
-  process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS ||
-    '8ba3bab0-cc12-44ac-89b9-8aff39918546,1bdf2fc2-20ba-4102-ade0-56dc8cbf3e50'
-);
 const shouldBypassDriverReadiness = (user) => {
-  const userId = String(user?.uid || user?.id || '').trim().toLowerCase();
-  const email = String(user?.email || '').trim().toLowerCase();
-  return (
-    (userId && DRIVER_READINESS_BYPASS_USER_IDS.has(userId)) ||
-    (email && DRIVER_READINESS_BYPASS_EMAILS.has(email))
-  );
+  return isDriverReadinessBypassEnabled(user);
 };
 const ACTIVE_TRIP_STATUS_LABELS = Object.freeze({
   accepted: 'Driver confirmed',
@@ -1097,7 +1076,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         return;
       }
 
-      const token = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+      const token = appConfig.mapbox.publicToken;
       const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupCoords.longitude},${pickupCoords.latitude};${dropoffCoords.longitude},${dropoffCoords.latitude}?geometries=geojson&overview=full&access_token=${token}`;
 
       const res = await fetch(url);

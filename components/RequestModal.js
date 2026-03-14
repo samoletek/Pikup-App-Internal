@@ -20,6 +20,7 @@ import Mapbox from '@rnmapbox/maps';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, typography, spacing, borderRadius } from '../styles/theme';
+import { appConfig } from '../config/appConfig';
 
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
@@ -188,7 +189,7 @@ export default function RequestModal({
       });
     }
 
-    const token = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+    const token = appConfig.mapbox.publicToken;
     if (!token) {
       return;
     }

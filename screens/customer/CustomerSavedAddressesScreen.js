@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/ScreenHeader";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import { borderRadius, colors, spacing, typography } from "../../styles/theme";
+import { appConfig } from "../../config/appConfig";
 
 const RECENT_ADDRESSES_KEY = "@pikup_recent_addresses";
 const MODAL_VERTICAL_INSET = spacing.lg;
@@ -155,7 +156,7 @@ export default function CustomerSavedAddressesScreen({ navigation }) {
       searchTimeoutRef.current = setTimeout(async () => {
         try {
           setIsLoadingSuggestions(true);
-          const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+          const accessToken = appConfig.mapbox.publicToken;
           let url =
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
               query

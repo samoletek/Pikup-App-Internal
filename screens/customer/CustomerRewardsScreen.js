@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
+import { links } from "../../constants/links";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   borderRadius,
@@ -77,7 +78,7 @@ export default function CustomerRewardsScreen({ navigation, route }) {
     const code = currentUser?.id?.slice(0, 8)?.toUpperCase() || "PIKUP10";
     try {
       await Share.share({
-        message: `Join PikUp and get $10 off your first delivery! Use my code: ${code}\nhttps://pikup-app.com/invite/${code}`,
+        message: `Join PikUp and get $10 off your first delivery! Use my code: ${code}\n${links.inviteBase}${code}`,
       });
     } catch (e) {
       // user cancelled

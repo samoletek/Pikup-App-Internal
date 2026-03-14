@@ -36,6 +36,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import BaseModal from '../../components/BaseModal';
 import MapboxLocationService from '../../services/MapboxLocationService';
+import { links } from '../../constants/links';
+import { appConfig } from '../../config/appConfig';
 import {
   uploadVehiclePhotos,
   verifyVehicle,
@@ -168,7 +170,7 @@ const formatLicensePlate = (value) => value.replace(/[^a-zA-Z0-9]/g, '').toUpper
 const ONBOARDING_VIDEO_WATCHED_KEY = 'driver_onboarding_video_watched';
 const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
 const VALID_VERIFICATION_STATUSES = ['pending', 'completed', 'failed', 'canceled'];
-const WEBSITE_URL = 'https://pikup-app.com/';
+const WEBSITE_URL = links.website;
 
 const getDraftStorageKey = (userId) => `${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`;
 
@@ -245,7 +247,12 @@ const pickLatestDraft = (localDraft, remoteDraft) => {
 export default function DriverOnboardingScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width, height: screenHeight } = useWindowDimensions();
-  const { currentUser, updateDriverPaymentProfile } = useAuth();
+  const {
+    currentUser,
+    updateDriverPaymentProfile,
+    createDriverConnectAccount,
+    getDriverOnboardingLink,
+  } = useAuth();
   const userId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
@@ -539,7 +546,7 @@ export default function DriverOnboardingScreen({ navigation }) {
     addressSearchTimeout.current = setTimeout(async () => {
       try {
         setIsLoadingAddress(true);
-        const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+        const accessToken = appConfig.mapbox.publicToken;
         let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
           `access_token=${accessToken}&country=us&types=address,place&limit=5&autocomplete=true&fuzzy_match=true`;
 
@@ -906,22 +913,51 @@ export default function DriverOnboardingScreen({ navigation }) {
   const handleCreateConnectAccount = async () => {
     setLoading(true);
     try {
-      console.warn('MIGRATION: Driver Onboarding disabled. Needs Supabase & Stripe Connect implementation.');
+      const driverId = currentUser?.uid || currentUser?.id;
+      if (!driverId) {
+        throw new Error('User not authenticated');
+      }
 
-      Alert.alert(
-        'Onboarding Update',
-        'Driver onboarding is currently being upgraded. Please check back later.',
-        [{ text: 'OK' }]
-      );
+      const createResult = await createDriverConnectAccount?.({
+        driverId,
+        email: currentUser?.email,
+      });
 
-      // Stop execution here
-      return;
+      if (!createResult?.success || !createResult?.connectAccountId) {
+        throw new Error(createResult?.error || 'Failed to create Stripe Connect account');
+      }
 
-      /* LEGACY CODE REMOVED
-      // Real API Calls... 
-      */
+      const connectAccountId = createResult.connectAccountId;
+
+      const onboardingResult = createResult.onboardingUrl
+        ? {
+            success: true,
+            onboardingUrl: createResult.onboardingUrl,
+            connectAccountId,
+          }
+        : await getDriverOnboardingLink?.(connectAccountId);
+
+      if (!onboardingResult?.success || !onboardingResult?.onboardingUrl) {
+        throw new Error(onboardingResult?.error || 'Failed to get onboarding link');
+      }
+
+      await updateDriverPaymentProfile?.(driverId, {
+        connectAccountId: onboardingResult.connectAccountId || connectAccountId,
+        onboardingComplete: false,
+        canReceivePayments: false,
+      });
+
+      await Linking.openURL(onboardingResult.onboardingUrl);
+
+      navigation.navigate('DriverOnboardingCompleteScreen', {
+        connectAccountId: onboardingResult.connectAccountId || connectAccountId,
+      });
     } catch (error) {
       console.error('Error in onboarding:', error);
+      Alert.alert(
+        'Onboarding Error',
+        error?.message || 'Failed to start Stripe onboarding. Please try again.'
+      );
     } finally {
       setLoading(false);
     }

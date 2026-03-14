@@ -1,14 +1,8 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import Mapbox from '@rnmapbox/maps';
+import { ensureMapboxConfigured } from '../../config/mapbox';
 
-// Configure Mapbox with your token
-const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
-
-if (MAPBOX_TOKEN) {
-  Mapbox.setAccessToken(MAPBOX_TOKEN);
-} else {
-  console.error('MAPBOX TOKEN IS MISSING! Maps will not work.');
-}
+ensureMapboxConfigured();
 
 const MapboxMap = forwardRef(({
   style,

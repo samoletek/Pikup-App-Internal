@@ -27,6 +27,7 @@ Pods/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+.eslintcache
 *.swp
 *.swo
 *~

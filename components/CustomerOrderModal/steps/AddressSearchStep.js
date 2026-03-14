@@ -17,6 +17,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import MapboxLocationService from '../../../services/MapboxLocationService';
 import { colors } from '../../../styles/theme';
 import { styles } from '../styles';
+import { appConfig } from '../../../config/appConfig';
 
 const MAX_SCHEDULE_DAYS_AHEAD = 30;
 
@@ -97,7 +98,7 @@ const AddressSearchStep = ({
         searchTimeoutRef.current = setTimeout(async () => {
             try {
                 setIsLoadingSuggestions(true);
-                const accessToken = process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN;
+                const accessToken = appConfig.mapbox.publicToken;
                 let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
                     `access_token=${accessToken}&country=us&types=address,place,poi&limit=7&autocomplete=true&fuzzy_match=true`;
 

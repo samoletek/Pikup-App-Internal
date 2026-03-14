@@ -224,6 +224,8 @@ export const PaymentProvider = ({ children }) => {
   };
 
   const confirmPayment = async (paymentIntentClientSecret, paymentMethodId = null) => {
+    let paymentMethodToUse = null;
+
     try {
       setLoading(true);
       console.log('Confirming payment with selected payment method');
@@ -232,7 +234,7 @@ export const PaymentProvider = ({ children }) => {
         throw new Error('Stripe not initialized');
       }
 
-      const paymentMethodToUse = paymentMethodId || defaultPaymentMethod?.stripePaymentMethodId;
+      paymentMethodToUse = paymentMethodId || defaultPaymentMethod?.stripePaymentMethodId;
 
       if (!paymentMethodToUse) {
         throw new Error('No payment method available');

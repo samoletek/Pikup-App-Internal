@@ -19,6 +19,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { useAuth } from "../../contexts/AuthContext";
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { colors, layout, spacing, typography } from "../../styles/theme";
+import { links } from "../../constants/links";
 
 export default function AuthScreen({ navigation, route }) {
     const insets = useSafeAreaInsets();
@@ -50,8 +51,8 @@ export default function AuthScreen({ navigation, route }) {
     const contentMaxWidth = Math.min(layout.authMaxWidth, width - spacing.xl);
     const iconSize = isCompact ? 88 : 100;
     const logoSize = isCompact ? 52 : 60;
-    const termsUrl = "https://pikup-app.com/pikup-app-terms-of-service/";
-    const privacyUrl = "https://pikup-app.com/pikup-app-privacy-policy/";
+    const termsUrl = links.terms;
+    const privacyUrl = links.privacy;
 
     // Validate email format
     const validateEmail = (email) => {

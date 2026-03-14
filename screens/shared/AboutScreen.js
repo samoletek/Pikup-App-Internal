@@ -14,10 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/ScreenHeader";
 import { borderRadius, colors, spacing, typography } from "../../styles/theme";
+import { links } from "../../constants/links";
 
-const WEBSITE_URL = "https://pikup-app.com/";
-const PRIVACY_URL = "https://pikup-app.com/pikup-app-privacy-policy/";
-const TERMS_URL = "https://pikup-app.com/pikup-app-terms-of-service/";
+const WEBSITE_URL = links.website;
+const PRIVACY_URL = links.privacy;
+const TERMS_URL = links.terms;
 
 async function openExternalLink(url, label) {
   try {
