@@ -28,6 +28,7 @@ import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import MapboxLocationService from "../../services/MapboxLocationService";
 import RedkikService from "../../services/RedkikService";
+import { uploadOrderItemsMedia } from "../../services/OrderItemMediaService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import {
   borderRadius,
@@ -714,59 +715,18 @@ export default function CustomerHomeScreen({ navigation }) {
         }
 
         // Step 3: Upload item photos/invoices first, so we never persist local `file://` URIs.
-        const storageUserId = String(currentUserId || "").trim();
-        if (!storageUserId) {
+        const uploadItemsResult = await uploadOrderItemsMedia({
+          items: orderData?.items || [],
+          userId: currentUserId,
+          uploadToSupabase,
+        });
+        if (!uploadItemsResult.success) {
           return {
             success: false,
-            error: "Session expired. Please sign in again.",
+            error: uploadItemsResult.error || "Could not upload item photos. Please try again.",
           };
         }
-
-        const isRemoteUrl = (value) =>
-          typeof value === "string" && /^https?:\/\//i.test(value.trim());
-
-        const orderIdTimestamp = Date.now();
-        const uploadItemMedia = async (uri, suffix) => {
-          const normalizedUri = String(uri || "").trim();
-          if (!normalizedUri) return null;
-          if (isRemoteUrl(normalizedUri)) return normalizedUri;
-
-          const filename = `${storageUserId}/order_items/${orderIdTimestamp}/${suffix}.jpg`;
-          const uploadedUrl = await uploadToSupabase(normalizedUri, "trip_photos", filename);
-          if (!isRemoteUrl(uploadedUrl)) {
-            throw new Error("Could not upload item media. Please try again.");
-          }
-
-          return uploadedUrl;
-        };
-
-        const uploadedItems = [];
-        for (let i = 0; i < (orderData?.items || []).length; i++) {
-          const item = orderData.items[i];
-          const uploadedPhotos = [];
-
-          if (Array.isArray(item.photos)) {
-            for (let j = 0; j < item.photos.length; j++) {
-              const photoUri = item.photos[j];
-              if (!photoUri) continue;
-              const uploadedPhotoUrl = await uploadItemMedia(photoUri, `item_${i}_photo_${j}`);
-              if (uploadedPhotoUrl) {
-                uploadedPhotos.push(uploadedPhotoUrl);
-              }
-            }
-          }
-
-          let uploadedInvoicePhoto = null;
-          if (item.invoicePhoto) {
-            uploadedInvoicePhoto = await uploadItemMedia(item.invoicePhoto, `item_${i}_invoice`);
-          }
-
-          uploadedItems.push({
-            ...item,
-            photos: uploadedPhotos,
-            invoicePhoto: uploadedInvoicePhoto,
-          });
-        }
+        const uploadedItems = uploadItemsResult.items;
 
         // Step 4: Charge the correct amount (with or without insurance).
         const rideDetails = {
