@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
   Modal,
-  TextInput,
   Alert,
   FlatList,
   ActivityIndicator,
+  RefreshControl,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +26,11 @@ import {
   typography,
 } from '../../styles/theme';
 import ScreenHeader from '../../components/ScreenHeader';
+import ClaimFlowModal from '../../components/ClaimFlowModal';
+
+const MIN_REFRESH_SPINNER_MS = 700;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function CustomerClaimsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -34,13 +38,13 @@ export default function CustomerClaimsScreen({ navigation }) {
   const { currentUser, getUserPickupRequests } = useAuth();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   const [activeTab, setActiveTab] = useState('ongoing');
-  const [modalVisible, setModalVisible] = useState(false);
+  const [claimFlowVisible, setClaimFlowVisible] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [claimDescription, setClaimDescription] = useState('');
   const [claimType, setClaimType] = useState('DAMAGED_GOODS');
-  const [showPastTrips, setShowPastTrips] = useState(false);
   const [showInsuranceInfo, setShowInsuranceInfo] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState([]);
 
@@ -51,15 +55,13 @@ export default function CustomerClaimsScreen({ navigation }) {
 
   // Load data on mount
   useEffect(() => {
-    loadClaimsData();
+    loadClaimsData({ withInitialLoader: true });
     loadPastTrips();
-    loadDocumentTypes();
   }, []);
-  const [documentTypes, setDocumentTypes] = useState([]);
 
-  const loadClaimsData = async () => {
+  const loadClaimsData = async ({ withInitialLoader = false } = {}) => {
     try {
-      setLoading(true);
+      if (withInitialLoader) setInitialLoading(true);
 
       const { data: claims, error } = await supabase
         .from('claims')
@@ -111,7 +113,24 @@ export default function CustomerClaimsScreen({ navigation }) {
       console.error('Error loading claims:', error);
       // Alert.alert('Error', 'Failed to load claims history');
     } finally {
-      setLoading(false);
+      if (withInitialLoader) setInitialLoading(false);
+    }
+  };
+
+  const handleRefreshClaims = async () => {
+    if (refreshing) return;
+
+    setRefreshing(true);
+    const refreshStartedAt = Date.now();
+
+    try {
+      await loadClaimsData();
+    } finally {
+      const elapsed = Date.now() - refreshStartedAt;
+      if (elapsed < MIN_REFRESH_SPINNER_MS) {
+        await wait(MIN_REFRESH_SPINNER_MS - elapsed);
+      }
+      setRefreshing(false);
     }
   };
 
@@ -127,39 +146,32 @@ export default function CustomerClaimsScreen({ navigation }) {
           request.insurance.included &&
           request.insurance.bookingId // Must have actual insurance booking ID
         )
-        .map(request => ({
-          id: request.id,
-          date: new Date(request.completedAt || request.createdAt).toLocaleDateString(),
-          pickup: request.pickup?.address || 'Pickup Location',
-          dropoff: request.dropoff?.address || 'Dropoff Location',
-          item: request.item?.description || 'Items',
-          driver: 'Driver',
-          amount: `${request.pricing?.total || '0.00'}`,
-          insuranceValue: request.itemValue || 500,
-          // Use the actual insurance booking ID (from purchase response)
-          bookingId: request.insurance.bookingId,
-          quoteId: request.insurance.quoteId,
-        }));
+        .map(request => {
+          const parsedInsuranceValue = Number(request.itemValue);
+          const insuranceValue = Number.isFinite(parsedInsuranceValue) && parsedInsuranceValue > 0
+            ? parsedInsuranceValue
+            : null;
+
+          return {
+            id: request.id,
+            date: new Date(request.completedAt || request.createdAt).toLocaleDateString(),
+            pickup: request.pickup?.address || 'Pickup Location',
+            dropoff: request.dropoff?.address || 'Dropoff Location',
+            item: request.item?.description || 'Items',
+            driver: 'Driver',
+            amount: `${request.pricing?.total || '0.00'}`,
+            insuranceValue,
+            // Use the actual insurance booking ID (from purchase response)
+            bookingId: request.insurance.bookingId,
+            quoteId: request.insurance.quoteId,
+          };
+        });
 
       setPastTrips(tripsWithInsurance);
     } catch (error) {
       console.error('Error loading past trips:', error);
       Alert.alert('Error', 'Failed to load past trips');
     }
-  };
-
-  const loadDocumentTypes = async () => {
-    // MIGRATION: Using static defaults
-    setDocumentTypes([
-      'PHOTOS_DAMAGE',
-      'PHOTOS_SCENE',
-      'POLICE_REPORT',
-      'RECEIPT',
-      'INVOICE',
-      'MEDICAL_REPORT',
-      'WITNESS_STATEMENT',
-      'OTHER'
-    ]);
   };
 
   const getClaimStatus = (claim) => {
@@ -220,23 +232,33 @@ export default function CustomerClaimsScreen({ navigation }) {
   };
 
   const handleStartClaim = () => {
-    setShowPastTrips(true);
+    setSelectedTrip(null);
+    setClaimDescription('');
+    setClaimType('DAMAGED_GOODS');
+    setSelectedDocuments([]);
+    setClaimFlowVisible(true);
   };
 
-  const handleSelectTrip = async (trip) => {
-    // MIGRATION: Stub check
-    // Assuming if it has insurance bookingId, it's valid for now.
+  const handleSelectTrip = (trip) => {
     if (!trip.bookingId) {
       Alert.alert('Error', 'This delivery does not have insurance details.');
-      return;
+      return false;
     }
 
     setSelectedTrip({
       ...trip,
       setupData: { claimsEnabled: true } // Stub
     });
-    setShowPastTrips(false);
-    setModalVisible(true);
+
+    return true;
+  };
+
+  const handleCloseClaimFlow = () => {
+    setClaimFlowVisible(false);
+    setSelectedTrip(null);
+    setClaimDescription('');
+    setClaimType('DAMAGED_GOODS');
+    setSelectedDocuments([]);
   };
 
   const handleAddDocument = async () => {
@@ -333,7 +355,9 @@ export default function CustomerClaimsScreen({ navigation }) {
           lossType: claimType,
           lossDate: new Date().toISOString().split('T')[0],
           lossDescription: claimDescription,
-          lossEstimatedClaimValue: selectedTrip.insuranceValue || 500, // Should be number
+          lossEstimatedClaimValue: Number.isFinite(Number(selectedTrip.insuranceValue))
+            ? Number(selectedTrip.insuranceValue)
+            : null,
           claimantName: currentUser.displayName || currentUser.email,
           claimantEmail: currentUser.email,
           documentTypes: selectedDocuments.map(doc => doc.documentType),
@@ -351,7 +375,8 @@ export default function CustomerClaimsScreen({ navigation }) {
       setClaimDescription('');
       setClaimType('DAMAGED_GOODS');
       setSelectedDocuments([]);
-      setModalVisible(false);
+      setClaimFlowVisible(false);
+      setSelectedTrip(null);
 
       // Reload claims data
       await loadClaimsData();
@@ -416,58 +441,6 @@ export default function CustomerClaimsScreen({ navigation }) {
     );
   };
 
-  const renderTripItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.tripCard}
-      onPress={() => handleSelectTrip(item)}
-    >
-      <View style={styles.tripHeader}>
-        <Text style={styles.tripDate}>{item.date}</Text>
-        <Text style={styles.tripAmount}>{item.amount}</Text>
-      </View>
-
-      <View style={styles.tripDetails}>
-        <View style={styles.tripLocationContainer}>
-          <Ionicons name="location" size={16} color={colors.primary} />
-          <View style={styles.tripLocations}>
-            <Text style={styles.tripLocation}>{item.pickup} → {item.dropoff}</Text>
-          </View>
-        </View>
-
-        <View style={styles.tripItemContainer}>
-          <Ionicons name="cube-outline" size={16} color={colors.primary} />
-          <Text style={styles.tripItemText}>{item.item}</Text>
-        </View>
-
-        <View style={styles.insuranceContainer}>
-          <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-          <Text style={styles.insuranceText}>
-            Insured up to ${item.insuranceValue?.toLocaleString()}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderDocumentItem = ({ item }) => (
-    <View style={styles.documentItem}>
-      <View style={styles.documentInfo}>
-        <Ionicons
-          name={item.type.startsWith('image/') ? 'image' : 'document'}
-          size={20}
-          color={colors.primary}
-        />
-        <Text style={styles.documentName}>{item.name}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.removeDocumentButton}
-        onPress={() => removeDocument(item.id)}
-      >
-        <Ionicons name="close-circle" size={20} color={colors.error} />
-      </TouchableOpacity>
-    </View>
-  );
-
   const activeClaims = activeTab === 'ongoing' ? ongoingClaims : completedClaims;
 
   const headerActions = (
@@ -480,18 +453,10 @@ export default function CustomerClaimsScreen({ navigation }) {
       >
         <Ionicons name="information-circle-outline" size={22} color={colors.text.primary} />
       </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.headerIconButton}
-        onPress={loadClaimsData}
-        accessibilityRole="button"
-        accessibilityLabel="Refresh claims"
-      >
-        <Ionicons name="refresh" size={22} color={colors.text.primary} />
-      </TouchableOpacity>
     </View>
   );
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <View style={styles.container}>
         <ScreenHeader
@@ -544,78 +509,49 @@ export default function CustomerClaimsScreen({ navigation }) {
       </View>
 
       {/* Claims List */}
-      {!showPastTrips ? (
-        <>
-          <FlatList
-            data={activeClaims}
-            renderItem={renderClaimItem}
-            keyExtractor={(item) => item.id}
-            style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
-            contentContainerStyle={[
-              styles.claimsList,
-              activeClaims.length === 0 && styles.claimsListEmpty,
-            ]}
-            refreshing={loading}
-            onRefresh={loadClaimsData}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="document-text-outline" size={48} color={colors.text.subtle} />
-                <Text style={styles.emptyStateText}>
-                  {activeTab === 'ongoing'
-                    ? 'No ongoing claims'
-                    : 'No completed claims'}
-                </Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Claims can only be filed for deliveries with insurance coverage
-                </Text>
-              </View>
-            }
+      <FlatList
+        data={activeClaims}
+        renderItem={renderClaimItem}
+        keyExtractor={(item) => item.id}
+        style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
+        contentContainerStyle={[
+          styles.claimsList,
+          activeClaims.length === 0 && styles.claimsListEmpty,
+        ]}
+        bounces
+        alwaysBounceVertical
+        overScrollMode="always"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefreshClaims}
           />
-
-          {/* Start New Claim Button */}
-          {pastTrips.length > 0 && (
-            <TouchableOpacity
-              style={styles.startClaimButton}
-              onPress={handleStartClaim}
-            >
-              <Ionicons name="add-circle" size={20} color={colors.white} />
-              <Text style={styles.startClaimText}>File New Claim</Text>
-            </TouchableOpacity>
-          )}
-        </>
-      ) : (
-        <>
-          <View style={[styles.pastTripsHeader, { maxWidth: contentMaxWidth }]}>
-            <Text style={styles.pastTripsTitle}>Select Insured Delivery</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowPastTrips(false)}
-            >
-              <Ionicons name="close" size={24} color={colors.white} />
-            </TouchableOpacity>
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="document-text-outline" size={48} color={colors.text.subtle} />
+            <Text style={styles.emptyStateText}>
+              {activeTab === 'ongoing'
+                ? 'No ongoing claims'
+                : 'No completed claims'}
+            </Text>
+            <Text style={styles.emptyStateSubtext}>
+              Claims can only be filed for deliveries with insurance coverage
+            </Text>
           </View>
+        }
+      />
 
-          <FlatList
-            data={pastTrips}
-            renderItem={renderTripItem}
-            keyExtractor={(item) => item.id}
-            style={[styles.listViewport, { maxWidth: contentMaxWidth }]}
-            contentContainerStyle={[
-              styles.tripsList,
-              pastTrips.length === 0 && styles.tripsListEmpty,
-            ]}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Ionicons name="shield-outline" size={48} color={colors.text.subtle} />
-                <Text style={styles.emptyStateText}>No insured deliveries found</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Only deliveries with insurance coverage can have claims filed
-                </Text>
-              </View>
-            }
-          />
-        </>
-      )}
+      <TouchableOpacity
+        style={[
+          styles.startClaimButton,
+          { bottom: insets.bottom > 0 ? insets.bottom + spacing.sm : spacing.lg },
+        ]}
+        onPress={handleStartClaim}
+      >
+        <Ionicons name="add-circle" size={20} color={colors.white} />
+        <Text style={styles.startClaimText}>File New Claim</Text>
+      </TouchableOpacity>
 
       <Modal
         visible={showInsuranceInfo}
@@ -659,144 +595,22 @@ export default function CustomerClaimsScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Enhanced Claim Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>File Insurance Claim</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={24} color={colors.text.subtle} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScroll}>
-              <View style={styles.tripSummary}>
-                <Text style={styles.tripSummaryTitle}>Delivery Details</Text>
-                <Text style={styles.tripSummaryDate}>{selectedTrip?.date}</Text>
-                <Text style={styles.tripSummaryItem}>{selectedTrip?.item}</Text>
-                <View style={styles.tripSummaryRoute}>
-                  <Ionicons name="location-outline" size={16} color={colors.primary} />
-                  <Text style={styles.tripSummaryRouteText}>
-                    {selectedTrip?.pickup} → {selectedTrip?.dropoff}
-                  </Text>
-                </View>
-                <View style={styles.insuranceInfo}>
-                  <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-                  <Text style={styles.insuranceInfoText}>
-                    Insured value: ${selectedTrip?.insuranceValue?.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.claimTypeContainer}>
-                <Text style={styles.claimTypeLabel}>Issue Type:</Text>
-                <View style={styles.claimTypeOptions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.claimTypeOption,
-                      claimType === 'DAMAGED_GOODS' && styles.claimTypeSelected
-                    ]}
-                    onPress={() => setClaimType('DAMAGED_GOODS')}
-                  >
-                    <Text style={[
-                      styles.claimTypeText,
-                      claimType === 'DAMAGED_GOODS' && styles.claimTypeTextSelected
-                    ]}>
-                      Damaged
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.claimTypeOption,
-                      claimType === 'LOST_GOODS' && styles.claimTypeSelected
-                    ]}
-                    onPress={() => setClaimType('LOST_GOODS')}
-                  >
-                    <Text style={[
-                      styles.claimTypeText,
-                      claimType === 'LOST_GOODS' && styles.claimTypeTextSelected
-                    ]}>
-                      Lost/Missing
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.claimTypeOption,
-                      claimType === 'OTHER' && styles.claimTypeSelected
-                    ]}
-                    onPress={() => setClaimType('OTHER')}
-                  >
-                    <Text style={[
-                      styles.claimTypeText,
-                      claimType === 'OTHER' && styles.claimTypeTextSelected
-                    ]}>
-                      Other
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Describe the issue: *</Text>
-                <TextInput
-                  style={styles.textInput}
-                  multiline={true}
-                  numberOfLines={4}
-                  placeholder="Please provide detailed information about what happened..."
-                  placeholderTextColor={colors.text.tertiary}
-                  value={claimDescription}
-                  onChangeText={setClaimDescription}
-                />
-              </View>
-
-              <View style={styles.documentsContainer}>
-                <Text style={styles.documentsLabel}>Supporting Documents:</Text>
-
-                {selectedDocuments.length > 0 && (
-                  <FlatList
-                    data={selectedDocuments}
-                    renderItem={renderDocumentItem}
-                    keyExtractor={(item) => item.id}
-                    style={styles.documentsList}
-                  />
-                )}
-
-                <TouchableOpacity
-                  style={styles.addDocumentButton}
-                  onPress={handleAddDocument}
-                >
-                  <Ionicons name="add-circle" size={24} color={colors.primary} />
-                  <Text style={styles.addDocumentText}>Add Photo or Document</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-              onPress={handleSubmitClaim}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <View style={styles.submittingContainer}>
-                  <ActivityIndicator size="small" color={colors.white} />
-                  <Text style={styles.submitButtonText}>Submitting...</Text>
-                </View>
-              ) : (
-                <Text style={styles.submitButtonText}>Submit Claim</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <ClaimFlowModal
+        visible={claimFlowVisible}
+        onClose={handleCloseClaimFlow}
+        pastTrips={pastTrips}
+        selectedTrip={selectedTrip}
+        onSelectTrip={handleSelectTrip}
+        claimType={claimType}
+        onClaimTypeChange={setClaimType}
+        claimDescription={claimDescription}
+        onClaimDescriptionChange={setClaimDescription}
+        selectedDocuments={selectedDocuments}
+        onAddDocument={handleAddDocument}
+        onRemoveDocument={removeDocument}
+        onSubmit={handleSubmitClaim}
+        submitting={submitting}
+      />
     </View>
   );
 }
@@ -1041,22 +855,21 @@ const styles = StyleSheet.create({
   },
   startClaimButton: {
     position: 'absolute',
-    bottom: spacing.xl + spacing.xs,
-    left: spacing.base,
-    right: spacing.base,
+    left: spacing.lg,
+    right: spacing.lg,
     maxWidth: layout.contentMaxWidth,
     alignSelf: 'center',
     backgroundColor: colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: borderRadius.md,
+    height: 56,
+    borderRadius: borderRadius.full,
   },
   startClaimText: {
     color: colors.white,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
     marginLeft: spacing.sm,
   },
   pastTripsHeader: {

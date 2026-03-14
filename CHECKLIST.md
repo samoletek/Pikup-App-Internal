@@ -323,6 +323,7 @@ NEW EDITS:
 
 - [ ] Add sceletons to all screens
 - [ ] Delete Spacing on the bottom (check all screens)
+- [ ] Rebuild buttons for important actions into sliders (protection from idiots)
 ---
 
 ## Completed Work (Original Contract)
