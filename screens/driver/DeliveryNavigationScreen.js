@@ -29,6 +29,55 @@ import {
   typography,
 } from '../../styles/theme';
 
+const firstNonEmptyString = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+};
+
+const resolveCustomerAvatarFromRequest = (requestLike) => {
+  if (!requestLike || typeof requestLike !== 'object') {
+    return null;
+  }
+
+  const customer =
+    requestLike.customer ||
+    requestLike.customerProfile ||
+    requestLike.customer_profile ||
+    {};
+  const originalData =
+    requestLike.originalData && typeof requestLike.originalData === 'object'
+      ? requestLike.originalData
+      : {};
+  const originalCustomer =
+    originalData.customer ||
+    originalData.customerProfile ||
+    originalData.customer_profile ||
+    {};
+
+  return firstNonEmptyString(
+    customer.profileImageUrl,
+    customer.profile_image_url,
+    customer.avatarUrl,
+    customer.avatar_url,
+    requestLike.customerProfileImageUrl,
+    requestLike.customer_profile_image_url,
+    requestLike.customerAvatarUrl,
+    requestLike.customer_avatar_url,
+    originalCustomer.profileImageUrl,
+    originalCustomer.profile_image_url,
+    originalCustomer.avatarUrl,
+    originalCustomer.avatar_url,
+    originalData.customerProfileImageUrl,
+    originalData.customer_profile_image_url,
+    originalData.customerAvatarUrl,
+    originalData.customer_avatar_url
+  );
+};
+
 export default function DeliveryNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { request, pickupPhotos, driverLocation: initialDriverLocation } = route.params;
@@ -38,6 +87,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     getConversations,
     updateDriverStatus,
     createConversation,
+    getUserProfile,
     currentUser,
     userType,
     subscribeToConversations,
@@ -58,6 +108,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const [currentHeading, setCurrentHeading] = useState(0); // Direction in degrees
   const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [customerAvatarUrl, setCustomerAvatarUrl] = useState(null);
   
   // Turn-by-turn navigation states
   const [routeSteps, setRouteSteps] = useState([]);
@@ -92,6 +143,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const locationSubscription = useRef(null);
   const cardAnimation = useRef(new Animated.Value(0)).current;
   const fadeAnimation = useRef(new Animated.Value(0)).current;
+  const customerAvatarCacheRef = useRef(new Map());
   
   // Monitor order status for cancellations
   useOrderStatusMonitor(requestData?.id, navigation, {
@@ -229,6 +281,64 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       fetchRequestData();
     }
   }, [request?.id]);
+
+  useEffect(() => {
+    const embeddedAvatar =
+      resolveCustomerAvatarFromRequest(requestData) ||
+      resolveCustomerAvatarFromRequest(request);
+
+    if (embeddedAvatar) {
+      setCustomerAvatarUrl(embeddedAvatar);
+      if (activeRequestCustomerId) {
+        customerAvatarCacheRef.current.set(activeRequestCustomerId, embeddedAvatar);
+      }
+      return;
+    }
+
+    if (!activeRequestCustomerId || typeof getUserProfile !== 'function') {
+      setCustomerAvatarUrl(null);
+      return;
+    }
+
+    if (customerAvatarCacheRef.current.has(activeRequestCustomerId)) {
+      setCustomerAvatarUrl(customerAvatarCacheRef.current.get(activeRequestCustomerId));
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCustomerAvatar = async () => {
+      try {
+        const profile = await getUserProfile(activeRequestCustomerId);
+        if (!isMounted) {
+          return;
+        }
+
+        const profileAvatar = firstNonEmptyString(
+          profile?.profileImageUrl,
+          profile?.profile_image_url,
+          profile?.avatarUrl,
+          profile?.avatar_url
+        );
+
+        customerAvatarCacheRef.current.set(activeRequestCustomerId, profileAvatar);
+        setCustomerAvatarUrl(profileAvatar);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        customerAvatarCacheRef.current.set(activeRequestCustomerId, null);
+        setCustomerAvatarUrl(null);
+      }
+    };
+
+    loadCustomerAvatar();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeRequestCustomerId, getUserProfile, request, requestData]);
 
   useEffect(() => {
     if (!currentUserId || typeof subscribeToConversations !== 'function') {
@@ -900,13 +1010,14 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
               </View>
               
               <View style={styles.customerInfoContainer}>
-                <View style={styles.customerImageContainer}>
-                  <Image
-                    source={require('../../assets/profile.png')}
-                    style={styles.customerImage}
-                  />
+                <View style={styles.customerAvatarContainer}>
+                  {customerAvatarUrl ? (
+                    <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={() => setCustomerAvatarUrl(null)} />
+                  ) : (
+                    <Ionicons name="person" size={22} color={colors.text.muted} />
+                  )}
                 </View>
-                
+
                 <View style={styles.customerDetails}>
                   <Text style={styles.customerName}>
                     {requestData?.customer?.name || 'Customer'}
@@ -1061,13 +1172,14 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
             <View style={styles.divider} />
             
             <View style={styles.customerInfoContainer}>
-              <View style={styles.customerImageContainer}>
-                <Image
-                  source={require('../../assets/profile.png')}
-                  style={styles.customerImage}
-                />
+              <View style={styles.customerAvatarContainer}>
+                {customerAvatarUrl ? (
+                  <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={() => setCustomerAvatarUrl(null)} />
+                ) : (
+                  <Ionicons name="person" size={22} color={colors.text.muted} />
+                )}
               </View>
-              
+
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>
                   {requestData?.customer?.name || 'Customer'}
@@ -1243,14 +1355,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.base - 1,
   },
-  customerImageContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  customerAvatarContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     overflow: 'hidden',
-    backgroundColor: colors.background.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
   },
-  customerImage: {
+  customerAvatarImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',

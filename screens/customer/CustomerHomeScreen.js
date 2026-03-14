@@ -990,7 +990,7 @@ export default function CustomerHomeScreen({ navigation }) {
               onPress={handleOpenActiveTripDetails}
               activeOpacity={0.95}
             >
-              <View style={styles.activeTripSideSlot}>
+              <View style={[styles.activeTripSideSlot, styles.activeTripSideSlotLeft]}>
                 <View style={styles.activeTripIconCircle}>
                   <Ionicons
                     name={activeDeliveryStep.icon}
@@ -1004,7 +1004,7 @@ export default function CustomerHomeScreen({ navigation }) {
                 {activeDeliveryStep.label}
               </Text>
 
-              <View style={styles.activeTripSideSlot}>
+              <View style={[styles.activeTripSideSlot, styles.activeTripSideSlotRight]}>
                 <View style={styles.activeTripOpenIndicator}>
                   <Ionicons
                     name="chevron-forward"
@@ -1306,8 +1306,13 @@ const styles = StyleSheet.create({
   },
   activeTripSideSlot: {
     width: 34,
-    alignItems: "center",
     justifyContent: "center",
+  },
+  activeTripSideSlotLeft: {
+    alignItems: "flex-start",
+  },
+  activeTripSideSlotRight: {
+    alignItems: "flex-end",
   },
   activeTripIconCircle: {
     width: 32,
@@ -1323,7 +1328,7 @@ const styles = StyleSheet.create({
     color: colors.background.primary,
     flex: 1,
     textAlign: "center",
-    paddingHorizontal: 0,
+    paddingHorizontal: spacing.xxs,
   },
   activeTripOpenIndicator: {
     width: 32,

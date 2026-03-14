@@ -355,16 +355,6 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
             </View>
           </View>
 
-          {/* Customer Rating */}
-          <View style={styles.ratingCard}>
-            <Text style={styles.cardTitle}>Rate Your Experience</Text>
-            <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
-            {renderStars()}
-            {customerRating > 0 ? (
-              <Text style={styles.ratingText}>{getRatingLabel(customerRating)}</Text>
-            ) : null}
-          </View>
-
           {/* Photo Section */}
           <View style={styles.photoCard}>
             <View style={styles.photoHeader}>
@@ -415,6 +405,16 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
                 </View>
               ))}
             </ScrollView>
+          </View>
+
+          {/* Customer Rating */}
+          <View style={styles.ratingCard}>
+            <Text style={styles.cardTitle}>Rate Your Experience</Text>
+            <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
+            {renderStars()}
+            {customerRating > 0 ? (
+              <Text style={styles.ratingText}>{getRatingLabel(customerRating)}</Text>
+            ) : null}
           </View>
 
           {/* Final Instructions */}

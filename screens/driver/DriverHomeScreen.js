@@ -141,6 +141,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   const isAcceptingRequestRef = useRef(false);
   const incomingRequestIdRef = useRef(null);
   const requestPoolChannelRef = useRef(null);
+  const reopenRequestModalOnFocusRef = useRef(false);
+  const reopenRequestModalModeRef = useRef('all');
   const miniBarPulse = useRef(new Animated.Value(0)).current;
   const onlineDriverPulse = useRef(new Animated.Value(0)).current;
 
@@ -444,21 +446,49 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   }, [route.params]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!reopenRequestModalOnFocusRef.current) {
+        return undefined;
+      }
+
+      reopenRequestModalOnFocusRef.current = false;
+      const reopenMode = reopenRequestModalModeRef.current;
+      reopenRequestModalModeRef.current = 'all';
+
+      if (!isOnline || hasActiveTrip) {
+        return undefined;
+      }
+
+      if (reopenMode === 'single') {
+        setShowRequestModal(true);
+      } else {
+        setShowAllRequests(true);
+      }
+
+      return undefined;
+    }, [hasActiveTrip, isOnline])
+  );
+
   // Start real-time location tracking and auto-refresh
   useEffect(() => {
-    if (hasActiveTrip) {
+    if (isOnline && !hasActiveTrip) {
+      if (!locationSubscription.current) {
+        startLocationTracking();
+      }
+
+      // Recreate polling whenever request pool changes so interval closures
+      // always use the latest pool (ASAP vs Scheduled).
       clearAutoRefresh();
+      startAutoRefresh();
+      loadRequests(false, activeRequestPool);
+      return;
     }
 
-    if (isOnline && !hasActiveTrip && !locationSubscription.current) {
-      startLocationTracking();
-      startAutoRefresh(); // Start auto-refresh when going online
-      // Load initial requests
-      loadRequests();
-    } else if ((!isOnline || hasActiveTrip) && locationSubscription.current) {
+    if (locationSubscription.current) {
       stopLocationTracking();
-      clearAutoRefresh(); // Stop auto-refresh when going offline
     }
+    clearAutoRefresh(); // Stop auto-refresh when going offline or having active trip
   }, [activeRequestPool, hasActiveTrip, isOnline]);
 
   useEffect(() => {
@@ -785,11 +815,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     if (isOnline) {
       if (activeRequestPool !== targetPool) {
         setActiveRequestPool(targetPool);
-        clearAutoRefresh();
-        startAutoRefresh();
-        if (targetPool === REQUEST_POOLS.SCHEDULED) {
-          setShowAllRequests(true);
-        }
+        setShowRequestModal(false);
+        setShowAllRequests(false);
+        setSelectedRequest(null);
         loadRequests(false, targetPool);
       }
       return;
@@ -906,7 +934,9 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       // Set local state
       setActiveRequestPool(requestPool);
-      setShowAllRequests(requestPool === REQUEST_POOLS.SCHEDULED);
+      setShowRequestModal(false);
+      setShowAllRequests(false);
+      setSelectedRequest(null);
       setIsOnline(true);
 
       console.log('Driver is now online with session:', sessionId, 'Mode:', mode, 'Pool:', requestPool);
@@ -1043,25 +1073,12 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const handleViewRequestDetails = (request) => {
     if (!request) return;
-
-    const scheduleText = request?.scheduledTime
-      ? new Date(request.scheduledTime).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-      : 'ASAP';
-
-    const details = [
-      `Pickup: ${request?.pickup?.address || 'Not specified'}`,
-      `Drop-off: ${request?.dropoff?.address || 'Not specified'}`,
-      `Schedule: ${scheduleText}`,
-      `Vehicle: ${request?.vehicle?.type || 'Standard'}`,
-      `Payout: ${request?.driverPayout || request?.earnings || request?.price || '$0.00'}`,
-    ].join('\n');
-
-    Alert.alert('Request Details', details);
+    reopenRequestModalOnFocusRef.current = true;
+    reopenRequestModalModeRef.current = showRequestModal ? 'single' : 'all';
+    setShowRequestModal(false);
+    setShowAllRequests(false);
+    setSelectedRequest(null);
+    navigation.navigate('DriverRequestDetailsScreen', { request });
   };
 
   const handleMessageCustomer = (request) => {
@@ -1532,7 +1549,9 @@ export default function DriverHomeScreen({ navigation, route }) {
         style={[
           styles.bottomPanel,
           {
-            paddingBottom: insets.bottom + spacing.base,
+            paddingHorizontal: spacing.base,
+            paddingTop: spacing.base,
+            paddingBottom: spacing.md,
           },
         ]}
       >
@@ -1888,7 +1907,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   waitTimeContainer: {
-    marginBottom: spacing.base,
+    marginBottom: spacing.md,
   },
   waitTimeText: {
     color: colors.text.primary,
@@ -1909,7 +1928,7 @@ const styles = StyleSheet.create({
     borderColor: colors.navigation.tabBarBorder,
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
-    marginBottom: spacing.base,
+    marginBottom: spacing.md,
   },
   secondaryOnlineActionText: {
     color: colors.text.primary,
@@ -1919,8 +1938,8 @@ const styles = StyleSheet.create({
   progressContainer: {
     backgroundColor: colors.background.panel,
     borderRadius: borderRadius.lg,
-    padding: spacing.md + 2,
-    marginBottom: spacing.base + 2,
+    padding: spacing.base,
+    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.navigation.tabBarBorder,
   },
