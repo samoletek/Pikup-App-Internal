@@ -176,17 +176,34 @@ const invokeDriverPool = async (driver, requestPool, location = null) => {
 const isMissingAcceptRpc = (error) => {
     const message = String(error?.message || '').toLowerCase();
     const details = String(error?.details || '').toLowerCase();
+    const mentionsFunction = message.includes('accept_trip_request') || details.includes('accept_trip_request');
     return (
-        error?.code === 'PGRST202' ||
-        message.includes('could not find the function') ||
-        details.includes('could not find the function') ||
-        message.includes('accept_trip_request') ||
-        details.includes('accept_trip_request')
+        mentionsFunction &&
+        (
+            error?.code === 'PGRST202' ||
+            message.includes('could not find the function') ||
+            details.includes('could not find the function')
+        )
     );
 };
 
 const acceptTripAsDriver = async (driver, tripId) => {
     const driverId = driver.user.id;
+
+    const primaryRpcPayload = {
+        p_trip_id: tripId,
+        p_driver_id: driverId,
+        p_idempotency_key: `dispatch_smoke:${tripId}:${driverId}`,
+    };
+    const { data: primaryRpcRows, error: primaryRpcError } = await driver.client.rpc('accept_trip_request', primaryRpcPayload);
+
+    if (!primaryRpcError && Array.isArray(primaryRpcRows) && primaryRpcRows.length > 0) {
+        return 'rpc';
+    }
+
+    if (primaryRpcError && !isMissingAcceptRpc(primaryRpcError)) {
+        throw new Error(`accept_trip_request RPC failed: ${primaryRpcError.message || primaryRpcError.details || primaryRpcError}`);
+    }
 
     const { data: rpcRows, error: rpcError } = await driver.client.rpc('accept_trip_request', {
         p_trip_id: tripId,

@@ -420,13 +420,46 @@ const isMissingRpcFunctionError = (error, functionName) => {
     const message = String(error?.message || '').toLowerCase();
     const details = String(error?.details || '').toLowerCase();
     const target = String(functionName || '').toLowerCase();
-
+    const mentionsTarget = !target || message.includes(target) || details.includes(target);
     return (
-        error?.code === 'PGRST202' ||
-        message.includes('could not find the function') ||
-        details.includes('could not find the function') ||
-        (target && (message.includes(target) || details.includes(target)))
+        mentionsTarget &&
+        (
+            error?.code === 'PGRST202' ||
+            message.includes('could not find the function') ||
+            details.includes('could not find the function')
+        )
     );
+};
+
+const buildAcceptTripIdempotencyKey = ({ requestId, driverId }) => (
+    `accept_trip_request:${requestId}:${driverId}`
+);
+
+const invokeAcceptTripRequestRpc = async ({ requestId, driverId }) => {
+    const rpcName = 'accept_trip_request';
+    const idempotencyKey = buildAcceptTripIdempotencyKey({ requestId, driverId });
+    const primaryPayload = {
+        p_trip_id: requestId,
+        p_driver_id: driverId,
+        p_idempotency_key: idempotencyKey,
+    };
+
+    const primaryResult = await supabase.rpc(rpcName, primaryPayload);
+    if (!primaryResult.error) {
+        return { ...primaryResult, usedSignature: 'three_arg' };
+    }
+
+    if (!isMissingRpcFunctionError(primaryResult.error, rpcName)) {
+        return { ...primaryResult, usedSignature: 'three_arg' };
+    }
+
+    const fallbackPayload = {
+        p_trip_id: requestId,
+        p_driver_id: driverId,
+    };
+    const fallbackResult = await supabase.rpc(rpcName, fallbackPayload);
+
+    return { ...fallbackResult, usedSignature: 'two_arg' };
 };
 
 const REQUEST_UNAVAILABLE_ERROR_CODE = 'REQUEST_UNAVAILABLE';
@@ -889,9 +922,9 @@ export const acceptRequest = async (requestId, currentUser) => {
         let rpcAccepted = false;
 
         // Primary path: RPC with SECURITY DEFINER to bypass restrictive RLS during accept race.
-        const { data: rpcAcceptedRows, error: rpcAcceptError } = await supabase.rpc('accept_trip_request', {
-            p_trip_id: requestId,
-            p_driver_id: driverId
+        const { data: rpcAcceptedRows, error: rpcAcceptError, usedSignature } = await invokeAcceptTripRequestRpc({
+            requestId,
+            driverId,
         });
 
         if (rpcAcceptError) {
@@ -901,6 +934,9 @@ export const acceptRequest = async (requestId, currentUser) => {
                 throw rpcAcceptError;
             }
         } else {
+            if (usedSignature === 'two_arg') {
+                console.log('accept_trip_request RPC used legacy 2-arg signature.');
+            }
             rpcAccepted = true;
             if (Array.isArray(rpcAcceptedRows) && rpcAcceptedRows.length > 0) {
                 acceptedRequest = rpcAcceptedRows[0];

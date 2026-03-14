@@ -36,6 +36,7 @@ const STATUS_ALIAS_MAP = Object.freeze({
   arrivedAtDropoff: TRIP_STATUS.ARRIVED_AT_DROPOFF,
   arrived_at_dropoff: TRIP_STATUS.ARRIVED_AT_DROPOFF,
   completed: TRIP_STATUS.COMPLETED,
+  delivered: TRIP_STATUS.COMPLETED,
   cancelled: TRIP_STATUS.CANCELLED
 });
 
