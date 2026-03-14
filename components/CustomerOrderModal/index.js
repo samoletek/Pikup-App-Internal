@@ -198,7 +198,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 total: Math.round((prev.total - prevOld + redkikPremium) * 100) / 100,
             };
         });
-    }, [insuranceQuote]);
+    }, [insuranceQuote, previewPricing]);
 
     // ============================================
     // EFFECTS

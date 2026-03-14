@@ -192,7 +192,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
       isMountedRef.current = false;
       stopMonitoring();
     };
-  }, [requestId, enabled]);
+  }, [enabled, requestId, startMonitoring, stopMonitoring]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -63,7 +63,7 @@ export default function WelcomeScreen({ navigation }) {
 
       navigateAfterLogin();
     }
-  }, [currentUser, userType, navigation, modalVisible]);
+  }, [currentUser, userType, navigation, modalVisible, getDriverProfile]);
 
   return (
     <LinearGradient

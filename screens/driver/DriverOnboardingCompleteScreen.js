@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -46,20 +46,16 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const checkmarkAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  useEffect(() => {
-    // Start animations
-    startAnimations();
-    
-    // Check actual verification status from Stripe Connect
-    checkVerificationStatus();
-    return () => {
-      if (pollTimeoutRef.current) {
-        clearTimeout(pollTimeoutRef.current);
-      }
-    };
-  }, []);
+  const startCheckmarkAnimation = useCallback(() => {
+    Animated.spring(checkmarkAnim, {
+      toValue: 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [checkmarkAnim]);
 
-  const checkVerificationStatus = async () => {
+  const checkVerificationStatus = useCallback(async () => {
     try {
       if (connectAccountId) {
         const statusResult = await checkDriverOnboardingStatus?.(connectAccountId);
@@ -88,9 +84,9 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       console.error('Error checking verification status:', error);
       setVerificationStatus('error');
     }
-  };
+  }, [checkDriverOnboardingStatus, connectAccountId, startCheckmarkAnimation]);
 
-  const startAnimations = () => {
+  const startAnimations = useCallback(() => {
     // Fade in and scale up
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -121,16 +117,20 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
         }),
       ])
     ).start();
-  };
+  }, [fadeAnim, pulseAnim, scaleAnim]);
 
-  const startCheckmarkAnimation = () => {
-    Animated.spring(checkmarkAnim, {
-      toValue: 1,
-      tension: 100,
-      friction: 8,
-      useNativeDriver: true,
-    }).start();
-  };
+  useEffect(() => {
+    // Start animations
+    startAnimations();
+    
+    // Check actual verification status from Stripe Connect
+    checkVerificationStatus();
+    return () => {
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+      }
+    };
+  }, [checkVerificationStatus, startAnimations]);
 
   const handleContinue = async () => {
     setIsLoading(true);

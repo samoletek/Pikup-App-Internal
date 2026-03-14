@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -44,23 +44,7 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
 
 
 
-  useEffect(() => {
-    const loadData = async () => {
-      if (requestId && !initialRequestData) {
-        fetchRequestData();
-      } else if (initialRequestData) {
-        // Use initial request data if provided
-        await processRequestData(initialRequestData);
-        setLoading(false);
-      } else {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [requestId, initialRequestData]);
-
-  const processRequestData = async (data) => {
+  const processRequestData = useCallback(async (data) => {
     // Extract driver name from email if available
     if (data.assignedDriverEmail) {
       const driverNameFromEmail = data.assignedDriverEmail.split('@')[0];
@@ -86,9 +70,9 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
         setDriverRating(5.0);
       }
     }
-  };
+  }, [getDriverProfile]);
 
-  const fetchRequestData = async () => {
+  const fetchRequestData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getRequestById(requestId);
@@ -100,7 +84,23 @@ export default function DeliveryFeedbackScreen({ route, navigation }) {
       Alert.alert('Error', 'Failed to load delivery information');
       setLoading(false);
     }
-  };
+  }, [getRequestById, processRequestData, requestId]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (requestId && !initialRequestData) {
+        fetchRequestData();
+      } else if (initialRequestData) {
+        // Use initial request data if provided
+        await processRequestData(initialRequestData);
+        setLoading(false);
+      } else {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [fetchRequestData, initialRequestData, processRequestData, requestId]);
 
   const handleSubmit = async () => {
     if (submitting) return; // Prevent double submissions

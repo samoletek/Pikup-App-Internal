@@ -101,6 +101,23 @@ export default function DeliveryStatusTracker({
     { key: TRIP_STATUS.COMPLETED, label: 'Delivered', icon: 'checkmark-circle', description: 'Your delivery is complete' },
   ];
 
+  const fetchRequestData = useCallback(async (showLoader = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
+
+    try {
+      const data = await getRequestById(requestId);
+      setRequestData(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching request data:', err);
+      setError('Unable to load delivery status');
+    } finally {
+      setLoading(false);
+    }
+  }, [getRequestById, requestId]);
+
   useEffect(() => {
     if (requestId) {
       fetchRequestData();
@@ -119,7 +136,7 @@ export default function DeliveryStatusTracker({
         refreshIntervalRef.current = null;
       }
     };
-  }, [requestId]);
+  }, [fetchRequestData, requestId]);
 
   useEffect(() => {
     const normalizedExpanded = Boolean(expanded);
@@ -248,23 +265,6 @@ export default function DeliveryStatusTracker({
       }
     }
   }, [requestData, onDeliveryComplete]);
-
-  const fetchRequestData = async (showLoader = true) => {
-    if (showLoader) {
-      setLoading(true);
-    }
-
-    try {
-      const data = await getRequestById(requestId);
-      setRequestData(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching request data:', err);
-      setError('Unable to load delivery status');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleRefresh = () => {
     fetchRequestData();

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ScrollView,
   Share,
@@ -42,14 +42,7 @@ export default function CustomerRewardsScreen({ navigation, route }) {
     }
   }, [deepLinkCode]);
 
-  useEffect(() => {
-    loadTripCount();
-    return () => {
-      if (promoTimerRef.current) clearTimeout(promoTimerRef.current);
-    };
-  }, []);
-
-  const loadTripCount = async () => {
+  const loadTripCount = useCallback(async () => {
     try {
       const requests = await getUserPickupRequests?.();
       const completed = (requests || []).filter(
@@ -59,7 +52,14 @@ export default function CustomerRewardsScreen({ navigation, route }) {
     } catch (_e) {
       console.error("Error loading trip count:", _e);
     }
-  };
+  }, [getUserPickupRequests]);
+
+  useEffect(() => {
+    loadTripCount();
+    return () => {
+      if (promoTimerRef.current) clearTimeout(promoTimerRef.current);
+    };
+  }, [loadTripCount]);
 
   const milestoneProgress = completedTrips % MILESTONE_TARGET;
   const milestonesCompleted = Math.floor(completedTrips / MILESTONE_TARGET);

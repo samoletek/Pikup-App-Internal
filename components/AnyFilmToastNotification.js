@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Animated, Dimensions, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PanGestureHandler, State } from "react-native-gesture-handler";
@@ -17,6 +17,23 @@ export default function AnyFilmToastNotification({
   const opacity = useRef(new Animated.Value(0)).current;
   const timeoutRef = useRef(null);
   const screenWidth = Dimensions.get("window").width;
+
+  const hideToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      onHide?.();
+    });
+  }, [onHide, opacity, translateY]);
 
   useEffect(() => {
     if (visible) {
@@ -46,24 +63,7 @@ export default function AnyFilmToastNotification({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [visible, duration]);
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onHide?.();
-    });
-  };
+  }, [duration, hideToast, opacity, translateY, visible]);
 
   if (!visible) return null;
 

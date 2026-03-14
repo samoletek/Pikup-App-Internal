@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -227,30 +227,7 @@ export default function RequestModal({
     };
   }, [visible, showMap, requests, selectedIndex]);
 
-  useEffect(() => {
-    const hasTimedRequests = requests.some((request) => shouldRenderRequestTimer(request));
-
-    if (visible && requests.length > 0 && hasTimedRequests) {
-      timerInterval.current = setInterval(() => {
-        updateTimers();
-      }, 1000);
-      updateTimers();
-    } else {
-      if (timerInterval.current) {
-        clearInterval(timerInterval.current);
-        timerInterval.current = null;
-      }
-    }
-
-    return () => {
-      if (timerInterval.current) {
-        clearInterval(timerInterval.current);
-        timerInterval.current = null;
-      }
-    };
-  }, [visible, requests]);
-
-  const updateTimers = () => {
+  const updateTimers = useCallback(() => {
     const newTimers = {};
     const now = new Date();
 
@@ -272,7 +249,30 @@ export default function RequestModal({
     });
 
     setTimers(newTimers);
-  };
+  }, [requests]);
+
+  useEffect(() => {
+    const hasTimedRequests = requests.some((request) => shouldRenderRequestTimer(request));
+
+    if (visible && requests.length > 0 && hasTimedRequests) {
+      timerInterval.current = setInterval(() => {
+        updateTimers();
+      }, 1000);
+      updateTimers();
+    } else {
+      if (timerInterval.current) {
+        clearInterval(timerInterval.current);
+        timerInterval.current = null;
+      }
+    }
+
+    return () => {
+      if (timerInterval.current) {
+        clearInterval(timerInterval.current);
+        timerInterval.current = null;
+      }
+    };
+  }, [requests, updateTimers, visible]);
 
   const handleScroll = (event) => {
     const scrollPosition = event.nativeEvent.contentOffset.x;

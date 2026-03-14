@@ -72,7 +72,7 @@ const AIPhotoPickerModal = ({
 
         setPhotos([]);
         setShowCamera(false);
-    }, [visible, initialPhotosKey]);
+    }, [visible, initialPhotosKey, normalizedInitialPhotos]);
 
     const updatePhotoLoadingState = (photoId, isLoading) => {
         setPhotos(prev => {

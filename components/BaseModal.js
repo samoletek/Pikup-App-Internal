@@ -146,7 +146,7 @@ const BaseModal = forwardRef(({
             translateY.setValue(height);
             keyboardTranslateY.setValue(0);
         }
-    }, [visible]); // Removed 'height' to prevent slide animation on height changes
+    }, [height, keyboardTranslateY, translateY, visible]);
 
     useEffect(() => {
         if (!visible || !avoidKeyboard) {
@@ -187,7 +187,7 @@ const BaseModal = forwardRef(({
             showSub.remove();
             hideSub.remove();
         };
-    }, [avoidKeyboard, visible, insets.bottom]);
+    }, [avoidKeyboard, insets.bottom, keyboardTranslateY, visible]);
 
     // Backdrop opacity interpolated from translateY
     const backdropOpacity = translateY.interpolate({

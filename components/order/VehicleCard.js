@@ -55,13 +55,13 @@ const VehicleCard = ({
         imageW.value = withTiming(isExpanded ? EXPANDED_W : COLLAPSED_W, cfg);
         imageH.value = withTiming(isExpanded ? EXPANDED_H : COLLAPSED_H, cfg);
         priceOp.value = withTiming(isExpanded ? 1 : 0, cfg);
-    }, [isExpanded]);
+    }, [imageH, imageW, isExpanded, priceOp]);
 
     // Shadow grows smoothly on select, shrinks on deselect
     useEffect(() => {
         shadowOp.value = withTiming(isSelected ? 0.85 : 0, { duration: 300 });
         shadowRad.value = withTiming(isSelected ? 18 : 2, { duration: 300 });
-    }, [isSelected]);
+    }, [isSelected, shadowOp, shadowRad]);
 
     const imageAnimStyle = useAnimatedStyle(() => ({
         width: imageW.value,

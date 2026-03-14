@@ -13,6 +13,7 @@ const DEFAULT_MAX_WEIGHT = {
     cargo_truck: 5000,
 };
 const TOO_SMALL_REASON = 'Too small for your items.';
+const EMPTY_AI_FIT_BY_VEHICLE = {};
 
 const VehicleStep = ({ orderData, setOrderData }) => {
     const [vehicles, setVehicles] = useState([]);
@@ -22,7 +23,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
     const [expandedId, setExpandedId] = useState(null);
     const aiRecommendation = orderData.aiVehicleRecommendation || {};
     const aiStatus = aiRecommendation.status || 'idle';
-    const aiFitByVehicle = aiRecommendation.fitByVehicle || {};
+    const aiFitByVehicle = aiRecommendation.fitByVehicle || EMPTY_AI_FIT_BY_VEHICLE;
 
     // Calculate total weight from AI-analyzed items
     const totalWeight = useMemo(() => {

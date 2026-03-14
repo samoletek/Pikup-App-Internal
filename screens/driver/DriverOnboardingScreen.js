@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -506,6 +506,8 @@ export default function DriverOnboardingScreen({ navigation }) {
         'Your identity verification was not approved. Contact support or visit pikup-app.com.'
       );
     }
+    // fetchVerificationData remains non-memoized to preserve recursive retry behavior.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, verificationSessionId, currentUser]);
 
   useEffect(() => {
@@ -591,7 +593,7 @@ export default function DriverOnboardingScreen({ navigation }) {
     setAddressSuggestions([]);
   };
 
-  const buildDraftSnapshot = () => ({
+  const buildDraftSnapshot = useCallback(() => ({
     currentStep: normalizeStep(currentStep),
     verificationStatus: normalizeVerificationStatus(verificationStatus),
     verificationDataPopulated,
@@ -603,7 +605,15 @@ export default function DriverOnboardingScreen({ navigation }) {
       // Do not persist SSN in local/remote onboarding drafts.
       ssn: '',
     },
-  });
+  }), [
+    carPhotoUris,
+    currentStep,
+    formData,
+    verificationDataPopulated,
+    verificationStatus,
+    vehicleVerificationStatus,
+    vinPhotoUri,
+  ]);
 
   useEffect(() => {
     let isMounted = true;
@@ -794,6 +804,7 @@ export default function DriverOnboardingScreen({ navigation }) {
     vehicleVerificationStatus,
     vinPhotoUri,
     carPhotoUris,
+    buildDraftSnapshot,
   ]);
 
   const updateFormData = (field, value) => {

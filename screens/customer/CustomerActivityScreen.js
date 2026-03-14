@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -157,7 +157,7 @@ export default function CustomerActivityScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState([]);
 
-  const fetchTrips = async () => {
+  const fetchTrips = useCallback(async () => {
     if (!currentUser) {
       setTrips([]);
       setLoading(false);
@@ -209,11 +209,11 @@ export default function CustomerActivityScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, getUserPickupRequests]);
 
   useEffect(() => {
     fetchTrips();
-  }, [currentUser]);
+  }, [fetchTrips]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

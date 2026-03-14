@@ -459,6 +459,8 @@ export default function DriverHomeScreen({ navigation, route }) {
       stopLocationTracking();
     }
     clearAutoRefresh(); // Stop auto-refresh when going offline or having active trip
+    // These handlers are intentionally treated as stable for the online/offline lifecycle gate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRequestPool, hasActiveTrip, isOnline]);
 
   useEffect(() => {

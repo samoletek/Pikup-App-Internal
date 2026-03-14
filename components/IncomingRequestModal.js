@@ -62,7 +62,7 @@ export default function IncomingRequestModal({
       }).start();
       onSnapChange?.(1);
     }
-  }, [visible, request]);
+  }, [onSnapChange, request, translateY, visible]);
 
   const handleAccept = useCallback(() => {
     onAccept(request);
@@ -74,7 +74,7 @@ export default function IncomingRequestModal({
       duration: 250,
       useNativeDriver: true,
     }).start(() => onDeclineRef.current?.());
-  }, []);
+  }, [translateY]);
 
   // PanResponder
   const panResponder = useRef(

@@ -51,7 +51,7 @@ export default function OfflineDashboard({
                 useNativeDriver: false,
             }),
         ]).start();
-    }, []);
+    }, [animatedHeight, backdropOpacity]);
 
     const collapse = useCallback(() => {
         setIsExpanded(false);
@@ -70,7 +70,7 @@ export default function OfflineDashboard({
                 useNativeDriver: false,
             }),
         ]).start();
-    }, []);
+    }, [animatedHeight, backdropOpacity]);
 
     // PanResponder for swipe gesture
     const panResponder = useRef(
@@ -158,34 +158,7 @@ export default function OfflineDashboard({
         }
     };
 
-    useEffect(() => {
-        loadSessionData();
-    }, []);
-
-    const loadSessionData = async () => {
-        try {
-            if (currentUser?.uid) {
-                const stats = await getDriverSessionStats?.(currentUser.uid) || {};
-                const weeklyStats = await getDriverStats?.(currentUser.uid) || {};
-
-                setSessionStats({
-                    ...stats,
-                    averageRating: 4.8
-                });
-
-                setDriverStats({
-                    currentWeekTrips: weeklyStats.currentWeekTrips || 0,
-                    weeklyMilestone: 15
-                });
-
-                generateRecommendations(stats);
-            }
-        } catch (error) {
-            console.error('Error loading session data:', error);
-        }
-    };
-
-    const generateRecommendations = (stats) => {
+    const generateRecommendations = useCallback((stats) => {
         const recs = [];
         const currentHour = new Date().getHours();
 
@@ -227,7 +200,34 @@ export default function OfflineDashboard({
         });
 
         setRecommendations(recs);
-    };
+    }, []);
+
+    const loadSessionData = useCallback(async () => {
+        try {
+            if (currentUser?.uid) {
+                const stats = await getDriverSessionStats?.(currentUser.uid) || {};
+                const weeklyStats = await getDriverStats?.(currentUser.uid) || {};
+
+                setSessionStats({
+                    ...stats,
+                    averageRating: 4.8
+                });
+
+                setDriverStats({
+                    currentWeekTrips: weeklyStats.currentWeekTrips || 0,
+                    weeklyMilestone: 15
+                });
+
+                generateRecommendations(stats);
+            }
+        } catch (error) {
+            console.error('Error loading session data:', error);
+        }
+    }, [currentUser?.uid, generateRecommendations, getDriverSessionStats, getDriverStats]);
+
+    useEffect(() => {
+        loadSessionData();
+    }, [loadSessionData]);
 
     const formatDuration = (minutes) => {
         const total = minutes || 0;

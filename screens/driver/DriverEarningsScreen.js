@@ -68,6 +68,8 @@ export default function DriverEarningsScreen({ navigation, route }) {
     if (driverTrips.length > 0) {
       setWeeklyData(processTripsIntoChartData(driverTrips, selectedPeriod));
     }
+    // Chart projector is intentionally not memoized to keep data formatting colocated.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPeriod, driverTrips]);
 
   // Realtime subscription for trips and earnings updates
@@ -148,6 +150,8 @@ export default function DriverEarningsScreen({ navigation, route }) {
     } finally {
       if (!silent) setLoading(false);
     }
+    // Upstream auth loaders are treated as stable context methods in this screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId, selectedPeriod]);
 
   // Keep a stable ref so the realtime subscription always calls the latest version
