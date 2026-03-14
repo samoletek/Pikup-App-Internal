@@ -8,8 +8,6 @@ import * as Location from 'expo-location';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../config/supabase';
 import OfflineDashboard, { COLLAPSED_HEIGHT } from '../../components/OfflineDashboard';
-import DrivingProgressModal from '../../components/DrivingProgressModal';
-import NavigationModal from '../../components/NavigationModal';
 import RequestModal from '../../components/RequestModal';
 import IncomingRequestModal from '../../components/IncomingRequestModal';
 import PhoneVerificationModal from '../../components/PhoneVerificationModal';
@@ -84,9 +82,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [driverLocation, setDriverLocation] = useState(null);
   const [isOnline, setIsOnline] = useState(false);
   const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
-  const [currentModal, setCurrentModal] = useState(null); // 'offline', 'driving', 'navigation'
   const [activeJob, setActiveJob] = useState(null);
-  const [routeCoordinates, setRouteCoordinates] = useState([]);
 
   // Request modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -135,9 +131,6 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [isRestoringActiveTrip, setIsRestoringActiveTrip] = useState(true);
   const restoreInFlightRef = useRef(false);
 
-  // Driver session tracking
-  const [currentSessionId, setCurrentSessionId] = useState(null);
-
   // Location tracking
   const locationSubscription = useRef(null);
   const mapRef = useRef(null);
@@ -169,9 +162,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     const distanceMeters = distanceMiles * 1609.34; // Convert to meters
     return distanceMeters >= MIN_MOVE_METERS;
   };
-
-  // Modal animation
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const onlineDriverMarkerCoordinate = useMemo(() => {
     if (!driverLocation?.longitude || !driverLocation?.latitude) {
@@ -709,14 +699,6 @@ export default function DriverHomeScreen({ navigation, route }) {
           updateDriverLocation(activeJob.id, newLocation);
         }
 
-        // Update map region to follow driver
-        if (mapRef.current && (currentModal === 'driving' || currentModal === 'navigation')) {
-          mapRef.current.animateToRegion({
-            ...newLocation,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-          }, 1000);
-        }
       }
     );
   };
@@ -726,30 +708,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       locationSubscription.current.remove();
       locationSubscription.current = null;
     }
-  };
-
-  const showModal = (modalType, data = null) => {
-    setCurrentModal(modalType);
-    if (data) setActiveJob(data);
-
-    // Animate modal in
-    Animated.spring(slideAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start();
-  };
-
-  const hideModal = () => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 100,
-      friction: 8,
-    }).start(() => {
-      setCurrentModal(null);
-    });
   };
 
   const checkDriverReadiness = async () => {
@@ -909,7 +867,6 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       // Set driver online in backend with selected mode
       const sessionId = await setDriverOnline(currentUserId, driverPos, mode);
-      setCurrentSessionId(sessionId);
 
       // Set local state
       setActiveRequestPool(requestPool);
@@ -956,7 +913,6 @@ export default function DriverHomeScreen({ navigation, route }) {
 
       // Set driver offline in backend
       await setDriverOffline(currentUserId);
-      setCurrentSessionId(null);
 
       // Set local state
       setIsOnline(false);
@@ -965,7 +921,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       setShowIncomingModal(false);
       setIsMinimized(false);
       setIncomingRequest(null);
-      hideModal();
 
       console.log('Driver is now offline');
     } catch (error) {
@@ -1188,7 +1143,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     } else {
       miniBarPulse.setValue(0);
     }
-  }, [isMinimized, incomingRequest]);
+  }, [incomingRequest, isMinimized, miniBarPulse]);
 
   // Incoming request handlers
   const handleIncomingRequestAccept = async (request) => {
@@ -1338,28 +1293,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
   }, [availableRequests, hasActiveTrip, incomingRequest, isMinimized, isOnline, isScheduledPoolActive, showIncomingModal]);
 
-  const renderModal = () => {
-    switch (currentModal) {
-      case 'driving':
-        return (
-          <DrivingProgressModal
-            request={activeJob}
-            onClose={hideModal}
-          />
-        );
-      case 'navigation':
-        return (
-          <NavigationModal
-            request={activeJob}
-            onClose={hideModal}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
-
   return (
     <View style={styles.container}>
       {/* Always show map */}
@@ -1447,31 +1380,6 @@ export default function DriverHomeScreen({ navigation, route }) {
               </Mapbox.MarkerView>
             );
           })}
-
-          {/* Show route if active (legacy) */}
-          {routeCoordinates.length > 0 && routeCoordinates.every(coord => coord?.longitude && coord?.latitude) && (
-            <Mapbox.ShapeSource
-              id="route-source"
-              shape={{
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                  type: 'LineString',
-                  coordinates: routeCoordinates.map(coord => [coord.longitude, coord.latitude])
-                }
-              }}
-            >
-              <Mapbox.LineLayer
-                id="route-line"
-                style={{
-                  lineColor: colors.primary,
-                  lineWidth: 4,
-                  lineCap: 'round',
-                  lineJoin: 'round'
-                }}
-              />
-            </Mapbox.ShapeSource>
-          )}
 
           {/* Incoming request route line */}
           {incomingRoute && (
@@ -1678,27 +1586,6 @@ export default function DriverHomeScreen({ navigation, route }) {
               <Ionicons name="chevron-up" size={20} color={colors.text.primary} />
             </View>
           </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Current Modal */}
-      {currentModal && (
-        <Animated.View
-          style={[
-            styles.modalContainer,
-            {
-              transform: [
-                {
-                  translateY: slideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [600, 0]
-                  })
-                }
-              ]
-            }
-          ]}
-        >
-          {renderModal()}
         </Animated.View>
       )}
 
@@ -2014,13 +1901,6 @@ const styles = StyleSheet.create({
     textShadowColor: colors.overlayDark,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  modalContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
   },
   requestMarker: {
     backgroundColor: colors.background.tertiary,
