@@ -56,7 +56,7 @@ export const getPricingConfig = async () => {
                 return config;
             }
         }
-    } catch (e) {
+    } catch (_e) {
         // Cache read failed, fetch from server
     }
 

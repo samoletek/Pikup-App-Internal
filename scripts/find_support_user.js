@@ -6,7 +6,7 @@ const envPath = path.join(__dirname, '..', '.env.local');
 let envContent = '';
 try {
     envContent = fs.readFileSync(envPath, 'utf8');
-} catch (e) {
+} catch (_e) {
     console.error('Could not read .env file');
     process.exit(1);
 }

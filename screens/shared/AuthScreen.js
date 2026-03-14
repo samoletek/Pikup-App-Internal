@@ -284,7 +284,7 @@ export default function AuthScreen({ navigation, route }) {
                                                                     return;
                                                                 }
                                                                 await Linking.openURL(termsUrl);
-                                                            } catch (error) {
+                                                            } catch (_error) {
                                                                 Alert.alert("Error", "Failed to open Terms of Service.");
                                                             }
                                                         }}
@@ -301,7 +301,7 @@ export default function AuthScreen({ navigation, route }) {
                                                                     return;
                                                                 }
                                                                 await Linking.openURL(privacyUrl);
-                                                            } catch (error) {
+                                                            } catch (_error) {
                                                                 Alert.alert("Error", "Failed to open Privacy Policy.");
                                                             }
                                                         }}

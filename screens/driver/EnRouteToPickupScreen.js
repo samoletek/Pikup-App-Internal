@@ -28,8 +28,8 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const { request, isCustomerView = false, isDelivery = false, title } = route.params || {};
   const [driverLocation, setDriverLocation] = useState(null);
-  const [eta, setEta] = useState('10-15 min');
-  const [distance, setDistance] = useState('2.5 mi');
+  const [eta] = useState('10-15 min');
+  const [distance] = useState('2.5 mi');
   const mapRef = useRef(null);
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
   

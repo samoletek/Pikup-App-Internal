@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles } from '../styles';
-import { colors, typography, spacing, borderRadius, sizing, hitSlopDefault } from '../../../styles/theme';
+import { colors, typography, spacing, sizing, hitSlopDefault } from '../../../styles/theme';
 import PaymentMethodsScreen from '../../../screens/customer/PaymentMethodsScreen';
 import { estimateLaborMinutes } from '../../../services/PricingService';
 

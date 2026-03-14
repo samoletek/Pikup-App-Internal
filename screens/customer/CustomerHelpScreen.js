@@ -62,7 +62,6 @@ export default function CustomerHelpScreen({ navigation }) {
       // Use 'support' as the driverId for support chats
       // Use a constant UUID for the support driver
       const SUPPORT_DRIVER_ID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
-      const SUPPORT_REQUEST_ID = "00000000-0000-0000-0000-000000000000";
 
       let conversationId;
       let usedSupportId = SUPPORT_DRIVER_ID;

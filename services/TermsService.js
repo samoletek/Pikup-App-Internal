@@ -30,7 +30,7 @@ export const checkTermsAcceptance = async (uid) => {
         let currentVersions;
         try {
             currentVersions = await Promise.race([getLegalConfig(), configTimeout]);
-        } catch (err) {
+        } catch (_err) {
             console.warn('⚠️ getLegalConfig timed out, using defaults');
             currentVersions = { tosVersion: '1.0', privacyVersion: '1.0' };
         }
@@ -44,7 +44,7 @@ export const checkTermsAcceptance = async (uid) => {
         try {
             const result = await Promise.race([supabase.auth.getUser(), getUserTimeout]);
             user = result.data?.user;
-        } catch (err) {
+        } catch (_err) {
             console.warn('⚠️ getUser timed out - skipping terms check for now');
             return { needsAcceptance: false };
         }

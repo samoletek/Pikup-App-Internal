@@ -54,7 +54,7 @@ const readLocalFileAsArrayBuffer = async (uri) => {
             encoding: FileSystem.EncodingType.Base64
         });
         return decode(base64Data);
-    } catch (fileSystemError) {
+    } catch (_fileSystemError) {
         // Fallback for URI formats that cannot be read directly by FileSystem.
         const response = await fetch(uri);
         if (!response.ok) {

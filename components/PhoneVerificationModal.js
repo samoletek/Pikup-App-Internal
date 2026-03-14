@@ -239,7 +239,7 @@ export default function PhoneVerificationModal({
             setResendTimer(60);
             setOtpError('');
             setOtpCode('');
-        } catch (err) {
+        } catch (_err) {
             setOtpError('Failed to resend code. Please try again.');
         } finally {
             setSendingOtp(false);

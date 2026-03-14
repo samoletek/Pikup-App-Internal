@@ -101,7 +101,6 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   );
 
   const [photos, setPhotos] = useState([]);
-  const [isUploading, setIsUploading] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -156,7 +155,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
 
         customerAvatarCacheRef.current.set(activeRequestCustomerId, profileAvatar);
         setCustomerAvatarUrl(profileAvatar);
-      } catch (error) {
+      } catch (_error) {
         if (!isMounted) {
           return;
         }

@@ -12,8 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { colors } from '../../styles/theme';
-import { aiPhotoStyles as s } from './styles';
-import { SCREEN_HEIGHT } from './styles';
+import { aiPhotoStyles as s, SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
 import CameraScreen from './CameraScreen';
 

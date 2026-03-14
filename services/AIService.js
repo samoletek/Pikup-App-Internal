@@ -190,14 +190,14 @@ const parseGeminiJson = (textResponse) => {
     // Attempt 1: direct parse
     try {
         return JSON.parse(cleaned);
-    } catch (e1) { }
+    } catch (_e1) { }
 
     // Attempt 2: extract outermost {...} and parse
     const outerMatch = cleaned.match(/\{[\s\S]*\}/);
     if (outerMatch) {
         try {
             return JSON.parse(outerMatch[0]);
-        } catch (e2) { }
+        } catch (_e2) { }
     }
 
     // Attempt 3: response was truncated — try to repair the JSON structure
@@ -208,7 +208,7 @@ const parseGeminiJson = (textResponse) => {
         const parsed = JSON.parse(repaired);
         console.warn(`JSON repair succeeded, salvaged ${parsed?.items?.length ?? 0} items`);
         return parsed;
-    } catch (e3) { }
+    } catch (_e3) { }
 
     throw new Error('Could not parse AI response as JSON');
 };

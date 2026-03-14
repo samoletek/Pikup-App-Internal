@@ -28,7 +28,7 @@ async function openExternalLink(url, label) {
       return;
     }
     await Linking.openURL(url);
-  } catch (error) {
+  } catch (_error) {
     Alert.alert("Error", `Failed to open ${label}.`);
   }
 }

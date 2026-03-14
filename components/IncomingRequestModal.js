@@ -76,14 +76,6 @@ export default function IncomingRequestModal({
     }).start(() => onDeclineRef.current?.());
   }, []);
 
-  const minimize = useCallback(() => {
-    Animated.timing(translateY, {
-      toValue: SNAP_HIDDEN,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => onMinimizeRef.current?.());
-  }, []);
-
   // PanResponder
   const panResponder = useRef(
     PanResponder.create({

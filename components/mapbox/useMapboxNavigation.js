@@ -63,7 +63,7 @@ const useMapboxNavigation = ({
     try {
       await MapboxNavigationService.stopNavigation();
       setIsNavigating(false);
-    } catch (error) {
+    } catch (_error) {
       Alert.alert('Error', 'Failed to stop navigation');
     }
   };

@@ -5,13 +5,12 @@ import OrderItemCard from '../../order/OrderItemCard';
 import { styles } from '../styles';
 import { colors } from '../../../styles/theme';
 import AIPhotoPickerModal from '../AIPhotoPickerModal';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { analyzeImages } from '../../../services/AIService';
 
 const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 const ANALYSIS_IMAGE_MAX_SIDE = 1080;
 const ANALYSIS_IMAGE_QUALITY = 0.4;
-
-import * as ImageManipulator from 'expo-image-manipulator';
-import { analyzeImages } from '../../../services/AIService';
 
 const ItemsStep = ({
     orderData,

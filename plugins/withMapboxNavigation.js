@@ -281,7 +281,6 @@ function withMapboxXcodeProjectForceSources(config) {
       (mainGroup.children ||= []).push({ value: g.uuid, comment: projectName });
       appGroupKey = g.uuid;
     }
-    const appGroup = project.getPBXGroupByKey(appGroupKey);
     let bridgesGroupKey = (project.getPBXGroupByKey(appGroupKey).children || [])
       .map((c) => c.value)
       .find((key) => project.getPBXGroupByKey(key)?.name === 'Bridges');

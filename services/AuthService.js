@@ -204,7 +204,7 @@ export const login = async (email, password, expectedRole) => {
         let profile = null;
 
         if (expectedRole) {
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from(targetTable)
                 .select('*')
                 .eq('id', authData.user.id)
@@ -391,7 +391,7 @@ export const signInWithApple = async (userRole = 'customer') => {
                 needsConsent: status.needsAcceptance,
                 missingVersions: status.missingVersions
             };
-        } catch (e) {
+        } catch (_e) {
             return {
                 user: fullUser,
                 userType: userRole,
@@ -695,10 +695,10 @@ export const deleteAccount = async (currentUser) => {
                 try {
                     const errorBody = await error.context.clone().json();
                     functionMessage = errorBody?.error || errorBody?.message || '';
-                } catch (parseError) {
+                } catch (_parseError) {
                     try {
                         functionMessage = await error.context.clone().text();
-                    } catch (textParseError) {
+                    } catch (_textParseError) {
                         functionMessage = '';
                     }
                 }

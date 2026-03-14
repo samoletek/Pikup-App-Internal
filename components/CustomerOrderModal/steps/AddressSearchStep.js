@@ -186,7 +186,7 @@ const AddressSearchStep = ({
                         console.log('Reverse geocoding failed', err);
                     });
             }
-        } catch (error) {
+        } catch (_error) {
             Alert.alert('Location Error', 'Unable to get current location.');
         } finally {
             setIsLoadingCurrentLocation(false);

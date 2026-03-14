@@ -30,7 +30,7 @@ export default function CustomerRewardsScreen({ navigation, route }) {
   const [completedTrips, setCompletedTrips] = useState(0);
   const [promoCode, setPromoCode] = useState("");
   const [promoStatus, setPromoStatus] = useState(null); // null | 'success' | 'error'
-  const [credits, setCredits] = useState(0);
+  const [credits] = useState(0);
   const promoTimerRef = useRef(null);
 
   // Handle referral code from deep link (pikup-app.com/invite/CODE)
@@ -56,8 +56,8 @@ export default function CustomerRewardsScreen({ navigation, route }) {
         (r) => normalizeTripStatus(r.status) === TRIP_STATUS.COMPLETED
       );
       setCompletedTrips(completed.length);
-    } catch (e) {
-      console.error("Error loading trip count:", e);
+    } catch (_e) {
+      console.error("Error loading trip count:", _e);
     }
   };
 
@@ -80,7 +80,7 @@ export default function CustomerRewardsScreen({ navigation, route }) {
       await Share.share({
         message: `Join PikUp and get $10 off your first delivery! Use my code: ${code}\n${links.inviteBase}${code}`,
       });
-    } catch (e) {
+    } catch (_e) {
       // user cancelled
     }
   };

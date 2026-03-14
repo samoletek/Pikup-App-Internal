@@ -147,7 +147,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
                 throw new Error("Session expired. Please sign in again.");
               }
 
-              const { data, error } = await supabase.functions.invoke(
+              const { error } = await supabase.functions.invoke(
                 "download-user-data",
                 {
                   headers: {

@@ -24,7 +24,7 @@ import { TRIP_STATUS } from '../../constants/tripStatus';
 export default function DeliveryFeedbackScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { requestId, requestData: initialRequestData, returnToHome } = route.params || {};
+  const { requestId, requestData: initialRequestData } = route.params || {};
   const { getRequestById, updateRequestStatus, getDriverProfile, currentUser } = useAuth();
   const { confirmPayment, defaultPaymentMethod, createPaymentIntent } = usePayment();
 

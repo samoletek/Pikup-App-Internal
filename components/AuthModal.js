@@ -16,7 +16,6 @@ import {
     ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as AppleAuthentication from 'expo-apple-authentication';
 import BaseModal from './BaseModal';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../config/supabase';
@@ -450,7 +449,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             setResendTimer(60);
             setOtpError('');
             setOtpCode('');
-        } catch (err) {
+        } catch (_err) {
             setOtpError('Failed to resend code. Please try again.');
         } finally {
             setSendingOtp(false);

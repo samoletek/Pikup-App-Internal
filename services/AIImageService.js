@@ -1,5 +1,4 @@
 // services/AIImageService.js - Fixed Version
-import * as ImagePicker from "expo-image-picker";
 import { appConfig } from "../config/appConfig";
 
 class AIImageService {

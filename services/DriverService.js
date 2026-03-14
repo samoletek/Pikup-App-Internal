@@ -280,7 +280,7 @@ export const getDriverStats = async (driverId) => {
             if (data) {
                 driverProfile = { ...data, ...data.metadata };
             }
-        } catch (profileError) {
+        } catch (_profileError) {
             console.log('No driver profile found, using defaults');
         }
 
@@ -541,7 +541,7 @@ export const updateDriverHeartbeat = async (driverId, location, authFetch) => {
             if (!response.ok) {
                 throw new Error(`Failed to update heartbeat: ${response.statusText}`);
             }
-        } catch (networkError) {
+        } catch (_networkError) {
             await fallbackHeartbeat(driverId, location);
             return true;
         }

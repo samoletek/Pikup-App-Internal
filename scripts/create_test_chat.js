@@ -50,7 +50,7 @@ async function main() {
 
     if (driverError || !drivers) {
         console.log("⚠️ Driver 'drew@architeq.io' not found in drivers view. Checking users table...");
-        const { data: userDriver, error: userError } = await supabase
+        const { data: userDriver } = await supabase
             .from('users')
             .select('id, email')
             .eq('email', 'drew@architeq.io')
