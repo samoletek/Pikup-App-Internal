@@ -97,13 +97,10 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const [driverLocation, setDriverLocation] = useState(initialDriverLocation);
   const [dropoffLocation, setDropoffLocation] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
-  const [remainingDistance, setRemainingDistance] = useState('Calculating...');
   const [estimatedTime, setEstimatedTime] = useState('--');
   const [isLoading, setIsLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
   const [requestData, setRequestData] = useState(request);
-  const [deliveryStarted, setDeliveryStarted] = useState(false);
-  const [navigationStarted, setNavigationStarted] = useState(false);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const [currentHeading, setCurrentHeading] = useState(0); // Direction in degrees
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -115,7 +112,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [nextInstruction, setNextInstruction] = useState(null);
   const [distanceToTurn, setDistanceToTurn] = useState(null);
-  const [currentStreet, setCurrentStreet] = useState('');
   const cardGradientColors = [colors.background.primary, colors.background.secondary];
   const activeRequestId =
     requestData?.id || request?.id || requestData?.requestId || request?.requestId || null;
@@ -208,9 +204,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         const minutes = Math.round(progress.durationRemaining / 60);
         setEstimatedTime(minutes < 1 ? '<1' : minutes.toString());
       }
-      if (progress.distanceRemaining) {
-        setRemainingDistance(formatDistance(progress.distanceRemaining));
-      }
     },
     onArrival: () => {
       Alert.alert('Navigation', 'You have arrived at your destination!');
@@ -239,7 +232,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         })
       ]).start();
     }
-  }, [isLoading]);
+  }, [cardAnimation, fadeAnimation, isLoading]);
 
   useEffect(() => {
     initializeDeliveryTracking();
@@ -255,6 +248,8 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         stopNavigation();
       }
     };
+    // Screen bootstrap is intentionally one-time; retry button handles manual re-init.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Start Mapbox Navigation when coordinates are ready
@@ -273,13 +268,22 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         // Keep navigationAttempted true to prevent retries
       });
     }
-  }, [driverLocation, dropoffLocation, isSupported, isNavigating, navigationAttempted]);
+  }, [
+    driverLocation,
+    dropoffLocation,
+    isSupported,
+    isNavigating,
+    navigationAttempted,
+    startNavigation,
+  ]);
 
   // Fetch latest request data
   useEffect(() => {
     if (request?.id) {
       fetchRequestData();
     }
+    // Request refresh is keyed to request id; function identity is not a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request?.id]);
 
   useEffect(() => {
@@ -323,7 +327,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
 
         customerAvatarCacheRef.current.set(activeRequestCustomerId, profileAvatar);
         setCustomerAvatarUrl(profileAvatar);
-      } catch (error) {
+      } catch (_error) {
         if (!isMounted) {
           return;
         }
@@ -484,7 +488,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
             } else {
               throw new Error('No location available');
             }
-          } catch (fallbackError) {
+          } catch (_fallbackError) {
             setLocationError('Unable to get your location. Please check your GPS settings.');
             setIsLoading(false);
             return;
@@ -644,7 +648,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         // Set initial instruction
         const firstStep = routeData.steps[0];
         setNextInstruction(firstStep.maneuver?.instruction || 'Continue straight');
-        setCurrentStreet(firstStep.name || 'Current road');
         
         // Calculate distance to first maneuver
         if (firstStep.distance) {
@@ -654,12 +657,10 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       }
       
       // Update distance and ETA with real data
-      const distanceText = routeData.distance.text;
       const durationText = routeData.duration_in_traffic ? 
         routeData.duration_in_traffic.text : 
         routeData.duration.text;
       
-      setRemainingDistance(distanceText);
       setEstimatedTime(durationText.replace(' mins', ' min').replace(' min', ''));
     } catch (error) {
       console.error('Error getting real route:', error);
@@ -684,18 +685,9 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       dropoffCoords.longitude
     );
     
-    // Format distance
-    let formattedDistance;
-    if (distanceInKm < 1) {
-      formattedDistance = `${Math.round(distanceInKm * 1000)} m`;
-    } else {
-      formattedDistance = `${distanceInKm.toFixed(1)} km`;
-    }
-    
     // Calculate ETA (assuming average speed of 30 km/h)
     const timeInMinutes = Math.ceil(distanceInKm / 30 * 60);
     
-    setRemainingDistance(formattedDistance);
     setEstimatedTime(timeInMinutes < 1 ? '<1' : timeInMinutes.toString());
   };
 
@@ -775,7 +767,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
         const nextStep = routeSteps[currentStepIndex + 1];
         setCurrentStepIndex(currentStepIndex + 1);
         setNextInstruction(nextStep.maneuver?.instruction || 'Continue');
-        setCurrentStreet(nextStep.name || 'Road');
         
         // Calculate distance to next maneuver
         if (nextStep.distance) {
@@ -908,31 +899,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     } finally {
       setIsCreatingChat(false);
     }
-  };
-
-  const handleCallCustomer = () => {
-    // Get customer phone from request data
-    const customerPhone = requestData?.customerPhone || null;
-    
-    if (!customerPhone) {
-      Alert.alert('Error', 'Customer phone number not available');
-      return;
-    }
-    
-    // Make phone call
-    const url = `tel:${customerPhone}`;
-    Linking.canOpenURL(url)
-      .then(supported => {
-        if (supported) {
-          return Linking.openURL(url);
-        } else {
-          Alert.alert('Error', 'Phone calls are not supported on this device');
-        }
-      })
-      .catch(err => {
-        console.error('Error making phone call:', err);
-        Alert.alert('Error', 'Could not initiate phone call');
-      });
   };
 
   if (isLoading) {
