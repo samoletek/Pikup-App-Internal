@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   Alert,
   FlatList,
   ActivityIndicator,
@@ -33,6 +32,10 @@ import {
 } from '../../styles/theme';
 import ScreenHeader from '../../components/ScreenHeader';
 import ClaimFlowModal from '../../components/ClaimFlowModal';
+import ClaimCard from '../../components/claims/ClaimCard';
+import ClaimsTabs from '../../components/claims/ClaimsTabs';
+import ClaimsEmptyState from '../../components/claims/ClaimsEmptyState';
+import ClaimsInsuranceInfoModal from '../../components/claims/ClaimsInsuranceInfoModal';
 
 const MIN_REFRESH_SPINNER_MS = 700;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -291,44 +294,13 @@ export default function CustomerClaimsScreen({ navigation }) {
     const statusColor = getClaimStatusColor(item.workflowStatus);
 
     return (
-      <View style={styles.claimCard}>
-        <View style={styles.claimHeader}>
-          <View style={styles.claimInfo}>
-            <Text style={styles.claimDate}>{item.date}</Text>
-            <Text style={styles.claimItem}>{item.item}</Text>
-          </View>
-          <Text style={styles.claimAmount}>{item.amount}</Text>
-        </View>
-
-        <Text style={styles.claimDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
-
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { width: `${item.progress}%`, backgroundColor: statusColor },
-              ]}
-            />
-          </View>
-          <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
-        </View>
-
-        {item.workflowStatus === CLAIM_WORKFLOW_STATUS.COMPLETED && (
-          <View style={styles.resolutionContainer}>
-            <Text style={styles.resolutionLabel}>Resolution:</Text>
-            <Text style={styles.resolutionText}>{getClaimResolutionText(item)}</Text>
-            <Text style={styles.completedDate}>Completed on {item.completedDate}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity style={styles.viewDetailsButton}>
-          <Text style={styles.viewDetailsText}>View Details</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <ClaimCard
+        item={item}
+        statusColor={statusColor}
+        statusText={statusText}
+        resolutionText={getClaimResolutionText(item)}
+        showResolution={item.workflowStatus === CLAIM_WORKFLOW_STATUS.COMPLETED}
+      />
     );
   };
 
@@ -376,24 +348,12 @@ export default function CustomerClaimsScreen({ navigation }) {
       />
 
       <View style={[styles.topSection, { maxWidth: contentMaxWidth }]}>
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'ongoing' && styles.activeTab]}
-            onPress={() => setActiveTab('ongoing')}
-          >
-            <Text style={[styles.tabText, activeTab === 'ongoing' && styles.activeTabText]}>
-              Ongoing ({ongoingClaims.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
-            onPress={() => setActiveTab('completed')}
-          >
-            <Text style={[styles.tabText, activeTab === 'completed' && styles.activeTabText]}>
-              Completed ({completedClaims.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <ClaimsTabs
+          activeTab={activeTab}
+          ongoingCount={ongoingClaims.length}
+          completedCount={completedClaims.length}
+          onTabChange={setActiveTab}
+        />
       </View>
 
       <FlatList
@@ -414,17 +374,7 @@ export default function CustomerClaimsScreen({ navigation }) {
             onRefresh={handleRefreshClaims}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={48} color={colors.text.subtle} />
-            <Text style={styles.emptyStateText}>
-              {activeTab === 'ongoing' ? 'No ongoing claims' : 'No completed claims'}
-            </Text>
-            <Text style={styles.emptyStateSubtext}>
-              Claims can only be filed for deliveries with insurance coverage
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={<ClaimsEmptyState activeTab={activeTab} />}
       />
 
       <TouchableOpacity
@@ -438,47 +388,10 @@ export default function CustomerClaimsScreen({ navigation }) {
         <Text style={styles.startClaimText}>New Claim</Text>
       </TouchableOpacity>
 
-      <Modal
+      <ClaimsInsuranceInfoModal
         visible={showInsuranceInfo}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowInsuranceInfo(false)}
-      >
-        <View style={styles.infoModalOverlay}>
-          <View style={styles.infoModalCard}>
-            <View style={styles.infoModalHeader}>
-              <View style={styles.infoTitleRow}>
-                <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
-                <Text style={styles.infoModalTitle}>Redkik Insurance</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowInsuranceInfo(false)}
-                style={styles.infoModalCloseButton}
-                accessibilityRole="button"
-                accessibilityLabel="Close Redkik insurance info"
-              >
-                <Ionicons name="close" size={20} color={colors.text.subtle} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.infoModalText}>
-              Claims are available only for completed deliveries that were purchased with Redkik
-              insurance coverage.
-            </Text>
-            <Text style={styles.infoModalText}>
-              To avoid claim rejection, include a clear issue description and attach photos or
-              supporting documents when possible.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.infoModalOkButton}
-              onPress={() => setShowInsuranceInfo(false)}
-            >
-              <Text style={styles.infoModalOkButtonText}>Understood</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowInsuranceInfo(false)}
+      />
 
       <ClaimFlowModal
         visible={claimFlowVisible}
@@ -534,93 +447,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     marginTop: spacing.sm + spacing.xs,
   },
-  tabContainer: {
-    flexDirection: 'row',
-    marginHorizontal: spacing.base,
-    marginTop: spacing.base,
-    marginBottom: spacing.base,
-    backgroundColor: colors.background.input,
-    borderRadius: borderRadius.full,
-    padding: spacing.xs,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.xl,
-  },
-  activeTab: {
-    backgroundColor: colors.primary,
-  },
-  tabText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.muted,
-  },
-  activeTabText: {
-    color: colors.white,
-  },
-  infoModalOverlay: {
-    flex: 1,
-    backgroundColor: colors.overlayDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  infoModalCard: {
-    width: '100%',
-    maxWidth: layout.sheetMaxWidth,
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    padding: spacing.lg,
-  },
-  infoModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.base,
-  },
-  infoTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 1,
-  },
-  infoModalTitle: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  infoModalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.circle,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  infoModalText: {
-    fontSize: typography.fontSize.base,
-    lineHeight: 20,
-    color: colors.text.secondary,
-    marginBottom: spacing.md,
-  },
-  infoModalOkButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoModalOkButtonText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.white,
-  },
   claimsList: {
     paddingHorizontal: spacing.base,
     paddingBottom: 100,
@@ -628,114 +454,6 @@ const styles = StyleSheet.create({
   claimsListEmpty: {
     flexGrow: 1,
     justifyContent: 'center',
-  },
-  claimCard: {
-    backgroundColor: colors.background.panel,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  claimHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  claimInfo: {
-    flex: 1,
-  },
-  claimDate: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    marginBottom: 4,
-  },
-  claimItem: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.white,
-  },
-  claimAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.success,
-  },
-  claimDescription: {
-    fontSize: 14,
-    color: colors.text.secondary,
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  progressContainer: {
-    marginBottom: 16,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: colors.border.strong,
-    borderRadius: 2,
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  resolutionContainer: {
-    backgroundColor: colors.background.primary,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  resolutionLabel: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    marginBottom: 4,
-  },
-  resolutionText: {
-    fontSize: 14,
-    color: colors.white,
-    marginBottom: 4,
-  },
-  completedDate: {
-    fontSize: 12,
-    color: colors.success,
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-  },
-  viewDetailsText: {
-    fontSize: 14,
-    color: colors.primary,
-    fontWeight: '500',
-  },
-  emptyState: {
-    width: '100%',
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyStateText: {
-    fontSize: typography.fontSize.md,
-    color: colors.text.subtle,
-    marginTop: spacing.base,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  emptyStateSubtext: {
-    fontSize: typography.fontSize.base,
-    color: colors.text.subtle,
-    textAlign: 'center',
-    marginTop: spacing.xs + 1,
   },
   startClaimButton: {
     position: 'absolute',
