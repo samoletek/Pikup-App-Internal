@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -23,6 +23,16 @@ import {
   spacing,
   typography,
 } from "../../styles/theme";
+import {
+  filterDriverInboxConversations,
+  formatConversationTimestamp,
+  getAvatarInitial,
+  getAvatarUrlFromProfile,
+  getDisplayNameFromProfile,
+  isActiveConversation,
+  isArchivedConversation,
+  isSupportUserId,
+} from "../../services/MessagesInboxService";
 
 const FILTERS = ["all", "active", "archive"];
 const HEADER_ROW_HEIGHT = 56;
@@ -30,12 +40,6 @@ const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TOTAL_COLLAPSE_DISTANCE =
   SEARCH_COLLAPSE_DISTANCE + TITLE_COLLAPSE_DISTANCE;
-const ARCHIVE_STATUSES = new Set([
-  "completed",
-  "cancelled",
-  "delivered",
-  "archived",
-]);
 
 export default function DriverMessagesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -47,6 +51,7 @@ export default function DriverMessagesScreen({ navigation, route }) {
     subscribeToConversations,
     markMessageAsRead,
   } = useAuth();
+  const currentUserId = currentUser?.uid || currentUser?.id;
 
   const scrollRef = useRef(null);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -58,55 +63,7 @@ export default function DriverMessagesScreen({ navigation, route }) {
   const [peerProfiles, setPeerProfiles] = useState({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadConversations();
-  }, [currentUser]);
-
-  useEffect(() => {
-    const currentUserId = currentUser?.uid || currentUser?.id;
-    if (!currentUserId || !subscribeToConversations) {
-      return undefined;
-    }
-
-    const unsubscribe = subscribeToConversations(
-      currentUserId,
-      "driver",
-      (userConversations) => {
-        const validConversations = (Array.isArray(userConversations) ? userConversations : []).filter(
-          (conversation) =>
-            conversation.customerId &&
-            conversation.driverId &&
-            conversation.requestId &&
-            conversation.customerId !== "support" &&
-            conversation.driverId !== conversation.customerId
-        );
-        setConversations(validConversations);
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      unsubscribe?.();
-    };
-  }, [currentUser?.uid, currentUser?.id, subscribeToConversations]);
-
-  useEffect(() => {
-    loadPeerProfiles();
-  }, [conversations]);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      scrollRef.current?.scrollTo({
-        y: SEARCH_COLLAPSE_DISTANCE,
-        animated: false,
-      });
-    }, 0);
-
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  const loadConversations = async () => {
-    const currentUserId = currentUser?.uid || currentUser?.id;
+  const loadConversations = useCallback(async () => {
     if (!currentUserId) {
       setConversations([]);
       setLoading(false);
@@ -116,29 +73,21 @@ export default function DriverMessagesScreen({ navigation, route }) {
     try {
       setLoading(true);
       const userConversations = await getConversations(currentUserId, "driver");
-      const validConversations = userConversations.filter(
-        (conversation) =>
-          conversation.customerId &&
-          conversation.driverId &&
-          conversation.requestId &&
-          conversation.customerId !== "support" &&
-          conversation.driverId !== conversation.customerId
-      );
-      setConversations(validConversations);
+      setConversations(filterDriverInboxConversations(userConversations));
     } catch (error) {
       console.error("Error loading conversations:", error);
       Alert.alert("Unable to Load Messages", "Please try again later.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUserId, getConversations]);
 
-  const loadPeerProfiles = async () => {
+  const loadPeerProfiles = useCallback(async () => {
     const peerIds = Array.from(
       new Set(
         conversations
           .map((conversation) => conversation.customerId)
-          .filter((customerId) => Boolean(customerId) && customerId !== "support")
+          .filter((customerId) => Boolean(customerId) && !isSupportUserId(customerId))
       )
     );
     const missingIds = peerIds.filter((id) => !peerProfiles[id]);
@@ -165,74 +114,45 @@ export default function DriverMessagesScreen({ navigation, route }) {
       });
       return next;
     });
-  };
+  }, [conversations, getUserProfile, peerProfiles]);
 
-  const formatTimestamp = (timestamp) => {
-    if (!timestamp) {
-      return "";
-    }
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
 
-    if (diffInMinutes < 1) {
-      return "Just now";
+  useEffect(() => {
+    if (!currentUserId || !subscribeToConversations) {
+      return undefined;
     }
-    if (diffInMinutes < 60) {
-      return `${diffInMinutes} min ago`;
-    }
-    if (diffInMinutes < 1440) {
-      return `${Math.floor(diffInMinutes / 60)} hr ago`;
-    }
-    if (diffInMinutes < 10080) {
-      const days = Math.floor(diffInMinutes / 1440);
-      return `${days} day${days > 1 ? "s" : ""} ago`;
-    }
-    const weeks = Math.floor(diffInMinutes / 10080);
-    return `${weeks} week${weeks > 1 ? "s" : ""} ago`;
-  };
 
-  const getDisplayNameFromProfile = (profile, fallbackName) => {
-    const firstName = profile?.first_name || profile?.firstName || "";
-    const lastName = profile?.last_name || profile?.lastName || "";
-    const fullName = `${firstName} ${lastName}`.trim();
-
-    return (
-      fullName ||
-      profile?.name ||
-      profile?.email?.split("@")?.[0] ||
-      fallbackName
+    const unsubscribe = subscribeToConversations(
+      currentUserId,
+      "driver",
+      (userConversations) => {
+        setConversations(filterDriverInboxConversations(userConversations));
+        setLoading(false);
+      }
     );
-  };
 
-  const getAvatarUrlFromProfile = (profile) =>
-    profile?.profileImageUrl ||
-    profile?.profile_image_url ||
-    profile?.avatar_url ||
-    null;
+    return () => {
+      unsubscribe?.();
+    };
+  }, [currentUserId, subscribeToConversations]);
 
-  const getAvatarInitial = (displayName) =>
-    String(displayName || "?").trim().charAt(0).toUpperCase() || "?";
+  useEffect(() => {
+    loadPeerProfiles();
+  }, [loadPeerProfiles]);
 
-  const getConversationStatus = (conversation) =>
-    String(
-      conversation.requestStatus ||
-      conversation.tripStatus ||
-      conversation.status ||
-      ""
-    ).toLowerCase();
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: SEARCH_COLLAPSE_DISTANCE,
+        animated: false,
+      });
+    }, 0);
 
-  const isArchivedConversation = (conversation) => {
-    const status = getConversationStatus(conversation);
-    return (
-      ARCHIVE_STATUSES.has(status) ||
-      Boolean(conversation.archivedAt) ||
-      Boolean(conversation.completedAt)
-    );
-  };
-
-  const isActiveConversation = (conversation) =>
-    Boolean(conversation.requestId) && !isArchivedConversation(conversation);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   const filteredConversations = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -302,7 +222,7 @@ export default function DriverMessagesScreen({ navigation, route }) {
   };
 
   const renderConversationItem = (conversation) => {
-    const isSupport = conversation.driverId === "ffffffff-ffff-ffff-ffff-ffffffffffff" || conversation.driverId === "support";
+    const isSupport = isSupportUserId(conversation.driverId);
 
     let customerName, avatarUrl, avatarInitial;
 
@@ -361,7 +281,9 @@ export default function DriverMessagesScreen({ navigation, route }) {
             <Text style={[styles.peerName, isUnread && styles.peerNameUnread]} numberOfLines={1}>
               {customerName}
             </Text>
-            <Text style={styles.timestamp}>{formatTimestamp(conversation.lastMessageAt)}</Text>
+            <Text style={styles.timestamp}>
+              {formatConversationTimestamp(conversation.lastMessageAt)}
+            </Text>
           </View>
 
           <View style={styles.metaRow}>
