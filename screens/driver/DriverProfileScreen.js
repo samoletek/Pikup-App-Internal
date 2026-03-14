@@ -10,10 +10,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../contexts/AuthContext";
 import { supabase } from "../../config/supabase";
+import useProfilePhotoActions from "../../hooks/useProfilePhotoActions";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
@@ -59,6 +59,11 @@ export default function DriverProfileScreen({ navigation }) {
   const [driverStats, setDriverStats] = useState({
     totalTrips: 0,
     acceptanceRate: 0,
+  });
+  const { handleProfilePhotoPress } = useProfilePhotoActions({
+    uploadProfileImage,
+    deleteProfileImage,
+    refreshProfileImage: getProfileImage,
   });
 
   useEffect(() => {
@@ -211,91 +216,6 @@ export default function DriverProfileScreen({ navigation }) {
           });
         },
       },
-    ]);
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Camera permission is required to take photos.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    try {
-      await uploadProfileImage?.(result.assets[0].uri);
-      Alert.alert("Success", "Profile picture updated successfully.");
-      await getProfileImage?.();
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload profile picture.");
-    }
-  };
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Photo library permission is required to choose photos.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    try {
-      await uploadProfileImage?.(result.assets[0].uri);
-      Alert.alert("Success", "Profile picture updated successfully.");
-      await getProfileImage?.();
-    } catch (error) {
-      Alert.alert("Error", "Failed to upload profile picture.");
-    }
-  };
-
-  const removePhoto = () => {
-    Alert.alert(
-      "Remove Photo",
-      "Are you sure you want to remove your profile photo?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteProfileImage?.();
-              Alert.alert("Success", "Profile picture removed.");
-            } catch (error) {
-              Alert.alert("Error", "Failed to remove profile picture.");
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleProfilePhotoPress = () => {
-    Alert.alert("Update Profile Picture", "Choose an option", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Take Photo", onPress: takePhoto },
-      { text: "Choose from Library", onPress: pickImage },
-      { text: "Remove Photo", style: "destructive", onPress: removePhoto },
     ]);
   };
 
