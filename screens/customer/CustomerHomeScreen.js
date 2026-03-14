@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -26,9 +25,9 @@ import {
 } from "../../constants/tripStatus";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
+import PendingBookingSearchSheet from "../../components/customer/PendingBookingSearchSheet";
 import MapboxLocationService from "../../services/MapboxLocationService";
-import RedkikService from "../../services/RedkikService";
-import { uploadOrderItemsMedia } from "../../services/OrderItemMediaService";
+import { submitCustomerOrder } from "../../services/CustomerOrderSubmissionService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import {
   borderRadius,
@@ -146,7 +145,7 @@ const getTripId = (trip) => {
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
   const {
     currentUser,
@@ -154,10 +153,6 @@ export default function CustomerHomeScreen({ navigation }) {
     getUserPickupRequests,
     createPickupRequest,
     cancelOrder,
-    createConversation,
-    getRequestById,
-    getConversations,
-    subscribeToConversations,
   } = useAuth();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const { createPaymentIntent, confirmPayment } = usePayment();
@@ -169,11 +164,9 @@ export default function CustomerHomeScreen({ navigation }) {
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [isSearchSheetExpanded, setIsSearchSheetExpanded] = useState(false);
-  const [isActiveDeliverySheetExpanded, setIsActiveDeliverySheetExpanded] = useState(false);
   const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
-  const [hasUnreadDeliveryChat, setHasUnreadDeliveryChat] = useState(false);
   const searchingPinPulse = useRef(new Animated.Value(0)).current;
   const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
 
@@ -190,11 +183,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const floatingBottomOffset = useMemo(
     () => insets.bottom + spacing.lg,
     [insets.bottom]
-  );
-
-  const trackerMaxExpandedHeight = useMemo(
-    () => Math.max(320, height - insets.top - tabBarHeight - spacing.xxl),
-    [height, insets.top, tabBarHeight]
   );
 
   const canCreateOrder = !activeDelivery && !pendingBooking;
@@ -240,7 +228,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
     const parsed = new Date(rawDate).getTime();
     return Number.isFinite(parsed) ? parsed : Date.now();
-  }, [pendingBooking?.id, pendingBooking?.createdAt, pendingBooking?.created_at]);
+  }, [pendingBooking?.createdAt, pendingBooking?.created_at]);
 
   const searchTimerLabel = useMemo(
     () => formatSearchDuration(searchElapsedSeconds),
@@ -381,80 +369,6 @@ export default function CustomerHomeScreen({ navigation }) {
   }, [activeDelivery, pendingBooking, searchModalVisible]);
 
   useEffect(() => {
-    if (!activeDelivery?.id) {
-      setIsActiveDeliverySheetExpanded(false);
-      setHasUnreadDeliveryChat(false);
-    }
-  }, [activeDelivery?.id]);
-
-  useEffect(() => {
-    const activeRequestId =
-      activeDelivery?.id || activeDelivery?.requestId || activeDelivery?.request_id || null;
-    if (!activeDelivery || !currentUserId || typeof subscribeToConversations !== "function") {
-      setHasUnreadDeliveryChat(false);
-      return undefined;
-    }
-
-    const requestIdString = activeRequestId ? String(activeRequestId) : "";
-    const activeDriverId = String(
-      activeDelivery?.assignedDriverId ||
-      activeDelivery?.driverId ||
-      activeDelivery?.driver_id ||
-      ""
-    );
-    let isDisposed = false;
-
-    const updateUnreadState = (userConversations = []) => {
-      if (isDisposed) return;
-      const unreadConversations = userConversations.filter(
-        (conversation) =>
-          Number(conversation?.unreadByCustomer || 0) > 0 &&
-          Boolean(conversation?.lastMessageAt || conversation?.lastMessage)
-      );
-
-      const hasTripMatchUnread = unreadConversations.some(
-        (conversation) =>
-        (
-          (requestIdString && String(conversation?.requestId || "") === requestIdString) ||
-          (activeDriverId && String(conversation?.driverId || "") === activeDriverId)
-        )
-      );
-
-      // Delivery tracker badge should reflect only active-delivery chat unread state.
-      setHasUnreadDeliveryChat(hasTripMatchUnread);
-    };
-
-    const refreshUnread = async () => {
-      if (typeof getConversations !== "function" || isDisposed) return;
-      const conversations = await getConversations(currentUserId, "customer");
-      updateUnreadState(Array.isArray(conversations) ? conversations : []);
-    };
-
-    refreshUnread();
-    const pollInterval = setInterval(refreshUnread, 2500);
-
-    const unsubscribe = subscribeToConversations(
-      currentUserId,
-      "customer",
-      updateUnreadState
-    );
-
-    return () => {
-      isDisposed = true;
-      clearInterval(pollInterval);
-      unsubscribe?.();
-    };
-  }, [
-    activeDelivery?.id,
-    activeDelivery?.assignedDriverId,
-    activeDelivery?.driverId,
-    activeDelivery?.driver_id,
-    currentUserId,
-    getConversations,
-    subscribeToConversations,
-  ]);
-
-  useEffect(() => {
     if (!pendingBooking) {
       setIsSearchSheetExpanded(false);
     }
@@ -517,75 +431,6 @@ export default function CustomerHomeScreen({ navigation }) {
     return () => clearInterval(timerId);
   }, [pendingBooking, searchingStartedAtMs]);
 
-  const handleOpenDeliveryChat = useCallback(
-    async (deliveryData) => {
-      const requestId = deliveryData?.id || activeDelivery?.id;
-      if (!requestId || !currentUserId) {
-        return;
-      }
-
-      setHasUnreadDeliveryChat(false);
-
-      try {
-        let driverId =
-          deliveryData?.assignedDriverId ||
-          deliveryData?.driverId ||
-          deliveryData?.driver_id ||
-          activeDelivery?.assignedDriverId ||
-          activeDelivery?.driverId ||
-          activeDelivery?.driver_id ||
-          null;
-
-        let driverName =
-          deliveryData?.assignedDriverEmail ||
-          deliveryData?.driverEmail ||
-          activeDelivery?.assignedDriverEmail ||
-          activeDelivery?.driverEmail ||
-          "Driver";
-
-        if (!driverId && typeof getRequestById === "function") {
-          const latestRequest = await getRequestById(requestId);
-          driverId =
-            latestRequest?.assignedDriverId ||
-            latestRequest?.driverId ||
-            latestRequest?.driver_id ||
-            null;
-
-          if (!driverName || driverName === "Driver") {
-            driverName =
-              latestRequest?.assignedDriverEmail ||
-              latestRequest?.driverEmail ||
-              driverName;
-          }
-        }
-
-        if (!driverId) {
-          Alert.alert("Chat unavailable", "Driver details are not available yet.");
-          return;
-        }
-
-        const conversationId = await createConversation(requestId, currentUserId, driverId);
-
-        navigation.navigate("MessageScreen", {
-          conversationId,
-          requestId,
-          driverName: driverName || "Driver",
-        });
-      } catch (chatError) {
-        console.error("Error opening delivery chat:", chatError);
-        Alert.alert("Error", "Could not open chat right now. Please try again.");
-      }
-    },
-    [
-      activeDelivery,
-      createConversation,
-      currentUserId,
-      getRequestById,
-      navigation,
-      setHasUnreadDeliveryChat,
-    ]
-  );
-
   const handleOpenActiveTripDetails = useCallback(() => {
     if (!activeDelivery) {
       return;
@@ -617,185 +462,35 @@ export default function CustomerHomeScreen({ navigation }) {
         };
       }
 
-      const selectedPaymentMethod = orderData?.selectedPaymentMethod;
-      const totalAmount = Number(orderData?.pricing?.total || 0);
+      const orderSubmission = await submitCustomerOrder({
+        orderData,
+        currentUserId,
+        uploadToSupabase,
+        createPaymentIntent,
+        confirmPayment,
+        createPickupRequest,
+      });
 
-      if (!selectedPaymentMethod?.stripePaymentMethodId) {
+      if (!orderSubmission.success) {
         return {
           success: false,
-          error: "Please select a saved payment method.",
-        };
-      }
-      if (totalAmount <= 0) {
-        return {
-          success: false,
-          error: "Invalid order total. Please review your order and try again.",
+          error: orderSubmission.error || "Payment failed. Please try again.",
         };
       }
 
-      try {
-        // Step 1: Purchase insurance BEFORE payment (so we know the final charge amount)
-        let insuranceData = null;
-        let finalAmount = totalAmount;
-
-        if (orderData?.insuranceQuote?.offerId) {
-          // Block purchase if quote has amendment errors
-          if (orderData.insuranceQuote.canPurchase === false) {
-            console.warn('Insurance quote has blocking amendments:', orderData.insuranceQuote.amendments);
-            insuranceData = {
-              quoteId: orderData.insuranceQuote.offerId,
-              bookingId: null,
-              premium: orderData.insuranceQuote.premium,
-              status: 'amendments_blocked',
-            };
-            const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
-            finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
-
-            Alert.alert(
-              'Insurance Unavailable',
-              'Insurance could not be applied due to validation issues. You will only be charged for the delivery.',
-              [{ text: 'OK' }]
-            );
-          }
-
-          if (!insuranceData) {
-            const attemptPurchase = async () => {
-              const purchaseResult = await RedkikService.purchaseInsurance(
-                orderData.insuranceQuote.offerId
-              );
-              if (purchaseResult?.bookingId) {
-                return {
-                  bookingId: purchaseResult.bookingId,
-                  quoteId: orderData.insuranceQuote.offerId,
-                  premium: orderData.insuranceQuote.premium,
-                  status: 'purchased',
-                };
-              }
-              return null;
-            };
-
-            try {
-              insuranceData = await attemptPurchase();
-              if (!insuranceData) {
-                await new Promise(r => setTimeout(r, 1500));
-                insuranceData = await attemptPurchase();
-              }
-            } catch (insuranceErr) {
-              console.warn('Insurance purchase failed:', insuranceErr);
-            }
-
-            if (!insuranceData) {
-              // Insurance failed — remove premium from charge amount
-              const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
-              finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
-
-              insuranceData = {
-                quoteId: orderData.insuranceQuote.offerId,
-                bookingId: null,
-                premium: orderData.insuranceQuote.premium,
-                status: 'purchase_failed',
-              };
-
-              Alert.alert(
-                'Insurance Notice',
-                'We could not activate your insurance coverage. You will only be charged for the delivery itself. Our support team will follow up.',
-                [{ text: 'OK' }]
-              );
-            }
-          }
-        }
-
-        // Step 2: Validate the final charge amount.
-        const finalAmountInCents = Math.round(finalAmount * 100);
-        if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
-          return {
-            success: false,
-            error: "Invalid order total. Please review your order and try again.",
-          };
-        }
-
-        // Step 3: Upload item photos/invoices first, so we never persist local `file://` URIs.
-        const uploadItemsResult = await uploadOrderItemsMedia({
-          items: orderData?.items || [],
-          userId: currentUserId,
-          uploadToSupabase,
+      if (Array.isArray(orderSubmission.notices) && orderSubmission.notices.length > 0) {
+        orderSubmission.notices.forEach((notice) => {
+          Alert.alert(notice.title, notice.message, [{ text: "OK" }]);
         });
-        if (!uploadItemsResult.success) {
-          return {
-            success: false,
-            error: uploadItemsResult.error || "Could not upload item photos. Please try again.",
-          };
-        }
-        const uploadedItems = uploadItemsResult.items;
-
-        // Step 4: Charge the correct amount (with or without insurance).
-        const rideDetails = {
-          scheduleType: orderData?.scheduleType,
-          scheduledDateTime: orderData?.scheduledDateTime,
-          pickup: orderData?.pickup,
-          dropoff: orderData?.dropoff,
-          distance: orderData?.distance,
-          duration: orderData?.duration,
-          vehicleType: orderData?.selectedVehicle?.type,
-          itemsCount: orderData?.items?.length || 0,
-          timestamp: new Date().toISOString(),
-        };
-        const paymentIntentResult = await createPaymentIntent(
-          finalAmountInCents,
-          "usd",
-          rideDetails,
-          selectedPaymentMethod.stripePaymentMethodId
-        );
-        if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
-          return {
-            success: false,
-            error: paymentIntentResult.error || "Failed to start payment.",
-          };
-        }
-        const paymentResult = await confirmPayment(
-          paymentIntentResult.paymentIntent.client_secret,
-          selectedPaymentMethod.stripePaymentMethodId
-        );
-        if (!paymentResult.success) {
-          return {
-            success: false,
-            error: paymentResult.error || "Unable to confirm payment.",
-          };
-        }
-
-        const createdRequest = await createPickupRequest({
-          pickup: orderData?.pickup,
-          dropoff: orderData?.dropoff,
-          pickupDetails: orderData?.pickupDetails || {},
-          dropoffDetails: orderData?.dropoffDetails || {},
-          vehicle: orderData?.selectedVehicle,
-          pricing: {
-            ...(orderData?.pricing || {}),
-            total: finalAmount,
-            distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
-          },
-          items: uploadedItems,
-          scheduledTime:
-            orderData?.scheduleType === "scheduled"
-              ? orderData?.scheduledDateTime
-              : null,
-          insurance: insuranceData,
-        });
-
-        setSearchModalVisible(false);
-        setOrderModalKey((prev) => prev + 1);
-        setPendingBooking(createdRequest || null);
-        setIsSearchSheetExpanded(false);
-        checkActiveDeliveries();
-
-        return { success: true };
-      } catch (error) {
-        console.error("Error confirming customer order:", error);
-        return {
-          success: false,
-          error: error?.message || "Payment failed. Please try again.",
-        };
       }
+
+      setSearchModalVisible(false);
+      setOrderModalKey((prev) => prev + 1);
+      setPendingBooking(orderSubmission.createdRequest || null);
+      setIsSearchSheetExpanded(false);
+      checkActiveDeliveries();
+
+      return { success: true };
     },
     [
       currentUser?.phone_verified,
@@ -968,112 +663,16 @@ export default function CustomerHomeScreen({ navigation }) {
       )}
 
       {Boolean(pendingBooking) && !activeDelivery && (
-        <View
-          style={[
-            styles.searchSheetContainer,
-            {
-              bottom: 0,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.searchStatusCard}
-            activeOpacity={0.9}
-            onPress={() => setIsSearchSheetExpanded((prev) => !prev)}
-          >
-            <View style={styles.searchStatusHeader}>
-              <View style={styles.searchStatusMainTextWrap}>
-                <View style={styles.searchSheetTitleRow}>
-                  <Text style={styles.searchSheetTitle}>Looking for your driver</Text>
-                  <Text style={styles.searchSheetSubtitle}>
-                    We are matching your trip now. Please wait.
-                  </Text>
-                </View>
-                <View style={styles.searchingTimerRow}>
-                  <Ionicons name="time-outline" size={14} color={colors.text.tertiary} />
-                  <Text style={styles.searchingTimerText}>Search time: {searchTimerLabel}</Text>
-                </View>
-              </View>
-
-              <Ionicons
-                name={isSearchSheetExpanded ? "chevron-down" : "chevron-up"}
-                size={20}
-                color={colors.text.tertiary}
-              />
-            </View>
-
-            <Animated.View
-              style={[
-                styles.searchSheetDetailsAnimated,
-                {
-                  height: searchSheetDetailsHeight,
-                  opacity: searchSheetDetailsOpacity,
-                },
-              ]}
-            >
-              <View style={styles.searchSheetDetails}>
-                {pendingBookingSummary && (
-                  <>
-                    <View style={styles.searchDetailRow}>
-                      <Ionicons name="arrow-up-circle-outline" size={14} color={colors.primary} />
-                      <Text style={styles.searchDetailText} numberOfLines={1}>
-                        {pendingBookingSummary.pickupAddress}
-                      </Text>
-                    </View>
-
-                    <View style={styles.searchDetailRow}>
-                      <Ionicons name="arrow-down-circle-outline" size={14} color={colors.success} />
-                      <Text style={styles.searchDetailText} numberOfLines={1}>
-                        {pendingBookingSummary.dropoffAddress}
-                      </Text>
-                    </View>
-
-                    <View style={styles.searchDetailMetaRow}>
-                      <View style={styles.searchMetaPill}>
-                        <Ionicons name="car-outline" size={13} color={colors.text.secondary} />
-                        <Text style={styles.searchMetaPillText}>{pendingBookingSummary.vehicleType}</Text>
-                      </View>
-                      <View style={styles.searchMetaPill}>
-                        <Ionicons name="cube-outline" size={13} color={colors.text.secondary} />
-                        <Text style={styles.searchMetaPillText}>
-                          {pendingBookingSummary.itemsCount} item{pendingBookingSummary.itemsCount === 1 ? "" : "s"}
-                        </Text>
-                      </View>
-                      <View style={styles.searchMetaPill}>
-                        <Ionicons name="cash-outline" size={13} color={colors.text.secondary} />
-                        <Text style={styles.searchMetaPillText}>{pendingBookingSummary.totalAmountLabel}</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.searchScheduleRow}>
-                      <Ionicons name="calendar-outline" size={14} color={colors.text.tertiary} />
-                      <Text style={styles.searchScheduleText}>
-                        {pendingBookingSummary.scheduleLabel}
-                      </Text>
-                    </View>
-                  </>
-                )}
-              </View>
-            </Animated.View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.searchingCancelButton,
-              styles.searchingCancelButtonStandalone,
-              isCancellingPending && styles.searchingCancelButtonDisabled,
-            ]}
-            onPress={handleCancelPendingBooking}
-            activeOpacity={0.85}
-            disabled={isCancellingPending}
-          >
-            {isCancellingPending ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Text style={styles.searchingCancelButtonText}>Cancel Search</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <PendingBookingSearchSheet
+          isExpanded={isSearchSheetExpanded}
+          onToggleExpand={() => setIsSearchSheetExpanded((prev) => !prev)}
+          searchTimerLabel={searchTimerLabel}
+          pendingBookingSummary={pendingBookingSummary}
+          searchSheetDetailsHeight={searchSheetDetailsHeight}
+          searchSheetDetailsOpacity={searchSheetDetailsOpacity}
+          isCancellingPending={isCancellingPending}
+          onCancelPendingBooking={handleCancelPendingBooking}
+        />
       )}
 
       <CustomerOrderModal
@@ -1125,17 +724,6 @@ const styles = StyleSheet.create({
     height: 20,
     resizeMode: "contain",
     ...shadows.lg,
-  },
-  activeDeliverySheetContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    width: "100%",
-    bottom: 0,
-    zIndex: 24,
-    overflow: "hidden",
-    marginHorizontal: 0,
-    paddingHorizontal: 0,
   },
   floatingTriggerContainer: {
     position: "absolute",
@@ -1277,143 +865,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 6,
     elevation: 8,
-  },
-  searchSheetContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.background.secondary,
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    paddingBottom: spacing.md,
-    zIndex: 22,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  searchStatusCard: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.base,
-  },
-  searchStatusHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  searchStatusMainTextWrap: {
-    flex: 1,
-    marginRight: spacing.base,
-  },
-  searchSheetTitleRow: {
-    flexDirection: "column",
-  },
-  searchSheetTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-  },
-  searchSheetSubtitle: {
-    marginTop: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-  },
-  searchSheetDetailsAnimated: {
-    overflow: "hidden",
-  },
-  searchSheetDetails: {
-    marginTop: spacing.base,
-    paddingTop: spacing.base,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-  },
-  searchDetailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.base,
-  },
-  searchDetailText: {
-    flex: 1,
-    marginLeft: spacing.sm,
-    color: colors.text.primary,
-    fontSize: typography.fontSize.base,
-  },
-  searchDetailMetaRow: {
-    marginTop: spacing.xs,
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  searchMetaPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.elevated,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  searchMetaPillText: {
-    marginLeft: 6,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-  searchScheduleRow: {
-    marginTop: spacing.xs,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  searchScheduleText: {
-    marginLeft: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-  },
-  searchingTimerRow: {
-    marginTop: spacing.base,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  searchingTimerText: {
-    marginLeft: spacing.xs,
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
-  },
-  searchingCancelButton: {
-    width: "100%",
-    height: 48,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.error,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: spacing.base,
-    shadowColor: colors.error,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  searchingCancelButtonStandalone: {
-    marginTop: spacing.md,
-  },
-  searchingCancelButtonDisabled: {
-    opacity: 0.7,
-  },
-  searchingCancelButtonText: {
-    color: colors.white,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
   },
 });
