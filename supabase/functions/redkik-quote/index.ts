@@ -6,6 +6,8 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
 const REDKIK_BASE_URL = Deno.env.get("REDKIK_BASE_URL") ?? ""
 const REDKIK_CLIENT_ID = Deno.env.get("REDKIK_CLIENT_ID") ?? ""
 const REDKIK_CLIENT_SECRET = Deno.env.get("REDKIK_CLIENT_SECRET") ?? ""
+// TODO: Replace with real Org UUID once registered in Redkik
+const REDKIK_ORG_ID = Deno.env.get("REDKIK_ORG_ID") ?? ""
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,9 +20,10 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   })
 
-// ----- Redkik API helpers -----
+// ----- Auth: OAuth 2.0 with refresh token support -----
 
 let cachedToken: string | null = null
+let cachedRefreshToken: string | null = null
 let tokenExpiresAt = 0
 
 async function getRedkikToken(): Promise<string> {
@@ -28,6 +31,17 @@ async function getRedkikToken(): Promise<string> {
     return cachedToken
   }
 
+  // Try refresh token first (avoids re-auth with client credentials)
+  if (cachedRefreshToken && cachedToken) {
+    try {
+      const refreshed = await refreshAccessToken(cachedRefreshToken)
+      if (refreshed) return refreshed
+    } catch (e) {
+      console.warn("[Redkik] Refresh token failed, falling back to client credentials:", e)
+    }
+  }
+
+  // Full auth with client credentials
   const tokenUrl = `${REDKIK_BASE_URL}/api/v2/user/oauth/token`
 
   const res = await fetch(tokenUrl, {
@@ -46,25 +60,146 @@ async function getRedkikToken(): Promise<string> {
   }
 
   const data = await res.json()
-  const token = data.access_token || data.accessToken || data.token
+  return storeTokens(data)
+}
+
+async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+  const tokenUrl = `${REDKIK_BASE_URL}/api/v2/user/oauth/token`
+
+  const res = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  })
+
+  if (!res.ok) {
+    console.warn("[Redkik] Refresh failed:", res.status)
+    return null
+  }
+
+  const data = await res.json()
+  return storeTokens(data)
+}
+
+function storeTokens(data: Record<string, unknown>): string {
+  const token = (data.access_token || data.accessToken || data.token) as string
   if (!token) {
     console.error("[Redkik] Auth response (no token found):", JSON.stringify(data))
     throw new Error("Redkik auth response missing token")
   }
 
   cachedToken = token
+  cachedRefreshToken = (data.refresh_token || data.refreshToken || null) as string | null
+
   // Redkik returns expires_in in milliseconds (86400000 = 24h).
   // If value > 10000 treat as ms, otherwise treat as seconds.
-  const expiresInMs = (data.expires_in || 3600000) > 10000
-    ? (data.expires_in || 3600000)
-    : (data.expires_in || 3600) * 1000
-  tokenExpiresAt = Date.now() + expiresInMs - 60_000
+  const rawExpires = (data.expires_in as number) || 3600000
+  const expiresInMs = rawExpires > 10000 ? rawExpires : rawExpires * 1000
+  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 1 min safety margin
 
   return token
 }
 
-// Default commodity ID for "General Goods &/or Merchandise" from Redkik setup
-const DEFAULT_COMMODITY_ID = "ebe38cf9-df60-4f69-9210-a439981e6989"
+// ----- Setup cache -----
+
+interface SetupData {
+  commodities: Array<{ id: string; name: string }>
+  currencies: Array<{ id: string; symbol: string; divisionModifier: number }>
+  policies: Array<{ id: string; alias: string }>
+  customers: Array<{ id: string; name: string; email: string }>
+  defaultCurrencyId: string
+  raw: Record<string, unknown>
+}
+
+let cachedSetup: SetupData | null = null
+let setupExpiresAt = 0
+const SETUP_TTL_MS = 30 * 60 * 1000 // 30 minutes
+
+async function getSetupData(token: string): Promise<SetupData> {
+  if (cachedSetup && Date.now() < setupExpiresAt) {
+    return cachedSetup
+  }
+
+  const setupUrl = `${REDKIK_BASE_URL}/api/v2/quote/quotes/setup`
+  console.log("[Redkik] Fetching setup from:", setupUrl)
+
+  const res = await fetch(setupUrl, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Redkik setup failed (${res.status}): ${text}`)
+  }
+
+  const raw = await res.json()
+  console.log("[Redkik] Setup response keys:", Object.keys(raw))
+
+  const commodities = Array.isArray(raw.commodities)
+    ? raw.commodities.map((c: any) => ({ id: c.id, name: c.name || "Unknown" }))
+    : []
+
+  // Redkik currencies use id as the currency code (e.g. "USD", "EUR")
+  const currencies = Array.isArray(raw.currencies)
+    ? raw.currencies.map((c: any) => ({
+        id: c.id,
+        symbol: c.symbol || "$",
+        divisionModifier: c.divisionModifier || 100,
+      }))
+    : []
+
+  const policies = Array.isArray(raw.policies)
+    ? raw.policies.map((p: any) => ({ id: p.id, alias: p.alias || p.name || "" }))
+    : []
+
+  // Pre-registered customers in Redkik
+  const customers = Array.isArray(raw.customers)
+    ? raw.customers.map((c: any) => ({
+        id: c.id,
+        name: c.name || "",
+        email: c.email || "",
+      }))
+    : []
+
+  const defaultCurrencyId = raw.currencyId || "USD"
+
+  cachedSetup = { commodities, currencies, policies, customers, defaultCurrencyId, raw }
+  setupExpiresAt = Date.now() + SETUP_TTL_MS
+
+  return cachedSetup
+}
+
+// Get the divisionModifier for a currency (for converting cents to dollars)
+function getCurrencyDivider(setup: SetupData, currencyId: string): number {
+  const c = setup.currencies.find((cur) => cur.id === currencyId)
+  return c?.divisionModifier || 100
+}
+
+// Resolve first commodity ID (or find General Goods)
+function findDefaultCommodity(setup: SetupData): string {
+  const general = setup.commodities.find(
+    (c) => c.name.toLowerCase().includes("general")
+  )
+  if (general) return general.id
+  if (setup.commodities.length > 0) return setup.commodities[0].id
+  return "ebe38cf9-df60-4f69-9210-a439981e6989"
+}
+
+// Find a pre-registered customer or return the first available
+function findCustomerId(setup: SetupData): string | null {
+  if (setup.customers.length > 0) return setup.customers[0].id
+  return null
+}
+
+// ----- Quote helpers -----
 
 interface QuoteItem {
   name?: string
@@ -84,7 +219,7 @@ interface QuoteParams {
   customerName?: string
 }
 
-function buildQuotePayload(params: QuoteParams) {
+function buildQuotePayload(params: QuoteParams, setup: SetupData) {
   const totalValue = (params.items || []).reduce(
     (sum, item) => sum + (Number(item.value) || 0),
     0
@@ -106,38 +241,45 @@ function buildQuotePayload(params: QuoteParams) {
     .map((i) => i.name || "Item")
     .join(", ")
 
-  const fullName = (params.customerName || "").trim()
-  const nameParts = fullName.split(/\s+/).filter(Boolean)
-  const firstName = nameParts[0] || "Pikup"
-  const lastName = nameParts.slice(1).join(" ") || "Customer"
+  const commodityId = findDefaultCommodity(setup)
+  const currencyId = setup.defaultCurrencyId || "USD"
+  const insuredValue = Math.max(Math.round(totalValue * 100), 100)
 
-  return {
+  const payload: Record<string, unknown> = {
+    isPublic: false,
     commodities: [{
-      commodityId: DEFAULT_COMMODITY_ID,
-      // Redkik expects insuredValue in smallest currency unit (cents for USD)
-      insuredValue: Math.max(Math.round(totalValue * 100), 100),
-      currencyId: "USD",
+      commodityId,
+      insuredValue,
+      currencyId,
     }],
     commodityDescription,
-    origin: { formatted: params.pickup?.address || "" },
-    destination: { formatted: params.dropoff?.address || "" },
+    insuredValue,
+    originFormatted: params.pickup?.address || "",
+    destinationFormatted: params.dropoff?.address || "",
     startDate,
     endDate,
-    conveyanceType: "ROAD",
-    customer: {
-      type: "INDIVIDUAL",
-      email: params.customerEmail || "insurance@pikup-app.com",
-      individualFirstName: firstName,
-      individualLastName: lastName,
-      address: { formatted: params.pickup?.address || "" },
-    },
+    transportType: 1, // ROAD per Redkik docs
   }
+
+  // Use pre-registered customer from setup, or org UUID as fallback
+  const customerId = findCustomerId(setup)
+  if (customerId) {
+    payload.customerId = customerId
+  } else if (REDKIK_ORG_ID) {
+    payload.customerId = REDKIK_ORG_ID
+  }
+
+  // Attach policy if available from setup
+  if (setup.policies.length > 0) {
+    payload.policyId = setup.policies[0].id
+  }
+
+  return payload
 }
 
-async function requestQuote(token: string, params: QuoteParams) {
-  // Correct endpoint: /api/v2/quote/quotes/quote (NOT /bookings/quote)
+async function requestQuote(token: string, params: QuoteParams, setup: SetupData) {
   const quoteUrl = `${REDKIK_BASE_URL}/api/v2/quote/quotes/quote`
-  const payload = buildQuotePayload(params)
+  const payload = buildQuotePayload(params, setup)
 
   console.log("[Redkik] Quote request URL:", quoteUrl)
   console.log("[Redkik] Quote request payload:", JSON.stringify(payload))
@@ -162,7 +304,6 @@ async function requestQuote(token: string, params: QuoteParams) {
 }
 
 async function purchaseQuote(token: string, offerId: string) {
-  // Purchase endpoint confirmed in Swagger: /api/v2/quote/bookings/purchase
   const purchaseUrl = `${REDKIK_BASE_URL}/api/v2/quote/bookings/purchase`
 
   const res = await fetch(purchaseUrl, {
@@ -182,6 +323,71 @@ async function purchaseQuote(token: string, offerId: string) {
   const purchaseData = await res.json()
   console.log("[Redkik] Purchase response:", JSON.stringify(purchaseData))
   return purchaseData
+}
+
+async function completeBooking(token: string, bookingId: string) {
+  const completeUrl = `${REDKIK_BASE_URL}/api/v2/quote/bookings/${bookingId}/complete`
+
+  console.log("[Redkik] Complete booking:", bookingId)
+
+  const res = await fetch(completeUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Redkik complete failed (${res.status}): ${text}`)
+  }
+
+  const data = await res.json()
+  console.log("[Redkik] Complete response:", JSON.stringify(data))
+  return data
+}
+
+async function cancelBooking(token: string, bookingId: string) {
+  const cancelUrl = `${REDKIK_BASE_URL}/api/v2/quote/bookings/${bookingId}/cancel`
+
+  console.log("[Redkik] Cancel booking:", bookingId)
+
+  const res = await fetch(cancelUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Redkik cancel failed (${res.status}): ${text}`)
+  }
+
+  const data = await res.json()
+  console.log("[Redkik] Cancel response:", JSON.stringify(data))
+  return data
+}
+
+// ----- Amendments validation -----
+
+interface Amendment {
+  type?: string       // "error" | "warning" | "info"
+  message?: string
+  field?: string
+}
+
+function extractAmendments(offer: Record<string, unknown>): Amendment[] {
+  const amendments = (offer.amendments || offer.Amendments || []) as Amendment[]
+  return Array.isArray(amendments) ? amendments : []
+}
+
+function hasBlockingAmendments(amendments: Amendment[]): boolean {
+  return amendments.some(
+    (a) => (a.type || "").toLowerCase() === "error"
+  )
 }
 
 // ----- Main handler -----
@@ -224,6 +430,19 @@ serve(async (req) => {
     const token = await getRedkikToken()
 
     switch (action) {
+      // ----- Setup: returns available commodities, currencies, policies -----
+      case "setup": {
+        const setup = await getSetupData(token)
+        return jsonResponse({
+          commodities: setup.commodities,
+          currencies: setup.currencies,
+          policies: setup.policies,
+          customers: setup.customers,
+          defaultCurrencyId: setup.defaultCurrencyId,
+        })
+      }
+
+      // ----- Get Quote: Setup -> Quote with amendments validation -----
       case "get-quote": {
         const { items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName } = body
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -235,15 +454,13 @@ serve(async (req) => {
           return jsonResponse({ error: "Items must have a positive total value for insurance" }, 400)
         }
 
+        // Step 1: Get setup data (cached) for correct UUIDs
+        const setup = await getSetupData(token)
+
+        // Step 2: Request quote with correct payload
         const quoteResponse = await requestQuote(token, {
-          items,
-          pickup,
-          dropoff,
-          scheduledTime,
-          durationMinutes,
-          customerEmail,
-          customerName,
-        })
+          items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName,
+        }, setup)
 
         // Response is an array of offers — take the first accepted one
         const offers = Array.isArray(quoteResponse) ? quoteResponse : [quoteResponse]
@@ -256,9 +473,12 @@ serve(async (req) => {
           )
         }
 
+        // Step 3: Validate amendments — block if errors present
+        const amendments = extractAmendments(acceptedOffer)
+        const blocked = hasBlockingAmendments(amendments)
+
         const offerId = acceptedOffer.id
-        // Prices are in cents — convert using currencyDivisionModifier (default 100)
-        const divider = acceptedOffer.currencyDivisionModifier || 100
+        const divider = acceptedOffer.currencyDivisionModifier || getCurrencyDivider(setup, setup.defaultCurrencyId)
         const premium = Number(acceptedOffer.totalCost || 0) / divider
 
         if (!offerId) {
@@ -279,6 +499,12 @@ serve(async (req) => {
         return jsonResponse({
           offerId,
           premium,
+          canPurchase: !blocked,
+          amendments: amendments.map((a) => ({
+            type: a.type || "info",
+            message: a.message || "",
+            field: a.field || null,
+          })),
           details: {
             insurerPremium: Number(acceptedOffer.insurerPremium || 0) / divider,
             technologyFee: Number(acceptedOffer.technologyFee || 0) / divider,
@@ -291,6 +517,7 @@ serve(async (req) => {
         })
       }
 
+      // ----- Purchase: buy the quoted offer -----
       case "purchase": {
         const { offerId } = body
         if (!offerId) {
@@ -319,9 +546,41 @@ serve(async (req) => {
         })
       }
 
+      // ----- Complete: close the booking after successful delivery -----
+      case "complete": {
+        const { bookingId } = body
+        if (!bookingId) {
+          return jsonResponse({ error: "bookingId is required" }, 400)
+        }
+
+        const completeResponse = await completeBooking(token, bookingId)
+
+        return jsonResponse({
+          success: true,
+          bookingId,
+          details: completeResponse,
+        })
+      }
+
+      // ----- Cancel: cancel the booking -----
+      case "cancel": {
+        const { bookingId } = body
+        if (!bookingId) {
+          return jsonResponse({ error: "bookingId is required" }, 400)
+        }
+
+        const cancelResponse = await cancelBooking(token, bookingId)
+
+        return jsonResponse({
+          success: true,
+          bookingId,
+          details: cancelResponse,
+        })
+      }
+
       default:
         return jsonResponse(
-          { error: `Unknown action: ${action}. Use 'get-quote' or 'purchase'.` },
+          { error: `Unknown action: ${action}. Supported: 'setup', 'get-quote', 'purchase', 'complete', 'cancel'.` },
           400
         )
     }

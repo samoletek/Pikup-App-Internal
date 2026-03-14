@@ -638,52 +638,73 @@ export default function CustomerHomeScreen({ navigation }) {
         let finalAmount = totalAmount;
 
         if (orderData?.insuranceQuote?.offerId) {
-          const attemptPurchase = async () => {
-            const purchaseResult = await RedkikService.purchaseInsurance(
-              orderData.insuranceQuote.offerId
-            );
-            if (purchaseResult?.bookingId) {
-              return {
-                bookingId: purchaseResult.bookingId,
-                quoteId: orderData.insuranceQuote.offerId,
-                premium: orderData.insuranceQuote.premium,
-                status: 'purchased',
-              };
-            }
-            return null;
-          };
-
-          try {
-            insuranceData = await attemptPurchase();
-            if (!insuranceData) {
-              await new Promise(r => setTimeout(r, 1500));
-              insuranceData = await attemptPurchase();
-            }
-          } catch (insuranceErr) {
-            console.warn('Insurance purchase failed:', insuranceErr);
-          }
-
-          if (!insuranceData) {
-            // Insurance failed — remove premium from charge amount
-            const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
-            finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
-
+          // Block purchase if quote has amendment errors
+          if (orderData.insuranceQuote.canPurchase === false) {
+            console.warn('Insurance quote has blocking amendments:', orderData.insuranceQuote.amendments);
             insuranceData = {
               quoteId: orderData.insuranceQuote.offerId,
               bookingId: null,
               premium: orderData.insuranceQuote.premium,
-              status: 'purchase_failed',
+              status: 'amendments_blocked',
             };
+            const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
+            finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
 
             Alert.alert(
-              'Insurance Notice',
-              'We could not activate your insurance coverage. You will only be charged for the delivery itself. Our support team will follow up.',
+              'Insurance Unavailable',
+              'Insurance could not be applied due to validation issues. You will only be charged for the delivery.',
               [{ text: 'OK' }]
             );
           }
+
+          if (!insuranceData) {
+            const attemptPurchase = async () => {
+              const purchaseResult = await RedkikService.purchaseInsurance(
+                orderData.insuranceQuote.offerId
+              );
+              if (purchaseResult?.bookingId) {
+                return {
+                  bookingId: purchaseResult.bookingId,
+                  quoteId: orderData.insuranceQuote.offerId,
+                  premium: orderData.insuranceQuote.premium,
+                  status: 'purchased',
+                };
+              }
+              return null;
+            };
+
+            try {
+              insuranceData = await attemptPurchase();
+              if (!insuranceData) {
+                await new Promise(r => setTimeout(r, 1500));
+                insuranceData = await attemptPurchase();
+              }
+            } catch (insuranceErr) {
+              console.warn('Insurance purchase failed:', insuranceErr);
+            }
+
+            if (!insuranceData) {
+              // Insurance failed — remove premium from charge amount
+              const insurancePremium = Number(orderData.insuranceQuote.premium) || 0;
+              finalAmount = Math.round((totalAmount - insurancePremium) * 100) / 100;
+
+              insuranceData = {
+                quoteId: orderData.insuranceQuote.offerId,
+                bookingId: null,
+                premium: orderData.insuranceQuote.premium,
+                status: 'purchase_failed',
+              };
+
+              Alert.alert(
+                'Insurance Notice',
+                'We could not activate your insurance coverage. You will only be charged for the delivery itself. Our support team will follow up.',
+                [{ text: 'OK' }]
+              );
+            }
+          }
         }
 
-        // Step 2: Charge the correct amount (with or without insurance)
+        // Step 2: Validate the final charge amount.
         const finalAmountInCents = Math.round(finalAmount * 100);
         if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
           return {
@@ -692,6 +713,62 @@ export default function CustomerHomeScreen({ navigation }) {
           };
         }
 
+        // Step 3: Upload item photos/invoices first, so we never persist local `file://` URIs.
+        const storageUserId = String(currentUserId || "").trim();
+        if (!storageUserId) {
+          return {
+            success: false,
+            error: "Session expired. Please sign in again.",
+          };
+        }
+
+        const isRemoteUrl = (value) =>
+          typeof value === "string" && /^https?:\/\//i.test(value.trim());
+
+        const orderIdTimestamp = Date.now();
+        const uploadItemMedia = async (uri, suffix) => {
+          const normalizedUri = String(uri || "").trim();
+          if (!normalizedUri) return null;
+          if (isRemoteUrl(normalizedUri)) return normalizedUri;
+
+          const filename = `${storageUserId}/order_items/${orderIdTimestamp}/${suffix}.jpg`;
+          const uploadedUrl = await uploadToSupabase(normalizedUri, "trip_photos", filename);
+          if (!isRemoteUrl(uploadedUrl)) {
+            throw new Error("Could not upload item media. Please try again.");
+          }
+
+          return uploadedUrl;
+        };
+
+        const uploadedItems = [];
+        for (let i = 0; i < (orderData?.items || []).length; i++) {
+          const item = orderData.items[i];
+          const uploadedPhotos = [];
+
+          if (Array.isArray(item.photos)) {
+            for (let j = 0; j < item.photos.length; j++) {
+              const photoUri = item.photos[j];
+              if (!photoUri) continue;
+              const uploadedPhotoUrl = await uploadItemMedia(photoUri, `item_${i}_photo_${j}`);
+              if (uploadedPhotoUrl) {
+                uploadedPhotos.push(uploadedPhotoUrl);
+              }
+            }
+          }
+
+          let uploadedInvoicePhoto = null;
+          if (item.invoicePhoto) {
+            uploadedInvoicePhoto = await uploadItemMedia(item.invoicePhoto, `item_${i}_invoice`);
+          }
+
+          uploadedItems.push({
+            ...item,
+            photos: uploadedPhotos,
+            invoicePhoto: uploadedInvoicePhoto,
+          });
+        }
+
+        // Step 4: Charge the correct amount (with or without insurance).
         const rideDetails = {
           scheduleType: orderData?.scheduleType,
           scheduledDateTime: orderData?.scheduledDateTime,
@@ -810,11 +887,13 @@ export default function CustomerHomeScreen({ navigation }) {
     },
     [
       currentUser?.phone_verified,
+      currentUserId,
       activeDelivery,
       pendingBooking,
       createPaymentIntent,
       confirmPayment,
       createPickupRequest,
+      uploadToSupabase,
       checkActiveDeliveries,
     ]
   );

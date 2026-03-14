@@ -656,6 +656,8 @@ export default function DriverHomeScreen({ navigation, route }) {
         setShowIncomingModal(false);
         setIsMinimized(false);
         setIncomingRequest(null);
+      } else {
+        setShowAllRequests(false);
       }
       console.log(`Loaded ${normalizedRequests.length} real requests from Firebase`);
     } catch (error) {

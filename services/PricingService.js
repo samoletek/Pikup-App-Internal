@@ -222,13 +222,13 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         : (options.laborOptions?.items || []);
     const hasInsuredNewItem = pricingItems.some(isItemEligibleForInsurance);
     const serviceFeePercent = platformFees.serviceFeePercent || 0.25;
-    const insuranceSpread = platformFees.insuranceSpread || 2;
-    const appliedInsuranceSpread = hasInsuredNewItem ? insuranceSpread : 0;
+    // Flat insurance rate shown before Redkik quote arrives (replaced by actual Redkik premium at checkout).
+    // The technology fee inside the Redkik premium is Pikup's revenue — no extra spread needed.
     const mandatoryInsurance = hasInsuredNewItem
         ? (platformFees.mandatoryInsurance || 12.99)
         : 0;
 
-    const serviceFee = (fareAfterSurge * serviceFeePercent) + appliedInsuranceSpread;
+    const serviceFee = fareAfterSurge * serviceFeePercent;
 
     // Total
     const total = fareAfterSurge + serviceFee + mandatoryInsurance;
@@ -253,7 +253,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         serviceFee: round2(serviceFee),
         mandatoryInsurance: round2(mandatoryInsurance),
         insuranceApplied: hasInsuredNewItem,
-        insuranceSpread: round2(appliedInsuranceSpread),
         total: round2(total),
         driverPayout: round2(driverPayout),
         distance: dist,
