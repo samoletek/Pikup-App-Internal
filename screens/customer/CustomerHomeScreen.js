@@ -6,7 +6,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  StyleSheet,
   Image,
   useWindowDimensions,
 } from "react-native";
@@ -29,12 +28,10 @@ import PendingBookingSearchSheet from "../../components/customer/PendingBookingS
 import MapboxLocationService from "../../services/MapboxLocationService";
 import { submitCustomerOrder } from "../../services/CustomerOrderSubmissionService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
+import styles from "./CustomerHomeScreen.styles";
 import {
-  borderRadius,
   colors,
-  shadows,
   spacing,
-  typography,
 } from "../../styles/theme";
 
 const toMapboxCoordinate = (location) => {
@@ -129,8 +126,6 @@ const ACTIVE_DELIVERY_STEP_META = Object.freeze({
     icon: "checkmark-circle",
   },
 });
-
-const ACTIVE_TRIP_BUTTON_COLOR = "#F6C74A";
 
 const ACTIVE_DELIVERY_POLL_INTERVAL_MS = 5000;
 const IDLE_DELIVERY_POLL_INTERVAL_MS = 30000;
@@ -699,171 +694,3 @@ export default function CustomerHomeScreen({ navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  headerLogo: {
-    height: 20,
-    resizeMode: "contain",
-    ...shadows.lg,
-  },
-  floatingTriggerContainer: {
-    position: "absolute",
-    bottom: 0,
-    alignSelf: "center",
-    paddingHorizontal: spacing.lg,
-    zIndex: 20,
-  },
-  floatingTrigger: {
-    backgroundColor: colors.background.tertiary,
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    height: 56,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.base,
-    shadowColor: colors.black,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: colors.navigation.tabBarBorder,
-  },
-  triggerIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing.md,
-  },
-  floatingTriggerText: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  triggerTimeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.sm - 2,
-    borderRadius: borderRadius.full,
-  },
-  triggerTimeText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  timeIconLeft: {
-    marginRight: 4,
-  },
-  timeIconRight: {
-    marginLeft: 4,
-  },
-  activeTripPulseWrap: {
-    width: "100%",
-  },
-  activeTripTrigger: {
-    backgroundColor: ACTIVE_TRIP_BUTTON_COLOR,
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    height: 56,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    shadowColor: ACTIVE_TRIP_BUTTON_COLOR,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.42,
-    shadowRadius: 12,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  activeTripSideSlot: {
-    width: 34,
-    justifyContent: "center",
-  },
-  activeTripSideSlotLeft: {
-    alignItems: "flex-start",
-  },
-  activeTripSideSlotRight: {
-    alignItems: "flex-end",
-  },
-  activeTripIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.circle,
-    backgroundColor: "rgba(255,255,255,0.52)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activeTripTriggerText: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.background.primary,
-    flex: 1,
-    textAlign: "center",
-    paddingHorizontal: spacing.xxs,
-  },
-  activeTripOpenIndicator: {
-    width: 32,
-    height: 32,
-    borderRadius: borderRadius.circle,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(10,10,31,0.14)",
-  },
-  searchingMarkerContainer: {
-    width: 136,
-    height: 136,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  searchingMarkerPulse: {
-    backgroundColor: colors.transparent,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: 999,
-  },
-  searchingMarkerCore: {
-    position: "absolute",
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryDark,
-    borderWidth: 2,
-    borderColor: colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-});
