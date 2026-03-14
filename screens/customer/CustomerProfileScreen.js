@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -60,55 +60,7 @@ export default function CustomerProfileScreen({ navigation }) {
     refreshProfileImage: getProfileImage,
   });
 
-  useEffect(() => {
-    loadCustomerProfile();
-  }, []);
-
-  useEffect(() => {
-    if (!currentUserId) {
-      return undefined;
-    }
-
-    const channel = supabase
-      .channel(`customer:profile:${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "customers",
-          filter: `id=eq.${currentUserId}`,
-        },
-        (payload) => {
-          const nextProfile = payload?.new;
-          if (!nextProfile) return;
-
-          setCustomerProfile((prev) => ({ ...(prev || {}), ...nextProfile }));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUserId]);
-
-  useEffect(() => {
-    loadAccountStats();
-  }, [currentUser, customerProfile]);
-
-  useEffect(() => {
-    const dateStr =
-      customerProfile?.created_at || currentUser?.created_at;
-    if (dateStr) {
-      const createdYear = new Date(dateStr).getFullYear();
-      const currentYear = new Date().getFullYear();
-      const years = currentYear - createdYear;
-      setMemberSince(years > 0 ? `${years} yr on Pikup` : "New on Pikup");
-    }
-  }, [customerProfile, currentUser]);
-
-  const loadCustomerProfile = async () => {
+  const loadCustomerProfile = useCallback(async () => {
     try {
       const profile = await getUserProfile?.(currentUserId);
       setCustomerProfile(profile?.customerProfile || profile || null);
@@ -127,9 +79,9 @@ export default function CustomerProfileScreen({ navigation }) {
     } catch (error) {
       console.error("Error loading customer profile:", error);
     }
-  };
+  }, [currentUser?.email, currentUserId, getProfileImage, getUserProfile]);
 
-  const loadAccountStats = async () => {
+  const loadAccountStats = useCallback(async () => {
     if (!currentUser) return;
     try {
       const pickupRequests = await getUserPickupRequests?.();
@@ -164,7 +116,55 @@ export default function CustomerProfileScreen({ navigation }) {
     } catch (error) {
       console.error("Error loading account stats:", error);
     }
-  };
+  }, [currentUser, customerProfile, getUserPickupRequests]);
+
+  useEffect(() => {
+    loadCustomerProfile();
+  }, [loadCustomerProfile]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    const channel = supabase
+      .channel(`customer:profile:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "customers",
+          filter: `id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const nextProfile = payload?.new;
+          if (!nextProfile) return;
+
+          setCustomerProfile((prev) => ({ ...(prev || {}), ...nextProfile }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    loadAccountStats();
+  }, [loadAccountStats]);
+
+  useEffect(() => {
+    const dateStr =
+      customerProfile?.created_at || currentUser?.created_at;
+    if (dateStr) {
+      const createdYear = new Date(dateStr).getFullYear();
+      const currentYear = new Date().getFullYear();
+      const years = currentYear - createdYear;
+      setMemberSince(years > 0 ? `${years} yr on Pikup` : "New on Pikup");
+    }
+  }, [customerProfile, currentUser]);
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [

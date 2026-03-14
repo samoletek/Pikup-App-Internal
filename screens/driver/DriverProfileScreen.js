@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -66,9 +66,80 @@ export default function DriverProfileScreen({ navigation }) {
     refreshProfileImage: getProfileImage,
   });
 
+  const loadDriverStats = useCallback(async () => {
+    if (!currentUserId) {
+      return;
+    }
+
+    try {
+      const stats = await getDriverStats?.(currentUserId);
+      const parsedTotalTrips = Number(stats?.totalTrips);
+      const parsedAcceptanceRate = Number(stats?.acceptanceRate);
+
+      setDriverStats({
+        totalTrips:
+          Number.isFinite(parsedTotalTrips) && parsedTotalTrips > 0
+            ? parsedTotalTrips
+            : 0,
+        acceptanceRate:
+          Number.isFinite(parsedAcceptanceRate) && parsedAcceptanceRate > 0
+            ? Math.round(parsedAcceptanceRate)
+            : 0,
+      });
+    } catch (error) {
+      console.error("Error loading driver stats:", error);
+      setDriverStats({
+        totalTrips: 0,
+        acceptanceRate: 0,
+      });
+    }
+  }, [currentUserId, getDriverStats]);
+
+  const loadDriverProfile = useCallback(async () => {
+    try {
+      const profile = await getDriverProfile?.(currentUserId);
+      setDriverProfile(profile);
+
+      const user = await getUserProfile?.();
+      const firstName = user?.first_name || user?.firstName || "";
+      const lastName = user?.last_name || user?.lastName || "";
+      const fullName = `${firstName} ${lastName}`.trim();
+      const name =
+        fullName ||
+        user?.name ||
+        currentUser?.email?.split("@")[0] ||
+        "Driver";
+      setDisplayName(name);
+
+      await getProfileImage?.();
+
+      if (!profile) {
+        return;
+      }
+
+      setOnboardingStatus({
+        connectAccountCreated: !!profile.connectAccountId,
+        onboardingComplete: profile.onboardingComplete || false,
+        documentsVerified: profile.documentsVerified || false,
+        canReceivePayments: profile.canReceivePayments || false,
+      });
+
+      await loadDriverStats();
+    } catch (error) {
+      console.error("Error loading driver profile:", error);
+    }
+  }, [
+    currentUser?.email,
+    currentUserId,
+    getDriverProfile,
+    getProfileImage,
+    getUserProfile,
+    loadDriverStats,
+  ]);
+
   useEffect(() => {
     loadDriverProfile();
-  }, []);
+  }, [loadDriverProfile]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -129,70 +200,6 @@ export default function DriverProfileScreen({ navigation }) {
       supabase.removeChannel(channel);
     };
   }, [currentUserId]);
-
-  const loadDriverProfile = async () => {
-    try {
-      const profile = await getDriverProfile?.(currentUserId);
-      setDriverProfile(profile);
-
-      const user = await getUserProfile?.();
-      const firstName = user?.first_name || user?.firstName || "";
-      const lastName = user?.last_name || user?.lastName || "";
-      const fullName = `${firstName} ${lastName}`.trim();
-      const name =
-        fullName ||
-        user?.name ||
-        currentUser?.email?.split("@")[0] ||
-        "Driver";
-      setDisplayName(name);
-
-      await getProfileImage?.();
-
-      if (!profile) {
-        return;
-      }
-
-      setOnboardingStatus({
-        connectAccountCreated: !!profile.connectAccountId,
-        onboardingComplete: profile.onboardingComplete || false,
-        documentsVerified: profile.documentsVerified || false,
-        canReceivePayments: profile.canReceivePayments || false,
-      });
-
-      await loadDriverStats();
-    } catch (error) {
-      console.error("Error loading driver profile:", error);
-    }
-  };
-
-  const loadDriverStats = async () => {
-    if (!currentUserId) {
-      return;
-    }
-
-    try {
-      const stats = await getDriverStats?.(currentUserId);
-      const parsedTotalTrips = Number(stats?.totalTrips);
-      const parsedAcceptanceRate = Number(stats?.acceptanceRate);
-
-      setDriverStats({
-        totalTrips:
-          Number.isFinite(parsedTotalTrips) && parsedTotalTrips > 0
-            ? parsedTotalTrips
-            : 0,
-        acceptanceRate:
-          Number.isFinite(parsedAcceptanceRate) && parsedAcceptanceRate > 0
-            ? Math.round(parsedAcceptanceRate)
-            : 0,
-      });
-    } catch (error) {
-      console.error("Error loading driver stats:", error);
-      setDriverStats({
-        totalTrips: 0,
-        acceptanceRate: 0,
-      });
-    }
-  };
 
   const handleStartOnboarding = () => {
     navigation.navigate("DriverOnboardingScreen");

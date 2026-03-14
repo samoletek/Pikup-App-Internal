@@ -163,7 +163,7 @@ export default function PersonalInfoScreen({ navigation }) {
     };
 
     loadProfileData();
-  }, [userId, getProfileImage, getUserProfile, currentUser?.email]);
+  }, [userId, getProfileImage, getUserProfile, currentUser?.email, isDriver]);
 
   const updateField = (key, value) => {
     setPersonalInfo((prev) => ({ ...prev, [key]: value }));
