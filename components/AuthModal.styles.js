@@ -76,6 +76,12 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: colors.white,
         height: '100%',
+        backgroundColor: 'transparent',
+        borderWidth: 0,
+        borderColor: 'transparent',
+        borderRadius: 0,
+        paddingHorizontal: 0,
+        paddingVertical: 0,
     },
     inputError: {
         borderColor: colors.error,
