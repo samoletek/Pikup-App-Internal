@@ -2,6 +2,7 @@ import { normalizeDriverBadgeStats } from './driverProfileUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { fetchDriverRowById } from './repositories/paymentRepository';
+import { extractDriverPreferencesFromDriverProfile } from './driverPreferencesColumns';
 import {
   createRealtimeChannel,
   removeRealtimeChannel,
@@ -35,12 +36,14 @@ export const getDriverProfile = async (driverId) => {
     const ratingCount = Number.isFinite(Number(data?.rating_count))
       ? Number(data.rating_count)
       : 0;
+    const driverPreferences = extractDriverPreferencesFromDriverProfile(data);
 
     return {
       ...data,
       metadata,
       badge_stats: badgeStats,
       rating_count: ratingCount,
+      driverPreferences,
       onboardingComplete,
       canReceivePayments,
       connectAccountId,
@@ -49,6 +52,7 @@ export const getDriverProfile = async (driverId) => {
         ...metadata,
         badge_stats: badgeStats,
         rating_count: ratingCount,
+        driverPreferences,
         onboardingComplete,
         canReceivePayments,
         connectAccountId,

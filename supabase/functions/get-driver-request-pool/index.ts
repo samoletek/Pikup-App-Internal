@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import {
   corsHeaders,
   DRIVER_REQUEST_OFFER_TTL_SECONDS,
+  DRIVER_PREFERENCE_FILTER_SELECT_COLUMNS,
+  extractDriverPreferencesFromDriverRow,
   evaluateTripForDriverPreferences,
   isScheduledDispatchTrip,
   isTripOutsideDistanceWindow,
@@ -10,7 +12,6 @@ import {
   jsonResponse,
   mapTripFromDb,
   MAX_REQUEST_DISTANCE_BY_POOL_MILES,
-  mergeDriverPreferences,
   normalizeCoordinates,
   normalizeOfferAction,
   normalizeOfferStatus,
@@ -80,7 +81,7 @@ serve(async (req) => {
 
     const { data: driverProfile, error: driverProfileError } = await dbClient
       .from("drivers")
-      .select("metadata")
+      .select(DRIVER_PREFERENCE_FILTER_SELECT_COLUMNS)
       .eq("id", user.id)
       .maybeSingle()
 
@@ -226,12 +227,7 @@ serve(async (req) => {
       })
     }
 
-    const rawPreferences = driverProfile?.metadata?.driverPreferences
-    const hasPreferences =
-      rawPreferences &&
-      typeof rawPreferences === "object" &&
-      !Array.isArray(rawPreferences)
-    const mergedPreferences = hasPreferences ? mergeDriverPreferences(rawPreferences) : null
+    const mergedPreferences = extractDriverPreferencesFromDriverRow(driverProfile)
 
     const { data: tripRows, error: tripsError } = await dbClient
       .from("trips")

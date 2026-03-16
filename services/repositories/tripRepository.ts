@@ -6,6 +6,37 @@ import type {
 } from '../../supabase/functions/_shared/contracts';
 
 const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
+const DRIVER_PREFERENCE_SELECT_COLUMNS = [
+  'metadata',
+  'pref_pickup_small_items',
+  'pref_pickup_medium_items',
+  'pref_pickup_large_items',
+  'pref_pickup_extra_large_items',
+  'pref_pickup_fragile_items',
+  'pref_pickup_outdoor_items',
+  'pref_equipment_dolly',
+  'pref_equipment_hand_truck',
+  'pref_equipment_moving_straps',
+  'pref_equipment_heavy_duty_gloves',
+  'pref_equipment_furniture_pads',
+  'pref_equipment_tool_set',
+  'pref_equipment_rope',
+  'pref_equipment_tarp',
+  'pref_vehicle_truck_bed',
+  'pref_vehicle_trailer',
+  'pref_vehicle_large_van',
+  'pref_vehicle_suv_space',
+  'pref_vehicle_roof_rack',
+  'pref_team_willing_to_help',
+  'pref_team_needs_extra_hand',
+  'pref_mode_solo',
+  'pref_mode_team',
+  'pref_mode_both',
+  'pref_availability_weekends',
+  'pref_availability_evenings',
+  'pref_availability_short_notice',
+  'pref_availability_long_distance',
+].join(',');
 
 /**
  * Trip repository centralizes transport-level access for trip/request-related storage and edge functions.
@@ -19,7 +50,7 @@ export const invokeDriverRequestPool = async (payload: DriverRequestPoolRequest)
 export const fetchDriverMetadata = async (driverId: string) => {
   return supabase
     .from('drivers')
-    .select('metadata')
+    .select(DRIVER_PREFERENCE_SELECT_COLUMNS)
     .eq('id', driverId)
     .maybeSingle();
 };

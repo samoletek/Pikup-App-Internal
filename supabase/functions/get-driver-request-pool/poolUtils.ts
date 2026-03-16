@@ -125,6 +125,32 @@ export const DRIVER_PREFERENCES_DEFAULTS = Object.freeze({
   },
 })
 
+export const DRIVER_PREFERENCE_FILTER_COLUMNS = Object.freeze([
+  "pref_pickup_small_items",
+  "pref_pickup_medium_items",
+  "pref_pickup_large_items",
+  "pref_pickup_extra_large_items",
+  "pref_pickup_fragile_items",
+  "pref_pickup_outdoor_items",
+  "pref_equipment_dolly",
+  "pref_equipment_hand_truck",
+  "pref_equipment_moving_straps",
+  "pref_equipment_heavy_duty_gloves",
+  "pref_equipment_furniture_pads",
+  "pref_equipment_tool_set",
+  "pref_equipment_rope",
+  "pref_equipment_tarp",
+  "pref_availability_weekends",
+  "pref_availability_evenings",
+  "pref_availability_short_notice",
+  "pref_availability_long_distance",
+])
+
+export const DRIVER_PREFERENCE_FILTER_SELECT_COLUMNS = [
+  "metadata",
+  ...DRIVER_PREFERENCE_FILTER_COLUMNS,
+].join(",")
+
 export type AnyRecord = Record<string, unknown>
 
 export const jsonResponse = (body: unknown, status = 200) =>
@@ -565,6 +591,46 @@ export const mergeDriverPreferences = (candidate: AnyRecord) => {
       ),
     },
   }
+}
+
+export const extractDriverPreferencesFromDriverRow = (driverRow: AnyRecord = {}) => {
+  const source = toObject(driverRow)
+  const hasColumnPreferences = DRIVER_PREFERENCE_FILTER_COLUMNS.some((columnName) => (
+    typeof source[columnName] === "boolean"
+  ))
+
+  if (hasColumnPreferences) {
+    return mergeDriverPreferences({
+      pickupPreferences: {
+        smallItems: source.pref_pickup_small_items,
+        mediumItems: source.pref_pickup_medium_items,
+        largeItems: source.pref_pickup_large_items,
+        extraLargeItems: source.pref_pickup_extra_large_items,
+        fragileItems: source.pref_pickup_fragile_items,
+        outdoorItems: source.pref_pickup_outdoor_items,
+      },
+      equipment: {
+        dolly: source.pref_equipment_dolly,
+        handTruck: source.pref_equipment_hand_truck,
+        movingStraps: source.pref_equipment_moving_straps,
+        heavyDutyGloves: source.pref_equipment_heavy_duty_gloves,
+        furniturePads: source.pref_equipment_furniture_pads,
+        toolSet: source.pref_equipment_tool_set,
+        rope: source.pref_equipment_rope,
+        tarp: source.pref_equipment_tarp,
+      },
+      availability: {
+        weekends: source.pref_availability_weekends,
+        evenings: source.pref_availability_evenings,
+        shortNotice: source.pref_availability_short_notice,
+        longDistance: source.pref_availability_long_distance,
+      },
+    })
+  }
+
+  const metadata = toObject(source.metadata)
+  const metadataPreferences = toObject(metadata.driverPreferences)
+  return mergeDriverPreferences(metadataPreferences)
 }
 
 export const resolveDispatchRequirements = (tripLike: AnyRecord = {}, nowDate = new Date()) => {

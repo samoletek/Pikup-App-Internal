@@ -9,6 +9,10 @@ import {
   updateDriverRowById,
   upsertDriverRowWithSelect,
 } from '../repositories/paymentRepository';
+import {
+  buildDriverPreferenceColumnUpdates,
+  mergeDriverPreferences,
+} from '../driverPreferencesColumns';
 
 /**
  * Update driver payment profile metadata.
@@ -23,22 +27,48 @@ export const updateDriverPaymentProfile = async (driverId, updates = {}) => {
     const profile = await getDriverProfileRow(driverId);
     const currentMeta = profile?.metadata || {};
 
-    const newMeta = { ...currentMeta, ...updates, updatedAt: now };
+    const safeUpdates = updates && typeof updates === 'object' ? updates : {};
+    const hasDriverPreferencesUpdate = (
+      Object.prototype.hasOwnProperty.call(safeUpdates, 'driverPreferences') &&
+      safeUpdates.driverPreferences &&
+      typeof safeUpdates.driverPreferences === 'object'
+    );
+    const nextDriverPreferences = hasDriverPreferencesUpdate
+      ? mergeDriverPreferences(safeUpdates.driverPreferences)
+      : null;
+    const otherUpdates = { ...safeUpdates };
+    delete otherUpdates.driverPreferences;
+
+    const newMeta = { ...currentMeta, ...otherUpdates, updatedAt: now };
+    if (nextDriverPreferences) {
+      newMeta.driverPreferences = {
+        ...nextDriverPreferences,
+        updatedAt: now,
+      };
+    }
+
     const columnUpdates = {
       metadata: newMeta,
       updated_at: now,
     };
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'onboardingComplete')) {
-      columnUpdates.onboarding_complete = Boolean(updates.onboardingComplete);
+    if (nextDriverPreferences) {
+      Object.assign(
+        columnUpdates,
+        buildDriverPreferenceColumnUpdates(nextDriverPreferences)
+      );
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'canReceivePayments')) {
-      columnUpdates.can_receive_payments = Boolean(updates.canReceivePayments);
+    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'onboardingComplete')) {
+      columnUpdates.onboarding_complete = Boolean(safeUpdates.onboardingComplete);
     }
 
-    if (Object.prototype.hasOwnProperty.call(updates, 'connectAccountId')) {
-      columnUpdates.stripe_account_id = updates.connectAccountId || null;
+    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'canReceivePayments')) {
+      columnUpdates.can_receive_payments = Boolean(safeUpdates.canReceivePayments);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'connectAccountId')) {
+      columnUpdates.stripe_account_id = safeUpdates.connectAccountId || null;
     }
 
     const { data, error } = await updateDriverRowById(driverId, columnUpdates, true);

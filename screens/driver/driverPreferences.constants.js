@@ -1,64 +1,13 @@
-export const DEFAULT_DRIVER_PREFERENCES = {
-  pickupPreferences: {
-    smallItems: true,
-    mediumItems: true,
-    largeItems: false,
-    extraLargeItems: false,
-    fragileItems: true,
-    outdoorItems: true,
-  },
-  equipment: {
-    dolly: false,
-    handTruck: false,
-    movingStraps: false,
-    heavyDutyGloves: true,
-    furniturePads: false,
-    toolSet: false,
-    rope: true,
-    tarp: false,
-  },
-  vehicleSpecs: {
-    truckBed: false,
-    trailer: false,
-    largeVan: false,
-    suvSpace: true,
-    roofRack: false,
-  },
-  teamPreferences: {
-    preferredMode: "solo",
-    willingToHelp: false,
-    needsExtraHand: false,
-  },
-  availability: {
-    weekends: true,
-    evenings: true,
-    shortNotice: false,
-    longDistance: false,
-  },
-};
+import {
+  DRIVER_PREFERENCES_DEFAULTS,
+  mergeDriverPreferences as mergeStoredDriverPreferences,
+} from "../../services/driverPreferencesColumns";
 
-export const mergeDriverPreferences = (candidate) => ({
-  pickupPreferences: {
-    ...DEFAULT_DRIVER_PREFERENCES.pickupPreferences,
-    ...(candidate?.pickupPreferences || {}),
-  },
-  equipment: {
-    ...DEFAULT_DRIVER_PREFERENCES.equipment,
-    ...(candidate?.equipment || {}),
-  },
-  vehicleSpecs: {
-    ...DEFAULT_DRIVER_PREFERENCES.vehicleSpecs,
-    ...(candidate?.vehicleSpecs || {}),
-  },
-  teamPreferences: {
-    ...DEFAULT_DRIVER_PREFERENCES.teamPreferences,
-    ...(candidate?.teamPreferences || {}),
-  },
-  availability: {
-    ...DEFAULT_DRIVER_PREFERENCES.availability,
-    ...(candidate?.availability || {}),
-  },
-});
+export const DEFAULT_DRIVER_PREFERENCES = DRIVER_PREFERENCES_DEFAULTS;
+
+export const mergeDriverPreferences = (candidate) => (
+  mergeStoredDriverPreferences(candidate)
+);
 
 export const DRIVER_PREFERENCE_ITEM_META = {
   smallItems: { icon: "cube-outline", desc: "Boxes, bags, small furniture" },

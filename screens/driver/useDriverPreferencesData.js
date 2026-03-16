@@ -3,6 +3,7 @@ import {
   DEFAULT_DRIVER_PREFERENCES,
   mergeDriverPreferences,
 } from "./driverPreferences.constants";
+import { extractDriverPreferencesFromDriverProfile } from "../../services/driverPreferencesColumns";
 import { logger } from "../../services/logger";
 
 export default function useDriverPreferencesData({
@@ -22,10 +23,10 @@ export default function useDriverPreferencesData({
 
       try {
         const profile = await getDriverProfile(userId);
-        const savedPreferences = profile?.metadata?.driverPreferences;
-
-        if (savedPreferences && isMounted) {
-          setPreferences(mergeDriverPreferences(savedPreferences));
+        if (isMounted) {
+          setPreferences(mergeDriverPreferences(
+            extractDriverPreferencesFromDriverProfile(profile)
+          ));
         }
       } catch (error) {
         logger.error("DriverPreferencesData", "Failed to load driver preferences", error);
@@ -47,10 +48,7 @@ export default function useDriverPreferencesData({
 
       try {
         await updateDriverPaymentProfile(userId, {
-          driverPreferences: {
-            ...nextPreferences,
-            updatedAt: new Date().toISOString(),
-          },
+          driverPreferences: nextPreferences,
         });
       } catch (error) {
         logger.error("DriverPreferencesData", "Failed to persist driver preferences", error);

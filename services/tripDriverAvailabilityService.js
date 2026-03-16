@@ -1,6 +1,6 @@
 import { TRIP_STATUS, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
-import { mergeDriverPreferences } from './DispatchMatchingService';
+import { extractDriverPreferencesFromDriverProfile } from './driverPreferencesColumns';
 import {
   formatEdgeInvokeError,
   getAvailableRequestsFromEdge,
@@ -44,11 +44,7 @@ const loadDriverPreferences = async (driverId) => {
     return null;
   }
 
-  if (!driverProfile?.metadata?.driverPreferences) {
-    return null;
-  }
-
-  return mergeDriverPreferences(driverProfile.metadata.driverPreferences);
+  return extractDriverPreferencesFromDriverProfile(driverProfile);
 };
 
 const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
