@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   },
   declineBtn: {
     flex: 1,
-    height: spacing.xxxl + spacing.base,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.elevated,
@@ -151,25 +151,20 @@ const styles = StyleSheet.create({
   },
   declineTxt: {
     color: colors.text.primary,
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
   },
   acceptBtn: {
     flex: 1,
-    height: spacing.xxxl + spacing.base,
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  acceptGrad: {
-    flex: 1,
+    height: 56,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
   },
   acceptTxt: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.xl,
+    color: colors.white,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
   },
   detailsScroll: {

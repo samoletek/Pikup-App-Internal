@@ -188,10 +188,8 @@ function RequestCard({
             <Text style={styles.detailsButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept && onAccept(item)} activeOpacity={0.8}>
-            <View style={styles.acceptButtonInner}>
-              <Text style={styles.acceptButtonText}>Accept</Text>
-            </View>
+          <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept && onAccept(item)} activeOpacity={0.85}>
+            <Text style={styles.acceptButtonText}>Accept</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>

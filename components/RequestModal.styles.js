@@ -308,14 +308,12 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
   },
   acceptButton: {
+    backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  acceptButtonInner: {
-    backgroundColor: colors.success,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   acceptButtonText: {
     color: colors.white,
