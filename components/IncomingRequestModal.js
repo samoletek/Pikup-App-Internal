@@ -10,9 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AppButton from './ui/AppButton';
 import styles from './IncomingRequestModal.styles';
 import { colors, spacing } from '../styles/theme';
 import useIncomingRequestSheet from '../hooks/useIncomingRequestSheet';
@@ -178,20 +176,12 @@ export default function IncomingRequestModal({
 
         {/* ===== BUTTONS ===== */}
         <View style={styles.buttonsRow}>
-          <AppButton
-            title="Decline"
-            variant="secondary"
-            style={styles.declineBtn}
-            labelStyle={styles.declineTxt}
-            onPress={dismiss}
-          />
-          <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.8}>
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              style={styles.acceptGrad}
-            >
-              <Text style={styles.acceptTxt}>Accept</Text>
-            </LinearGradient>
+          <TouchableOpacity style={styles.declineBtn} onPress={dismiss} activeOpacity={0.85}>
+            <Text style={styles.declineTxt}>Decline</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.85}>
+            <Text style={styles.acceptTxt}>Accept</Text>
           </TouchableOpacity>
         </View>
 
