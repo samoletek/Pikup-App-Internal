@@ -1,6 +1,6 @@
+// Trip Rating Modal component: renders its UI and handles related interactions.
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getRatingBadgesByTargetRole } from '../constants/ratingBadges';
+import AppButton from './ui/AppButton';
 import { borderRadius, colors, spacing, typography } from '../styles/theme';
 
 const getRatingLabel = (rating) => {
@@ -133,25 +134,21 @@ export default function TripRatingModal({
           )}
 
           <View style={styles.footerRow}>
-            <TouchableOpacity
+            <AppButton
+              title={cancelLabel}
+              variant="secondary"
               style={styles.laterButton}
               onPress={onClose}
               disabled={submitting}
-            >
-              <Text style={styles.laterText}>{cancelLabel}</Text>
-            </TouchableOpacity>
+            />
 
-            <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.submitDisabled]}
+            <AppButton
+              title={submitLabel}
+              style={styles.submitButton}
               onPress={handleSubmit}
               disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color={colors.white} />
-              ) : (
-                <Text style={styles.submitText}>{submitLabel}</Text>
-              )}
-            </TouchableOpacity>
+              loading={submitting}
+            />
           </View>
         </View>
       </View>
@@ -239,31 +236,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.background.primary,
-  },
-  laterText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.medium,
   },
   submitButton: {
     flex: 1,
     height: 46,
     borderRadius: borderRadius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.primary,
-  },
-  submitDisabled: {
-    opacity: 0.7,
-  },
-  submitText: {
-    color: colors.white,
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
   },
 });

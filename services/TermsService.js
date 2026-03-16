@@ -1,7 +1,12 @@
 // services/TermsService.js
 // Extracted from AuthContext.js - Legal document and terms management
 
-import { supabase } from '../config/supabase';
+import { logger } from './logger';
+import { normalizeError } from './errorService';
+import {
+    getAuthenticatedUser,
+    updateAuthenticatedUserMetadata,
+} from './repositories/termsRepository';
 
 /**
  * Get current legal document versions
@@ -31,7 +36,7 @@ export const checkTermsAcceptance = async (uid) => {
         try {
             currentVersions = await Promise.race([getLegalConfig(), configTimeout]);
         } catch (_err) {
-            console.warn('⚠️ getLegalConfig timed out, using defaults');
+            logger.warn('TermsService', 'getLegalConfig timed out, using defaults');
             currentVersions = { tosVersion: '1.0', privacyVersion: '1.0' };
         }
 
@@ -42,15 +47,15 @@ export const checkTermsAcceptance = async (uid) => {
 
         let user;
         try {
-            const result = await Promise.race([supabase.auth.getUser(), getUserTimeout]);
+            const result = await Promise.race([getAuthenticatedUser(), getUserTimeout]);
             user = result.data?.user;
         } catch (_err) {
-            console.warn('⚠️ getUser timed out - skipping terms check for now');
+            logger.warn('TermsService', 'getUser timed out; skipping terms check for now');
             return { needsAcceptance: false };
         }
 
         if (!user || (uid && user.id !== uid)) {
-            console.warn('Cannot check terms for different user or no user');
+            logger.warn('TermsService', 'Cannot check terms for different user or no user');
             return { needsAcceptance: false };
         }
 
@@ -96,7 +101,8 @@ export const checkTermsAcceptance = async (uid) => {
             reason: missingVersions.length > 0 ? 'Version mismatch' : 'All versions current'
         };
     } catch (error) {
-        console.error('Error checking terms acceptance:', error);
+        const normalized = normalizeError(error, 'Failed to check terms acceptance');
+        logger.error('TermsService', 'Error checking terms acceptance', normalized, error);
         return { needsAcceptance: false };
     }
 };
@@ -111,25 +117,24 @@ export const acceptTerms = async (uid, acceptedDuringSignup = false, tokenOverri
     try {
         const currentVersions = await getLegalConfig();
 
-        const { error } = await supabase.auth.updateUser({
-            data: {
-                termsAgreement: {
-                    accepted: true,
-                    acceptedAt: new Date().toISOString(),
-                    tosVersion: currentVersions.tosVersion,
-                    privacyVersion: currentVersions.privacyVersion,
-                    driverAgreementVersion: currentVersions.driverAgreementVersion,
-                    acceptedDuringSignup
-                }
+        const { error } = await updateAuthenticatedUserMetadata({
+            termsAgreement: {
+                accepted: true,
+                acceptedAt: new Date().toISOString(),
+                tosVersion: currentVersions.tosVersion,
+                privacyVersion: currentVersions.privacyVersion,
+                driverAgreementVersion: currentVersions.driverAgreementVersion,
+                acceptedDuringSignup
             }
         });
 
         if (error) throw error;
-        console.log('Terms accepted and saved to Supabase metadata');
+        logger.info('TermsService', 'Terms accepted and saved to Supabase metadata');
 
     } catch (error) {
-        console.error('Failed to accept terms:', error);
-        throw error;
+        const normalized = normalizeError(error, 'Failed to accept terms');
+        logger.error('TermsService', 'Failed to accept terms', normalized, error);
+        throw new Error(normalized.message);
     }
 };
 
@@ -154,7 +159,8 @@ export const getTermsStatus = async (uid, currentUser = null) => {
             needsUpdate: termsData.version !== "1.0"
         };
     } catch (error) {
-        console.error('Error getting terms status:', error);
+        const normalized = normalizeError(error, 'Failed to load terms status');
+        logger.error('TermsService', 'Error getting terms status', normalized, error);
         return {
             hasAccepted: false,
             version: null,

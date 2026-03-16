@@ -1,4 +1,5 @@
 import { normalizeError } from './errorService';
+import { failureResult, successResult } from './contracts/result';
 
 const REMOTE_URL_REGEX = /^https?:\/\//i;
 
@@ -9,7 +10,7 @@ const sanitizeUserId = (userId) => String(userId || '').trim();
 const buildOrderItemMediaPath = (userId, orderTimestamp, suffix) =>
   `${sanitizeUserId(userId)}/order_items/${orderTimestamp}/${suffix}.jpg`;
 
-export const uploadOrderItemMedia = async ({
+const uploadOrderItemMedia = async ({
   uri,
   suffix,
   userId,
@@ -18,20 +19,29 @@ export const uploadOrderItemMedia = async ({
   bucket = 'trip_photos',
 }) => {
   const normalizedUri = String(uri || '').trim();
-  if (!normalizedUri) return null;
-  if (isRemoteUrl(normalizedUri)) return normalizedUri;
+  if (!normalizedUri) {
+    return successResult({ url: null });
+  }
+  if (isRemoteUrl(normalizedUri)) {
+    return successResult({ url: normalizedUri });
+  }
 
   if (!sanitizeUserId(userId)) {
-    throw new Error('Session expired. Please sign in again.');
+    return failureResult('Session expired. Please sign in again.');
   }
 
-  const filename = buildOrderItemMediaPath(userId, orderTimestamp, suffix);
-  const uploadedUrl = await uploadToSupabase(normalizedUri, bucket, filename);
-  if (!isRemoteUrl(uploadedUrl)) {
-    throw new Error('Could not upload item media. Please try again.');
-  }
+  try {
+    const filename = buildOrderItemMediaPath(userId, orderTimestamp, suffix);
+    const uploadedUrl = await uploadToSupabase(normalizedUri, bucket, filename);
+    if (!isRemoteUrl(uploadedUrl)) {
+      return failureResult('Could not upload item media. Please try again.');
+    }
 
-  return uploadedUrl;
+    return successResult({ url: uploadedUrl });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Could not upload item media. Please try again.');
+    return failureResult(normalized.message);
+  }
 };
 
 export const uploadOrderItemsMedia = async ({
@@ -42,7 +52,10 @@ export const uploadOrderItemsMedia = async ({
 }) => {
   try {
     if (!sanitizeUserId(userId)) {
-      throw new Error('Session expired. Please sign in again.');
+      return failureResult('Session expired. Please sign in again.', null, {
+        items: [],
+        orderTimestamp,
+      });
     }
 
     const sourceItems = Array.isArray(items) ? items : [];
@@ -54,7 +67,7 @@ export const uploadOrderItemsMedia = async ({
       const sourcePhotos = Array.isArray(item.photos) ? item.photos : [];
 
       for (let j = 0; j < sourcePhotos.length; j += 1) {
-        const uploadedPhotoUrl = await uploadOrderItemMedia({
+        const uploadedPhotoResult = await uploadOrderItemMedia({
           uri: sourcePhotos[j],
           suffix: `item_${i}_photo_${j}`,
           userId,
@@ -62,38 +75,48 @@ export const uploadOrderItemsMedia = async ({
           uploadToSupabase,
         });
 
-        if (uploadedPhotoUrl) {
-          uploadedPhotos.push(uploadedPhotoUrl);
+        if (!uploadedPhotoResult.success) {
+          return failureResult(uploadedPhotoResult.error || 'Could not upload item media.', null, {
+            items: [],
+            orderTimestamp,
+          });
+        }
+
+        if (uploadedPhotoResult.url) {
+          uploadedPhotos.push(uploadedPhotoResult.url);
         }
       }
 
-      const uploadedInvoicePhoto = await uploadOrderItemMedia({
+      const uploadedInvoiceResult = await uploadOrderItemMedia({
         uri: item.invoicePhoto,
         suffix: `item_${i}_invoice`,
         userId,
         orderTimestamp,
         uploadToSupabase,
       });
+      if (!uploadedInvoiceResult.success) {
+        return failureResult(uploadedInvoiceResult.error || 'Could not upload item media.', null, {
+          items: [],
+          orderTimestamp,
+        });
+      }
 
       uploadedItems.push({
         ...item,
         photos: uploadedPhotos,
-        invoicePhoto: uploadedInvoicePhoto,
+        invoicePhoto: uploadedInvoiceResult.url,
       });
     }
 
-    return {
-      success: true,
+    return successResult({
       items: uploadedItems,
       orderTimestamp,
-    };
+    });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to upload order item media');
-    return {
-      success: false,
-      error: normalized.message,
+    return failureResult(normalized.message, null, {
       items: [],
       orderTimestamp,
-    };
+    });
   }
 };

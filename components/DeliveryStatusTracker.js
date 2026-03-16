@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Delivery Status Tracker component: renders its UI and handles related interactions.
+import React, { useState } from 'react';
 import {
   Animated,
-  Easing,
-  PanResponder,
   ScrollView,
   View,
   Text,
@@ -10,11 +9,19 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/AuthContext';
+import { useTripActions } from '../contexts/AuthContext';
 import DeliveryPhotosModal from './DeliveryPhotosModal';
 import styles from './DeliveryStatusTracker.styles';
-import { TRIP_STATUS } from '../constants/tripStatus';
 import { colors, spacing } from '../styles/theme';
+import DeliveryStatusStep from './deliveryTracker/DeliveryStatusStep';
+import {
+  DELIVERY_STATUS_STEPS,
+  formatDeliveryEta,
+  getCurrentStatusIndex,
+  isScheduledDeliveryRequest,
+} from './deliveryTracker/deliveryTracker.utils';
+import useDeliveryTrackerRequestData from '../hooks/useDeliveryTrackerRequestData';
+import useDeliveryTrackerSheet from '../hooks/useDeliveryTrackerSheet';
 
 export default function DeliveryStatusTracker({
   requestId,
@@ -28,237 +35,41 @@ export default function DeliveryStatusTracker({
   variant = 'floating',
   bottomInset = 0,
 }) {
-  const { getRequestById } = useAuth();
-
-  const [requestData, setRequestData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { getRequestById } = useTripActions();
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [activePhotoType, setActivePhotoType] = useState('pickup');
-  const [isExpanded, setIsExpanded] = useState(expanded);
-  const refreshIntervalRef = useRef(null);
-  const isSheetVariant = variant === 'sheet';
-  const DRAG_THRESHOLD = 28;
-  const DEFAULT_COLLAPSED_HEIGHT = 76;
-  const [collapsedSheetHeight, setCollapsedSheetHeight] = useState(DEFAULT_COLLAPSED_HEIGHT);
-  const [isSheetClosing, setIsSheetClosing] = useState(false);
-  const isExpandedRef = useRef(Boolean(expanded));
-  const sheetAnimationRef = useRef(null);
-  const sheetHeightAnim = useRef(
-    new Animated.Value(Boolean(expanded) ? maxExpandedHeight : DEFAULT_COLLAPSED_HEIGHT)
-  ).current;
-
-  const animateSheetHeight = useCallback((toValue, options = {}) => {
-    const { type = 'expand', onComplete } = options;
-
-    if (!isSheetVariant) {
-      onComplete?.(true);
-      return;
-    }
-
-    if (sheetAnimationRef.current) {
-      sheetAnimationRef.current.stop();
-    }
-
-    const animation =
-      type === 'collapse'
-        ? Animated.timing(sheetHeightAnim, {
-          toValue,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
-        })
-        : Animated.spring(sheetHeightAnim, {
-          toValue,
-          useNativeDriver: false,
-          tension: 100,
-          friction: 12,
-        });
-
-    sheetAnimationRef.current = animation;
-    animation.start(({ finished }) => {
-      if (sheetAnimationRef.current === animation) {
-        sheetAnimationRef.current = null;
-      }
-      onComplete?.(finished);
-    });
-  }, [isSheetVariant, sheetHeightAnim]);
-
-  // Status steps in order with modern labels
-  const statusSteps = [
-    { key: TRIP_STATUS.ACCEPTED, label: 'Driver Confirmed', icon: 'checkmark-circle', description: 'Driver is preparing for your pickup' },
-    { key: TRIP_STATUS.IN_PROGRESS, label: 'On the way to you', icon: 'car-sport', description: 'Driver is heading to your location' },
-    { key: TRIP_STATUS.ARRIVED_AT_PICKUP, label: 'Driver arrived', icon: 'location', description: 'Driver has arrived at pickup location' },
-    { key: TRIP_STATUS.PICKED_UP, label: 'Package collected', icon: 'cube', description: 'Your items are secured for transport' },
-    { key: TRIP_STATUS.EN_ROUTE_TO_DROPOFF, label: 'On the way to destination', icon: 'navigate', description: 'Your package is in transit' },
-    { key: TRIP_STATUS.ARRIVED_AT_DROPOFF, label: 'Arrived at destination', icon: 'home', description: 'Driver has arrived at delivery location' },
-    { key: TRIP_STATUS.COMPLETED, label: 'Delivered', icon: 'checkmark-circle', description: 'Your delivery is complete' },
-  ];
-
-  const fetchRequestData = useCallback(async (showLoader = true) => {
-    if (showLoader) {
-      setLoading(true);
-    }
-
-    try {
-      const data = await getRequestById(requestId);
-      setRequestData(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching request data:', err);
-      setError('Unable to load delivery status');
-    } finally {
-      setLoading(false);
-    }
-  }, [getRequestById, requestId]);
-
-  useEffect(() => {
-    if (requestId) {
-      fetchRequestData();
-
-      // Set up polling for updates every 15 seconds
-      const interval = setInterval(() => {
-        fetchRequestData(false); // Don't show loading indicator for refreshes
-      }, 15000);
-
-      refreshIntervalRef.current = interval;
-    }
-
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-    };
-  }, [fetchRequestData, requestId]);
-
-  useEffect(() => {
-    const normalizedExpanded = Boolean(expanded);
-    if (normalizedExpanded === isExpanded) {
-      return;
-    }
-
-    if (normalizedExpanded) {
-      setIsSheetClosing(false);
-    } else if (isSheetVariant) {
-      setIsSheetClosing(true);
-    }
-    setIsExpanded(normalizedExpanded);
-  }, [expanded, isExpanded, isSheetVariant, requestId]);
-
-  useEffect(() => {
-    isExpandedRef.current = Boolean(isExpanded);
-  }, [isExpanded]);
-
-  useEffect(() => {
-    if (!isSheetVariant) {
-      return undefined;
-    }
-
-    const expandedHeight = Math.max(maxExpandedHeight, collapsedSheetHeight);
-
-    if (isExpanded) {
-      setIsSheetClosing(false);
-      animateSheetHeight(expandedHeight, { type: 'expand' });
-      return undefined;
-    }
-
-    setIsSheetClosing(true);
-    animateSheetHeight(collapsedSheetHeight, {
-      type: 'collapse',
-      onComplete: (finished) => {
-        if (!finished) return;
-        if (!isExpandedRef.current) {
-          setIsSheetClosing(false);
-        }
-      },
-    });
-
-    return undefined;
-  }, [
-    animateSheetHeight,
-    collapsedSheetHeight,
+  const {
+    requestData,
+    loading,
+    error,
+    fetchRequestData,
+  } = useDeliveryTrackerRequestData({
+    requestId,
+    getRequestById,
+    onDeliveryComplete,
+  });
+  const {
     isExpanded,
     isSheetVariant,
+    isSheetClosing,
+    sheetHeightAnim,
+    sheetPanHandlers,
+    toggleExpanded,
+    handleCollapse,
+    handleCompactLayout,
+  } = useDeliveryTrackerSheet({
+    variant,
+    expanded,
     maxExpandedHeight,
-  ]);
+    onExpandedChange,
+    onViewFullTracker,
+    requestId,
+  });
 
-  useEffect(() => {
-    if (!isSheetVariant) {
-      return undefined;
-    }
-
-    return () => {
-      if (sheetAnimationRef.current) {
-        sheetAnimationRef.current.stop();
-        sheetAnimationRef.current = null;
-      }
-    };
-  }, [isSheetVariant]);
-
-  const setExpandedState = useCallback((nextExpanded) => {
-    const normalizedValue = Boolean(nextExpanded);
-    if (normalizedValue === isExpanded) {
-      return;
-    }
-
-    if (normalizedValue) {
-      setIsSheetClosing(false);
-    } else if (isSheetVariant) {
-      setIsSheetClosing(true);
-    }
-    setIsExpanded(normalizedValue);
-    if (typeof onExpandedChange === 'function') {
-      onExpandedChange(normalizedValue);
-    }
-  }, [isExpanded, isSheetVariant, onExpandedChange]);
-
-  const toggleExpanded = useCallback(() => {
-    if (onViewFullTracker) {
-      onViewFullTracker();
-      return;
-    }
-    setExpandedState(!isExpanded);
-  }, [isExpanded, onViewFullTracker, setExpandedState]);
-
-  const handleCollapse = useCallback(() => {
-    setExpandedState(false);
-  }, [setExpandedState]);
-
-  const sheetPanHandlers = useMemo(() => {
-    if (!isSheetVariant) {
-      return {};
-    }
-
-    return PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy <= -DRAG_THRESHOLD) {
-          setExpandedState(true);
-          return;
-        }
-
-        if (gestureState.dy >= DRAG_THRESHOLD) {
-          setExpandedState(false);
-        }
-      },
-    }).panHandlers;
-  }, [isSheetVariant, setExpandedState]);
-
-  // When delivery is completed, notify parent component
-  useEffect(() => {
-    if (requestData && requestData.status === TRIP_STATUS.COMPLETED && onDeliveryComplete) {
-      onDeliveryComplete(requestData);
-
-      // Stop polling when delivery is complete
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = null;
-      }
-    }
-  }, [requestData, onDeliveryComplete]);
+  const currentStatusIndex = getCurrentStatusIndex(requestData);
+  const currentStep = DELIVERY_STATUS_STEPS[currentStatusIndex] || DELIVERY_STATUS_STEPS[0];
+  const etaText = formatDeliveryEta(currentStatusIndex);
+  const isScheduledDelivery = isScheduledDeliveryRequest(requestData);
 
   const handleRefresh = () => {
     fetchRequestData();
@@ -269,57 +80,12 @@ export default function DeliveryStatusTracker({
     setShowPhotosModal(true);
   };
 
-  const getCurrentStatusIndex = () => {
-    if (!requestData || !requestData.status) return 0;
-
-    const currentStatus = requestData.status;
-    const index = statusSteps.findIndex(step => step.key === currentStatus);
-    return index >= 0 ? index : 0;
-  };
-
-  const formatETA = () => {
-    if (!requestData) return '-- min';
-
-    // Calculate ETA based on status
-    const currentStatus = getCurrentStatusIndex();
-
-    if (currentStatus === 0) return '10-15 min';
-    if (currentStatus === 1) return '5-10 min';
-    if (currentStatus === 2) return 'Arrived';
-    if (currentStatus === 3) return '15-20 min';
-    if (currentStatus === 4) return '5-10 min';
-    if (currentStatus === 5) return 'Arrived';
-    return 'Delivered';
-  };
-
-  const isScheduledDelivery = Boolean(
-    requestData?.scheduledTime ||
-    requestData?.scheduled_time ||
-    requestData?.scheduleType === 'scheduled' ||
-    requestData?.dispatchRequirements?.scheduleType === 'scheduled' ||
-    requestData?.dispatch_requirements?.scheduleType === 'scheduled'
-  );
-
   const renderCompactView = () => {
     if (!requestData) return null;
 
-    const currentIndex = getCurrentStatusIndex();
-    const currentStep = statusSteps[currentIndex] || statusSteps[0];
     const shortDeliveryLabel = requestData.item?.description || requestData.vehicleType || 'Delivery in progress';
 
     if (isSheetVariant) {
-      const handleCompactLayout = (event) => {
-        const measuredHeight = Math.ceil(event?.nativeEvent?.layout?.height || 0);
-        if (!measuredHeight || measuredHeight === collapsedSheetHeight) {
-          return;
-        }
-
-        setCollapsedSheetHeight(measuredHeight);
-        if (!isExpanded && !isSheetClosing) {
-          sheetHeightAnim.setValue(measuredHeight);
-        }
-      };
-
       return (
         <Animated.View
           style={[
@@ -339,7 +105,7 @@ export default function DeliveryStatusTracker({
             <View style={styles.sheetCompactRow}>
               <TouchableOpacity
                 style={styles.sheetCompactMain}
-                onPress={onViewFullTracker || toggleExpanded}
+                onPress={toggleExpanded}
                 activeOpacity={0.9}
               >
                 <View style={styles.compactContent}>
@@ -349,7 +115,7 @@ export default function DeliveryStatusTracker({
                   <View style={[styles.compactTextContainer, styles.sheetCompactTextContainer]}>
                     <Text style={styles.compactStatus}>{currentStep.label}</Text>
                     <Text style={styles.compactInfo}>
-                      {shortDeliveryLabel} • ETA: {formatETA()}
+                      {shortDeliveryLabel} • ETA: {etaText}
                     </Text>
                   </View>
                 </View>
@@ -376,7 +142,7 @@ export default function DeliveryStatusTracker({
     }
 
     return (
-      <TouchableOpacity style={styles.compactContainer} onPress={onViewFullTracker || toggleExpanded} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.compactContainer} onPress={toggleExpanded} activeOpacity={0.9}>
         <View style={styles.compactContent}>
           <View style={styles.compactIconContainer}>
             <Ionicons name={currentStep.icon} size={16} color={colors.white} />
@@ -384,7 +150,7 @@ export default function DeliveryStatusTracker({
           <View style={styles.compactTextContainer}>
             <Text style={styles.compactStatus}>{currentStep.label}</Text>
             <Text style={styles.compactInfo}>
-              {shortDeliveryLabel} • ETA: {formatETA()}
+              {shortDeliveryLabel} • ETA: {etaText}
             </Text>
           </View>
         </View>
@@ -395,57 +161,11 @@ export default function DeliveryStatusTracker({
     );
   };
 
-  const renderStatusStep = (step, index) => {
-    const currentIndex = getCurrentStatusIndex();
-    const isActive = index <= currentIndex;
-    const isCurrent = index === currentIndex;
-
-    return (
-      <View key={step.key} style={styles.statusStep}>
-        <View style={styles.statusIconContainer}>
-          <View style={[
-            styles.statusDot,
-            isActive ? styles.activeDot : styles.inactiveDot,
-            isCurrent ? styles.currentDot : null
-          ]}>
-            <Ionicons
-              name={step.icon}
-              size={16}
-              color={isActive ? colors.white : colors.text.subtle}
-            />
-          </View>
-
-          {index < statusSteps.length - 1 && (
-            <View style={[
-              styles.statusLine,
-              index < currentIndex ? styles.activeLine : styles.inactiveLine
-            ]} />
-          )}
-        </View>
-
-        <View style={styles.statusTextContainer}>
-          <Text style={[
-            styles.statusLabel,
-            isActive ? styles.activeLabel : styles.inactiveLabel,
-            isCurrent ? styles.currentLabel : null
-          ]}>
-            {step.label}
-          </Text>
-
-          {isCurrent && (
-            <Text style={styles.statusDescription}>{step.description}</Text>
-          )}
-        </View>
-      </View>
-    );
-  };
-
   const renderPhotoButtons = () => {
     const hasPickupPhotos = requestData?.pickupPhotos && requestData.pickupPhotos.length > 0;
     const hasDeliveryPhotos = requestData?.dropoffPhotos && requestData.dropoffPhotos.length > 0;
-    const currentIndex = getCurrentStatusIndex();
 
-    if (currentIndex < 3 || (!hasPickupPhotos && !hasDeliveryPhotos)) {
+    if (currentStatusIndex < 3 || (!hasPickupPhotos && !hasDeliveryPhotos)) {
       return null;
     }
 
@@ -571,7 +291,17 @@ export default function DeliveryStatusTracker({
         {renderDriverInfo()}
 
         <View style={styles.statusContainer}>
-          {statusSteps.map(renderStatusStep)}
+          {DELIVERY_STATUS_STEPS.map((step, index) => (
+            <DeliveryStatusStep
+              key={step.key}
+              step={step}
+              index={index}
+              isLast={index === DELIVERY_STATUS_STEPS.length - 1}
+              currentStatusIndex={currentStatusIndex}
+              styles={styles}
+              colors={colors}
+            />
+          ))}
         </View>
 
         {renderPhotoButtons()}

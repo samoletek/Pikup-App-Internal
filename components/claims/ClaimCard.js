@@ -1,6 +1,8 @@
+// Claim Card component: renders its UI and handles related interactions.
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppCard from '../ui/AppCard';
 import {
   borderRadius,
   colors,
@@ -16,7 +18,7 @@ export default function ClaimCard({
   showResolution,
 }) {
   return (
-    <View style={styles.claimCard}>
+    <AppCard style={styles.claimCard}>
       <View style={styles.claimHeader}>
         <View style={styles.claimInfo}>
           <Text style={styles.claimDate}>{item.date}</Text>
@@ -53,18 +55,13 @@ export default function ClaimCard({
         <Text style={styles.viewDetailsText}>View Details</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.primary} />
       </TouchableOpacity>
-    </View>
+    </AppCard>
   );
 }
 
 const styles = StyleSheet.create({
   claimCard: {
-    backgroundColor: colors.background.panel,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
     marginBottom: spacing.base,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
   },
   claimHeader: {
     flexDirection: 'row',

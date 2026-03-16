@@ -1,8 +1,10 @@
+// Offline Dashboard component: renders its UI and handles related interactions.
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Animated, PanResponder } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, Animated, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuthIdentity, useDriverActions } from '../../contexts/AuthContext';
+import { logger } from '../../services/logger';
+import OfflineDashboardBody from './OfflineDashboardBody';
 import { styles, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 
@@ -15,7 +17,8 @@ export default function OfflineDashboard({
     navigation,
     onExpandedChange,
 }) {
-    const { currentUser, getDriverSessionStats, getDriverStats } = useAuth();
+    const { currentUser } = useAuthIdentity();
+    const { getDriverSessionStats, getDriverStats } = useDriverActions();
     const [sessionStats, setSessionStats] = useState({
         totalEarnings: 0,
         tripsCompleted: 0,
@@ -204,9 +207,10 @@ export default function OfflineDashboard({
 
     const loadSessionData = useCallback(async () => {
         try {
-            if (currentUser?.uid) {
-                const stats = await getDriverSessionStats?.(currentUser.uid) || {};
-                const weeklyStats = await getDriverStats?.(currentUser.uid) || {};
+            const currentUserId = currentUser?.uid || currentUser?.id;
+            if (currentUserId) {
+                const stats = await getDriverSessionStats?.(currentUserId) || {};
+                const weeklyStats = await getDriverStats?.(currentUserId) || {};
 
                 setSessionStats({
                     ...stats,
@@ -221,9 +225,9 @@ export default function OfflineDashboard({
                 generateRecommendations(stats);
             }
         } catch (error) {
-            console.error('Error loading session data:', error);
+            logger.error('OfflineDashboard', 'Error loading session data', error);
         }
-    }, [currentUser?.uid, generateRecommendations, getDriverSessionStats, getDriverStats]);
+    }, [currentUser?.id, currentUser?.uid, generateRecommendations, getDriverSessionStats, getDriverStats]);
 
     useEffect(() => {
         loadSessionData();
@@ -263,161 +267,21 @@ export default function OfflineDashboard({
             {/* Dashboard */}
             <Animated.View style={[styles.container, { height: animatedHeight }]}>
                 <LinearGradient colors={[colors.background.primary, colors.background.secondary]} style={styles.gradient}>
-
-                    {/* Swipeable Handle Area */}
-                    <View {...panResponder.panHandlers} style={styles.handleArea}>
-                        <View style={styles.dragHandle} />
-                    </View>
-
-                    {/* Collapsed Peek - Progress Bar visible */}
-                    {!isExpanded && (
-                        <TouchableOpacity
-                            style={styles.collapsedContainer}
-                            onPress={toggleExpanded}
-                            activeOpacity={0.9}
-                        >
-                            {/* Peek Content - Weekly Progress */}
-                            <View style={styles.peekContent}>
-                                <View style={styles.peekHeader}>
-                                    <View style={styles.peekLeft}>
-                                        <Ionicons name="trophy" size={18} color={colors.primary} />
-                                        <Text style={styles.peekTitle}>Weekly Milestone</Text>
-                                    </View>
-                                    <Text style={styles.peekProgress}>{driverStats.currentWeekTrips}/{driverStats.weeklyMilestone}</Text>
-                                </View>
-
-                                <View style={styles.progressBarSmall}>
-                                    <View style={[styles.progressFillSmall, { width: `${milestoneProgress}%` }]} />
-                                </View>
-
-                                <View style={styles.peekFooter}>
-                                    <Text style={styles.peekSubtitle}>
-                                        {tripsRemaining > 0
-                                            ? `${tripsRemaining} more trips for $50 bonus`
-                                            : 'Milestone achieved! $50 bonus earned'
-                                        }
-                                    </Text>
-                                    <View style={styles.expandHint}>
-                                        <Ionicons name="chevron-up" size={14} color={colors.text.muted} />
-                                        <Text style={styles.expandHintText}>Tap for more</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    )}
-
-                    {/* Expanded View - Full Dashboard */}
-                    {isExpanded && (
-                        <>
-                            {/* Header with Close */}
-                            <View style={styles.expandedHeader}>
-                                <View style={styles.headerSideSpacer} />
-                                <Text style={styles.expandedTitle}>Driver Dashboard</Text>
-                                <TouchableOpacity onPress={collapse} style={styles.closeBtn}>
-                                    <Ionicons name="chevron-down" size={24} color={colors.text.primary} />
-                                </TouchableOpacity>
-                            </View>
-
-                            <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-
-                                {/* Weekly Milestone */}
-                                <View style={styles.sectionCard}>
-                                    <View style={styles.milestoneHeader}>
-                                        <View style={styles.milestoneLeft}>
-                                            <Ionicons name="trophy" size={22} color={colors.success} />
-                                            <View style={styles.milestoneTextWrap}>
-                                                <Text style={styles.milestoneTitle}>Weekly Milestone</Text>
-                                                <Text style={styles.milestoneSubtitle}>
-                                                    {tripsRemaining > 0 ? `${tripsRemaining} more trips for $50 bonus` : 'Milestone achieved!'}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.milestoneCount}>{driverStats.currentWeekTrips}/{driverStats.weeklyMilestone}</Text>
-                                    </View>
-                                    <View style={styles.progressRow}>
-                                        <View style={styles.progressBar}>
-                                            <View style={[styles.progressFill, { width: `${milestoneProgress}%` }]} />
-                                        </View>
-                                        <Text style={styles.progressPct}>{Math.round(milestoneProgress)}%</Text>
-                                    </View>
-                                </View>
-
-                                {/* Today's Session */}
-                                <View style={styles.sectionCard}>
-                                    <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="calendar-outline" size={18} color={colors.success} />
-                                        <Text style={styles.sectionTitle}>Today's Session</Text>
-                                    </View>
-                                    <View style={styles.statsGrid}>
-                                        <View style={styles.statItem}>
-                                            <Text style={styles.statValue}>${(sessionStats.totalEarnings || 0).toFixed(2)}</Text>
-                                            <Text style={styles.statLabel}>Earnings</Text>
-                                        </View>
-                                        <View style={styles.statItem}>
-                                            <Text style={styles.statValue}>{sessionStats.tripsCompleted || 0}</Text>
-                                            <Text style={styles.statLabel}>Trips</Text>
-                                        </View>
-                                        <View style={styles.statItem}>
-                                            <Text style={styles.statValue}>{formatDuration(sessionStats.totalOnlineMinutes)}</Text>
-                                            <Text style={styles.statLabel}>Online</Text>
-                                        </View>
-                                        <View style={styles.statItem}>
-                                            <Text style={styles.statValue}>{(sessionStats.averageRating || 0).toFixed(1)}</Text>
-                                            <Text style={styles.statLabel}>Rating</Text>
-                                        </View>
-                                    </View>
-                                </View>
-
-                                {/* Recommendations */}
-                                <View style={styles.sectionCard}>
-                                    <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="bulb-outline" size={18} color={colors.success} />
-                                        <Text style={styles.sectionTitle}>Recommendations</Text>
-                                    </View>
-                                    {recommendations.map((rec, index) => (
-                                        <View key={index} style={styles.recommendationItem}>
-                                            <View style={[styles.recIcon, { backgroundColor: rec.color }]}>
-                                                <Ionicons name={rec.icon} size={18} color={colors.text.primary} />
-                                            </View>
-                                            <View style={styles.recContent}>
-                                                <Text style={styles.recTitle}>{rec.title}</Text>
-                                                <Text style={styles.recDescription}>{rec.description}</Text>
-                                            </View>
-                                        </View>
-                                    ))}
-                                </View>
-
-                                {/* Quick Actions */}
-                                <View style={styles.sectionCard}>
-                                    <View style={styles.sectionHeaderRow}>
-                                        <Ionicons name="flash-outline" size={18} color={colors.success} />
-                                        <Text style={styles.sectionTitle}>Quick Actions</Text>
-                                    </View>
-                                    <View style={styles.actionsGrid}>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverEarningsScreen')}>
-                                            <Ionicons name="stats-chart-outline" size={22} color={colors.success} />
-                                            <Text style={styles.actionText}>Earnings</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('PersonalInfoScreen')}>
-                                            <Ionicons name="person-outline" size={22} color={colors.success} />
-                                            <Text style={styles.actionText}>Profile</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('DriverMessagesScreen')}>
-                                            <Ionicons name="chatbubbles-outline" size={22} color={colors.success} />
-                                            <Text style={styles.actionText}>Messages</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={styles.actionButton} onPress={() => handleNavigation('CustomerHelpScreen')}>
-                                            <Ionicons name="help-circle-outline" size={22} color={colors.success} />
-                                            <Text style={styles.actionText}>Help</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-
-                                <View style={{ height: 100 }} />
-                            </ScrollView>
-                        </>
-                    )}
+                    <OfflineDashboardBody
+                        isExpanded={isExpanded}
+                        toggleExpanded={toggleExpanded}
+                        collapse={collapse}
+                        panHandlers={panResponder.panHandlers}
+                        driverStats={driverStats}
+                        milestoneProgress={milestoneProgress}
+                        tripsRemaining={tripsRemaining}
+                        sessionStats={sessionStats}
+                        recommendations={recommendations}
+                        formatDuration={formatDuration}
+                        handleNavigation={handleNavigation}
+                        styles={styles}
+                        colors={colors}
+                    />
 
                     {/* Go Online Button - Always visible at bottom */}
                     <Animated.View

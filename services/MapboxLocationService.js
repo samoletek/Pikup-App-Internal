@@ -1,6 +1,13 @@
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { appConfig } from '../config/appConfig';
+import {
+  getMapProviderAdapter,
+  resetMapProviderAdapter,
+  setMapProviderAdapter,
+} from './adapters/mapProviderAdapter';
+import { logger } from './logger';
+import { normalizeError } from './errorService';
 
 const MAPBOX_ACCESS_TOKEN = appConfig.mapbox.publicToken;
 const LAST_LOCATION_KEY = '@pikup_last_location';
@@ -10,6 +17,17 @@ class MapboxLocationService {
     this.currentLocation = null;
     this.locationCallbacks = [];
     this.watchId = null;
+    this.mapProvider = getMapProviderAdapter();
+  }
+
+  setMapProviderAdapter(adapter) {
+    setMapProviderAdapter(adapter);
+    this.mapProvider = getMapProviderAdapter();
+  }
+
+  resetMapProviderAdapter() {
+    resetMapProviderAdapter();
+    this.mapProvider = getMapProviderAdapter();
   }
 
   // Save location to storage
@@ -17,7 +35,8 @@ class MapboxLocationService {
     try {
       await AsyncStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(location));
     } catch (error) {
-      console.warn('Failed to save last location:', error);
+      const normalized = normalizeError(error, 'Failed to save last location');
+      logger.warn('MapboxLocationService', 'Failed to save last location', normalized, error);
     }
   }
 
@@ -27,29 +46,21 @@ class MapboxLocationService {
       const jsonValue = await AsyncStorage.getItem(LAST_LOCATION_KEY);
       return jsonValue != null ? JSON.parse(jsonValue) : null;
     } catch (error) {
-      console.warn('Failed to load last location:', error);
+      const normalized = normalizeError(error, 'Failed to load last location');
+      logger.warn('MapboxLocationService', 'Failed to load last location', normalized, error);
       return null;
     }
   }
 
   // CRITICAL: Replace Google Directions API (TOS violation)
   async getRoute(origin, destination, waypoints = []) {
-    // ... existing implementation ...
     try {
-      const originStr = `${origin.longitude},${origin.latitude}`;
-      const destinationStr = `${destination.longitude},${destination.latitude}`;
-
-      let waypointsStr = '';
-      if (waypoints.length > 0) {
-        waypointsStr = waypoints
-          .map(point => `${point.longitude},${point.latitude}`)
-          .join(';');
-      }
-
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${originStr}${waypointsStr ? `;${waypointsStr}` : ''};${destinationStr}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson&steps=true&voice_instructions=true&alternatives=true`;
-
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.mapProvider.fetchDirections({
+        accessToken: MAPBOX_ACCESS_TOKEN,
+        origin,
+        destination,
+        waypoints,
+      });
 
       if (data.routes && data.routes.length > 0) {
         const route = data.routes[0];
@@ -78,20 +89,21 @@ class MapboxLocationService {
         throw new Error(`Mapbox Directions API error: ${data.message || 'No routes found'}`);
       }
     } catch (error) {
-      console.error('Error getting route:', error);
-      throw error;
+      const normalized = normalizeError(error, 'Failed to get route');
+      logger.error('MapboxLocationService', 'Error getting route', normalized, error);
+      throw new Error(normalized.message);
     }
   }
 
   // CRITICAL: Replace Google Geocoding API (TOS violation)
   async geocodeAddress(address) {
     try {
-      // Bias search to Georgia (your service area)
-      const bbox = '-85.605166,30.355757,-80.751429,35.000659'; // Georgia bounds
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&bbox=${bbox}&country=US`;
-
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.mapProvider.geocodeAddress({
+        accessToken: MAPBOX_ACCESS_TOKEN,
+        address,
+        bbox: '-85.605166,30.355757,-80.751429,35.000659',
+        country: 'US',
+      });
 
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
@@ -104,18 +116,22 @@ class MapboxLocationService {
         throw new Error('Geocoding failed: No results found');
       }
     } catch (error) {
-      console.error('Geocoding error:', error);
-      throw error;
+      const normalized = normalizeError(error, 'Failed to geocode address');
+      logger.error('MapboxLocationService', 'Geocoding error', normalized, error);
+      throw new Error(normalized.message);
     }
   }
 
   // CRITICAL: Add reverse geocoding for coordinates to address
   async reverseGeocode(latitude, longitude) {
     try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${MAPBOX_ACCESS_TOKEN}&types=address,poi&country=US`;
-
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await this.mapProvider.reverseGeocode({
+        accessToken: MAPBOX_ACCESS_TOKEN,
+        latitude,
+        longitude,
+        types: 'address,poi',
+        country: 'US',
+      });
 
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
@@ -127,8 +143,9 @@ class MapboxLocationService {
         throw new Error('Reverse geocoding failed: No results found');
       }
     } catch (error) {
-      console.error('Reverse geocoding error:', error);
-      throw error;
+      const normalized = normalizeError(error, 'Failed to reverse geocode coordinates');
+      logger.error('MapboxLocationService', 'Reverse geocoding error', normalized, error);
+      throw new Error(normalized.message);
     }
   }
 
@@ -203,7 +220,8 @@ class MapboxLocationService {
 
       return this.currentLocation;
     } catch (error) {
-      console.error('Error getting current location:', error);
+      const normalized = normalizeError(error, 'Failed to get current location');
+      logger.error('MapboxLocationService', 'Error getting current location', normalized, error);
       if (allowStoredFallback) {
         const storedLocation = await this.getLastKnownLocation();
         if (storedLocation?.latitude && storedLocation?.longitude) {
@@ -211,7 +229,7 @@ class MapboxLocationService {
           return storedLocation;
         }
       }
-      throw error;
+      throw new Error(normalized.message);
     }
   }
 
@@ -244,8 +262,9 @@ class MapboxLocationService {
         }
       );
     } catch (error) {
-      console.error('Error starting location tracking:', error);
-      throw error;
+      const normalized = normalizeError(error, 'Failed to start location tracking');
+      logger.error('MapboxLocationService', 'Error starting location tracking', normalized, error);
+      throw new Error(normalized.message);
     }
   }
 
@@ -254,7 +273,8 @@ class MapboxLocationService {
       try {
         this.watchId.remove(); // ✅ correct way
       } catch (e) {
-        console.warn('Failed to remove location watcher', e);
+        const normalized = normalizeError(e, 'Failed to remove location watcher');
+        logger.warn('MapboxLocationService', 'Failed to remove location watcher', normalized, e);
       }
       this.watchId = null;
     }

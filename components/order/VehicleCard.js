@@ -1,3 +1,4 @@
+// Vehicle Card component: renders its UI and handles related interactions.
 import React, { useEffect } from 'react';
 import {
     View,

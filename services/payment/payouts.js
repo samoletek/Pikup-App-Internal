@@ -1,0 +1,191 @@
+import { normalizeError } from '../errorService';
+import { logger } from '../logger';
+import { failureResult, successResult } from '../contracts/result';
+import {
+  fetchCompletedDriverTrips,
+  invokeProcessPayout,
+} from '../repositories/paymentRepository';
+import {
+  getDriverProfileRow,
+  periodStartIso,
+  toNumber,
+} from './common';
+import { updateDriverPaymentProfile } from './profile';
+
+/**
+ * Get driver earnings history.
+ */
+export const getDriverEarningsHistory = async (driverId, period = 'week') => {
+  try {
+    if (!driverId) {
+      return failureResult('Driver ID is required', null, { earnings: [] });
+    }
+
+    const fromIso = periodStartIso(period);
+    const { data, error } = await fetchCompletedDriverTrips(driverId, fromIso);
+
+    if (error) {
+      const normalized = normalizeError(error, 'Unable to load earnings history');
+      logger.error('PaymentService', 'getDriverEarningsHistory failed', normalized, error);
+      return failureResult(normalized.message, normalized.code || null, { earnings: [] });
+    }
+
+    const earnings = (data || []).map((trip) => {
+      const total = toNumber(trip.price, 0);
+      const driverAmount = Number((total * 0.75).toFixed(2));
+
+      return {
+        id: trip.id,
+        amount: driverAmount,
+        grossAmount: total,
+        distance: toNumber(trip.distance_miles, 0),
+        createdAt: trip.created_at,
+        completedAt: trip.completed_at,
+      };
+    });
+
+    return successResult({ earnings });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Unable to load earnings history');
+    logger.error('PaymentService', 'getDriverEarningsHistory failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null, { earnings: [] });
+  }
+};
+
+/**
+ * Get driver payouts history from metadata ledger.
+ */
+export const getDriverPayouts = async (driverId) => {
+  try {
+    if (!driverId) return failureResult('Driver ID is required', null, { payouts: [] });
+
+    const profile = await getDriverProfileRow(driverId);
+    const payouts = Array.isArray(profile?.metadata?.payouts) ? profile.metadata.payouts : [];
+
+    return successResult({
+      payouts,
+      totalPayouts: toNumber(profile?.metadata?.totalPayouts, 0),
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Unable to load payout history');
+    logger.error('PaymentService', 'getDriverPayouts failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null, { payouts: [] });
+  }
+};
+
+/**
+ * Request instant payout.
+ */
+export const requestInstantPayout = async (driverId, amount, currentUser = null) => {
+  try {
+    if (!driverId) {
+      return failureResult('Driver ID is required');
+    }
+
+    const normalizedAmount = Number(amount);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      return failureResult('Invalid payout amount');
+    }
+
+    const profile = await getDriverProfileRow(driverId);
+    if (!profile) {
+      return failureResult('Driver profile not found');
+    }
+
+    const metadata = profile.metadata || {};
+    const connectAccountId = profile.stripe_account_id || metadata.connectAccountId;
+    if (!connectAccountId) {
+      return failureResult('Stripe Connect account is not configured');
+    }
+
+    const availableBalance = toNumber(metadata.availableBalance, 0);
+    if (normalizedAmount > availableBalance) {
+      return failureResult(`Insufficient available balance. Available: $${availableBalance.toFixed(2)}`);
+    }
+
+    const transferGroup = `instant_payout:${driverId}:${Date.now()}`;
+
+    const { data, error } = await invokeProcessPayout({
+      amount: Number(normalizedAmount.toFixed(2)),
+      currency: 'usd',
+      connectAccountId,
+      transferGroup,
+      driverId,
+    });
+
+    if (error) {
+      const normalized = normalizeError(error, 'Failed to process instant payout');
+      logger.error('PaymentService', 'requestInstantPayout failed', normalized, error);
+      return failureResult(normalized.message, normalized.code || null);
+    }
+    if (!data?.success) {
+      return failureResult(data?.error || 'Instant payout failed');
+    }
+
+    const now = new Date().toISOString();
+    const payoutRecord = {
+      id: data.transferId,
+      amount: Number(normalizedAmount.toFixed(2)),
+      createdAt: now,
+      status: 'processed',
+      transferGroup,
+      kind: 'instant',
+    };
+
+    const currentPayouts = Array.isArray(metadata.payouts) ? metadata.payouts : [];
+    const totalPayouts = toNumber(metadata.totalPayouts, 0) + payoutRecord.amount;
+    const nextAvailableBalance = Math.max(
+      0,
+      Number((availableBalance - payoutRecord.amount).toFixed(2))
+    );
+
+    await updateDriverPaymentProfile(driverId, {
+      payouts: [payoutRecord, ...currentPayouts].slice(0, 100),
+      totalPayouts: Number(totalPayouts.toFixed(2)),
+      availableBalance: nextAvailableBalance,
+      lastPayoutAt: now,
+      lastPayoutId: data.transferId,
+    });
+
+    return successResult({
+      transferId: data.transferId,
+      payout: payoutRecord,
+      availableBalance: nextAvailableBalance,
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to process instant payout');
+    logger.error('PaymentService', 'requestInstantPayout failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null);
+  }
+};
+
+/**
+ * Process trip payout through Edge Function.
+ */
+export const processTripPayout = async (payoutData) => {
+  try {
+    const { data, error } = await invokeProcessPayout({
+      amount: payoutData.amount,
+      currency: 'usd',
+      connectAccountId: payoutData.connectAccountId,
+      transferGroup: payoutData.tripId,
+      driverId: payoutData.driverId,
+    });
+
+    if (error) {
+      const normalized = normalizeError(error, 'Trip payout failed');
+      logger.error('PaymentService', 'processTripPayout failed', normalized, error);
+      return failureResult(normalized.message, normalized.code || null);
+    }
+
+    if (!data.success) {
+      return failureResult(data.error || 'Payout processing failed');
+    }
+
+    return successResult({ transferId: data.transferId });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Trip payout failed');
+    logger.error('PaymentService', 'processTripPayout failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null);
+  }
+};

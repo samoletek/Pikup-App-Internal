@@ -1,3 +1,4 @@
+// Delivery Photos Modal component: renders its UI and handles related interactions.
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -10,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import BaseModal from './BaseModal';
-import { supabase } from '../config/supabase';
+import { getPhotoURL } from '../services/StorageService';
 import { colors } from '../styles/theme';
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -45,8 +46,7 @@ export default function DeliveryPhotosModal({
       }
 
       const normalizedPath = raw.replace(/^\/+/, '').replace(/^trip_photos\//, '');
-      const { data } = supabase.storage.from('trip_photos').getPublicUrl(normalizedPath);
-      return data?.publicUrl || null;
+      return getPhotoURL(normalizedPath);
     }
 
     if (Array.isArray(photo)) {

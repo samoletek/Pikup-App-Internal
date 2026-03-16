@@ -10,7 +10,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/ScreenHeader";
-import { useAuth } from "../../contexts/AuthContext";
+import AppButton from "../../components/ui/AppButton";
+import { useAuthIdentity, useMessagingActions } from "../../contexts/AuthContext";
+import { logger } from "../../services/logger";
 import {
   borderRadius,
   colors,
@@ -38,7 +40,8 @@ const FAQS = [
 
 export default function CustomerHelpScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, createConversation } = useAuth();
+  const { currentUser } = useAuthIdentity();
+  const { createConversation } = useMessagingActions();
   const [expandedFaqId, setExpandedFaqId] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -79,7 +82,7 @@ export default function CustomerHelpScreen({ navigation }) {
         // If hardcoded ID fails (FK constraint), fallback to Self-Chat (Note-to-Self)
         // This allows testing the UI flow without a real support user in DB
         if (err.message && (err.message.includes("foreign key") || err.code === "23503")) {
-          console.warn("Support ID not found, falling back to Self-Support (Note-to-Self)");
+          logger.warn("CustomerHelpScreen", "Support ID not found, falling back to Self-Support (Note-to-Self)");
           usedSupportId = currentUserId;
           conversationId = await createConversation(
             null,
@@ -100,7 +103,7 @@ export default function CustomerHelpScreen({ navigation }) {
         driverName: "Support",
       });
     } catch (error) {
-      console.error("Error creating support chat:", error);
+      logger.error("CustomerHelpScreen", "Error creating support chat", error);
       Alert.alert("Error", "Could not start support chat. Please try again.");
     } finally {
       setLoading(false);
@@ -158,16 +161,13 @@ export default function CustomerHelpScreen({ navigation }) {
             Our support team is available 24/7 to assist you.
           </Text>
 
-          <TouchableOpacity
+          <AppButton
+            title={loading ? "Starting Chat..." : "Chat with Support"}
             style={[styles.contactButton, loading && styles.contactButtonDisabled]}
             onPress={handleContactSupport}
             disabled={loading}
-          >
-            <Ionicons name="chatbubbles-outline" size={24} color={colors.white} />
-            <Text style={styles.contactButtonText}>
-              {loading ? "Starting Chat..." : "Chat with Support"}
-            </Text>
-          </TouchableOpacity>
+            leftIcon={<Ionicons name="chatbubbles-outline" size={24} color={colors.white} />}
+          />
         </View>
       </ScrollView>
     </View>
@@ -242,22 +242,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   contactButton: {
-    flexDirection: "row",
     backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.full,
-    alignItems: "center",
     width: "100%",
     justifyContent: "center",
   },
   contactButtonDisabled: {
     opacity: 0.7,
-  },
-  contactButtonText: {
-    color: colors.white,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.bold,
-    marginLeft: spacing.sm,
   },
 });

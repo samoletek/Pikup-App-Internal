@@ -1,5 +1,7 @@
-import { supabase } from '../config/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logger } from './logger';
+import { fetchPricingConfigRows } from './repositories/pricingRepository';
+import { normalizeError } from './errorService';
 
 const PRICING_CACHE_KEY = '@pikup_pricing_config';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -20,9 +22,7 @@ const VEHICLE_ORDER = ['midsize_suv', 'fullsize_pickup', 'fullsize_truck', 'carg
  */
 export const fetchPricingConfig = async () => {
     try {
-        const { data, error } = await supabase
-            .from('pricing_config')
-            .select('id, value');
+        const { data, error } = await fetchPricingConfigRows();
 
         if (error) throw error;
 
@@ -39,8 +39,9 @@ export const fetchPricingConfig = async () => {
 
         return config;
     } catch (error) {
-        console.error('Error fetching pricing config:', error);
-        throw error;
+        const normalized = normalizeError(error, 'Failed to fetch pricing configuration');
+        logger.error('PricingService', 'Error fetching pricing config', normalized, error);
+        throw new Error(normalized.message);
     }
 };
 

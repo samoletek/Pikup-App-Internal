@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import { useTripActions } from '../contexts/AuthContext';
+import { logger } from '../services/logger';
 
 /**
  * Custom hook to monitor order status changes, specifically for cancellation detection
@@ -22,7 +23,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
     onError
   } = options;
 
-  const { getRequestById } = useAuth();
+  const { getRequestById } = useTripActions();
   const intervalRef = useRef(null);
   const isMountedRef = useRef(true);
   const retryCountRef = useRef(0);
@@ -42,7 +43,11 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
         retryCountRef.current = 0; // Reset retry count on success
         return request;
       } catch (error) {
-        console.warn(`[${currentScreen}] Status check attempt ${attempt + 1} failed:`, error.message);
+        logger.warn(
+          'OrderStatusMonitor',
+          `[${currentScreen}] Status check attempt ${attempt + 1} failed`,
+          error?.message
+        );
         
         if (attempt === retries - 1) {
           // Final attempt failed
@@ -59,7 +64,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
    * Handle order cancellation
    */
   const handleCancellation = useCallback((request) => {
-    console.log(`[${currentScreen}] Order ${requestId} was cancelled`);
+    logger.info('OrderStatusMonitor', `[${currentScreen}] Order ${requestId} was cancelled`);
     
     // Stop monitoring
     if (intervalRef.current) {
@@ -97,13 +102,16 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
    * Handle monitoring errors
    */
   const handleError = useCallback((error) => {
-    console.error(`[${currentScreen}] Order status monitoring error:`, error);
+    logger.error('OrderStatusMonitor', `[${currentScreen}] Order status monitoring error`, error);
     
     retryCountRef.current += 1;
     
     // If we've exceeded retry attempts, stop monitoring
     if (retryCountRef.current >= MAX_RETRIES) {
-      console.error(`[${currentScreen}] Stopping monitoring after ${MAX_RETRIES} consecutive failures`);
+      logger.error(
+        'OrderStatusMonitor',
+        `[${currentScreen}] Stopping monitoring after ${MAX_RETRIES} consecutive failures`
+      );
       
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -134,7 +142,11 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
 
       // Log status changes for debugging
       if (request.status !== lastStatusRef.current) {
-        console.log(`[${currentScreen}] Order ${requestId} status changed: ${lastStatusRef.current} → ${request.status}`);
+        logger.info(
+          'OrderStatusMonitor',
+          `[${currentScreen}] Order ${requestId} status changed`,
+          { from: lastStatusRef.current, to: request.status }
+        );
         lastStatusRef.current = request.status;
       }
 
@@ -160,7 +172,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
       return;
     }
 
-    console.log(`[${currentScreen}] Starting order status monitoring for request ${requestId}`);
+    logger.info('OrderStatusMonitor', `[${currentScreen}] Starting monitoring for request ${requestId}`);
     
     // Initial check
     monitorOrderStatus();
@@ -174,7 +186,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
    */
   const stopMonitoring = useCallback(() => {
     if (intervalRef.current) {
-      console.log(`[${currentScreen}] Stopping order status monitoring for request ${requestId}`);
+      logger.info('OrderStatusMonitor', `[${currentScreen}] Stopping monitoring for request ${requestId}`);
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }

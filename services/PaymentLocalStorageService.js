@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from './logger';
+import { normalizeError } from './errorService';
 
 const getPaymentMethodsKey = (userId) => `paymentMethods:${userId}`;
 const getDefaultMethodKey = (userId) => `defaultPaymentMethod:${userId}`;
@@ -21,7 +22,8 @@ export const loadStoredPaymentState = async (userId) => {
       defaultPaymentMethod: savedDefault ? JSON.parse(savedDefault) : null,
     };
   } catch (error) {
-    logger.error('PaymentLocalStorageService', 'loadStoredPaymentState failed', error);
+    const normalized = normalizeError(error, 'Failed to load payment methods from local storage');
+    logger.error('PaymentLocalStorageService', 'loadStoredPaymentState failed', normalized, error);
     return {
       paymentMethods: [],
       defaultPaymentMethod: null,

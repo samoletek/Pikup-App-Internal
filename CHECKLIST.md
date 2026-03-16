@@ -279,7 +279,7 @@ NEW EDITS:
 ### Stripe Payments
 - [-] #83 Customer payment flow testing - drew
 - [ ] #84 Driver payout (Stripe Connect) - drew
-- [-] #85 75% earnings calculation verification - drew (25/75)
+- [x] #85 75% earnings calculation verification - drew (25/75)
 
 ### Milestone 4 Deliverables
 - [ ] Complete driver home screen with order notifications

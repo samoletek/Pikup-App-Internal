@@ -1,4 +1,10 @@
-import { supabase } from '../config/supabase';
+import {
+    invokeSendPhoneOtp,
+    invokeVerifyPhoneOtp,
+    updateProfileByTableAndUserId,
+} from './repositories/authRepository';
+import { normalizeError } from './errorService';
+import { failureResult, successResult } from './contracts/result';
 
 const getEdgeFunctionErrorMessage = async (error) => {
     if (!error) return 'Request failed';
@@ -10,8 +16,11 @@ const getEdgeFunctionErrorMessage = async (error) => {
             const payload = await context.json();
             if (payload?.error) return payload.error;
             if (payload?.message) return payload.message;
-        } catch (_) {
-            // fall back to generic message below
+        } catch (contextParseError) {
+            const normalized = normalizeError(contextParseError, '');
+            if (normalized.message) {
+                return normalized.message;
+            }
         }
     }
 
@@ -27,23 +36,28 @@ const getEdgeFunctionErrorMessage = async (error) => {
  */
 export const sendPhoneOtp = async (phone, options = {}) => {
     if (!phone || !phone.startsWith('+')) {
-        throw new Error('Valid phone number with country code is required');
+        return failureResult('Valid phone number with country code is required');
     }
 
-    const { data, error } = await supabase.functions.invoke('send-phone-otp', {
-        body: {
+    try {
+        const { data, error } = await invokeSendPhoneOtp({
             phone,
             userId: options.userId || null,
             userTable: options.userTable || null,
+        });
+
+        if (error) {
+            return failureResult(await getEdgeFunctionErrorMessage(error));
         }
-    });
+        if (data?.error) {
+            return failureResult(data.error);
+        }
 
-    if (error) {
-        throw new Error(await getEdgeFunctionErrorMessage(error));
+        return successResult();
+    } catch (error) {
+        const normalized = normalizeError(error, 'Failed to send verification code');
+        return failureResult(normalized.message, normalized.code || null);
     }
-    if (data?.error) throw new Error(data.error);
-
-    return { success: true };
 };
 
 /**
@@ -53,19 +67,46 @@ export const sendPhoneOtp = async (phone, options = {}) => {
  */
 export const verifyPhoneOtp = async (phone, code) => {
     if (!phone || !code) {
-        throw new Error('Phone number and code are required');
+        return failureResult('Phone number and code are required');
     }
 
-    const { data, error } = await supabase.functions.invoke('verify-phone-otp', {
-        body: { phone, code }
-    });
+    try {
+        const { data, error } = await invokeVerifyPhoneOtp({ phone, code });
 
-    if (error) {
-        throw new Error(await getEdgeFunctionErrorMessage(error));
+        if (error) {
+            return failureResult(await getEdgeFunctionErrorMessage(error));
+        }
+        if (data?.error) {
+            return failureResult(data.error);
+        }
+
+        return successResult({ verified: data?.verified === true });
+    } catch (error) {
+        const normalized = normalizeError(error, 'Failed to verify code');
+        return failureResult(normalized.message, normalized.code || null);
     }
-    if (data?.error) throw new Error(data.error);
+};
 
-    return { success: true, verified: data?.verified === true };
+export const saveVerifiedPhoneNumber = async ({ userTable, userId, phone }) => {
+    if (!userTable || !userId) {
+        return failureResult('Could not link verification to your profile. Please sign in again.');
+    }
+
+    try {
+        const { error: updateError } = await updateProfileByTableAndUserId(userTable, userId, {
+            phone_number: phone,
+            phone_verified: true,
+        });
+
+        if (updateError) {
+            return failureResult(updateError.message || 'Failed to save verified phone number');
+        }
+
+        return successResult();
+    } catch (error) {
+        const normalized = normalizeError(error, 'Failed to save verified phone number');
+        return failureResult(normalized.message, normalized.code || null);
+    }
 };
 
 /**

@@ -6,7 +6,7 @@ const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
 const REDKIK_BASE_URL = Deno.env.get("REDKIK_BASE_URL") ?? ""
 const REDKIK_CLIENT_ID = Deno.env.get("REDKIK_CLIENT_ID") ?? ""
 const REDKIK_CLIENT_SECRET = Deno.env.get("REDKIK_CLIENT_SECRET") ?? ""
-// TODO: Replace with real Org UUID once registered in Redkik
+// Optional fallback customer id when setup API returns no registered customers.
 const REDKIK_ORG_ID = Deno.env.get("REDKIK_ORG_ID") ?? ""
 
 const corsHeaders = {
@@ -114,6 +114,37 @@ interface SetupData {
   raw: Record<string, unknown>
 }
 
+interface SetupCommodityRaw {
+  id: string
+  name?: string
+}
+
+interface SetupCurrencyRaw {
+  id: string
+  symbol?: string
+  divisionModifier?: number
+}
+
+interface SetupPolicyRaw {
+  id: string
+  alias?: string
+  name?: string
+}
+
+interface SetupCustomerRaw {
+  id: string
+  name?: string
+  email?: string
+}
+
+interface SetupResponseRaw extends Record<string, unknown> {
+  commodities?: SetupCommodityRaw[]
+  currencies?: SetupCurrencyRaw[]
+  policies?: SetupPolicyRaw[]
+  customers?: SetupCustomerRaw[]
+  currencyId?: string
+}
+
 let cachedSetup: SetupData | null = null
 let setupExpiresAt = 0
 const SETUP_TTL_MS = 30 * 60 * 1000 // 30 minutes
@@ -140,32 +171,38 @@ async function getSetupData(token: string): Promise<SetupData> {
     throw new Error(`Redkik setup failed (${res.status}): ${text}`)
   }
 
-  const raw = await res.json()
+  const raw = (await res.json()) as SetupResponseRaw
   console.log("[Redkik] Setup response keys:", Object.keys(raw))
 
   const commodities = Array.isArray(raw.commodities)
-    ? raw.commodities.map((c: any) => ({ id: c.id, name: c.name || "Unknown" }))
+    ? raw.commodities.map((commodity) => ({
+        id: commodity.id,
+        name: commodity.name || "Unknown",
+      }))
     : []
 
   // Redkik currencies use id as the currency code (e.g. "USD", "EUR")
   const currencies = Array.isArray(raw.currencies)
-    ? raw.currencies.map((c: any) => ({
-        id: c.id,
-        symbol: c.symbol || "$",
-        divisionModifier: c.divisionModifier || 100,
+    ? raw.currencies.map((currency) => ({
+        id: currency.id,
+        symbol: currency.symbol || "$",
+        divisionModifier: currency.divisionModifier || 100,
       }))
     : []
 
   const policies = Array.isArray(raw.policies)
-    ? raw.policies.map((p: any) => ({ id: p.id, alias: p.alias || p.name || "" }))
+    ? raw.policies.map((policy) => ({
+        id: policy.id,
+        alias: policy.alias || policy.name || "",
+      }))
     : []
 
   // Pre-registered customers in Redkik
   const customers = Array.isArray(raw.customers)
-    ? raw.customers.map((c: any) => ({
-        id: c.id,
-        name: c.name || "",
-        email: c.email || "",
+    ? raw.customers.map((customer) => ({
+        id: customer.id,
+        name: customer.name || "",
+        email: customer.email || "",
       }))
     : []
 
@@ -217,6 +254,32 @@ interface QuoteParams {
   durationMinutes?: number | null
   customerEmail?: string
   customerName?: string
+}
+
+interface OfferRecord extends Record<string, unknown> {
+  id?: string
+  accepted?: boolean
+  totalCost?: number
+  currencyDivisionModifier?: number
+  insurerPremium?: number
+  technologyFee?: number
+  bookingFee?: number
+  deductibles?: unknown[]
+  currencySymbol?: string
+  amendments?: Amendment[]
+}
+
+interface RedkikRequestBody {
+  action?: string
+  items?: QuoteItem[]
+  pickup?: QuoteParams["pickup"]
+  dropoff?: QuoteParams["dropoff"]
+  scheduledTime?: string | null
+  durationMinutes?: number | null
+  customerEmail?: string
+  customerName?: string
+  offerId?: string
+  bookingId?: string
 }
 
 function buildQuotePayload(params: QuoteParams, setup: SetupData) {
@@ -424,7 +487,7 @@ serve(async (req) => {
       return jsonResponse({ error: "Unauthorized" }, 401)
     }
 
-    const body = await req.json()
+    const body = (await req.json()) as RedkikRequestBody
     const { action } = body
 
     const token = await getRedkikToken()
@@ -444,12 +507,20 @@ serve(async (req) => {
 
       // ----- Get Quote: Setup -> Quote with amendments validation -----
       case "get-quote": {
-        const { items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName } = body
+        const {
+          items = [],
+          pickup,
+          dropoff,
+          scheduledTime,
+          durationMinutes,
+          customerEmail,
+          customerName,
+        } = body
         if (!items || !Array.isArray(items) || items.length === 0) {
           return jsonResponse({ error: "Items array is required" }, 400)
         }
 
-        const totalItemValue = items.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0)
+        const totalItemValue = items.reduce((sum, item) => sum + (Number(item?.value) || 0), 0)
         if (totalItemValue <= 0) {
           return jsonResponse({ error: "Items must have a positive total value for insurance" }, 400)
         }
@@ -463,8 +534,10 @@ serve(async (req) => {
         }, setup)
 
         // Response is an array of offers — take the first accepted one
-        const offers = Array.isArray(quoteResponse) ? quoteResponse : [quoteResponse]
-        const acceptedOffer = offers.find((o: any) => o.accepted) || offers[0]
+        const offers: OfferRecord[] = Array.isArray(quoteResponse)
+          ? (quoteResponse as OfferRecord[])
+          : [quoteResponse as OfferRecord]
+        const acceptedOffer = offers.find((offer) => Boolean(offer.accepted)) || offers[0]
 
         if (!acceptedOffer) {
           return jsonResponse(
@@ -477,8 +550,10 @@ serve(async (req) => {
         const amendments = extractAmendments(acceptedOffer)
         const blocked = hasBlockingAmendments(amendments)
 
-        const offerId = acceptedOffer.id
-        const divider = acceptedOffer.currencyDivisionModifier || getCurrencyDivider(setup, setup.defaultCurrencyId)
+        const offerId = String(acceptedOffer.id || "").trim()
+        const divider = Number(
+          acceptedOffer.currencyDivisionModifier || getCurrencyDivider(setup, setup.defaultCurrencyId)
+        )
         const premium = Number(acceptedOffer.totalCost || 0) / divider
 
         if (!offerId) {
@@ -510,9 +585,9 @@ serve(async (req) => {
             technologyFee: Number(acceptedOffer.technologyFee || 0) / divider,
             bookingFee: Number(acceptedOffer.bookingFee || 0) / divider,
             totalCost: premium,
-            deductibles: acceptedOffer.deductibles || [],
-            accepted: acceptedOffer.accepted,
-            currencySymbol: acceptedOffer.currencySymbol || "$",
+            deductibles: Array.isArray(acceptedOffer.deductibles) ? acceptedOffer.deductibles : [],
+            accepted: Boolean(acceptedOffer.accepted),
+            currencySymbol: String(acceptedOffer.currencySymbol || "$"),
           },
         })
       }

@@ -5,7 +5,18 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'react-native';
 import { decode } from 'base64-arraybuffer';
-import { supabase } from '../config/supabase';
+import { logger } from './logger';
+import {
+    getAuthenticatedSession,
+    refreshAuthenticatedSession,
+} from './repositories/authRepository';
+import {
+    createStorageSignedUrl,
+    getStoragePublicUrl,
+    removeStoragePaths,
+    uploadToStorageBucket,
+} from './repositories/storageRepository';
+import { normalizeError } from './errorService';
 
 const MAX_UPLOAD_RETRIES = 3;
 const IMAGE_MAX_SIDE_PX = 1024;
@@ -22,12 +33,12 @@ const getImageSize = (uri) =>
     });
 
 const ensureStorageSessionUserId = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
+    const { data: sessionData } = await getAuthenticatedSession();
     if (sessionData?.session?.access_token && sessionData.session?.user?.id) {
         return sessionData.session.user.id;
     }
 
-    const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+    const { data: refreshedData, error: refreshError } = await refreshAuthenticatedSession();
     if (!refreshError && refreshedData?.session?.access_token && refreshedData.session?.user?.id) {
         return refreshedData.session.user.id;
     }
@@ -85,7 +96,11 @@ export const compressImage = async (uri) => {
                         : [{ resize: { height: IMAGE_MAX_SIDE_PX } }];
             }
         } catch (sizeError) {
-            console.warn('Could not determine image dimensions before compression, compressing without resize:', sizeError);
+            logger.warn(
+                'StorageService',
+                'Could not determine image dimensions before compression, compressing without resize',
+                sizeError
+            );
         }
 
         const manipulatedImage = await ImageManipulator.manipulateAsync(
@@ -98,7 +113,7 @@ export const compressImage = async (uri) => {
         );
         return manipulatedImage.uri;
     } catch (error) {
-        console.warn('Image compression failed, using original:', error);
+        logger.warn('StorageService', 'Image compression failed, using original', error);
         return uri;
     }
 };
@@ -122,24 +137,21 @@ export const uploadToSupabase = async (uri, bucket, path) => {
 
         for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
             const body = arrayBuffer.slice(0);
-            const { error } = await supabase.storage
-                .from(bucket)
-                .upload(path, body, {
+            const { error } = await uploadToStorageBucket(bucket, path, body, {
                     contentType: 'image/jpeg',
                     upsert: true
                 });
 
             if (!error) {
-                const { data: { publicUrl } } = supabase.storage
-                    .from(bucket)
-                    .getPublicUrl(path);
+                const { data: { publicUrl } } = getStoragePublicUrl(bucket, path);
 
                 return publicUrl;
             }
 
             lastError = error;
             if (attempt < MAX_UPLOAD_RETRIES && shouldRetryUpload(error)) {
-                console.warn(
+                logger.warn(
+                    'StorageService',
                     `Retrying Supabase upload (${attempt}/${MAX_UPLOAD_RETRIES}) for ${bucket}/${path}:`,
                     error?.message || error
                 );
@@ -152,8 +164,9 @@ export const uploadToSupabase = async (uri, bucket, path) => {
 
         throw lastError || new Error('Upload failed');
     } catch (error) {
-        console.error('Supabase upload error:', error);
-        throw error;
+        const normalized = normalizeError(error, 'File upload failed');
+        logger.error('StorageService', 'Supabase upload error', normalized, error);
+        throw new Error(normalized.message);
     }
 };
 
@@ -177,7 +190,7 @@ export const uploadMultiplePhotos = async (photos, path) => {
             const url = await uploadToSupabase(uri, bucket, filename);
             urls.push({ url, storagePath: filename, id: filename });
         } catch (e) {
-            console.error('Failed to upload photo:', filename, e);
+            logger.error('StorageService', 'Failed to upload photo', { filename, error: e });
         }
     }
     return urls;
@@ -191,8 +204,22 @@ export const uploadMultiplePhotos = async (photos, path) => {
 export const getPhotoURL = (path) => {
     if (!path) return null;
     if (path.startsWith('http')) return path;
-    const { data } = supabase.storage.from('trip_photos').getPublicUrl(path);
+    const { data } = getStoragePublicUrl('trip_photos', path);
     return data.publicUrl;
+};
+
+export const createSignedTripPhotoUrl = async (path, expiresInSeconds) => {
+    if (!path) {
+        return null;
+    }
+
+    const { data, error } = await createStorageSignedUrl('trip_photos', path, expiresInSeconds);
+
+    if (error || !data?.signedUrl) {
+        return null;
+    }
+
+    return data.signedUrl;
 };
 
 /**
@@ -201,9 +228,9 @@ export const getPhotoURL = (path) => {
  */
 export const deletePhotoFromStorage = async (path) => {
     try {
-        await supabase.storage.from('trip_photos').remove([path]);
+        await removeStoragePaths('trip_photos', [path]);
     } catch (e) {
-        console.error('Error deleting photo:', e);
+        logger.error('StorageService', 'Error deleting photo', e);
     }
 };
 

@@ -1,33 +1,34 @@
 import { useMemo } from "react";
-import { useAuth } from "../contexts/AuthContext";
+import { useDriverActions, usePaymentActions } from "../contexts/AuthContext";
 
 export const useDriverPayoutActions = () => {
-  const auth = useAuth();
+  const driverActions = useDriverActions();
+  const paymentActions = usePaymentActions();
 
   return useMemo(
     () => ({
-      getDriverProfile: auth.getDriverProfile,
-      getDriverStats: auth.getDriverStats,
-      getDriverTrips: auth.getDriverTrips,
-      requestInstantPayout: auth.requestInstantPayout,
-      getDriverEarningsHistory: auth.getDriverEarningsHistory,
-      getDriverPayouts: auth.getDriverPayouts,
-      createDriverConnectAccount: auth.createDriverConnectAccount,
-      getDriverOnboardingLink: auth.getDriverOnboardingLink,
-      checkDriverOnboardingStatus: auth.checkDriverOnboardingStatus,
-      updateDriverPaymentProfile: auth.updateDriverPaymentProfile,
+      getDriverProfile: driverActions.getDriverProfile,
+      getDriverStats: driverActions.getDriverStats,
+      getDriverTrips: driverActions.getDriverTrips,
+      requestInstantPayout: paymentActions.requestInstantPayout,
+      getDriverEarningsHistory: paymentActions.getDriverEarningsHistory,
+      getDriverPayouts: paymentActions.getDriverPayouts,
+      createDriverConnectAccount: paymentActions.createDriverConnectAccount,
+      getDriverOnboardingLink: paymentActions.getDriverOnboardingLink,
+      checkDriverOnboardingStatus: paymentActions.checkDriverOnboardingStatus,
+      updateDriverPaymentProfile: paymentActions.updateDriverPaymentProfile,
     }),
     [
-      auth.getDriverProfile,
-      auth.getDriverStats,
-      auth.getDriverTrips,
-      auth.requestInstantPayout,
-      auth.getDriverEarningsHistory,
-      auth.getDriverPayouts,
-      auth.createDriverConnectAccount,
-      auth.getDriverOnboardingLink,
-      auth.checkDriverOnboardingStatus,
-      auth.updateDriverPaymentProfile,
+      driverActions.getDriverProfile,
+      driverActions.getDriverStats,
+      driverActions.getDriverTrips,
+      paymentActions.requestInstantPayout,
+      paymentActions.getDriverEarningsHistory,
+      paymentActions.getDriverPayouts,
+      paymentActions.createDriverConnectAccount,
+      paymentActions.getDriverOnboardingLink,
+      paymentActions.checkDriverOnboardingStatus,
+      paymentActions.updateDriverPaymentProfile,
     ]
   );
 };

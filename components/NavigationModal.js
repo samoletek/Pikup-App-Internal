@@ -1,6 +1,8 @@
+// Navigation Modal component: renders its UI and handles related interactions.
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { colors } from '../styles/theme';
+import AppButton from './ui/AppButton';
 
 export const NavigationModal = ({ request, onComplete }) => {
   return (
@@ -43,9 +45,7 @@ export const NavigationModal = ({ request, onComplete }) => {
         <Text style={styles.photoRequirement}>4 photos is required</Text>
       </View>
 
-      <TouchableOpacity style={styles.nextBtn} onPress={onComplete}>
-        <Text style={styles.nextBtnText}>→ Go to pick up</Text>
-      </TouchableOpacity>
+      <AppButton title="→ Go to pick up" onPress={onComplete} style={styles.nextBtn} />
     </View>
   );
 };
@@ -176,17 +176,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   nextBtn: {
-    backgroundColor: colors.primary,
-    padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  nextBtnText: {
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

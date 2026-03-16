@@ -1,3 +1,4 @@
+// Items Step component: renders its UI and handles related interactions.
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +8,7 @@ import { colors } from '../../../styles/theme';
 import AIPhotoPickerModal from '../AIPhotoPickerModal';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { analyzeImages } from '../../../services/AIService';
+import { logger } from '../../../services/logger';
 
 const generateItemId = () => `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 const ANALYSIS_IMAGE_MAX_SIDE = 1080;
@@ -53,7 +55,7 @@ const ItemsStep = ({
                 const asset = assets[i];
                 try {
                     if (!asset?.uri) {
-                        console.warn(`Image ${i} missing uri`);
+                        logger.warn('ItemsStep', `Image ${i} missing uri`);
                         continue;
                     }
 
@@ -71,10 +73,10 @@ const ItemsStep = ({
                         processedImages.push(optimizedAsset.base64);
                         assetMap[i + 1] = asset.uri;
                     } else {
-                        console.warn(`Image ${i} missing base64`);
+                        logger.warn('ItemsStep', `Image ${i} missing base64`);
                     }
                 } catch (e) {
-                    console.error("Error processing image", e);
+                    logger.error('ItemsStep', 'Error processing image', e);
                 }
             }
 
@@ -130,7 +132,7 @@ const ItemsStep = ({
             }
 
         } catch (error) {
-            console.error('Batch analysis error:', error);
+            logger.error('ItemsStep', 'Batch analysis error', error);
             Alert.alert('Analysis Failed', error?.message || 'Could not analyze images. Please try again.');
         } finally {
             setIsAnalyzing(false);

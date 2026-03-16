@@ -1,15 +1,107 @@
-import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../config/supabase';
+import React, { createContext, useState, useContext, useCallback, useMemo } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthService from '../services/AuthService';
-import { createAuthActions } from './auth/createAuthActions';
+import { fetchUserProfileByRole } from '../services/authSessionService';
+import { createAuthDomainActions } from './auth/actions/authActions';
+import { createProfileDomainActions } from './auth/actions/profileActions';
+import { createTripDomainActions } from './auth/actions/tripActions';
+import { createDriverDomainActions } from './auth/actions/driverActions';
+import { createPaymentDomainActions } from './auth/actions/paymentActions';
+import { createMessagingDomainActions } from './auth/actions/messagingActions';
+import { createTermsDomainActions } from './auth/actions/termsActions';
+import { createStorageDomainActions } from './auth/actions/storageActions';
+import useAuthSessionBootstrap from '../hooks/useAuthSessionBootstrap';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AuthContext = createContext();
+const AuthIdentityContext = createContext();
+const AuthActionsContext = createContext({});
+const ProfileActionsContext = createContext({});
+const TripActionsContext = createContext({});
+const DriverActionsContext = createContext({});
+const PaymentActionsContext = createContext({});
+const MessagingActionsContext = createContext({});
+const TermsActionsContext = createContext({});
+const StorageActionsContext = createContext({});
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const identity = useContext(AuthIdentityContext);
+  const authActions = useContext(AuthActionsContext);
+  const profileActions = useContext(ProfileActionsContext);
+  const tripActions = useContext(TripActionsContext);
+  const driverActions = useContext(DriverActionsContext);
+  const paymentActions = useContext(PaymentActionsContext);
+  const messagingActions = useContext(MessagingActionsContext);
+  const termsActions = useContext(TermsActionsContext);
+  const storageActions = useContext(StorageActionsContext);
+
+  return useMemo(
+    () => ({
+      ...(identity || {}),
+      ...(authActions || {}),
+      ...(profileActions || {}),
+      ...(tripActions || {}),
+      ...(driverActions || {}),
+      ...(paymentActions || {}),
+      ...(messagingActions || {}),
+      ...(termsActions || {}),
+      ...(storageActions || {}),
+    }),
+    [
+      identity,
+      authActions,
+      profileActions,
+      tripActions,
+      driverActions,
+      paymentActions,
+      messagingActions,
+      termsActions,
+      storageActions,
+    ]
+  );
+}
+
+export function useAuthIdentity() {
+  return useContext(AuthIdentityContext);
+}
+
+/** @returns {any} */
+export function useAuthActions() {
+  return useContext(AuthActionsContext);
+}
+
+/** @returns {any} */
+export function useProfileActions() {
+  return useContext(ProfileActionsContext);
+}
+
+/** @returns {any} */
+export function useTripActions() {
+  return useContext(TripActionsContext);
+}
+
+/** @returns {any} */
+export function useDriverActions() {
+  return useContext(DriverActionsContext);
+}
+
+/** @returns {any} */
+export function usePaymentActions() {
+  return useContext(PaymentActionsContext);
+}
+
+/** @returns {any} */
+export function useMessagingActions() {
+  return useContext(MessagingActionsContext);
+}
+
+/** @returns {any} */
+export function useTermsActions() {
+  return useContext(TermsActionsContext);
+}
+
+/** @returns {any} */
+export function useStorageActions() {
+  return useContext(StorageActionsContext);
 }
 
 export function AuthProvider({ children }) {
@@ -34,123 +126,79 @@ export function AuthProvider({ children }) {
     });
   }, [currentUser?.accessToken]);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const hydrateFromStorage = async () => {
-      try {
-        const stored = await AuthService.hydrateFromStorage();
-        if (stored && mounted) {
-          setCurrentUser(stored.user);
-          setUserType(stored.userType);
-          setIsInitializing(false);
-          return true;
-        }
-
-        return false;
-      } catch (error) {
-        console.error('Hydration failed:', error);
-        return false;
-      }
-    };
-
-    hydrateFromStorage();
-
-    const timeout = setTimeout(() => {
-      if (mounted) {
-        console.warn('Auth timeout - unblocking UI');
-        setIsInitializing(false);
-      }
-    }, 3000);
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      try {
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
-          if (!session) return;
-
-          const metadata = session.user.user_metadata || {};
-          let detectedUserType = metadata.user_type;
-
-          if (!detectedUserType) {
-            const [{ data: driverProfile }, { data: customerProfile }] = await Promise.all([
-              supabase.from('drivers').select('id').eq('id', session.user.id).maybeSingle(),
-              supabase.from('customers').select('id').eq('id', session.user.id).maybeSingle(),
-            ]);
-
-            detectedUserType = driverProfile ? 'driver' : customerProfile ? 'customer' : 'customer';
-          }
-
-          const fullUser = {
-            ...session.user,
-            id: session.user.id,
-            email: session.user.email,
-            first_name: metadata.firstName || metadata.first_name || '',
-            last_name: metadata.lastName || metadata.last_name || '',
-            phone_number: metadata.phoneNumber || metadata.phone_number || '',
-            accessToken: session.access_token,
-            user_type: detectedUserType,
-          };
-
-          setCurrentUser(fullUser);
-          setUserType(detectedUserType);
-          setIsInitializing(false);
-
-          const table = detectedUserType === 'driver' ? 'drivers' : 'customers';
-          supabase
-            .from(table)
-            .select('*')
-            .eq('id', session.user.id)
-            .single()
-            .then(({ data }) => {
-              if (data && mounted) {
-                setCurrentUser((prev) => (prev ? { ...prev, ...data } : data));
-              }
-            });
-        } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
-          setCurrentUser(null);
-          setUserType(null);
-          setIsInitializing(false);
-        }
-      } catch (error) {
-        console.error('Error in auth state change:', error);
-        setIsInitializing(false);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription?.unsubscribe();
-      clearTimeout(timeout);
-    };
-  }, []);
+  useAuthSessionBootstrap({
+    setCurrentUser,
+    setUserType,
+    setIsInitializing,
+  });
 
   const refreshProfile = useCallback(async () => {
     const uid = currentUser?.id || currentUser?.uid;
     if (!uid || !userType) return;
-    const table = userType === 'driver' ? 'drivers' : 'customers';
-    const { data } = await supabase.from(table).select('*').eq('id', uid).single();
+    const data = await fetchUserProfileByRole({ userId: uid, userType });
     if (data) {
       setCurrentUser((prev) => (prev ? { ...prev, ...data } : data));
     }
   }, [currentUser?.id, currentUser?.uid, userType]);
 
-  const actions = useMemo(() => {
-    return createAuthActions({
+  const authActions = useMemo(() => {
+    return createAuthDomainActions({
       currentUser,
-      userType,
-      authFetch,
       setCurrentUser,
       setUserType,
       setLoading,
-      setProfileImage,
     });
-  }, [currentUser, userType, authFetch]);
+  }, [currentUser, setCurrentUser, setUserType, setLoading]);
 
-  const value = useMemo(() => {
+  const profileActions = useMemo(() => {
+    return createProfileDomainActions({
+      currentUser,
+      userType,
+      setCurrentUser,
+      setProfileImage,
+      setLoading,
+    });
+  }, [currentUser, userType, setCurrentUser, setProfileImage, setLoading]);
+
+  const tripActions = useMemo(() => {
+    return createTripDomainActions({ currentUser });
+  }, [currentUser]);
+
+  const driverActions = useMemo(() => {
+    return createDriverDomainActions({ authFetch });
+  }, [authFetch]);
+
+  const paymentActions = useMemo(() => {
+    return createPaymentDomainActions({
+      currentUser,
+      updateRequestStatus: tripActions.updateRequestStatus,
+      getRequestById: tripActions.getRequestById,
+      getDriverProfile: driverActions.getDriverProfile,
+      calculateDriverEarnings: driverActions.calculateDriverEarnings,
+      updateDriverEarnings: driverActions.updateDriverEarnings,
+    });
+  }, [
+    currentUser,
+    tripActions.updateRequestStatus,
+    tripActions.getRequestById,
+    driverActions.getDriverProfile,
+    driverActions.calculateDriverEarnings,
+    driverActions.updateDriverEarnings,
+  ]);
+
+  const messagingActions = useMemo(() => {
+    return createMessagingDomainActions();
+  }, []);
+
+  const termsActions = useMemo(() => {
+    return createTermsDomainActions({ currentUser });
+  }, [currentUser]);
+
+  const storageActions = useMemo(() => {
+    return createStorageDomainActions();
+  }, []);
+
+  const identityValue = useMemo(() => {
     return {
       currentUser,
       userType,
@@ -158,9 +206,28 @@ export function AuthProvider({ children }) {
       isInitializing,
       profileImage,
       refreshProfile,
-      ...actions,
     };
-  }, [currentUser, userType, loading, isInitializing, profileImage, refreshProfile, actions]);
+  }, [currentUser, userType, loading, isInitializing, profileImage, refreshProfile]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthIdentityContext.Provider value={identityValue}>
+      <AuthActionsContext.Provider value={authActions}>
+        <ProfileActionsContext.Provider value={profileActions}>
+          <TripActionsContext.Provider value={tripActions}>
+            <DriverActionsContext.Provider value={driverActions}>
+              <PaymentActionsContext.Provider value={paymentActions}>
+                <MessagingActionsContext.Provider value={messagingActions}>
+                  <TermsActionsContext.Provider value={termsActions}>
+                    <StorageActionsContext.Provider value={storageActions}>
+                      {children}
+                    </StorageActionsContext.Provider>
+                  </TermsActionsContext.Provider>
+                </MessagingActionsContext.Provider>
+              </PaymentActionsContext.Provider>
+            </DriverActionsContext.Provider>
+          </TripActionsContext.Provider>
+        </ProfileActionsContext.Provider>
+      </AuthActionsContext.Provider>
+    </AuthIdentityContext.Provider>
+  );
 }

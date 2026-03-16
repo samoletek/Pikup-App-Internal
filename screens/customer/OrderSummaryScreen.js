@@ -2,28 +2,28 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   Image,
   TouchableOpacity,
   Animated,
   Alert,
-  ActivityIndicator,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePayment } from '../../contexts/PaymentContext';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuthIdentity } from '../../contexts/AuthContext';
 import AddPaymentMethodModal from '../../components/AddPaymentMethodModal';
 import PhoneVerificationModal from '../../components/PhoneVerificationModal';
 import ScreenHeader from '../../components/ScreenHeader';
+import AppButton from '../../components/ui/AppButton';
+import { logger } from '../../services/logger';
+import styles from './OrderSummaryScreen.styles';
+import { getPaymentMethodDisplay, getPricingData } from './orderSummary.utils';
 import {
-  borderRadius,
   colors,
   layout,
   spacing,
-  typography,
 } from '../../styles/theme';
 
 export default function OrderSummaryScreen({ navigation, route }) {
@@ -38,7 +38,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
     duration,
   } = route.params || {};
 
-  const { currentUser, refreshProfile } = useAuth();
+  const { currentUser, refreshProfile } = useAuthIdentity();
 
   const [addPaymentModalVisible, setAddPaymentModalVisible] = useState(false);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
@@ -53,31 +53,6 @@ export default function OrderSummaryScreen({ navigation, route }) {
     confirmPayment,
     loading: paymentLoading,
   } = usePayment();
-
-  const getPricingData = () => {
-    if (selectedVehicle?.pricing) {
-      const vehiclePricing = selectedVehicle.pricing;
-      return {
-        basePrice: vehiclePricing.baseFare + vehiclePricing.mileageCharge,
-        serviceFee: vehiclePricing.serviceFee,
-        tax:
-          vehiclePricing.tax ||
-          (vehiclePricing.subtotal + vehiclePricing.serviceFee) * 0.08,
-        total: vehiclePricing.total.toFixed(2),
-      };
-    }
-
-    const basePrice = parseFloat(selectedVehicle?.price?.replace('$', '') || '40.00');
-    const serviceFee = 2.99;
-    const tax = (basePrice + serviceFee) * 0.08;
-
-    return {
-      basePrice,
-      serviceFee,
-      tax,
-      total: (basePrice + serviceFee + tax).toFixed(2),
-    };
-  };
 
   const handleSchedule = async () => {
     if (!currentUser?.phone_verified) {
@@ -113,7 +88,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
     setProcessing(true);
 
     try {
-      const pricing = getPricingData();
+      const pricing = getPricingData(selectedVehicle);
       const rideDetails = {
         vehicleType: selectedVehicle?.type,
         pickup: selectedLocations?.pickup,
@@ -147,7 +122,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
         screen: 'Home',
       });
     } catch (error) {
-      console.error('Payment failed:', error);
+      logger.error('OrderSummaryScreen', 'Payment failed', error);
       Alert.alert(
         'Payment Issue',
         error.message || "We couldn't process your payment. Please try again.",
@@ -169,24 +144,8 @@ export default function OrderSummaryScreen({ navigation, route }) {
     navigation.navigate('PaymentMethodsScreen');
   };
 
-  const getPaymentMethodDisplay = () => {
-    if (!defaultPaymentMethod) {
-      return {
-        icon: 'add-circle-outline',
-        text: 'Add Payment Method',
-        subtext: 'Required for pickup',
-      };
-    }
-
-    return {
-      icon: 'card',
-      text: `${(defaultPaymentMethod.brand || defaultPaymentMethod.cardBrand || 'Card').toUpperCase()} •••• ${defaultPaymentMethod.last4}`,
-      subtext: `Expires ${defaultPaymentMethod.expMonth}/${defaultPaymentMethod.expYear}`,
-    };
-  };
-
-  const pricing = getPricingData();
-  const paymentDisplay = getPaymentMethodDisplay();
+  const pricing = getPricingData(selectedVehicle);
+  const paymentDisplay = getPaymentMethodDisplay(defaultPaymentMethod);
 
   return (
     <View style={styles.container}>
@@ -321,25 +280,14 @@ export default function OrderSummaryScreen({ navigation, route }) {
 
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + spacing.base }]}>
         <View style={[styles.bottomInner, { maxWidth: contentMaxWidth }]}>
-          <TouchableOpacity
+          <AppButton
+            title="Confirm Payment"
             style={[styles.confirmButton, (processing || paymentLoading) && styles.confirmButtonDisabled]}
             onPress={handleSchedule}
             disabled={processing || paymentLoading}
-          >
-            {processing || paymentLoading ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={20}
-                  color={colors.white}
-                  style={styles.confirmIcon}
-                />
-                <Text style={styles.confirmButtonText}>Confirm Payment</Text>
-              </>
-            )}
-          </TouchableOpacity>
+            loading={processing || paymentLoading}
+            leftIcon={<Ionicons name="checkmark-circle" size={20} color={colors.white} style={styles.confirmIcon} />}
+          />
         </View>
       </View>
 
@@ -366,192 +314,3 @@ export default function OrderSummaryScreen({ navigation, route }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.primary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-    paddingTop: spacing.sm,
-  },
-  contentColumn: {
-    width: "100%",
-    alignSelf: "center",
-  },
-  section: {
-    backgroundColor: colors.background.secondary,
-    marginHorizontal: spacing.base,
-    marginBottom: spacing.md,
-    borderRadius: borderRadius.lg,
-    padding: spacing.base,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  sectionTitle: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.sm + 4,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  locationText: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-    marginLeft: spacing.sm + 2,
-    flex: 1,
-    lineHeight: 20,
-  },
-  dotLine: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    paddingVertical: spacing.xs,
-    marginLeft: spacing.xs + 1,
-  },
-  dot: {
-    width: 2,
-    height: 2,
-    backgroundColor: colors.text.subtle,
-    borderRadius: borderRadius.circle,
-    marginVertical: 2,
-  },
-  tripMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.sm + 4,
-    paddingTop: spacing.sm + 4,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-  },
-  tripMetaText: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm + 1,
-  },
-  tripMetaDivider: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm + 1,
-    marginHorizontal: spacing.sm,
-  },
-  vehicleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  vehicleImage: {
-    width: 60,
-    height: 35,
-    resizeMode: 'contain',
-    marginRight: spacing.md,
-  },
-  vehicleInfo: {
-    flex: 1,
-  },
-  vehicleType: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  vehicleEta: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm + 1,
-    marginTop: 2,
-  },
-  priceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  totalPrice: {
-    color: colors.primary,
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.bold,
-    marginRight: spacing.sm,
-  },
-  breakdownContainer: {
-    overflow: 'hidden',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm - 2,
-  },
-  priceLabel: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.base,
-  },
-  priceValue: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.base,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  paymentLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  paymentInfo: {
-    marginLeft: spacing.md,
-    flex: 1,
-  },
-  paymentText: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.base + 1,
-    fontWeight: typography.fontWeight.medium,
-  },
-  paymentTextHighlight: {
-    color: colors.primary,
-  },
-  paymentSubtext: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.sm,
-    marginTop: 2,
-  },
-  bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-    backgroundColor: colors.background.primary,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.strong,
-  },
-  bottomInner: {
-    width: "100%",
-    alignSelf: "center",
-  },
-  confirmButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.base,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmButtonDisabled: {
-    backgroundColor: colors.text.subtle,
-  },
-  confirmIcon: {
-    marginRight: spacing.sm,
-  },
-  confirmButtonText: {
-    color: colors.white,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-  },
-});

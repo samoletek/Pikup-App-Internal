@@ -1,19 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   Image,
   ScrollView,
-  Alert,
-  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuthIdentity, useProfileActions, useTripActions } from '../../contexts/AuthContext';
 import ScreenHeader from '../../components/ScreenHeader';
+import AppButton from '../../components/ui/AppButton';
+import useDeliveryConfirmationFlow from './useDeliveryConfirmationFlow';
 import styles from './DeliveryConfirmationScreen.styles';
 import {
   colors,
@@ -21,184 +20,37 @@ import {
   spacing,
 } from '../../styles/theme';
 
-const MAX_VERIFICATION_PHOTOS = 10;
-
 export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { request, pickupPhotos, driverLocation } = route.params;
-  const { finishDelivery, submitTripRating, refreshProfile } = useAuth();
+  const { refreshProfile } = useAuthIdentity();
+  const { finishDelivery } = useTripActions();
+  const { submitTripRating } = useProfileActions();
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
-  const [deliveryPhotos, setDeliveryPhotos] = useState([]);
-  const [customerRating, setCustomerRating] = useState(0);
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
-
-  const scrollViewRef = useRef(null);
-
-  const requestPermissions = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Camera Permission',
-        'We need camera permission to take delivery verification photos.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => ImagePicker.requestCameraPermissionsAsync() }
-        ]
-      );
-      return false;
-    }
-    return true;
-  };
-
-  const showMaxPhotosAlert = () => {
-    Alert.alert(
-      'Photo Limit Reached',
-      `You can add up to ${MAX_VERIFICATION_PHOTOS} verification photos.`
-    );
-  };
-
-  const mapAssetsToPhotos = (assets = [], startIndex = 0) => {
-    const timestamp = new Date().toISOString();
-    return (assets || [])
-      .filter((asset) => asset?.uri)
-      .map((asset, index) => ({
-        uri: asset.uri,
-        id: `${Date.now()}-${startIndex + index}-${Math.random().toString(36).slice(2, 8)}`,
-        timestamp,
-      }));
-  };
-
-  const appendPhotos = (newPhotos = []) => {
-    if (!Array.isArray(newPhotos) || newPhotos.length === 0) return;
-    setDeliveryPhotos(prev => [...prev, ...newPhotos].slice(0, MAX_VERIFICATION_PHOTOS));
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
-  const takePhotoBatch = async () => {
-    try {
-      if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
-        showMaxPhotosAlert();
-        return;
-      }
-
-      const hasPermission = await requestPermissions();
-      if (!hasPermission) return;
-
-      let remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
-      const capturedPhotos = [];
-
-      while (remaining > 0) {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: 'images',
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-          exif: false,
-        });
-
-        if (result.canceled || !result.assets?.length) {
-          break;
-        }
-
-        const mappedPhotos = mapAssetsToPhotos(result.assets, capturedPhotos.length).slice(0, remaining);
-        if (mappedPhotos.length === 0) {
-          break;
-        }
-
-        capturedPhotos.push(...mappedPhotos);
-        remaining -= mappedPhotos.length;
-      }
-
-      if (capturedPhotos.length > 0) {
-        appendPhotos(capturedPhotos);
-      }
-
-      if (remaining <= 0) {
-        showMaxPhotosAlert();
-      }
-    } catch (error) {
-      console.error('Error taking photo:', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
-    }
-  };
-
-  const selectFromGallery = async () => {
-    try {
-      if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
-        showMaxPhotosAlert();
-        return;
-      }
-
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant access to your photo library.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsMultipleSelection: true,
-        selectionLimit: MAX_VERIFICATION_PHOTOS - deliveryPhotos.length,
-        allowsEditing: false,
-        quality: 0.8,
-        exif: false,
-      });
-
-      if (!result.canceled && result.assets?.length) {
-        const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
-        const selectedPhotos = mapAssetsToPhotos(result.assets).slice(0, remaining);
-        appendPhotos(selectedPhotos);
-
-        if (deliveryPhotos.length + selectedPhotos.length >= MAX_VERIFICATION_PHOTOS) {
-          showMaxPhotosAlert();
-        }
-      }
-    } catch (error) {
-      console.error('Error selecting photo:', error);
-      Alert.alert('Error', 'Failed to select photo. Please try again.');
-    }
-  };
-
-  const removePhoto = (photoId) => {
-    Alert.alert(
-      'Remove Photo',
-      'Are you sure you want to remove this photo?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            setDeliveryPhotos(prev => prev.filter(photo => photo.id !== photoId));
-          }
-        }
-      ]
-    );
-  };
-
-  const showPhotoOptions = () => {
-    if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
-      showMaxPhotosAlert();
-      return;
-    }
-
-    const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
-
-    Alert.alert(
-      'Add Delivery Photo',
-      `Add up to ${remaining} photos`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photos (Camera)', onPress: takePhotoBatch },
-        { text: `Choose from Gallery (${remaining})`, onPress: selectFromGallery }
-      ]
-    );
-  };
+  const {
+    completeDelivery,
+    customerRating,
+    deliveryPhotos,
+    getRatingLabel,
+    isCompleting,
+    isUploadingPhotos,
+    isMaxPhotosReached,
+    maxVerificationPhotos,
+    removePhoto,
+    scrollViewRef,
+    setCustomerRating,
+    showPhotoOptions,
+  } = useDeliveryConfirmationFlow({
+    driverLocation,
+    finishDelivery,
+    navigation,
+    pickupPhotos,
+    refreshProfile,
+    request,
+    submitTripRating,
+  });
 
   const renderStars = () => {
     return (
@@ -220,90 +72,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     );
   };
 
-  const getRatingLabel = (rating) => {
-    if (rating === 5) return 'Excellent';
-    if (rating === 4) return 'Very Good';
-    if (rating === 3) return 'Good';
-    if (rating === 2) return 'Fair';
-    if (rating === 1) return 'Poor';
-    return '';
-  };
-
-  const completeDelivery = async () => {
-    if (deliveryPhotos.length === 0) {
-      Alert.alert(
-        'Photos Required',
-        'Please take at least one photo to verify the delivery.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-    await handleCompleteDelivery();
-  };
-
-  const handleCompleteDelivery = async () => {
-    setIsCompleting(true);
-    setIsUploadingPhotos(true);
-
-    try {
-      console.log(`Completing delivery with ${deliveryPhotos.length} photos...`);
-
-      // Complete delivery with photos, location, and rating (photos are uploaded to Supabase Storage)
-      await finishDelivery(
-        request.id,
-        deliveryPhotos,
-        driverLocation,
-        customerRating
-      );
-
-      console.log('Delivery completed with photos uploaded to Supabase Storage');
-      setIsUploadingPhotos(false);
-
-      const customerId = request?.customerId || request?.customer_id || null;
-      if (customerId && customerRating > 0) {
-        try {
-          await submitTripRating({
-            requestId: request?.id,
-            toUserId: customerId,
-            toUserType: 'customer',
-            rating: customerRating,
-            badges: [],
-          });
-          await refreshProfile?.();
-        } catch (ratingError) {
-          console.warn('Failed to save driver rating after delivery completion:', ratingError);
-        }
-      } else if (customerId) {
-        console.log('Skipping customer rating save: rating was not selected');
-      } else {
-        console.warn('Skipping customer rating save: customer id is missing');
-      }
-
-      console.log('Delivery completed successfully');
-      navigateToDriverTabs();
-
-    } catch (error) {
-      console.error('Error completing delivery:', error);
-      setIsUploadingPhotos(false);
-      Alert.alert(
-        'Error',
-        'Failed to complete delivery and upload photos. Please try again.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsCompleting(false);
-    }
-  };
-
-  const navigateToDriverTabs = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'DriverTabs' }],
-    });
-  };
-
   const customerName = request?.customerEmail?.split('@')[0] || 'Customer';
-  const isMaxPhotosReached = deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS;
 
   return (
     <View style={styles.container}>
@@ -357,7 +126,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           <View style={styles.photoCard}>
             <View style={styles.photoHeader}>
               <Text style={styles.cardTitle}>Delivery Verification Photos</Text>
-              <Text style={styles.photoCount}>{deliveryPhotos.length}/{MAX_VERIFICATION_PHOTOS}</Text>
+              <Text style={styles.photoCount}>{deliveryPhotos.length}/{maxVerificationPhotos}</Text>
             </View>
             <Text style={styles.photoSubtitle}>
               Take photos to confirm successful delivery
@@ -440,25 +209,24 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
       {/* Bottom Action Button */}
       <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity
+        <AppButton
+          title={
+            isUploadingPhotos
+              ? 'Uploading Photos...'
+              : isCompleting
+                ? 'Completing Delivery...'
+                : 'Complete Delivery'
+          }
           style={[
             styles.completeButton,
             { opacity: (deliveryPhotos.length === 0 || isCompleting) ? 0.6 : 1 }
           ]}
           onPress={completeDelivery}
           disabled={deliveryPhotos.length === 0 || isCompleting}
-        >
-          {isCompleting ? (
-            <ActivityIndicator size="small" color={colors.white} style={{ marginRight: spacing.sm }} />
-          ) : (
-            <Ionicons name="checkmark-circle" size={20} color={colors.white} style={{ marginRight: spacing.sm }} />
-          )}
-          <Text style={styles.completeButtonText}>
-            {isUploadingPhotos ? 'Uploading Photos...' :
-              isCompleting ? 'Completing Delivery...' :
-                'Complete Delivery'}
-          </Text>
-        </TouchableOpacity>
+          loading={isCompleting}
+          labelStyle={styles.completeButtonText}
+          leftIcon={<Ionicons name="checkmark-circle" size={20} color={colors.white} />}
+        />
 
         {deliveryPhotos.length === 0 && (
           <Text style={styles.warningText}>⚠️ At least 1 delivery photo required</Text>

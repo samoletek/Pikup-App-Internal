@@ -10,7 +10,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AuthModal from '../../components/AuthModal';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuthIdentity, useDriverActions } from '../../contexts/AuthContext';
+import { logger } from '../../services/logger';
 import { colors, layout, spacing, typography } from '../../styles/theme';
 
 export default function WelcomeScreen({ navigation }) {
@@ -18,7 +19,8 @@ export default function WelcomeScreen({ navigation }) {
   const { width } = useWindowDimensions();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedRole, setSelectedRole] = useState("customer");
-  const { currentUser, userType, getDriverProfile } = useAuth();
+  const { currentUser, userType } = useAuthIdentity();
+  const { getDriverProfile } = useDriverActions();
 
   const isCompact = width < 370;
   const logoWidth = Math.min(Math.max(width * 0.58, 180), 280);
@@ -54,7 +56,7 @@ export default function WelcomeScreen({ navigation }) {
             navigation.replace("CustomerTabs");
           }
         } catch (error) {
-          console.error("Navigation error:", error);
+          logger.error("WelcomeScreen", "Navigation error", error);
           // Fallback
           if (userType === "driver") navigation.replace("DriverTabs");
           else navigation.replace("CustomerTabs");

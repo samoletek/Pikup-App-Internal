@@ -1,4 +1,7 @@
 import { uploadOrderItemsMedia } from './OrderItemMediaService';
+import { failureResult, successResult } from './contracts/result';
+import { logger } from './logger';
+import { logFlowError, logFlowInfo, startFlowContext } from './flowContext';
 
 const DEFAULT_INSURANCE_RETRY_DELAY_MS = 1500;
 
@@ -104,7 +107,7 @@ const resolveInsuranceForOrder = async ({
       });
     }
   } catch (insuranceError) {
-    console.warn('Insurance purchase failed:', insuranceError);
+    logger.warn('CustomerOrderSubmission', 'Insurance purchase failed', insuranceError);
   }
 
   if (!insuranceData) {
@@ -135,24 +138,28 @@ export const submitCustomerOrder = async ({
   purchaseInsurance,
   insuranceRetryDelayMs = DEFAULT_INSURANCE_RETRY_DELAY_MS,
 }) => {
+  const flowContext = startFlowContext('trip.submitOrder', {
+    userId: currentUserId || null,
+    hasInsuranceQuote: Boolean(orderData?.insuranceQuote?.offerId),
+  });
+
   const selectedPaymentMethod = orderData?.selectedPaymentMethod;
   const totalAmount = Number(orderData?.pricing?.total || 0);
   if (!selectedPaymentMethod?.stripePaymentMethodId) {
-    return {
-      success: false,
-      error: 'Please select a saved payment method.',
+    return failureResult('Please select a saved payment method.', null, {
       notices: [],
-    };
+      correlationId: flowContext.correlationId,
+    });
   }
   if (totalAmount <= 0) {
-    return {
-      success: false,
-      error: 'Invalid order total. Please review your order and try again.',
+    return failureResult('Invalid order total. Please review your order and try again.', null, {
       notices: [],
-    };
+      correlationId: flowContext.correlationId,
+    });
   }
 
   try {
+    logFlowInfo('CustomerOrderSubmission', 'order submission started', flowContext);
     const needsInsurancePurchase = Boolean(orderData?.insuranceQuote?.offerId);
     let purchaseInsuranceFn = purchaseInsurance;
 
@@ -161,11 +168,10 @@ export const submitCustomerOrder = async ({
     }
 
     if (needsInsurancePurchase && typeof purchaseInsuranceFn !== 'function') {
-      return {
-        success: false,
-        error: 'Insurance service is unavailable. Please try again.',
+      return failureResult('Insurance service is unavailable. Please try again.', null, {
         notices: [],
-      };
+        correlationId: flowContext.correlationId,
+      });
     }
 
     const {
@@ -181,11 +187,10 @@ export const submitCustomerOrder = async ({
 
     const finalAmountInCents = Math.round(finalAmount * 100);
     if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
-      return {
-        success: false,
-        error: 'Invalid order total. Please review your order and try again.',
+      return failureResult('Invalid order total. Please review your order and try again.', null, {
         notices,
-      };
+        correlationId: flowContext.correlationId,
+      });
     }
 
     const uploadItemsResult = await uploadOrderItemsMedia({
@@ -194,11 +199,11 @@ export const submitCustomerOrder = async ({
       uploadToSupabase,
     });
     if (!uploadItemsResult.success) {
-      return {
-        success: false,
-        error: uploadItemsResult.error || 'Could not upload item photos. Please try again.',
-        notices,
-      };
+      return failureResult(
+        uploadItemsResult.error || 'Could not upload item photos. Please try again.',
+        null,
+        { notices, correlationId: flowContext.correlationId }
+      );
     }
 
     const paymentIntentResult = await createPaymentIntent(
@@ -208,11 +213,10 @@ export const submitCustomerOrder = async ({
       selectedPaymentMethod.stripePaymentMethodId
     );
     if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
-      return {
-        success: false,
-        error: paymentIntentResult.error || 'Failed to start payment.',
+      return failureResult(paymentIntentResult.error || 'Failed to start payment.', null, {
         notices,
-      };
+        correlationId: flowContext.correlationId,
+      });
     }
 
     const paymentResult = await confirmPayment(
@@ -220,11 +224,10 @@ export const submitCustomerOrder = async ({
       selectedPaymentMethod.stripePaymentMethodId
     );
     if (!paymentResult.success) {
-      return {
-        success: false,
-        error: paymentResult.error || 'Unable to confirm payment.',
+      return failureResult(paymentResult.error || 'Unable to confirm payment.', null, {
         notices,
-      };
+        correlationId: flowContext.correlationId,
+      });
     }
 
     const createdRequest = await createPickupRequest({
@@ -246,17 +249,23 @@ export const submitCustomerOrder = async ({
       insurance: insuranceData,
     });
 
-    return {
-      success: true,
+    logFlowInfo('CustomerOrderSubmission', 'order submission succeeded', flowContext);
+    return successResult({
       createdRequest: createdRequest || null,
       notices,
-    };
+      correlationId: flowContext.correlationId,
+    });
   } catch (error) {
-    console.error('Error confirming customer order:', error);
-    return {
-      success: false,
-      error: error?.message || 'Payment failed. Please try again.',
+    const normalized = logFlowError(
+      'CustomerOrderSubmission',
+      'order submission failed',
+      error,
+      flowContext,
+      'Payment failed. Please try again.'
+    );
+    return failureResult(normalized.message || 'Payment failed. Please try again.', null, {
       notices: [],
-    };
+      correlationId: flowContext.correlationId,
+    });
   }
 };

@@ -1,7 +1,9 @@
 // Redkik calls must run through a trusted backend (Supabase Edge Function).
 // Do not place Redkik client secrets in the mobile app bundle.
 
-import { supabase } from '../config/supabase';
+import { logger } from './logger';
+import { invokeRedkikQuote } from './repositories/redkikRepository';
+import { normalizeError } from './errorService';
 
 const RedkikService = {
   /**
@@ -13,24 +15,23 @@ const RedkikService = {
    */
   async getSetup() {
     try {
-      const { data, error } = await supabase.functions.invoke('redkik-quote', {
-        body: { action: 'setup' },
-      });
+      const { data, error } = await invokeRedkikQuote({ action: 'setup' });
 
       if (error) {
-        console.warn('Redkik setup request failed:', error.message || error);
+        logger.warn('RedkikService', 'Setup request failed', error?.message || error);
         return null;
       }
 
       if (data?.error) {
-        console.warn('Redkik setup returned error:', data.error);
+        logger.warn('RedkikService', 'Setup returned error', data.error);
         return null;
       }
 
-      console.log('[RedkikService] Setup response:', JSON.stringify(data, null, 2));
+      logger.info('RedkikService', 'Setup response', data);
       return data;
-    } catch (err) {
-      console.warn('Redkik getSetup exception:', err);
+    } catch (error) {
+      const normalized = normalizeError(error, 'Redkik setup request failed');
+      logger.warn('RedkikService', 'getSetup exception', normalized, error);
       return null;
     }
   },
@@ -52,9 +53,9 @@ const RedkikService = {
    */
   async getQuote({ items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName }) {
     try {
-      const { data, error } = await supabase.functions.invoke('redkik-quote', {
-        body: {
-          action: 'get-quote',
+      const { data, error } = await invokeRedkikQuote({
+        action: 'get-quote',
+        payload: {
           items: (items || []).map(item => ({
             name: item.name || 'Item',
             description: item.description || '',
@@ -72,23 +73,23 @@ const RedkikService = {
       });
 
       if (error) {
-        console.warn('Redkik quote request failed:', error.message || error);
+        logger.warn('RedkikService', 'Quote request failed', error?.message || error);
         return null;
       }
 
       if (data?.error) {
-        console.warn('Redkik quote returned error:', data.error);
+        logger.warn('RedkikService', 'Quote returned error', data.error);
         return null;
       }
 
-      console.log('[RedkikService] Quote response:', JSON.stringify(data, null, 2));
+      logger.info('RedkikService', 'Quote response', data);
 
       if (!data.offerId) {
-        console.warn('[RedkikService] Quote missing offerId — check Edge Function logs');
+        logger.warn('RedkikService', 'Quote missing offerId; check Edge Function logs');
         return null;
       }
       if (Number(data.premium) <= 0) {
-        console.warn('[RedkikService] Quote has invalid premium:', data.premium);
+        logger.warn('RedkikService', 'Quote has invalid premium', data.premium);
         return null;
       }
 
@@ -99,8 +100,9 @@ const RedkikService = {
         amendments: data.amendments || [],
         details: data.details || {},
       };
-    } catch (err) {
-      console.warn('Redkik getQuote exception:', err);
+    } catch (error) {
+      const normalized = normalizeError(error, 'Redkik quote request failed');
+      logger.warn('RedkikService', 'getQuote exception', normalized, error);
       return null;
     }
   },
@@ -116,35 +118,34 @@ const RedkikService = {
     if (!offerId) return null;
 
     try {
-      const { data, error } = await supabase.functions.invoke('redkik-quote', {
-        body: {
-          action: 'purchase',
-          offerId,
-        },
+      const { data, error } = await invokeRedkikQuote({
+        action: 'purchase',
+        payload: { offerId },
       });
 
       if (error) {
-        console.warn('Redkik purchase failed:', error.message || error);
+        logger.warn('RedkikService', 'Purchase failed', error?.message || error);
         return null;
       }
 
       if (data?.error) {
-        console.warn('Redkik purchase returned error:', data.error);
+        logger.warn('RedkikService', 'Purchase returned error', data.error);
         return null;
       }
 
-      console.log('[RedkikService] Purchase response:', JSON.stringify(data, null, 2));
+      logger.info('RedkikService', 'Purchase response', data);
 
       if (!data.bookingId) {
-        console.warn('[RedkikService] Purchase missing bookingId — check Edge Function logs');
+        logger.warn('RedkikService', 'Purchase missing bookingId; check Edge Function logs');
         return null;
       }
 
       return {
         bookingId: data.bookingId,
       };
-    } catch (err) {
-      console.warn('Redkik purchaseInsurance exception:', err);
+    } catch (error) {
+      const normalized = normalizeError(error, 'Redkik purchase request failed');
+      logger.warn('RedkikService', 'purchaseInsurance exception', normalized, error);
       return null;
     }
   },
@@ -160,27 +161,26 @@ const RedkikService = {
     if (!bookingId) return null;
 
     try {
-      const { data, error } = await supabase.functions.invoke('redkik-quote', {
-        body: {
-          action: 'complete',
-          bookingId,
-        },
+      const { data, error } = await invokeRedkikQuote({
+        action: 'complete',
+        payload: { bookingId },
       });
 
       if (error) {
-        console.warn('Redkik complete failed:', error.message || error);
+        logger.warn('RedkikService', 'Complete failed', error?.message || error);
         return null;
       }
 
       if (data?.error) {
-        console.warn('Redkik complete returned error:', data.error);
+        logger.warn('RedkikService', 'Complete returned error', data.error);
         return null;
       }
 
-      console.log('[RedkikService] Complete response:', JSON.stringify(data, null, 2));
+      logger.info('RedkikService', 'Complete response', data);
       return { success: true, bookingId };
-    } catch (err) {
-      console.warn('Redkik completeBooking exception:', err);
+    } catch (error) {
+      const normalized = normalizeError(error, 'Redkik complete request failed');
+      logger.warn('RedkikService', 'completeBooking exception', normalized, error);
       return null;
     }
   },
@@ -195,27 +195,26 @@ const RedkikService = {
     if (!bookingId) return null;
 
     try {
-      const { data, error } = await supabase.functions.invoke('redkik-quote', {
-        body: {
-          action: 'cancel',
-          bookingId,
-        },
+      const { data, error } = await invokeRedkikQuote({
+        action: 'cancel',
+        payload: { bookingId },
       });
 
       if (error) {
-        console.warn('Redkik cancel failed:', error.message || error);
+        logger.warn('RedkikService', 'Cancel failed', error?.message || error);
         return null;
       }
 
       if (data?.error) {
-        console.warn('Redkik cancel returned error:', data.error);
+        logger.warn('RedkikService', 'Cancel returned error', data.error);
         return null;
       }
 
-      console.log('[RedkikService] Cancel response:', JSON.stringify(data, null, 2));
+      logger.info('RedkikService', 'Cancel response', data);
       return { success: true, bookingId };
-    } catch (err) {
-      console.warn('Redkik cancelBooking exception:', err);
+    } catch (error) {
+      const normalized = normalizeError(error, 'Redkik cancel request failed');
+      logger.warn('RedkikService', 'cancelBooking exception', normalized, error);
       return null;
     }
   },

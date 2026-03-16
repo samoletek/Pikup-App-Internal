@@ -1,4 +1,6 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { normalizeError } from './errorService';
+import { logger } from './logger';
 
 // Try different possible module names
 const MapboxNavigation = NativeModules.MapboxNavigation || 
@@ -9,10 +11,14 @@ const isNavigationModuleAvailable = !!MapboxNavigation && typeof MapboxNavigatio
 
 // Debug logging (dev only)
 if (__DEV__) {
-  console.log('=== MAPBOX SERVICE DEBUG ===');
-  console.log('Platform.OS:', Platform.OS);
-  console.log('Mapbox native module available:', isNavigationModuleAvailable);
-  console.log('============================');
+  logger.debug('MapboxNavigationService', '=== MAPBOX SERVICE DEBUG ===');
+  logger.debug('MapboxNavigationService', 'Platform.OS', Platform.OS);
+  logger.debug(
+    'MapboxNavigationService',
+    'Mapbox native module available',
+    isNavigationModuleAvailable
+  );
+  logger.debug('MapboxNavigationService', '============================');
 }
 
 class MapboxNavigationService {
@@ -29,27 +35,28 @@ class MapboxNavigationService {
 
   startNavigation(origin, destination) {
     return new Promise((resolve, reject) => {
-      console.log('=== START NAVIGATION ATTEMPT ===');
-      console.log('Origin:', origin);
-      console.log('Destination:', destination);
-      console.log('MapboxNavigation available:', this.isAvailable());
+      logger.info('MapboxNavigationService', '=== START NAVIGATION ATTEMPT ===');
+      logger.info('MapboxNavigationService', 'Origin', origin);
+      logger.info('MapboxNavigationService', 'Destination', destination);
+      logger.info('MapboxNavigationService', 'MapboxNavigation available', this.isAvailable());
       
       if (!this.isAvailable()) {
         const error = 'Mapbox Navigation not available on this platform';
-        console.log('ERROR:', error);
+        logger.error('MapboxNavigationService', error);
         reject(new Error(error));
         return;
       }
 
-      console.log('Calling MapboxNavigation.startNavigation...');
+      logger.info('MapboxNavigationService', 'Calling MapboxNavigation.startNavigation');
       MapboxNavigation.startNavigation(origin, destination)
         .then((result) => {
-          console.log('Navigation started successfully:', result);
+          logger.info('MapboxNavigationService', 'Navigation started successfully', result);
           resolve(result);
         })
         .catch((error) => {
-          console.log('Navigation failed:', error);
-          reject(error);
+          const normalized = normalizeError(error, 'Navigation failed');
+          logger.error('MapboxNavigationService', 'Navigation failed', normalized);
+          reject(new Error(normalized.message || 'Navigation failed'));
         });
     });
   }
@@ -63,7 +70,10 @@ class MapboxNavigationService {
 
       MapboxNavigation.stopNavigation()
         .then(resolve)
-        .catch(reject);
+        .catch((error) => {
+          const normalized = normalizeError(error, 'Failed to stop navigation');
+          reject(new Error(normalized.message || 'Failed to stop navigation'));
+        });
     });
   }
 

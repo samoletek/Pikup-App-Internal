@@ -1,7 +1,8 @@
-import { supabase } from '../config/supabase';
 import { TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { failureResult, successResult } from './contracts/result';
+import { fetchClaimsByUserId, invokeSubmitClaim } from './repositories/claimsRepository';
 
 export const CLAIM_WORKFLOW_STATUS = Object.freeze({
   FILED: 'filed',
@@ -91,32 +92,32 @@ export const splitClaimsByState = (claims = []) => {
 export const fetchClaimsForUser = async (userId) => {
   try {
     if (!userId) {
-      return { success: true, ongoingClaims: [], completedClaims: [] };
+      return successResult({ ongoingClaims: [], completedClaims: [] });
     }
 
-    const { data, error } = await supabase
-      .from('claims')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await fetchClaimsByUserId(userId);
 
-    if (error) throw error;
+    if (error) {
+      const normalized = normalizeError(error, 'Failed to load claims history');
+      logger.error('ClaimsService', 'fetchClaimsForUser failed', normalized, error);
+      return failureResult(normalized.message, normalized.code || null, {
+        ongoingClaims: [],
+        completedClaims: [],
+      });
+    }
 
     const { ongoing, completed } = splitClaimsByState(data || []);
-    return {
-      success: true,
+    return successResult({
       ongoingClaims: ongoing,
       completedClaims: completed,
-    };
+    });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to load claims history');
     logger.error('ClaimsService', 'fetchClaimsForUser failed', normalized, error);
-    return {
-      success: false,
-      error: normalized.message,
+    return failureResult(normalized.message, normalized.code || null, {
       ongoingClaims: [],
       completedClaims: [],
-    };
+    });
   }
 };
 
@@ -160,31 +161,33 @@ export const submitClaimRequest = async ({
 }) => {
   try {
     if (!selectedTrip?.bookingId) {
-      return { success: false, error: 'Delivery does not contain insurance booking details.' };
+      return failureResult('Delivery does not contain insurance booking details.');
     }
 
-    const { data, error } = await supabase.functions.invoke('submit-claim', {
-      body: {
-        bookingId: selectedTrip.bookingId,
-        lossType: claimType,
-        lossDate: new Date().toISOString().split('T')[0],
-        lossDescription: claimDescription,
-        lossEstimatedClaimValue: Number.isFinite(Number(selectedTrip.insuranceValue))
-          ? Number(selectedTrip.insuranceValue)
-          : null,
-        claimantName: currentUser?.displayName || currentUser?.email || null,
-        claimantEmail: currentUser?.email || null,
-        documentTypes: (Array.isArray(selectedDocuments) ? selectedDocuments : []).map(
-          (doc) => doc.documentType
-        ),
-      },
+    const { data, error } = await invokeSubmitClaim({
+      bookingId: selectedTrip.bookingId,
+      lossType: claimType,
+      lossDate: new Date().toISOString().split('T')[0],
+      lossDescription: claimDescription,
+      lossEstimatedClaimValue: Number.isFinite(Number(selectedTrip.insuranceValue))
+        ? Number(selectedTrip.insuranceValue)
+        : null,
+      claimantName: currentUser?.displayName || currentUser?.email || null,
+      claimantEmail: currentUser?.email || null,
+      documentTypes: (Array.isArray(selectedDocuments) ? selectedDocuments : []).map(
+        (doc) => doc.documentType
+      ),
     });
 
-    if (error) throw error;
-    return { success: true, data };
+    if (error) {
+      const normalized = normalizeError(error, 'Failed to submit claim. Please try again.');
+      logger.error('ClaimsService', 'submitClaimRequest failed', normalized, error);
+      return failureResult(normalized.message, normalized.code || null);
+    }
+    return successResult({ data });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to submit claim. Please try again.');
     logger.error('ClaimsService', 'submitClaimRequest failed', normalized, error);
-    return { success: false, error: normalized.message };
+    return failureResult(normalized.message, normalized.code || null);
   }
 };

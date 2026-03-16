@@ -13,6 +13,7 @@ import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ScreenHeader from "../../components/ScreenHeader";
+import AppCard from "../../components/ui/AppCard";
 import { borderRadius, colors, spacing, typography } from "../../styles/theme";
 import { links } from "../../constants/links";
 
@@ -70,7 +71,7 @@ export default function AboutScreen({ navigation }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SUPPORT</Text>
-          <View style={styles.sectionCard}>
+          <AppCard style={styles.sectionCard} padded={false}>
             <TouchableOpacity
               style={styles.row}
               onPress={() => navigation.navigate("CustomerHelpScreen")}
@@ -110,12 +111,12 @@ export default function AboutScreen({ navigation }) {
                 color={colors.text.tertiary}
               />
             </TouchableOpacity>
-          </View>
+          </AppCard>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>LEGAL</Text>
-          <View style={styles.sectionCard}>
+          <AppCard style={styles.sectionCard} padded={false}>
             <TouchableOpacity
               style={styles.row}
               onPress={() => openExternalLink(PRIVACY_URL, "Privacy Policy")}
@@ -155,12 +156,12 @@ export default function AboutScreen({ navigation }) {
                 color={colors.text.tertiary}
               />
             </TouchableOpacity>
-          </View>
+          </AppCard>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>APP</Text>
-          <View style={styles.sectionCard}>
+          <AppCard style={styles.sectionCard} padded={false}>
             <TouchableOpacity
               style={styles.row}
               onPress={() => openExternalLink(WEBSITE_URL, "Pikup website")}
@@ -179,7 +180,7 @@ export default function AboutScreen({ navigation }) {
                 color={colors.text.tertiary}
               />
             </TouchableOpacity>
-          </View>
+          </AppCard>
         </View>
 
         <View style={styles.versionContainer}>

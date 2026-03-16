@@ -1,6 +1,8 @@
+// Claims Insurance Info Modal component: renders its UI and handles related interactions.
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppButton from '../ui/AppButton';
 import {
   borderRadius,
   colors,
@@ -38,9 +40,7 @@ export default function ClaimsInsuranceInfoModal({ visible, onClose }) {
             supporting documents when possible.
           </Text>
 
-          <TouchableOpacity style={styles.infoModalOkButton} onPress={onClose}>
-            <Text style={styles.infoModalOkButtonText}>Understood</Text>
-          </TouchableOpacity>
+          <AppButton title="Understood" onPress={onClose} style={styles.infoModalOkButton} />
         </View>
       </View>
     </Modal>
@@ -96,15 +96,5 @@ const styles = StyleSheet.create({
   },
   infoModalOkButton: {
     marginTop: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.full,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoModalOkButtonText: {
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    color: colors.white,
   },
 });

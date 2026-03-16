@@ -3,49 +3,36 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Image,
-  Keyboard,
-  Platform,
-  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
-import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import ScreenHeader from "../../components/ScreenHeader";
 import MediaViewer from "../../components/MediaViewer";
+import ScreenHeader from "../../components/ScreenHeader";
+import ChatMessageItem from "../../components/messages/ChatMessageItem";
+import { getMessageMediaType } from "../../components/messages/messageMediaUtils";
+import { useAuthIdentity, useMessagingActions } from "../../contexts/AuthContext";
+import useConversationMessages from "../../hooks/useConversationMessages";
+import useKeyboardHeight from "../../hooks/useKeyboardHeight";
+import useMessageComposer from "../../hooks/useMessageComposer";
+import useMessageMediaSizing from "../../hooks/useMessageMediaSizing";
 import styles from "./MessageScreen.styles";
-import { useAuth } from "../../contexts/AuthContext";
-import { uploadToSupabase, compressImage } from "../../services/StorageService";
-import {
-  colors,
-  layout,
-  spacing,
-} from "../../styles/theme";
-
-const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|webp|heic|heif|bmp|tiff?)(\?|#|$)/i;
-const VIDEO_URL_PATTERN = /\.(mp4|mov|m4v|webm|avi|mkv|3gp)(\?|#|$)/i;
-const DEFAULT_IMAGE_ASPECT_RATIO = 4 / 3;
-const DEFAULT_VIDEO_ASPECT_RATIO = 16 / 9;
-const MIN_MEDIA_ASPECT_RATIO = 0.45;
-const MAX_MEDIA_ASPECT_RATIO = 2.2;
+import { colors, layout, spacing } from "../../styles/theme";
 
 export default function MessageScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { currentUser, userType } = useAuthIdentity();
   const {
-    currentUser,
-    userType,
     sendMessage,
     subscribeToMessages,
     markMessageAsRead,
     loadOlderMessages,
-  } = useAuth();
+  } = useMessagingActions();
 
   const { conversationId, driverName, customerName, driverInfo } = route.params || {};
   const hasConversationId = Boolean(conversationId);
@@ -53,176 +40,53 @@ export default function MessageScreen({ navigation, route }) {
   const currentUserId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
 
-  const [messages, setMessages] = useState([]);
-  const [messageText, setMessageText] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [loadingOlder, setLoadingOlder] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerMediaUri, setViewerMediaUri] = useState(null);
   const [viewerMediaType, setViewerMediaType] = useState("image");
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [mediaNaturalSizeById, setMediaNaturalSizeById] = useState({});
-  const messageListRef = useRef(null);
-  const mediaSizeProbeInFlightRef = useRef(new Set());
   const missingConversationAlertShownRef = useRef(false);
+  const messageListRef = useRef(null);
+
+  const keyboardHeight = useKeyboardHeight();
   const isKeyboardVisible = keyboardHeight > 0;
   const mediaMaxWidth = Math.round(Math.min(contentMaxWidth * 0.7, width * 0.72));
   const mediaMaxHeight = Math.round(Math.min(contentMaxWidth * 0.78, width * 0.8));
 
-  const scrollToLatest = useCallback(() => {
-    requestAnimationFrame(() => {
-      messageListRef.current?.scrollToOffset?.({ offset: 0, animated: true });
-    });
-  }, []);
-
-  const getMessageMediaType = useCallback((message) => {
-    const normalizedType = String(message?.messageType || "").toLowerCase();
-    if (normalizedType === "image" || normalizedType === "video") {
-      return normalizedType;
-    }
-
-    const content = String(message?.content || "").trim();
-    if (!/^https?:\/\//i.test(content)) {
-      return null;
-    }
-
-    if (VIDEO_URL_PATTERN.test(content)) {
-      return "video";
-    }
-
-    if (content.includes("/chat-attachments/") || IMAGE_URL_PATTERN.test(content)) {
-      return "image";
-    }
-
-    return null;
-  }, []);
-
-  const getMediaDisplaySize = useCallback(
-    (messageId, mediaType) => {
-      const naturalSize = mediaNaturalSizeById[String(messageId)];
-      const hasNaturalSize = !!naturalSize?.width && !!naturalSize?.height;
-      const defaultAspectRatio =
-        mediaType === "video" ? DEFAULT_VIDEO_ASPECT_RATIO : DEFAULT_IMAGE_ASPECT_RATIO;
-      const rawAspectRatio = hasNaturalSize
-        ? naturalSize.width / naturalSize.height
-        : defaultAspectRatio;
-      const aspectRatio = Math.min(
-        MAX_MEDIA_ASPECT_RATIO,
-        Math.max(MIN_MEDIA_ASPECT_RATIO, rawAspectRatio)
-      );
-
-      let widthCandidate = mediaMaxWidth;
-      let heightCandidate = Math.round(widthCandidate / aspectRatio);
-      if (heightCandidate > mediaMaxHeight) {
-        heightCandidate = mediaMaxHeight;
-        widthCandidate = Math.round(heightCandidate * aspectRatio);
-      }
-
-      return {
-        width: Math.max(widthCandidate, 1),
-        height: Math.max(heightCandidate, 1),
-      };
-    },
-    [mediaMaxHeight, mediaMaxWidth, mediaNaturalSizeById]
-  );
-
-  const saveMediaNaturalSize = useCallback((messageId, loadedWidth, loadedHeight) => {
-    const parsedWidth = Number(loadedWidth || 0);
-    const parsedHeight = Number(loadedHeight || 0);
-
-    if (!parsedWidth || !parsedHeight) {
-      return;
-    }
-
-    const mediaKey = String(messageId);
-    setMediaNaturalSizeById((prev) => {
-      const existing = prev[mediaKey];
-      if (existing?.width === parsedWidth && existing?.height === parsedHeight) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        [mediaKey]: { width: parsedWidth, height: parsedHeight },
-      };
-    });
-  }, []);
-
-  const handleImageLoad = useCallback((messageId, event) => {
-    const source = event?.nativeEvent?.source;
-    saveMediaNaturalSize(messageId, source?.width, source?.height);
-  }, [saveMediaNaturalSize]);
-
-  const handleVideoReady = useCallback((messageId, event) => {
-    const naturalSize = event?.naturalSize || event?.nativeEvent?.naturalSize;
-    saveMediaNaturalSize(messageId, naturalSize?.width, naturalSize?.height);
-  }, [saveMediaNaturalSize]);
-
-  const probeMediaSize = useCallback((messageId, uri) => {
-    if (typeof uri !== "string" || !uri) {
-      return;
-    }
-
-    const mediaKey = String(messageId);
-    if (mediaNaturalSizeById[mediaKey] || mediaSizeProbeInFlightRef.current.has(mediaKey)) {
-      return;
-    }
-
-    mediaSizeProbeInFlightRef.current.add(mediaKey);
-    Image.getSize(
-      uri,
-      (loadedWidth, loadedHeight) => {
-        mediaSizeProbeInFlightRef.current.delete(mediaKey);
-        if (!loadedWidth || !loadedHeight) {
-          return;
-        }
-
-        saveMediaNaturalSize(mediaKey, loadedWidth, loadedHeight);
-      },
-      () => {
-        mediaSizeProbeInFlightRef.current.delete(mediaKey);
-      }
-    );
-  }, [mediaNaturalSizeById, saveMediaNaturalSize]);
-
-  useEffect(() => {
-    if (!conversationId || !currentUserId) {
-      setLoading(false);
-      return undefined;
-    }
-
-    setLoading(true);
-    setHasMore(true);
-
-    const unsubscribe = subscribeToMessages(
+  const { messages, setMessages, loading, loadingOlder, handleLoadOlder } =
+    useConversationMessages({
       conversationId,
-      // onInitialLoad — receives array of last 20 messages
-      (initialMessages) => {
-        setMessages((prevMessages) => {
-          const pendingMessages = prevMessages.filter(
-            (msg) => msg.id?.startsWith("temp-") && msg.status !== "sent"
-          );
-          return [...initialMessages, ...pendingMessages];
-        });
-        if (initialMessages.length < 20) setHasMore(false);
-        setLoading(false);
-      },
-      // onNewMessage — receives single new message from realtime
-      (newMsg) => {
-        setMessages((prev) => {
-          // Skip if already present (e.g. optimistic)
-          if (prev.some((m) => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-      }
-    );
+      currentUserId,
+      userType,
+      subscribeToMessages,
+      markMessageAsRead,
+      loadOlderMessages,
+    });
 
-    markMessageAsRead(conversationId, userType);
-    return unsubscribe;
-  }, [conversationId, currentUserId, subscribeToMessages, markMessageAsRead, userType]);
+  const {
+    getMediaDisplaySize,
+    handleImageLoad,
+    handleVideoReady,
+    saveMediaNaturalSize,
+  } = useMessageMediaSizing({
+    messages,
+    mediaMaxWidth,
+    mediaMaxHeight,
+  });
+
+  const {
+    messageText,
+    setMessageText,
+    sending,
+    uploadingImage,
+    handleAttachPress,
+    handleSend,
+  } = useMessageComposer({
+    conversationId,
+    currentUserId,
+    userType,
+    sendMessage,
+    setMessages,
+    saveMediaNaturalSize,
+  });
 
   useEffect(() => {
     if (hasConversationId || missingConversationAlertShownRef.current) {
@@ -237,429 +101,49 @@ export default function MessageScreen({ navigation, route }) {
     );
   }, [hasConversationId]);
 
-  useEffect(() => {
-    setMediaNaturalSizeById((prev) => {
-      const activeIds = new Set(messages.map((message) => String(message.id)));
-      let hasRemovedItems = false;
-      const next = {};
-
-      mediaSizeProbeInFlightRef.current.forEach((mediaId) => {
-        if (!activeIds.has(mediaId)) {
-          mediaSizeProbeInFlightRef.current.delete(mediaId);
-        }
-      });
-
-      Object.entries(prev).forEach(([mediaId, size]) => {
-        if (activeIds.has(mediaId)) {
-          next[mediaId] = size;
-        } else {
-          hasRemovedItems = true;
-        }
-      });
-
-      return hasRemovedItems ? next : prev;
-    });
-  }, [messages]);
-
-  useEffect(() => {
-    messages.forEach((message) => {
-      const mediaType = getMessageMediaType(message);
-      if (!mediaType) {
-        return;
-      }
-
-      if (mediaType === "image") {
-        probeMediaSize(message.id, String(message.content || ""));
-      }
-    });
-  }, [getMessageMediaType, messages, probeMediaSize]);
-
-  // No initial scroll logic needed — inverted FlatList shows latest messages first
-
-  const handleLoadOlder = useCallback(async () => {
-    if (!conversationId || loadingOlder || !hasMore || messages.length === 0) return;
-
-    const oldestMessage = messages[0];
-    if (!oldestMessage?.timestamp) return;
-
-    setLoadingOlder(true);
-    try {
-      const olderMessages = await loadOlderMessages(conversationId, oldestMessage.timestamp);
-      if (olderMessages.length === 0 || olderMessages.length < 20) {
-        setHasMore(false);
-      }
-      if (olderMessages.length > 0) {
-        setMessages((prev) => [...olderMessages, ...prev]);
-      }
-    } catch (error) {
-      console.error('Error loading older messages:', error);
-    } finally {
-      setLoadingOlder(false);
-    }
-  }, [conversationId, hasMore, loadOlderMessages, loadingOlder, messages]);
-
-  useEffect(() => {
-    const handleKeyboardChange = (event) => {
-      const nextKeyboardHeight = Number(event?.endCoordinates?.height || 0);
-      setKeyboardHeight(nextKeyboardHeight);
-    };
-
-    const handleKeyboardHide = () => {
-      setKeyboardHeight(0);
-    };
-
-    const subscriptions =
-      Platform.OS === "ios"
-        ? [
-          Keyboard.addListener("keyboardWillChangeFrame", handleKeyboardChange),
-          Keyboard.addListener("keyboardWillHide", handleKeyboardHide),
-        ]
-        : [
-          Keyboard.addListener("keyboardDidShow", handleKeyboardChange),
-          Keyboard.addListener("keyboardDidHide", handleKeyboardHide),
-        ];
-
-    return () => {
-      subscriptions.forEach((subscription) => subscription.remove());
-    };
-  }, [scrollToLatest]);
-
-  const handleSend = async () => {
-    if (!conversationId) {
-      Alert.alert("Chat unavailable", "Conversation was not initialized.");
+  const openMediaViewer = useCallback((mediaUri, mediaType) => {
+    if (!mediaUri) {
       return;
     }
 
-    if (!messageText.trim() || sending || !currentUserId) {
-      return;
-    }
-
-    const content = messageText.trim();
-    const tempId = `temp-${Date.now()}`;
-
-    // Optimistic update - show message immediately
-    const optimisticMessage = {
-      id: tempId,
-      senderId: currentUserId,
-      content,
-      messageType: "text",
-      timestamp: new Date().toISOString(),
-      status: "sending",
-    };
-
-    setMessages((prev) => [...prev, optimisticMessage]);
-    setMessageText("");
-    setSending(true);
-
-    try {
-      const sentMessage = await sendMessage(conversationId, currentUserId, userType, content);
-      // Replace optimistic message with real one
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...sentMessage, status: "sent" } : msg
-        )
-      );
-    } catch (error) {
-      console.error("Error sending message:", error);
-      // Mark as failed and restore text
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...msg, status: "failed" } : msg
-        )
-      );
-      setMessageText(content);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleAttachPress = () => {
-    if (!conversationId) {
-      Alert.alert("Chat unavailable", "Conversation was not initialized.");
-      return;
-    }
-
-    Alert.alert(
-      "Attach Photo",
-      "Choose an option",
-      [
-        { text: "Take Photo", onPress: takePhoto },
-        { text: "Choose from Library", onPress: pickImageFromLibrary },
-        { text: "Cancel", style: "cancel" },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Camera permission is required to take photos.");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets?.[0]) {
-      await uploadAndSendImage(result.assets[0]);
-    }
-  };
-
-  const pickImageFromLibrary = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "Photo library permission is required.");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets?.[0]) {
-      await uploadAndSendImage(result.assets[0]);
-    }
-  };
-
-  const uploadAndSendImage = async (asset) => {
-    if (!currentUserId || !conversationId) return;
-
-    const uri = typeof asset === "string" ? asset : asset?.uri;
-    if (!uri) return;
-
-    const tempId = `temp-img-${Date.now()}`;
-    const imageWidth = Number(asset?.width || 0);
-    const imageHeight = Number(asset?.height || 0);
-
-    // Optimistic update - show image immediately with local URI
-    const optimisticMessage = {
-      id: tempId,
-      senderId: currentUserId,
-      content: uri,
-      messageType: "image",
-      timestamp: new Date().toISOString(),
-      status: "uploading",
-    };
-
-    if (imageWidth && imageHeight) {
-      saveMediaNaturalSize(tempId, imageWidth, imageHeight);
-    }
-
-    setMessages((prev) => [...prev, optimisticMessage]);
-    setUploadingImage(true);
-
-    try {
-      const compressedUri = await compressImage(uri);
-      // Use chat-attachments bucket which has proper policies
-      const filename = `${currentUserId}/${conversationId}/${Date.now()}.jpg`;
-      const publicUrl = await uploadToSupabase(compressedUri, "chat-attachments", filename);
-
-      // Update to show uploading to server
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...msg, content: publicUrl, status: "sending" } : msg
-        )
-      );
-
-      const sentMessage = await sendMessage(conversationId, currentUserId, userType, publicUrl, "image");
-      // Replace with real message
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...sentMessage, status: "sent" } : msg
-        )
-      );
-    } catch (error) {
-      console.error("Error uploading image:", error);
-      // Mark as failed
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === tempId ? { ...msg, status: "failed" } : msg
-        )
-      );
-      Alert.alert("Upload Failed", "Failed to upload image. Please try again.");
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  const openMediaViewer = (mediaUri, mediaType) => {
-    if (!mediaUri) return;
     setViewerMediaUri(mediaUri);
     setViewerMediaType(mediaType === "video" ? "video" : "image");
     setViewerVisible(true);
-  };
+  }, []);
 
-  const closeMediaViewer = () => {
+  const closeMediaViewer = useCallback(() => {
     setViewerVisible(false);
     setViewerMediaUri(null);
     setViewerMediaType("image");
-  };
+  }, []);
 
-  // Render message status icon for outgoing messages
-  const renderStatusIcon = (status) => {
-    switch (status) {
-      case "sending":
-      case "uploading":
-        return <Ionicons name="time-outline" size={12} color="rgba(255,255,255,0.7)" />;
-      case "sent":
-        return <Ionicons name="checkmark" size={12} color="rgba(255,255,255,0.7)" />;
-      case "delivered":
-        return <Ionicons name="checkmark-done-outline" size={12} color="rgba(255,255,255,0.7)" />;
-      case "read":
-        return <Ionicons name="checkmark-done" size={12} color={colors.success} />;
-      case "failed":
-        return <Ionicons name="alert-circle" size={12} color={colors.error} />;
-      default:
-        return <Ionicons name="checkmark" size={12} color="rgba(255,255,255,0.7)" />;
-    }
-  };
-
-  const renderMessage = ({ item }) => {
-    const isMyMessage = item.senderId === currentUserId;
-    const messageTime = new Date(item.timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    if (item.messageType === "system") {
-      return (
-        <View style={styles.systemBox}>
-          <Text style={styles.systemText}>{item.content}</Text>
-        </View>
-      );
-    }
-
-    // Media message (image/video)
-    const mediaType = getMessageMediaType(item);
-    if (mediaType) {
-      const isUploading = item.status === "uploading" || item.status === "sending";
-      const mediaSize = getMediaDisplaySize(item.id, mediaType);
-      const isImage = mediaType === "image";
-      const canOpenMediaViewer = !isUploading;
-      const MediaBubble = canOpenMediaViewer ? TouchableOpacity : View;
+  const renderMessage = useCallback(
+    ({ item }) => {
+      const mediaType = getMessageMediaType(item);
+      const mediaSize = mediaType ? getMediaDisplaySize(item.id, mediaType) : null;
 
       return (
-        <View
-          style={[
-            styles.messageContainer,
-            isMyMessage ? styles.outgoingContainer : styles.incomingContainer,
-          ]}
-        >
-          <MediaBubble
-            style={[
-              styles.imageBubble,
-              item.status === "failed" && styles.failedMsg,
-            ]}
-            {...(canOpenMediaViewer
-              ? {
-                onPress: () => openMediaViewer(item.content, mediaType),
-                activeOpacity: 0.9,
-              }
-              : {})}
-          >
-            <View style={[styles.imageWrapper, mediaSize]}>
-              {isImage ? (
-                <Image
-                  source={{ uri: item.content }}
-                  style={[styles.messageImage, mediaSize, isUploading && styles.imageUploading]}
-                  resizeMode="contain"
-                  onLoad={(event) => handleImageLoad(item.id, event)}
-                />
-              ) : (
-                <>
-                  <View style={[styles.videoContainer, mediaSize, isUploading && styles.imageUploading]}>
-                    <Video
-                      source={{ uri: item.content }}
-                      style={StyleSheet.absoluteFill}
-                      pointerEvents="none"
-                      resizeMode={ResizeMode.CONTAIN}
-                      shouldPlay={false}
-                      isLooping={false}
-                      isMuted
-                      useNativeControls={false}
-                      onLoad={(status) =>
-                        saveMediaNaturalSize(
-                          item.id,
-                          status?.naturalSize?.width,
-                          status?.naturalSize?.height
-                        )
-                      }
-                      onReadyForDisplay={(event) => handleVideoReady(item.id, event)}
-                    />
-                  </View>
-                  <View style={styles.videoPreviewOverlay} pointerEvents="none">
-                    <Ionicons name="play-circle" size={spacing.xxl} color={colors.white} />
-                  </View>
-                </>
-              )}
-              {isUploading && (
-                <View style={styles.uploadingOverlay}>
-                  <ActivityIndicator size="large" color={colors.white} />
-                </View>
-              )}
-              {/* Time and status overlay on image */}
-              <View style={styles.imageTimeOverlay}>
-                <Text style={styles.imageTimeText}>{messageTime}</Text>
-                {isMyMessage && (
-                  <View style={styles.statusIcon}>
-                    {renderStatusIcon(item.status)}
-                  </View>
-                )}
-              </View>
-            </View>
-          </MediaBubble>
-        </View>
+        <ChatMessageItem
+          item={item}
+          currentUserId={currentUserId}
+          mediaType={mediaType}
+          mediaSize={mediaSize}
+          onOpenMediaViewer={openMediaViewer}
+          onImageLoad={handleImageLoad}
+          onVideoReady={handleVideoReady}
+          onVideoLoad={saveMediaNaturalSize}
+        />
       );
-    }
-
-    // Text message
-    return (
-      <View
-        style={[
-          styles.messageContainer,
-          isMyMessage ? styles.outgoingContainer : styles.incomingContainer,
-        ]}
-      >
-        <View
-          style={[
-            styles.messageBubble,
-            isMyMessage ? styles.outgoingMsg : styles.incomingMsg,
-            item.status === "failed" && styles.failedMsg,
-          ]}
-        >
-          <Text
-            style={[
-              styles.messageText,
-              isMyMessage ? styles.outgoingText : styles.incomingText,
-            ]}
-          >
-            {item.content}
-          </Text>
-          <View style={styles.messageFooter}>
-            <Text
-              style={[
-                styles.messageTime,
-                isMyMessage ? styles.outgoingTime : styles.incomingTime,
-              ]}
-            >
-              {messageTime}
-            </Text>
-            {isMyMessage && (
-              <View style={styles.statusIcon}>
-                {renderStatusIcon(item.status)}
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
+    },
+    [
+      currentUserId,
+      getMediaDisplaySize,
+      handleImageLoad,
+      handleVideoReady,
+      openMediaViewer,
+      saveMediaNaturalSize,
+    ]
+  );
 
   return (
     <View style={styles.container}>
@@ -670,7 +154,7 @@ export default function MessageScreen({ navigation, route }) {
         showBack
       />
 
-      <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+      <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}> 
         {!hasConversationId && (
           <View style={[styles.systemBox, { marginHorizontal: spacing.base, marginTop: spacing.sm }]}>
             <Text style={styles.systemText}>Conversation is unavailable for this trip.</Text>
@@ -714,7 +198,6 @@ export default function MessageScreen({ navigation, route }) {
             },
           ]}
         >
-          {/* Paperclip/Attach Button */}
           <TouchableOpacity
             style={[
               styles.attachButton,
@@ -730,20 +213,16 @@ export default function MessageScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
 
-          {/* Input Field with Send Button */}
           <View style={styles.inputWrapper}>
             <TextInput
-              style={[
-                styles.input,
-                { maxHeight: 10 * 20 } // 10 lines × ~20px line height
-              ]}
+              style={[styles.input, { maxHeight: 10 * 20 }]}
               placeholder="Send message..."
               placeholderTextColor={colors.text.placeholder}
               value={messageText}
               onChangeText={setMessageText}
               multiline
               textAlignVertical="center"
-              scrollEnabled={true}
+              scrollEnabled
               editable={hasConversationId}
             />
             {messageText.trim().length > 0 && (
@@ -763,7 +242,6 @@ export default function MessageScreen({ navigation, route }) {
         </View>
       </View>
 
-      {/* Full-screen Media Viewer */}
       <MediaViewer
         visible={viewerVisible}
         mediaUri={viewerMediaUri}

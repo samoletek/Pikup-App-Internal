@@ -1,9 +1,9 @@
+// Order Item Card component: renders its UI and handles related interactions.
 import React, { useState } from 'react';
 import {
     View,
     Text,
     TextInput,
-    StyleSheet,
     TouchableOpacity,
     Image,
     Alert,
@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, borderRadius, spacing, typography, hitSlopDefault } from '../../styles/theme';
+import { colors, hitSlopDefault } from '../../styles/theme';
 import AIPhotoPickerModal from '../CustomerOrderModal/AIPhotoPickerModal';
+import styles from './OrderItemCard.styles';
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -144,7 +145,7 @@ const OrderItemCard = ({
                         onPress={openPhotoPicker}
                     >
                         <Ionicons name="camera" size={24} color={colors.text.primary} />
-                        <View style={{ marginLeft: 12 }}>
+                        <View style={styles.addPhotoTextWrap}>
                             <Text style={styles.addPhotoBtnTopTitle}>
                                 {item.photos.length === 0
                                     ? `Add Photos (up to ${MAX_PHOTOS})`
@@ -156,7 +157,7 @@ const OrderItemCard = ({
                                     : 'Photo limit reached'}
                             </Text>
                         </View>
-                        <Ionicons name="add-circle" size={24} color={colors.primary} style={{ marginLeft: 'auto' }} />
+                        <Ionicons name="add-circle" size={24} color={colors.primary} style={styles.addPhotoIconTrailing} />
                     </TouchableOpacity>
                     {hasPhotoError && (
                         <Text style={styles.errorText}>Please add at least one photo.</Text>
@@ -288,8 +289,8 @@ const OrderItemCard = ({
                                 Upload invoice to confirm item is new
                             </Text>
                             {item.invoicePhoto ? (
-                                <View style={{ position: 'relative', alignSelf: 'flex-start' }}>
-                                    <Image source={{ uri: item.invoicePhoto }} style={[styles.invoiceImage, { marginRight: 0 }]} />
+                                <View style={styles.invoicePreviewContainer}>
+                                    <Image source={{ uri: item.invoicePhoto }} style={[styles.invoiceImage, styles.invoiceImageNoMargin]} />
                                     <TouchableOpacity
                                         style={styles.removePhotoBtn}
                                         onPress={() => updateItemDraft({ invoicePhoto: null })}
@@ -323,292 +324,5 @@ const OrderItemCard = ({
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    card: {
-        backgroundColor: colors.background.tertiary,
-        borderRadius: borderRadius.lg,
-        marginBottom: spacing.md,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: colors.border.default
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: spacing.base
-    },
-    cardHeaderMain: {
-        flex: 1,
-    },
-    cardHeaderLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1
-    },
-    thumbnail: {
-        width: 48,
-        height: 48,
-        borderRadius: borderRadius.sm
-    },
-    placeholderThumb: {
-        width: 48,
-        height: 48,
-        borderRadius: borderRadius.sm,
-        backgroundColor: colors.border.default,
-        alignItems: 'center',
-        justifyContent: 'center'
-    },
-    cardHeaderActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    headerActionButton: {
-        width: 44,
-        height: 44,
-        borderRadius: borderRadius.circle,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cardHeaderInfo: {
-        marginLeft: spacing.md,
-        flex: 1
-    },
-    itemName: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.md,
-        fontWeight: typography.fontWeight.semibold
-    },
-    badges: {
-        flexDirection: 'row',
-        marginTop: spacing.xs
-    },
-    badge: {
-        paddingHorizontal: spacing.sm,
-        paddingVertical: 2,
-        borderRadius: borderRadius.xs,
-        marginRight: 6
-    },
-    badgeFragile: {
-        backgroundColor: colors.secondaryLight
-    },
-    badgeInsured: {
-        backgroundColor: colors.primaryLight
-    },
-    badgeText: {
-        fontSize: typography.fontSize.xs,
-        fontWeight: typography.fontWeight.semibold,
-        color: colors.white
-    },
-    cardContent: {
-        padding: spacing.base,
-        paddingTop: 0,
-        borderTopWidth: 1,
-        borderTopColor: colors.border.default
-    },
-    field: {
-        marginTop: spacing.base
-    },
-    fieldLabel: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.sm,
-        fontWeight: typography.fontWeight.semibold,
-        marginBottom: spacing.sm,
-        textTransform: 'uppercase'
-    },
-    textInput: {
-        backgroundColor: colors.background.input,
-        borderRadius: borderRadius.lg,
-        borderWidth: 1,
-        borderColor: colors.border.default,
-        color: colors.text.primary,
-        fontSize: typography.fontSize.md,
-        padding: 14
-    },
-    textArea: {
-        height: 80,
-        textAlignVertical: 'top'
-    },
-    photoGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap'
-    },
-    photoContainer: {
-        position: 'relative',
-        marginRight: spacing.sm,
-        marginBottom: spacing.sm
-    },
-    photo: {
-        width: 80,
-        height: 80,
-        borderRadius: borderRadius.sm
-    },
-    removePhotoBtn: {
-        position: 'absolute',
-        top: -8,
-        right: -8,
-        backgroundColor: colors.background.secondary,
-        borderRadius: borderRadius.circle,
-        zIndex: 10
-    },
-    addPhotoBtnTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: colors.background.tertiary,
-        borderRadius: borderRadius.lg,
-        padding: spacing.md,
-        borderWidth: 1,
-        borderColor: colors.border.default,
-        marginBottom: spacing.md,
-        marginTop: spacing.md // Added top spacing
-    },
-    addPhotoBtnTopTitle: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.md,
-        fontWeight: typography.fontWeight.semibold
-    },
-    addPhotoBtnTopSubtitle: {
-        color: colors.text.secondary,
-        fontSize: typography.fontSize.xs,
-        marginTop: 2
-    },
-    errorText: {
-        color: colors.error,
-        fontSize: typography.fontSize.sm,
-        fontWeight: typography.fontWeight.semibold,
-        marginBottom: spacing.sm,
-    },
-    photoGridTop: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        marginBottom: spacing.base
-    },
-    // ... (skipping condition styles) ...
-    conditionBtnGroup: {
-        flexDirection: 'row',
-        backgroundColor: colors.background.input,
-        borderRadius: borderRadius.full,
-        padding: 2, // Reduced padding to bring buttons closer to edges
-        marginBottom: spacing.base // Add margin bottom to group instead
-    },
-    conditionBtn: {
-        flex: 1,
-        paddingVertical: spacing.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: borderRadius.xl
-    },
-    conditionBtnActive: {
-        backgroundColor: colors.primary
-    },
-    conditionBtnText: {
-        color: colors.text.muted,
-        fontWeight: typography.fontWeight.semibold
-        // Removed fontSize: typography.fontSize.sm to match toggleText default size
-    },
-    conditionBtnTextActive: {
-        color: colors.white
-    },
-    booleanBtnGroup: {
-        flexDirection: 'row',
-        backgroundColor: colors.background.input,
-        borderRadius: borderRadius.full,
-        padding: 2,
-        gap: spacing.xs,
-    },
-    booleanBtn: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: spacing.md,
-        borderRadius: borderRadius.xl,
-    },
-    booleanBtnActive: {
-        backgroundColor: colors.primary
-    },
-    booleanBtnText: {
-        color: colors.text.muted,
-        fontWeight: typography.fontWeight.semibold
-    },
-    booleanBtnTextActive: {
-        color: colors.white
-    },
-    coverageInfoBox: {
-        marginTop: spacing.base,
-        marginBottom: spacing.sm,
-        backgroundColor: colors.primaryLight,
-        borderWidth: 1,
-        borderColor: colors.primary,
-        borderRadius: borderRadius.md,
-        padding: spacing.base,
-    },
-    coverageInfoHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: spacing.xs,
-    },
-    coverageInfoTitle: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.sm,
-        fontWeight: typography.fontWeight.semibold,
-        marginLeft: spacing.xs,
-    },
-    coverageInfoBody: {
-        color: colors.text.secondary,
-        fontSize: typography.fontSize.xs,
-        lineHeight: 16,
-    },
-    invoiceSection: {
-        marginTop: spacing.base,
-        padding: spacing.base,
-        backgroundColor: colors.background.input,
-        borderRadius: borderRadius.md
-    },
-    invoiceLabel: {
-        color: colors.text.muted,
-        fontSize: typography.fontSize.sm,
-        marginBottom: spacing.md
-    },
-    invoicePreview: {
-        flexDirection: 'row',
-        alignItems: 'center'
-    },
-    invoiceImage: {
-        width: 60,
-        height: 80,
-        borderRadius: borderRadius.sm,
-        marginRight: spacing.md
-    },
-    removeInvoiceBtn: {
-        flexDirection: 'row',
-        alignItems: 'center'
-    },
-    removeInvoiceText: {
-        color: colors.error,
-        marginLeft: 6,
-        fontWeight: typography.fontWeight.semibold
-    },
-    uploadInvoiceBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 2,
-        borderColor: colors.primary,
-        borderStyle: 'dashed',
-        borderRadius: borderRadius.md,
-        padding: spacing.base
-    },
-    uploadInvoiceText: {
-        color: colors.primary,
-        fontWeight: typography.fontWeight.semibold,
-        marginLeft: spacing.sm
-    },
-    errorBorder: {
-        borderWidth: 1,
-        borderColor: colors.error,
-    },
-});
 
 export default OrderItemCard;

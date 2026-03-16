@@ -1,7 +1,9 @@
+// Vehicle Step component: renders its UI and handles related interactions.
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, ScrollView, ActivityIndicator } from 'react-native';
 import VehicleCard from '../../order/VehicleCard';
 import { getVehicleRates, calculatePrice } from '../../../services/PricingService';
+import { logger } from '../../../services/logger';
 import { styles } from '../styles';
 import { colors, spacing } from '../../../styles/theme';
 
@@ -115,7 +117,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
                 const rates = await getVehicleRates();
                 setVehicles(rates);
             } catch (error) {
-                console.error('Failed to load vehicle rates:', error);
+                logger.error('VehicleStep', 'Failed to load vehicle rates', error);
             } finally {
                 setIsLoading(false);
             }
@@ -148,7 +150,7 @@ const VehicleStep = ({ orderData, setOrderData }) => {
 
                 setPrices(priceMap);
             } catch (error) {
-                console.error('Failed to calculate prices:', error);
+                logger.error('VehicleStep', 'Failed to calculate prices', error);
             } finally {
                 setIsLoadingPrices(false);
             }

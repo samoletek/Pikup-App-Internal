@@ -2,6 +2,7 @@ import React from "react";
 import { View, Image, StyleSheet } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./contexts/AuthContext";
+import { logger } from "./services/logger";
 import { colors } from "./styles/theme";
 import { stackScreenOptions } from "./navigation/navigationTheme";
 
@@ -123,7 +124,11 @@ const DriverStack = () => (
 export default function Navigation() {
   const { isInitializing, currentUser, userType } = useAuth();
 
-  console.log('🎯 Navigation render - isInitializing:', isInitializing, 'currentUser:', !!currentUser ? currentUser.email : 'null', 'userType:', userType);
+  logger.debug(
+    'Navigation',
+    'render',
+    { isInitializing, hasCurrentUser: !!currentUser, userType }
+  );
 
   if (isInitializing) {
     return (

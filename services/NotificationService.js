@@ -2,6 +2,8 @@ import * as Notifications from 'expo-notifications';
 // import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { colors } from '../styles/theme';
+import { logger } from './logger';
+import { normalizeError } from './errorService';
 
 class NotificationService {
   constructor() {
@@ -22,11 +24,7 @@ class NotificationService {
   // Initialize push notifications
   async initialize() {
     try {
-      // Commented out Device check since expo-device is not installed
-      // if (!Device.isDevice) {
-      //   console.log('Push notifications only work on physical devices');
-      //   return;
-      // }
+      // Commented out Device check since expo-device is not installed.
 
       // Request permissions
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -38,13 +36,13 @@ class NotificationService {
       }
 
       if (finalStatus !== 'granted') {
-        console.log('Failed to get push token for push notification!');
+        logger.warn('NotificationService', 'Failed to get push token for push notification');
         return;
       }
 
       // Get push token
       this.expoPushToken = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('Expo push token:', this.expoPushToken);
+      logger.info('NotificationService', 'Expo push token acquired');
 
       // Configure notification channel for Android
       if (Platform.OS === 'android') {
@@ -59,7 +57,8 @@ class NotificationService {
 
       this.isInitialized = true;
     } catch (error) {
-      console.error('Error initializing notifications:', error);
+      const normalized = normalizeError(error, 'Failed to initialize notifications');
+      logger.error('NotificationService', 'Error initializing notifications', normalized, error);
     }
   }
 
@@ -81,7 +80,8 @@ class NotificationService {
         trigger: null, // Show immediately
       });
     } catch (error) {
-      console.error('Error sending notification:', error);
+      const normalized = normalizeError(error, 'Failed to send notification');
+      logger.error('NotificationService', 'Error sending notification', normalized, error);
     }
   }
 

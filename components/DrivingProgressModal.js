@@ -1,6 +1,8 @@
+// Driving Progress Modal component: renders its UI and handles related interactions.
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { colors } from '../styles/theme';
+import AppButton from './ui/AppButton';
 
 export const DrivingProgressModal = ({ request, onArrive, driverLocation }) => {
   return (
@@ -19,9 +21,7 @@ export const DrivingProgressModal = ({ request, onArrive, driverLocation }) => {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.arriveBtn} onPress={onArrive}>
-        <Text style={styles.arriveBtnText}>Arrive</Text>
-      </TouchableOpacity>
+      <AppButton title="Arrive" onPress={onArrive} style={styles.arriveBtn} />
     </View>
   );
 };
@@ -77,15 +77,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   arriveBtn: {
-    backgroundColor: colors.primary,
-    padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
-  },
-  arriveBtnText: {
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
 

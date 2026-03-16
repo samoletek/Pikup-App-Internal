@@ -1,32 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Incoming Request Modal component: renders its UI and handles related interactions.
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Image,
   ScrollView,
-  FlatList,
-  Dimensions,
   Animated,
-  PanResponder,
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AppButton from './ui/AppButton';
 import styles from './IncomingRequestModal.styles';
 import { colors, spacing } from '../styles/theme';
-
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-
-const FULL_HEIGHT = SCREEN_HEIGHT * 0.92;
-const HALF_HEIGHT = SCREEN_HEIGHT * 0.55;
-
-const SNAP_FULL = 0;
-const SNAP_HALF = FULL_HEIGHT - HALF_HEIGHT;
-const SNAP_HIDDEN = FULL_HEIGHT + 50;
-const SNAP_POINTS = [SNAP_FULL, SNAP_HALF];
+import useIncomingRequestSheet from '../hooks/useIncomingRequestSheet';
+import IncomingRequestPhotoViewer from './incomingRequestModal/IncomingRequestPhotoViewer';
+import IncomingRequestLocationCard from './incomingRequestModal/IncomingRequestLocationCard';
+import IncomingRequestItemCard from './incomingRequestModal/IncomingRequestItemCard';
+import {
+  FULL_HEIGHT,
+  SCREEN_HEIGHT,
+  formatOfferTimer,
+  getItemPhotoOffset,
+  resolveIncomingRequestData,
+  resolvePhotoSource,
+  resolvePhotoUri,
+} from './incomingRequestModal/incomingRequestModal.utils';
 
 export default function IncomingRequestModal({
   visible,
@@ -39,116 +40,23 @@ export default function IncomingRequestModal({
   onSnapChange,
 }) {
   const insets = useSafeAreaInsets();
-  const [currentSnap, setCurrentSnap] = useState(1);
-  const translateY = useRef(new Animated.Value(SNAP_HIDDEN)).current;
-  const snapIndexRef = useRef(1);
-  const onMinimizeRef = useRef(onMinimize);
-  const onDeclineRef = useRef(onDecline);
-
-  useEffect(() => { onMinimizeRef.current = onMinimize; }, [onMinimize]);
-  useEffect(() => { onDeclineRef.current = onDecline; }, [onDecline]);
-
-  // Entry animation
-  useEffect(() => {
-    if (visible && request) {
-      snapIndexRef.current = 1;
-      setCurrentSnap(1);
-      translateY.setValue(SNAP_HIDDEN);
-      Animated.spring(translateY, {
-        toValue: SNAP_HALF,
-        useNativeDriver: true,
-        tension: 80,
-        friction: 12,
-      }).start();
-      onSnapChange?.(1);
-    }
-  }, [onSnapChange, request, translateY, visible]);
+  const {
+    currentSnap,
+    translateY,
+    backdropOpacity,
+    dismiss,
+    panHandlers,
+  } = useIncomingRequestSheet({
+    visible,
+    request,
+    onDecline,
+    onMinimize,
+    onSnapChange,
+  });
 
   const handleAccept = useCallback(() => {
     onAccept(request);
   }, [request, onAccept]);
-
-  const dismiss = useCallback(() => {
-    Animated.timing(translateY, {
-      toValue: SNAP_HIDDEN,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => onDeclineRef.current?.());
-  }, [translateY]);
-
-  // PanResponder
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dy) > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
-      onPanResponderGrant: () => {
-        translateY.setOffset(translateY._value);
-        translateY.setValue(0);
-      },
-      onPanResponderMove: (_, gs) => {
-        translateY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_, gs) => {
-        translateY.flattenOffset();
-        const currentY = translateY._value;
-        const velocity = gs.vy;
-        const idx = snapIndexRef.current;
-
-        // Fast swipe down from half → minimize
-        if (velocity > 1.5 && idx >= 1) {
-          Animated.timing(translateY, {
-            toValue: SNAP_HIDDEN, duration: 250, useNativeDriver: true,
-          }).start(() => onMinimizeRef.current?.());
-          return;
-        }
-
-        // Dragged far below half → minimize
-        if (currentY > SNAP_HALF + (SNAP_HIDDEN - SNAP_HALF) * 0.3) {
-          Animated.timing(translateY, {
-            toValue: SNAP_HIDDEN, duration: 250, useNativeDriver: true,
-          }).start(() => onMinimizeRef.current?.());
-          return;
-        }
-
-        let target;
-        if (velocity > 1.5) {
-          target = Math.min(idx + 1, SNAP_POINTS.length - 1);
-        } else if (velocity < -1.5) {
-          target = Math.max(idx - 1, 0);
-        } else {
-          let minDist = Infinity;
-          target = 1;
-          SNAP_POINTS.forEach((pt, i) => {
-            const d = Math.abs(currentY - pt);
-            if (d < minDist) { minDist = d; target = i; }
-          });
-        }
-
-        snapIndexRef.current = target;
-        setCurrentSnap(target);
-        Animated.spring(translateY, {
-          toValue: SNAP_POINTS[target],
-          useNativeDriver: true,
-          tension: 100,
-          friction: 14,
-        }).start();
-        onSnapChange?.(target);
-      },
-    })
-  ).current;
-
-  // Backdrop opacity
-  const backdropOpacity = translateY.interpolate({
-    inputRange: [SNAP_FULL, SNAP_HALF, SNAP_HIDDEN],
-    outputRange: [0.6, 0.4, 0],
-    extrapolate: 'clamp',
-  });
-
-  const formatTime = (s) => {
-    const sec = Math.max(0, s);
-    return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`;
-  };
 
   // Photo viewer state (must be before early return to satisfy Rules of Hooks)
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
@@ -156,12 +64,7 @@ export default function IncomingRequestModal({
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
 
   const openPhotoViewer = useCallback((photos, index) => {
-    const resolved = photos.map(p => {
-      if (typeof p === 'string') return p;
-      if (p?.url) return p.url;
-      if (p?.uri) return p.uri;
-      return null;
-    }).filter(Boolean);
+    const resolved = photos.map((photo) => resolvePhotoUri(photo)).filter(Boolean);
     if (resolved.length === 0) return;
     setPhotoViewerPhotos(resolved);
     setPhotoViewerIndex(Math.min(index, resolved.length - 1));
@@ -172,95 +75,26 @@ export default function IncomingRequestModal({
     setPhotoViewerVisible(false);
   }, []);
 
-  if (!request) return null;
-
-  // --- Data extraction ---
-  const allItems = Array.isArray(request.items) && request.items.length > 0
-    ? request.items
-    : request.item ? [request.item] : [];
-  const allPhotos = allItems.flatMap(i => Array.isArray(i.photos) ? i.photos : []);
-  const displayPhotos = allPhotos.length > 0 ? allPhotos : Array.isArray(request.photos) ? request.photos : [];
-  const earnings = request.driverPayout || request.earnings || request.price || '$0.00';
-  const pricing = request.pricing || {};
-  const vehicleType = request.vehicle?.type || 'Standard';
-  const scheduledTime = request.scheduledTime;
-  const pickupDetails = request.pickup?.details || {};
-  const dropoffDetails = request.dropoff?.details || {};
-  const needsHelp = pickupDetails.driverHelpsLoading || dropoffDetails.driverHelpsUnloading;
-  const helpText = pickupDetails.driverHelpsLoading && dropoffDetails.driverHelpsUnloading
-    ? 'Loading & Unloading'
-    : pickupDetails.driverHelpsLoading ? 'Loading' : 'Unloading';
-  const timerColor = timeRemaining <= 30 ? colors.error : colors.primary;
-  const timerPercent = timerTotal > 0 ? (Math.max(0, timeRemaining) / timerTotal) * 100 : 0;
-
-  // --- Render helpers ---
-  const renderPhotoSource = (photo) => {
-    if (typeof photo === 'string') return { uri: photo };
-    if (photo?.url) return { uri: photo.url };
-    if (photo?.uri) return { uri: photo.uri };
-    return null;
-  };
-
-  const renderLocationDetail = (label, value) => {
-    if (!value) return null;
-    return <Text style={styles.locDetailText}>{label}: {value}</Text>;
-  };
-
-  const renderItemCard = (item, index, photoOffset = 0) => {
-    const photos = Array.isArray(item.photos) ? item.photos : [];
-    return (
-      <View key={index} style={styles.itemCard}>
-        <View style={styles.itemCardHeader}>
-          <Text style={styles.itemName} numberOfLines={1}>
-            {item.description || item.name || item.type || `Item ${index + 1}`}
-          </Text>
-          {item.weightEstimate > 0 && (
-            <Text style={styles.itemWeight}>{item.weightEstimate} lbs</Text>
-          )}
-        </View>
-        {item.dimensions && <Text style={styles.itemDims}>{item.dimensions}</Text>}
-        {photos.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing.sm }}>
-            {photos.map((p, i) => {
-              const src = renderPhotoSource(p);
-              if (!src) return null;
-              return (
-                <TouchableOpacity key={i} onPress={() => openPhotoViewer(allPhotos, photoOffset + i)} activeOpacity={0.8}>
-                  <Image source={src} style={styles.itemPhoto} />
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
-    );
-  };
-
-  const renderLocationCard = (label, location, details, dotColor) => (
-    <View style={styles.locCard}>
-      <View style={styles.locCardHeader}>
-        <View style={[styles.locDot, { backgroundColor: dotColor }]} />
-        <Text style={styles.locLabel}>{label}</Text>
-      </View>
-      <Text style={styles.locAddress} numberOfLines={2}>
-        {location?.address || `${label} location`}
-      </Text>
-      {(details.locationType || details.floor || details.unitNumber) && (
-        <View style={styles.locDetailsRow}>
-          {renderLocationDetail('Type', details.locationType)}
-          {renderLocationDetail('Unit', details.unitNumber)}
-          {renderLocationDetail('Floor', details.floor)}
-          {details.hasElevator === true && <Text style={styles.locDetailText}>Elevator: Yes</Text>}
-          {details.hasElevator === false && (
-            <Text style={[styles.locDetailText, { color: colors.warning }]}>No elevator</Text>
-          )}
-        </View>
-      )}
-      {details.notes && (
-        <Text style={styles.locNotes} numberOfLines={2}>Note: {details.notes}</Text>
-      )}
-    </View>
+  const {
+    allItems,
+    allPhotos,
+    displayPhotos,
+    earnings,
+    pricing,
+    vehicleType,
+    scheduledTime,
+    pickupDetails,
+    dropoffDetails,
+    needsHelp,
+    helpText,
+    timerColor,
+    timerPercent,
+  } = useMemo(
+    () => resolveIncomingRequestData(request, timeRemaining, timerTotal),
+    [request, timeRemaining, timerTotal]
   );
+
+  if (!request) return null;
 
   return (
     <Modal visible={visible} transparent animationType="none" statusBarTranslucent>
@@ -279,7 +113,7 @@ export default function IncomingRequestModal({
         ]}
       >
         {/* ===== DRAG AREA ===== */}
-        <View {...panResponder.panHandlers}>
+        <View {...panHandlers}>
           <View style={styles.handleArea}>
             <View style={styles.handleBar} />
           </View>
@@ -289,7 +123,7 @@ export default function IncomingRequestModal({
             <View style={styles.timerRow}>
               <Ionicons name="timer-outline" size={22} color={timerColor} />
               <Text style={[styles.timerText, { color: timerColor }]}>
-                {formatTime(timeRemaining)}
+                {formatOfferTimer(timeRemaining)}
               </Text>
             </View>
             <View style={styles.timerBar}>
@@ -344,9 +178,13 @@ export default function IncomingRequestModal({
 
         {/* ===== BUTTONS ===== */}
         <View style={styles.buttonsRow}>
-          <TouchableOpacity style={styles.declineBtn} onPress={dismiss} activeOpacity={0.8}>
-            <Text style={styles.declineTxt}>Decline</Text>
-          </TouchableOpacity>
+          <AppButton
+            title="Decline"
+            variant="secondary"
+            style={styles.declineBtn}
+            labelStyle={styles.declineTxt}
+            onPress={dismiss}
+          />
           <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.8}>
             <LinearGradient
               colors={[colors.primary, colors.primaryDark]}
@@ -382,17 +220,37 @@ export default function IncomingRequestModal({
             </View>
           )}
 
-          {renderLocationCard('Pickup', request.pickup, pickupDetails, colors.primary)}
-          {renderLocationCard('Drop-off', request.dropoff, dropoffDetails, colors.success)}
+          <IncomingRequestLocationCard
+            label="Pickup"
+            location={request.pickup}
+            details={pickupDetails}
+            dotColor={colors.primary}
+            styles={styles}
+          />
+          <IncomingRequestLocationCard
+            label="Drop-off"
+            location={request.dropoff}
+            details={dropoffDetails}
+            dotColor={colors.success}
+            styles={styles}
+          />
 
           {allItems.length > 0 && (
             <View style={styles.detailSection}>
               <Text style={styles.detailTitle}>Items ({allItems.length})</Text>
               {allItems.map((item, idx) => {
-                const offset = allItems.slice(0, idx).reduce(
-                  (sum, prev) => sum + (Array.isArray(prev.photos) ? prev.photos.length : 0), 0
+                const offset = getItemPhotoOffset(allItems, idx);
+                return (
+                  <IncomingRequestItemCard
+                    key={item?.id || idx}
+                    item={item}
+                    index={idx}
+                    photoOffset={offset}
+                    allPhotos={allPhotos}
+                    onOpenPhotoViewer={openPhotoViewer}
+                    styles={styles}
+                  />
                 );
-                return renderItemCard(item, idx, offset);
               })}
             </View>
           )}
@@ -400,7 +258,7 @@ export default function IncomingRequestModal({
           {allPhotos.length === 0 && displayPhotos.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.base }}>
               {displayPhotos.map((p, i) => {
-                const src = renderPhotoSource(p);
+                const src = resolvePhotoSource(p);
                 if (!src) return null;
                 return (
                   <TouchableOpacity key={i} onPress={() => openPhotoViewer(displayPhotos, i)} activeOpacity={0.8}>
@@ -474,51 +332,13 @@ export default function IncomingRequestModal({
         </ScrollView>
       </Animated.View>
 
-      {/* Full-screen photo viewer */}
-      {photoViewerVisible && (
-        <TouchableWithoutFeedback onPress={closePhotoViewer}>
-          <View style={styles.photoViewerOverlay}>
-            <FlatList
-              data={photoViewerPhotos}
-              horizontal
-              pagingEnabled
-              initialScrollIndex={photoViewerIndex}
-              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const page = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-                setPhotoViewerIndex(page);
-              }}
-              keyExtractor={(_, i) => i.toString()}
-              renderItem={({ item }) => (
-                <TouchableWithoutFeedback onPress={closePhotoViewer}>
-                  <View style={styles.photoViewerPage}>
-                    <TouchableWithoutFeedback>
-                      <Image source={{ uri: item }} style={styles.photoViewerImage} resizeMode="contain" />
-                    </TouchableWithoutFeedback>
-                  </View>
-                </TouchableWithoutFeedback>
-              )}
-            />
-            {photoViewerPhotos.length > 1 && (
-              <View style={styles.photoViewerDots}>
-                {photoViewerPhotos.map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.photoViewerDot,
-                      i === photoViewerIndex && styles.photoViewerDotActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-            <TouchableOpacity style={styles.photoViewerClose} onPress={closePhotoViewer}>
-              <Ionicons name="close" size={28} color={colors.white} />
-            </TouchableOpacity>
-          </View>
-        </TouchableWithoutFeedback>
-      )}
+      <IncomingRequestPhotoViewer
+        visible={photoViewerVisible}
+        photos={photoViewerPhotos}
+        currentIndex={photoViewerIndex}
+        onIndexChange={setPhotoViewerIndex}
+        onClose={closePhotoViewer}
+      />
     </Modal>
   );
 }

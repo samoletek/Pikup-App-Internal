@@ -1,3 +1,4 @@
+// AIPhoto Picker Modal component: renders its UI and handles related interactions.
 import React, { useState } from 'react';
 import {
     View,
@@ -15,6 +16,7 @@ import { colors } from '../../styles/theme';
 import { aiPhotoStyles as s, SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
 import CameraScreen from './CameraScreen';
+import { logger } from '../../services/logger';
 
 const DEFAULT_MAX_PHOTOS = 20;
 const EMPTY_INITIAL_PHOTOS = [];
@@ -141,7 +143,7 @@ const AIPhotoPickerModal = ({
                 setPhotos(prev => [...prev, ...newEntries].slice(0, photoLimit));
             }
         } catch (error) {
-            console.error('Library picker error:', error);
+            logger.error('AIPhotoPickerModal', 'Library picker error', error);
             Alert.alert('Error', 'Failed to pick photos.');
         }
     };

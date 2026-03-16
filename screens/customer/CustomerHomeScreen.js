@@ -1,8 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo } from "react";
 import {
-  Alert,
   Animated,
-  Easing,
   View,
   Text,
   TouchableOpacity,
@@ -13,157 +11,88 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Mapbox from "@rnmapbox/maps";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useFocusEffect } from "@react-navigation/native";
 
-import { useAuth } from "../../contexts/AuthContext";
-import { usePayment } from "../../contexts/PaymentContext";
 import {
-  ACTIVE_TRIP_STATUSES,
-  TRIP_STATUS,
-  normalizeTripStatus,
-} from "../../constants/tripStatus";
+  useAuthIdentity,
+  useStorageActions,
+  useTripActions,
+} from "../../contexts/AuthContext";
+import { usePayment } from "../../contexts/PaymentContext";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import PendingBookingSearchSheet from "../../components/customer/PendingBookingSearchSheet";
-import MapboxLocationService from "../../services/MapboxLocationService";
-import { submitCustomerOrder } from "../../services/CustomerOrderSubmissionService";
 import MapboxMap from "../../components/mapbox/MapboxMap";
 import styles from "./CustomerHomeScreen.styles";
 import {
   colors,
   spacing,
 } from "../../styles/theme";
-
-const toMapboxCoordinate = (location) => {
-  const rawCoordinates = location?.coordinates || location;
-
-  if (
-    Array.isArray(rawCoordinates) &&
-    rawCoordinates.length === 2 &&
-    Number.isFinite(Number(rawCoordinates[0])) &&
-    Number.isFinite(Number(rawCoordinates[1]))
-  ) {
-    return [Number(rawCoordinates[0]), Number(rawCoordinates[1])];
-  }
-
-  const longitude = Number(rawCoordinates?.longitude);
-  const latitude = Number(rawCoordinates?.latitude);
-
-  if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
-    return [longitude, latitude];
-  }
-
-  return null;
-};
-
-const formatSearchDuration = (seconds) => {
-  const safeSeconds = Math.max(0, Number(seconds) || 0);
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(
-    2,
-    "0"
-  )}`;
-};
-
-const getBookingAddress = (booking, pointType) => {
-  const addressKey = `${pointType}Address`;
-  const point = booking?.[pointType];
-  return (
-    booking?.[addressKey] ||
-    point?.address ||
-    point?.formatted_address ||
-    "Address unavailable"
-  );
-};
-
-const formatScheduleLabel = (scheduledTime) => {
-  if (!scheduledTime) {
-    return "ASAP";
-  }
-
-  const parsedDate = new Date(scheduledTime);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "Scheduled";
-  }
-
-  return parsedDate.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-};
-
-const ACTIVE_DELIVERY_STEP_META = Object.freeze({
-  [TRIP_STATUS.ACCEPTED]: {
-    label: "Delivery Confirmed",
-    icon: "checkmark-circle",
-  },
-  [TRIP_STATUS.IN_PROGRESS]: {
-    label: "On the way to you",
-    icon: "car-sport",
-  },
-  [TRIP_STATUS.ARRIVED_AT_PICKUP]: {
-    label: "Driver arrived",
-    icon: "location",
-  },
-  [TRIP_STATUS.PICKED_UP]: {
-    label: "Package collected",
-    icon: "cube",
-  },
-  [TRIP_STATUS.EN_ROUTE_TO_DROPOFF]: {
-    label: "On the way to destination",
-    icon: "navigate",
-  },
-  [TRIP_STATUS.ARRIVED_AT_DROPOFF]: {
-    label: "Arrived at destination",
-    icon: "home",
-  },
-  [TRIP_STATUS.COMPLETED]: {
-    label: "Delivered",
-    icon: "checkmark-circle",
-  },
-});
-
-const ACTIVE_DELIVERY_POLL_INTERVAL_MS = 5000;
-const IDLE_DELIVERY_POLL_INTERVAL_MS = 30000;
-
-const getTripId = (trip) => {
-  const rawId = trip?.id || trip?.requestId || trip?.request_id || null;
-  if (!rawId) {
-    return null;
-  }
-  return String(rawId);
-};
+import useCustomerDeliveryTracking from "../../hooks/useCustomerDeliveryTracking";
+import usePendingBookingSearchUi from "../../hooks/usePendingBookingSearchUi";
+import useCustomerHomeFlow from "./useCustomerHomeFlow";
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const tabBarHeight = useBottomTabBarHeight();
-  const {
-    currentUser,
-    refreshProfile,
-    getUserPickupRequests,
-    createPickupRequest,
-    cancelOrder,
-  } = useAuth();
+  const { currentUser, refreshProfile } = useAuthIdentity();
+  const { getUserPickupRequests, createPickupRequest, cancelOrder } = useTripActions();
+  const { uploadToSupabase } = useStorageActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const { createPaymentIntent, confirmPayment } = usePayment();
-  const { uploadToSupabase } = useAuth();
 
-  const [userLocation, setUserLocation] = useState(null);
-  const [activeDelivery, setActiveDelivery] = useState(null);
-  const [pendingBooking, setPendingBooking] = useState(null);
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [isCancellingPending, setIsCancellingPending] = useState(false);
-  const [isSearchSheetExpanded, setIsSearchSheetExpanded] = useState(false);
-  const [searchElapsedSeconds, setSearchElapsedSeconds] = useState(0);
-  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
-  const [orderModalKey, setOrderModalKey] = useState(0);
-  const searchingPinPulse = useRef(new Animated.Value(0)).current;
-  const searchSheetExpandAnim = useRef(new Animated.Value(0)).current;
+  const {
+    activeDelivery,
+    pendingBooking,
+    setPendingBooking,
+    checkActiveDeliveries,
+  } = useCustomerDeliveryTracking({
+    currentUserId,
+    getUserPickupRequests,
+  });
+
+  const {
+    activeDeliveryStep,
+    canCreateOrder,
+    handleCancelPendingBooking,
+    handleOpenActiveTripDetails,
+    handleOrderConfirm,
+    isCancellingPending,
+    orderModalKey,
+    phoneVerifyVisible,
+    searchModalVisible,
+    setPhoneVerifyVisible,
+    setSearchModalVisible,
+    userLocation,
+  } = useCustomerHomeFlow({
+    activeDelivery,
+    pendingBooking,
+    currentUser,
+    currentUserId,
+    navigation,
+    checkActiveDeliveries,
+    setPendingBooking,
+    cancelOrder,
+    uploadToSupabase,
+    createPaymentIntent,
+    confirmPayment,
+    createPickupRequest,
+  });
+
+  const {
+    isSearchSheetExpanded,
+    setIsSearchSheetExpanded,
+    searchTimerLabel,
+    pendingBookingSummary,
+    searchSheetDetailsHeight,
+    searchSheetDetailsOpacity,
+    searchingMarkerCoordinate,
+    searchingPulseSize,
+    searchingPulseRingOpacity,
+  } = usePendingBookingSearchUi({
+    pendingBooking,
+    userLocation,
+  });
 
   const floatingWidth = useMemo(
     () => Math.min(Math.max(width - spacing.lg * 2, 280), 560),
@@ -180,90 +109,6 @@ export default function CustomerHomeScreen({ navigation }) {
     [insets.bottom]
   );
 
-  const canCreateOrder = !activeDelivery && !pendingBooking;
-
-  const searchingPulseSize = searchingPinPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [24, 96],
-  });
-
-  const searchingPulseRingOpacity = searchingPinPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.45, 0.02],
-  });
-
-  const searchSheetDetailsHeight = searchSheetExpandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 165],
-  });
-
-  const searchSheetDetailsOpacity = searchSheetExpandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const searchingMarkerCoordinate = useMemo(() => {
-    const pickupCoordinate = toMapboxCoordinate(pendingBooking?.pickup);
-    if (pickupCoordinate) {
-      return pickupCoordinate;
-    }
-
-    if (userLocation?.longitude && userLocation?.latitude) {
-      return [userLocation.longitude, userLocation.latitude];
-    }
-
-    return null;
-  }, [pendingBooking, userLocation]);
-
-  const searchingStartedAtMs = useMemo(() => {
-    const rawDate = pendingBooking?.createdAt || pendingBooking?.created_at;
-    if (!rawDate) {
-      return Date.now();
-    }
-
-    const parsed = new Date(rawDate).getTime();
-    return Number.isFinite(parsed) ? parsed : Date.now();
-  }, [pendingBooking?.createdAt, pendingBooking?.created_at]);
-
-  const searchTimerLabel = useMemo(
-    () => formatSearchDuration(searchElapsedSeconds),
-    [searchElapsedSeconds]
-  );
-
-  const pendingBookingSummary = useMemo(() => {
-    if (!pendingBooking) {
-      return null;
-    }
-
-    const totalAmount =
-      Number(pendingBooking?.pricing?.total ?? pendingBooking?.price ?? 0) || 0;
-    const itemsCount = Array.isArray(pendingBooking?.items)
-      ? pendingBooking.items.length
-      : pendingBooking?.item
-        ? 1
-        : 0;
-
-    return {
-      pickupAddress: getBookingAddress(pendingBooking, "pickup"),
-      dropoffAddress: getBookingAddress(pendingBooking, "dropoff"),
-      vehicleType: pendingBooking?.vehicleType || pendingBooking?.vehicle?.type || "Vehicle",
-      scheduleLabel: formatScheduleLabel(
-        pendingBooking?.scheduledTime || pendingBooking?.scheduled_time
-      ),
-      itemsCount,
-      totalAmountLabel: `$${totalAmount.toFixed(2)}`,
-    };
-  }, [pendingBooking]);
-
-  const activeDeliveryStep = useMemo(() => {
-    if (!activeDelivery) {
-      return null;
-    }
-
-    const normalizedStatus = normalizeTripStatus(activeDelivery.status);
-    return ACTIVE_DELIVERY_STEP_META[normalizedStatus] || null;
-  }, [activeDelivery]);
-
   const mapCenterCoordinate = useMemo(() => {
     if (pendingBooking && searchingMarkerCoordinate) {
       return searchingMarkerCoordinate;
@@ -276,264 +121,6 @@ export default function CustomerHomeScreen({ navigation }) {
     return [-84.388, 33.749];
   }, [pendingBooking, searchingMarkerCoordinate, userLocation]);
 
-  const loadCurrentLocation = useCallback(async () => {
-    try {
-      const savedLocation = await MapboxLocationService.getLastKnownLocation();
-      if (savedLocation?.latitude && savedLocation?.longitude) {
-        setUserLocation({
-          latitude: savedLocation.latitude,
-          longitude: savedLocation.longitude,
-        });
-      }
-
-      const location = await MapboxLocationService.getCurrentLocation();
-      if (location?.latitude && location?.longitude) {
-        setUserLocation({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        });
-      }
-    } catch (error) {
-      console.error("Location error:", error);
-    }
-  }, []);
-
-  const checkActiveDeliveries = useCallback(async () => {
-    if (!currentUserId) {
-      setActiveDelivery(null);
-      setPendingBooking(null);
-      return;
-    }
-
-    try {
-      const requests = await getUserPickupRequests?.();
-      if (!Array.isArray(requests)) {
-        setActiveDelivery(null);
-        setPendingBooking(null);
-        return;
-      }
-
-      const customerRequests = requests.filter((req) => {
-        const requestCustomerId = req?.customerId || req?.customer_id;
-        return requestCustomerId === currentUserId;
-      });
-
-      const activeRequest = customerRequests.find((req) =>
-        ACTIVE_TRIP_STATUSES.includes(normalizeTripStatus(req.status))
-      );
-      const pendingRequest = customerRequests.find(
-        (req) => normalizeTripStatus(req.status) === TRIP_STATUS.PENDING
-      );
-
-      setActiveDelivery(activeRequest || null);
-      setPendingBooking(activeRequest ? null : pendingRequest || null);
-    } catch (error) {
-      console.error("Error checking active deliveries:", error);
-      setActiveDelivery(null);
-      setPendingBooking(null);
-    }
-  }, [currentUserId, getUserPickupRequests]);
-
-  useEffect(() => {
-    loadCurrentLocation();
-  }, [loadCurrentLocation]);
-
-  useEffect(() => {
-    checkActiveDeliveries();
-
-    const intervalMs = activeDelivery?.id
-      ? ACTIVE_DELIVERY_POLL_INTERVAL_MS
-      : IDLE_DELIVERY_POLL_INTERVAL_MS;
-    const intervalCheck = setInterval(checkActiveDeliveries, intervalMs);
-
-    return () => {
-      clearInterval(intervalCheck);
-    };
-  }, [activeDelivery?.id, checkActiveDeliveries]);
-
-  useFocusEffect(
-    useCallback(() => {
-      checkActiveDeliveries();
-    }, [checkActiveDeliveries])
-  );
-
-  useEffect(() => {
-    if ((activeDelivery || pendingBooking) && searchModalVisible) {
-      setSearchModalVisible(false);
-    }
-  }, [activeDelivery, pendingBooking, searchModalVisible]);
-
-  useEffect(() => {
-    if (!pendingBooking) {
-      setIsSearchSheetExpanded(false);
-    }
-  }, [pendingBooking]);
-
-  useEffect(() => {
-    Animated.timing(searchSheetExpandAnim, {
-      toValue: isSearchSheetExpanded ? 1 : 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [isSearchSheetExpanded, searchSheetExpandAnim]);
-
-  useEffect(() => {
-    if (!pendingBooking) {
-      searchingPinPulse.stopAnimation();
-      searchingPinPulse.setValue(0);
-      return;
-    }
-
-    const pulseAnimation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(searchingPinPulse, {
-          toValue: 1,
-          duration: 1400,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(searchingPinPulse, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    pulseAnimation.start();
-
-    return () => {
-      pulseAnimation.stop();
-      searchingPinPulse.stopAnimation();
-      searchingPinPulse.setValue(0);
-    };
-  }, [pendingBooking, searchingPinPulse]);
-
-  useEffect(() => {
-    if (!pendingBooking) {
-      setSearchElapsedSeconds(0);
-      return;
-    }
-
-    const updateTimer = () => {
-      const seconds = Math.floor((Date.now() - searchingStartedAtMs) / 1000);
-      setSearchElapsedSeconds(Math.max(0, seconds));
-    };
-
-    updateTimer();
-    const timerId = setInterval(updateTimer, 1000);
-
-    return () => clearInterval(timerId);
-  }, [pendingBooking, searchingStartedAtMs]);
-
-  const handleOpenActiveTripDetails = useCallback(() => {
-    if (!activeDelivery) {
-      return;
-    }
-
-    const activeTripId = getTripId(activeDelivery);
-    if (!activeTripId) {
-      return;
-    }
-
-    navigation.navigate("CustomerTripDetailsScreen", {
-      tripId: activeTripId,
-      tripSummary: activeDelivery,
-      tripSnapshot: activeDelivery,
-    });
-  }, [activeDelivery, navigation]);
-
-  const handleOrderConfirm = useCallback(
-    async (orderData) => {
-      if (!currentUser?.phone_verified) {
-        setPhoneVerifyVisible(true);
-        return { pending: true };
-      }
-
-      if (activeDelivery || pendingBooking) {
-        return {
-          success: false,
-          error: "Complete or cancel your current booking before creating a new one.",
-        };
-      }
-
-      const orderSubmission = await submitCustomerOrder({
-        orderData,
-        currentUserId,
-        uploadToSupabase,
-        createPaymentIntent,
-        confirmPayment,
-        createPickupRequest,
-      });
-
-      if (!orderSubmission.success) {
-        return {
-          success: false,
-          error: orderSubmission.error || "Payment failed. Please try again.",
-        };
-      }
-
-      if (Array.isArray(orderSubmission.notices) && orderSubmission.notices.length > 0) {
-        orderSubmission.notices.forEach((notice) => {
-          Alert.alert(notice.title, notice.message, [{ text: "OK" }]);
-        });
-      }
-
-      setSearchModalVisible(false);
-      setOrderModalKey((prev) => prev + 1);
-      setPendingBooking(orderSubmission.createdRequest || null);
-      setIsSearchSheetExpanded(false);
-      checkActiveDeliveries();
-
-      return { success: true };
-    },
-    [
-      currentUser?.phone_verified,
-      currentUserId,
-      activeDelivery,
-      pendingBooking,
-      createPaymentIntent,
-      confirmPayment,
-      createPickupRequest,
-      uploadToSupabase,
-      checkActiveDeliveries,
-    ]
-  );
-
-  const handleCancelPendingBooking = useCallback(() => {
-    if (!pendingBooking?.id || isCancellingPending) {
-      return;
-    }
-
-    Alert.alert(
-      "Cancel booking?",
-      "We will stop searching for a driver and move this trip to Activity as cancelled.",
-      [
-        { text: "Keep searching", style: "cancel" },
-        {
-          text: "Cancel booking",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setIsCancellingPending(true);
-              await cancelOrder(pendingBooking.id, "customer_request");
-              setPendingBooking(null);
-              await checkActiveDeliveries();
-            } catch (error) {
-              console.error("Error cancelling pending booking:", error);
-              Alert.alert(
-                "Unable to cancel",
-                error?.message || "Please try again in a moment."
-              );
-            } finally {
-              setIsCancellingPending(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [pendingBooking, isCancellingPending, cancelOrder, checkActiveDeliveries]);
-
   return (
     <View style={styles.container}>
       <MapboxMap
@@ -543,7 +130,7 @@ export default function CustomerHomeScreen({ navigation }) {
       >
         <Mapbox.UserLocation visible />
 
-        {pendingBooking && searchingMarkerCoordinate && (
+        {pendingBooking && searchingMarkerCoordinate ? (
           <Mapbox.MarkerView
             id="searching-driver-marker"
             coordinate={searchingMarkerCoordinate}
@@ -567,7 +154,7 @@ export default function CustomerHomeScreen({ navigation }) {
               </View>
             </View>
           </Mapbox.MarkerView>
-        )}
+        ) : null}
       </MapboxMap>
 
       <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -579,7 +166,7 @@ export default function CustomerHomeScreen({ navigation }) {
         />
       </View>
 
-      {activeDelivery && activeDeliveryStep && (
+      {activeDelivery && activeDeliveryStep ? (
         <View
           style={[
             styles.floatingTriggerContainer,
@@ -618,9 +205,9 @@ export default function CustomerHomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         </View>
-      )}
+      ) : null}
 
-      {canCreateOrder && (
+      {canCreateOrder ? (
         <View
           style={[
             styles.floatingTriggerContainer,
@@ -655,9 +242,9 @@ export default function CustomerHomeScreen({ navigation }) {
             </View>
           </TouchableOpacity>
         </View>
-      )}
+      ) : null}
 
-      {Boolean(pendingBooking) && !activeDelivery && (
+      {Boolean(pendingBooking) && !activeDelivery ? (
         <PendingBookingSearchSheet
           isExpanded={isSearchSheetExpanded}
           onToggleExpand={() => setIsSearchSheetExpanded((prev) => !prev)}
@@ -668,16 +255,24 @@ export default function CustomerHomeScreen({ navigation }) {
           isCancellingPending={isCancellingPending}
           onCancelPendingBooking={handleCancelPendingBooking}
         />
-      )}
+      ) : null}
 
       <CustomerOrderModal
         key={orderModalKey}
         visible={searchModalVisible && canCreateOrder}
         onClose={() => setSearchModalVisible(false)}
-        onConfirm={handleOrderConfirm}
+        onConfirm={async (orderData) => {
+          const result = await handleOrderConfirm(orderData);
+          if (result?.success) {
+            setIsSearchSheetExpanded(false);
+          }
+          return result;
+        }}
         userLocation={userLocation}
         customerEmail={currentUser?.email}
-        customerName={[currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(' ') || undefined}
+        customerName={
+          [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(" ") || undefined
+        }
         renderPhoneVerification={() => (
           <PhoneVerificationModal
             visible={phoneVerifyVisible}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import MapboxNavigationService from '../../services/MapboxNavigationService';
+import { logger } from '../../services/logger';
 
 const useMapboxNavigation = ({
   origin,
@@ -46,7 +47,7 @@ const useMapboxNavigation = ({
     }
 
     if (!origin || !destination) {
-      console.warn('Cannot start navigation without origin and destination');
+      logger.warn('MapboxNavigationHook', 'Cannot start navigation without origin and destination');
       return;
     }
 

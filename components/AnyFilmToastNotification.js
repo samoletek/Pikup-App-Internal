@@ -1,3 +1,4 @@
+// Any Film Toast Notification component: renders its UI and handles related interactions.
 import React, { useCallback, useEffect, useRef } from "react";
 import { Animated, Dimensions, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

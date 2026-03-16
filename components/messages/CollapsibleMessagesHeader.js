@@ -1,3 +1,4 @@
+// Collapsible Messages Header component: renders its UI and handles related interactions.
 import React from "react";
 import {
   Animated,

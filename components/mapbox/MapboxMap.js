@@ -1,6 +1,7 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import Mapbox from '@rnmapbox/maps';
 import { ensureMapboxConfigured } from '../../config/mapbox';
+import { logger } from '../../services/logger';
 
 ensureMapboxConfigured();
 
@@ -65,7 +66,7 @@ const MapboxMap = forwardRef(({
     }
   }));
   const handleMapError = (error) => {
-    console.error('Mapbox Map Error:', error);
+    logger.error('MapboxMap', 'Mapbox Map Error', error);
   };
 
   return (

@@ -13,7 +13,13 @@
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "test": "jest --runInBand",
+    "check:smoke": "npm run lint && npx tsc --noEmit && npm run test -- --watch=false",
+    "check:ai-entrypoint": "bash scripts/check_ai_entrypoint.sh",
+    "boundaries:check": "bash scripts/check_supabase_boundaries.sh",
+    "size:check": "bash scripts/check_module_size.sh",
+    "errors:check": "bash scripts/check_service_error_normalization.sh",
     "dispatch:smoke": "node scripts/dispatch_smoke.js",
+    "hooks:install": "git config core.hooksPath .githooks",
     "postinstall": "patch-package",
     "eas-build-on-error": "bash -lc 'set -e; echo === MANIFEST FAILURE REPORTS ===; find android -path \"*/outputs/logs/*manifest-merger*failure-report*.txt\" -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,400p\\\" {}\" \\; || true; echo === MANIFEST REPORTS (ALL) ===; find android -path \"*/outputs/logs/*manifest-merger*debug*.txt\" -o -path \"*/outputs/logs/*manifest-merger*release*.txt\" -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,200p\\\" {}\" \\; || true; echo === MERGED MANIFESTS (APP) ===; find android/app/build/intermediates/merged_manifests -name AndroidManifest.xml -print -exec bash -lc \"echo --- {}; echo; sed -n \\\"1,200p\\\" {}\" \\; || true'"
   },

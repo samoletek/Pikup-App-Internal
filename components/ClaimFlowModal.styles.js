@@ -1,0 +1,273 @@
+import { StyleSheet } from 'react-native';
+import {
+  borderRadius,
+  colors,
+  spacing,
+  typography,
+} from '../styles/theme';
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    height: 56,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.text.primary,
+    textAlign: 'center',
+  },
+  headerStep: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.muted,
+    marginTop: 2,
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: colors.border.default,
+    marginHorizontal: spacing.lg,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.xs,
+  },
+  stepContainer: { flex: 1 },
+  tripsList: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.base,
+    gap: spacing.sm,
+  },
+  tripCard: {
+    backgroundColor: colors.background.panel,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+  },
+  tripCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.background.brandTint,
+  },
+  tripHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  tripDate: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+  },
+  tripAmount: {
+    color: colors.success,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
+  tripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  tripRouteText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flexShrink: 1,
+  },
+  tripSecondaryText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flexShrink: 1,
+  },
+  emptyStateContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyStateTitle: {
+    marginTop: spacing.base,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    fontSize: typography.fontSize.base,
+    lineHeight: 20,
+  },
+  stepScroll: { flex: 1 },
+  stepScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.base,
+  },
+  summaryCard: {
+    backgroundColor: colors.background.panel,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.lg,
+  },
+  summaryTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.sm,
+  },
+  summaryDate: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.xs,
+  },
+  summaryItem: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    marginBottom: spacing.xs,
+  },
+  section: {
+    marginBottom: spacing.lg,
+  },
+  sectionLabel: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  claimTypesRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.full,
+    padding: spacing.xs,
+  },
+  claimTypeChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.transparent,
+    marginHorizontal: spacing.xs / 2,
+  },
+  claimTypeChipSelected: {
+    backgroundColor: colors.primary,
+  },
+  claimTypeText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  claimTypeTextSelected: {
+    color: colors.white,
+  },
+  descriptionInput: {
+    backgroundColor: colors.background.input,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: borderRadius.lg,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    minHeight: 120,
+    padding: spacing.base,
+  },
+  documentsList: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  documentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background.panel,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+  },
+  documentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  documentName: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.sm,
+    flex: 1,
+  },
+  addDocButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    backgroundColor: colors.background.input,
+    height: 56,
+  },
+  addDocButtonText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: colors.background.input,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.base,
+  },
+  continueBtn: {
+    backgroundColor: colors.primary,
+    height: 56,
+    borderRadius: borderRadius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueBtnDisabled: {
+    backgroundColor: colors.text.subtle,
+    opacity: 0.65,
+  },
+  submitBtn: {
+    backgroundColor: colors.success,
+  },
+  continueBtnText: {
+    color: colors.white,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+    marginRight: spacing.sm,
+  },
+  continueBtnTextNoTrailing: {
+    marginRight: 0,
+  },
+  submittingWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+});
+
+export default styles;

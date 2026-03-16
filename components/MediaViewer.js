@@ -1,3 +1,4 @@
+// Media Viewer component: renders its UI and handles related interactions.
 import React from "react";
 import {
     Animated,

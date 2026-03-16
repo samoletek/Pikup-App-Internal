@@ -3,11 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppButton from './ui/AppButton';
 import { colors } from '../styles/theme';
+import { logger } from '../services/logger';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -26,7 +27,7 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     // Log error details for debugging
-    console.error('Error caught by boundary:', error, errorInfo);
+    logger.error('ErrorBoundary', 'Error caught by boundary', error, errorInfo);
     
     // You can also log to a service like Sentry here
     this.setState({
@@ -59,23 +60,24 @@ class ErrorBoundary extends React.Component {
             </Text>
 
             <View style={styles.buttonContainer}>
-              <TouchableOpacity 
+              <AppButton
+                title="Try Again"
                 style={styles.primaryButton}
+                labelStyle={styles.primaryButtonText}
                 onPress={this.handleReset}
-              >
-                <Text style={styles.primaryButtonText}>Try Again</Text>
-              </TouchableOpacity>
+              />
 
-              <TouchableOpacity 
+              <AppButton
+                title="Contact Support"
+                variant="ghost"
                 style={styles.secondaryButton}
+                labelStyle={styles.secondaryButtonText}
                 onPress={() => {
                   // In production, this could open support chat or email
-                  console.log('Contact support requested');
+                  logger.info('ErrorBoundary', 'Contact support requested');
                   alert('Support: ');
                 }}
-              >
-                <Text style={styles.secondaryButtonText}>Contact Support</Text>
-              </TouchableOpacity>
+              />
             </View>
 
             {__DEV__ && this.state.error && (
@@ -134,10 +136,8 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: colors.primary,
-    paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 25,
-    alignItems: 'center',
   },
   primaryButtonText: {
     color: colors.text.primary,
@@ -147,10 +147,8 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1,
     borderColor: colors.primary,
-    paddingVertical: 16,
     paddingHorizontal: 32,
     borderRadius: 25,
-    alignItems: 'center',
   },
   secondaryButtonText: {
     color: colors.primary,

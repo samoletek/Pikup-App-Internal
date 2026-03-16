@@ -1,18 +1,7 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  borderRadius,
-  colors,
-  spacing,
-  typography,
-} from '../../styles/theme';
+import { borderRadius, colors, spacing, typography } from '../../styles/theme';
 
 export default function DriverHomeBottomPanel({
   isCompact,

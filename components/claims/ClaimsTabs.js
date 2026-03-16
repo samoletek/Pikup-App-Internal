@@ -1,3 +1,4 @@
+// Claims Tabs component: renders its UI and handles related interactions.
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { borderRadius, colors, spacing, typography } from '../../styles/theme';

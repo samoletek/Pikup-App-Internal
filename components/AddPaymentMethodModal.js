@@ -1,12 +1,11 @@
+// Add Payment Method Modal component: renders its UI and handles related interactions.
 import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   TouchableWithoutFeedback,
   Alert,
-  ActivityIndicator,
   Keyboard,
   Dimensions,
 } from "react-native";
@@ -14,38 +13,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { CardField, useStripe } from "@stripe/stripe-react-native";
 import { usePayment } from "../contexts/PaymentContext";
 import BaseModal from "./BaseModal";
-import { colors, spacing, typography } from "../styles/theme";
+import AppButton from "./ui/AppButton";
+import { colors } from "../styles/theme";
+import { logger } from "../services/logger";
+import styles from "./AddPaymentMethodModal.styles";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Use consistent button style from AuthModal
-const Button = ({ title, onPress, variant = 'primary', disabled, loading, style, icon }) => {
-  const isPrimary = variant === 'primary';
-  const backgroundColor = isPrimary ? colors.success : 'transparent';
-  const textColor = isPrimary ? colors.text.primary : colors.success;
-  const borderColor = isPrimary ? 'transparent' : colors.success;
-
-  return (
-    <TouchableOpacity
-      style={[
-        styles.btn,
-        { backgroundColor, borderColor, borderWidth: isPrimary ? 0 : 1, opacity: disabled ? 0.6 : 1 },
-        style
-      ]}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      {loading ? (
-        <ActivityIndicator color={textColor} />
-      ) : (
-        <View style={styles.btnContent}>
-          {icon && <Ionicons name={icon} size={20} color={textColor} style={{ marginRight: 8 }} />}
-          <Text style={[styles.btnText, { color: textColor }]}>{title}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-};
 
 export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
   const [cardDetails, setCardDetails] = useState(null);
@@ -112,7 +85,7 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
         createdAt: new Date().toISOString(),
       };
 
-      console.log('Created payment method:', newPaymentMethod);
+      logger.info('AddPaymentMethodModal', 'Created payment method', newPaymentMethod);
 
       // Save to our payment context
       const result = await savePaymentMethod(newPaymentMethod);
@@ -134,7 +107,7 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
         throw new Error(result.error || 'Failed to save payment method');
       }
     } catch (error) {
-      console.error('Error adding payment method:', error);
+      logger.error('AddPaymentMethodModal', 'Error adding payment method', error);
       Alert.alert('Error', error.message || 'Failed to add payment method. Please try again.');
     } finally {
       setLoading(false);
@@ -224,12 +197,14 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
 
             {/* Action Button */}
             <View style={styles.footer}>
-              <Button
+              <AppButton
                 title="Add Payment Method"
                 onPress={handleAddCard}
                 loading={loading}
                 disabled={!cardDetails?.complete}
-                icon="add-circle-outline"
+                style={[styles.btn, styles.btnPrimary]}
+                labelStyle={styles.btnText}
+                leftIcon={<Ionicons name="add-circle-outline" size={20} color={colors.text.primary} />}
               />
             </View>
           </View>
@@ -238,138 +213,3 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
     </BaseModal>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    height: 56,
-    paddingHorizontal: spacing.base,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-    color: colors.text.primary,
-  },
-  headerBtnPlaceholder: {
-    width: 40,
-    height: 40,
-  },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: spacing.base,
-    paddingTop: spacing.base,
-  },
-  securityNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.successLight,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: colors.success,
-  },
-  securityText: {
-    color: colors.success,
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  cardSection: {
-    marginBottom: 24,
-  },
-  sectionLabel: {
-    color: colors.text.secondary,
-    fontSize: 14,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  cardFieldContainer: {
-    backgroundColor: colors.background.input,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    paddingVertical: 4,
-  },
-  cardFieldWrapper: {
-    height: 50,
-    marginVertical: 5,
-  },
-  cardField: {
-    backgroundColor: colors.background.input,
-    textColor: colors.text.primary,
-    placeholderColor: colors.text.placeholder,
-    borderRadius: 30,
-    fontSize: 16,
-    cursorColor: colors.success,
-    textErrorColor: colors.error,
-  },
-  brandsContainer: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
-  },
-  brandBadge: {
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  brandText: {
-    color: colors.text.placeholder,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  featuresList: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 'auto',
-    gap: 16,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  featureText: {
-    color: colors.text.placeholder,
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  footer: {
-    paddingBottom: 20,
-  },
-  // Button Styles
-  btn: {
-    height: 56,
-    borderRadius: 30,
-    marginTop: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  btnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  btnText: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});

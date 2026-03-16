@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React from "react";
 import {
   Alert,
   Animated,
@@ -10,14 +10,19 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "../../contexts/AuthContext";
-import { supabase } from "../../config/supabase";
+import {
+  useAuthActions,
+  useAuthIdentity,
+  useProfileActions,
+  useTripActions,
+} from "../../contexts/AuthContext";
 import useProfilePhotoActions from "../../hooks/useProfilePhotoActions";
+import useCollapsibleTitleSnap from "../../hooks/useCollapsibleTitleSnap";
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from "../../components/messages/CollapsibleMessagesHeader";
 import styles from "./CustomerProfileScreen.styles";
-import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
+import useCustomerProfileOverview from "./useCustomerProfileOverview";
 import {
   colors,
   spacing,
@@ -28,141 +33,39 @@ const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 
 export default function CustomerProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const {
-    currentUser,
-    logout,
-    getUserProfile,
-    getUserPickupRequests,
-    profileImage,
-    getProfileImage,
-    uploadProfileImage,
-    deleteProfileImage,
-  } = useAuth();
+  const { currentUser, profileImage } = useAuthIdentity();
+  const { logout } = useAuthActions();
+  const { getUserProfile, getProfileImage, uploadProfileImage, deleteProfileImage } = useProfileActions();
+  const { getUserPickupRequests } = useTripActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
 
-  const scrollRef = useRef(null);
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const isSnappingRef = useRef(false);
+  const {
+    scrollRef,
+    scrollY,
+    handleScrollEndDrag,
+    handleMomentumScrollEnd,
+  } = useCollapsibleTitleSnap({ collapseDistance: TITLE_COLLAPSE_DISTANCE });
 
-  const [customerProfile, setCustomerProfile] = useState(null);
-  const [displayName, setDisplayName] = useState("User");
-  const [accountStats, setAccountStats] = useState({
-    totalTrips: 0,
-    totalSpent: 0,
-    avgRating: 0,
+  const {
+    displayName,
+    memberSince,
+    initials,
+    totalTrips,
+    reviewsCount,
+    ratingValue,
+  } = useCustomerProfileOverview({
+    currentUser,
+    currentUserId,
+    getProfileImage,
+    getUserPickupRequests,
+    getUserProfile,
   });
-  const [memberSince, setMemberSince] = useState("New on Pikup");
+
   const { handleProfilePhotoPress } = useProfilePhotoActions({
     uploadProfileImage,
     deleteProfileImage,
     refreshProfileImage: getProfileImage,
   });
-
-  const loadCustomerProfile = useCallback(async () => {
-    try {
-      const profile = await getUserProfile?.(currentUserId);
-      setCustomerProfile(profile?.customerProfile || profile || null);
-
-      const firstName = profile?.first_name || profile?.firstName || "";
-      const lastName = profile?.last_name || profile?.lastName || "";
-      const fullName = `${firstName} ${lastName}`.trim();
-      const name =
-        fullName ||
-        profile?.name ||
-        currentUser?.email?.split("@")[0] ||
-        "User";
-      setDisplayName(name);
-
-      await getProfileImage?.();
-    } catch (error) {
-      console.error("Error loading customer profile:", error);
-    }
-  }, [currentUser?.email, currentUserId, getProfileImage, getUserProfile]);
-
-  const loadAccountStats = useCallback(async () => {
-    if (!currentUser) return;
-    try {
-      const pickupRequests = await getUserPickupRequests?.();
-      const requests = Array.isArray(pickupRequests) ? pickupRequests : [];
-      const completedTrips = requests.filter(
-        (trip) => normalizeTripStatus(trip.status) === TRIP_STATUS.COMPLETED
-      );
-      const totalSpent = completedTrips.reduce((sum, trip) => {
-        const amount = Number(trip.pricing?.total ?? trip.price ?? 0) || 0;
-        return sum + amount;
-      }, 0);
-      const ratingCount = Number(
-        customerProfile?.rating_count ||
-          customerProfile?.customerProfile?.rating_count ||
-          0
-      );
-      const rawRating = Number(
-        customerProfile?.rating ||
-          customerProfile?.customerProfile?.rating ||
-          0
-      );
-      const rating =
-        ratingCount > 0 && Number.isFinite(rawRating)
-          ? rawRating
-          : 0;
-
-      setAccountStats({
-        totalTrips: completedTrips.length,
-        totalSpent,
-        avgRating: rating,
-      });
-    } catch (error) {
-      console.error("Error loading account stats:", error);
-    }
-  }, [currentUser, customerProfile, getUserPickupRequests]);
-
-  useEffect(() => {
-    loadCustomerProfile();
-  }, [loadCustomerProfile]);
-
-  useEffect(() => {
-    if (!currentUserId) {
-      return undefined;
-    }
-
-    const channel = supabase
-      .channel(`customer:profile:${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "customers",
-          filter: `id=eq.${currentUserId}`,
-        },
-        (payload) => {
-          const nextProfile = payload?.new;
-          if (!nextProfile) return;
-
-          setCustomerProfile((prev) => ({ ...(prev || {}), ...nextProfile }));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentUserId]);
-
-  useEffect(() => {
-    loadAccountStats();
-  }, [loadAccountStats]);
-
-  useEffect(() => {
-    const dateStr =
-      customerProfile?.created_at || currentUser?.created_at;
-    if (dateStr) {
-      const createdYear = new Date(dateStr).getFullYear();
-      const currentYear = new Date().getFullYear();
-      const years = currentYear - createdYear;
-      setMemberSince(years > 0 ? `${years} yr on Pikup` : "New on Pikup");
-    }
-  }, [customerProfile, currentUser]);
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -179,54 +82,6 @@ export default function CustomerProfileScreen({ navigation }) {
         },
       },
     ]);
-  };
-
-  const initials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .substring(0, 2)
-    .toUpperCase();
-
-  const totalTrips = String(accountStats.totalTrips || 0);
-  const reviewsCount = String(
-    Number(
-      customerProfile?.rating_count ||
-        customerProfile?.customerProfile?.rating_count ||
-        0
-    ) || 0
-  );
-  const ratingValue =
-    Number(accountStats.avgRating) > 0
-      ? Number(accountStats.avgRating).toFixed(1)
-      : "0";
-
-  /* ── Scroll snap (same pattern as driver Account) ── */
-
-  const getSnapOffset = (offsetY) => {
-    if (offsetY < 0 || offsetY > TITLE_COLLAPSE_DISTANCE) return null;
-    return offsetY < TITLE_COLLAPSE_DISTANCE / 2 ? 0 : TITLE_COLLAPSE_DISTANCE;
-  };
-
-  const snapToNearestOffset = (offsetY) => {
-    const target = getSnapOffset(offsetY);
-    if (target === null || Math.abs(target - offsetY) < 1) return;
-    if (!scrollRef.current) return;
-    isSnappingRef.current = true;
-    scrollRef.current.scrollTo({ y: target, animated: true });
-    setTimeout(() => { isSnappingRef.current = false; }, 220);
-  };
-
-  const handleScrollEndDrag = (e) => {
-    if (isSnappingRef.current) return;
-    const vy = e.nativeEvent.velocity?.y ?? 0;
-    if (Math.abs(vy) < 0.15) snapToNearestOffset(e.nativeEvent.contentOffset.y);
-  };
-
-  const handleMomentumScrollEnd = (e) => {
-    if (isSnappingRef.current) return;
-    snapToNearestOffset(e.nativeEvent.contentOffset.y);
   };
 
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;

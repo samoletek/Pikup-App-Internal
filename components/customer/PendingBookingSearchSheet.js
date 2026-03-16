@@ -1,3 +1,4 @@
+// Pending Booking Search Sheet component: renders its UI and handles related interactions.
 import React from 'react';
 import {
   ActivityIndicator,

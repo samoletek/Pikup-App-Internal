@@ -1,3 +1,4 @@
+// Coming Soon Screen component: renders its UI and handles related interactions.
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

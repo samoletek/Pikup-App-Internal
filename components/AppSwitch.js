@@ -1,3 +1,4 @@
+// App Switch component: renders its UI and handles related interactions.
 import React from "react";
 import { Platform, StyleSheet, Switch, View } from "react-native";
 import { colors } from "../styles/theme";

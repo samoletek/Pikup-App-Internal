@@ -1,5 +1,11 @@
-import { supabase } from '../config/supabase';
 import { compressImage, uploadToSupabase } from './StorageService';
+import { normalizeError } from './errorService';
+import { refreshAuthenticatedSession } from './repositories/authRepository';
+import {
+    fetchDriverRowById,
+    invokeVerifyVehicle,
+    updateDriverRowById,
+} from './repositories/paymentRepository';
 
 const VEHICLE_PHOTOS_BUCKET = 'vehicle-photos';
 
@@ -38,9 +44,7 @@ export const uploadVehiclePhotos = async (driverId, vinPhotoUri, carPhotoUris) =
  * @returns {Promise<Object>} Verification result
  */
 export const verifyVehicle = async (vinPhotoUrl, carPhotoUrls) => {
-    const { data, error } = await supabase.functions.invoke('verify-vehicle', {
-        body: { vinPhotoUrl, carPhotoUrls },
-    });
+    const { data, error } = await invokeVerifyVehicle({ vinPhotoUrl, carPhotoUrls });
 
     if (error) {
         let detail = error.message;
@@ -51,17 +55,25 @@ export const verifyVehicle = async (vinPhotoUrl, carPhotoUrls) => {
                 try {
                     const parsed = JSON.parse(raw);
                     detail = parsed?.error || parsed?.msg || parsed?.message || raw;
-                } catch (_) {
-                    detail = raw || detail;
+                } catch (parseRawError) {
+                    const normalizedRaw = normalizeError(parseRawError, raw || detail);
+                    detail = normalizedRaw.message || raw || detail;
                 }
             }
-        } catch (_) { /* context already consumed — use error.message */ }
+        } catch (contextReadError) {
+            const normalizedContext = normalizeError(contextReadError, detail);
+            detail = normalizedContext.message || detail;
+        }
         throw new Error(detail);
     }
 
     if (data?.error) throw new Error(data.error);
 
     return data;
+};
+
+export const refreshVehicleVerificationSession = async () => {
+    await refreshAuthenticatedSession();
 };
 
 /**
@@ -73,18 +85,14 @@ export const verifyVehicle = async (vinPhotoUrl, carPhotoUrls) => {
  * @returns {Promise<Object>}
  */
 export const saveVehicleData = async (driverId, vehicleData) => {
-    const { data: profile } = await supabase
-        .from('drivers')
-        .select('metadata')
-        .eq('id', driverId)
-        .maybeSingle();
+    const { data: profile } = await fetchDriverRowById(driverId, 'metadata', true);
 
     const currentMeta = profile?.metadata || {};
     const existingVehicleData = currentMeta.vehicleData || {};
 
-    const { data, error } = await supabase
-        .from('drivers')
-        .update({
+    const { data, error } = await updateDriverRowById(
+        driverId,
+        {
             metadata: {
                 ...currentMeta,
                 vehicleData: {
@@ -94,10 +102,9 @@ export const saveVehicleData = async (driverId, vehicleData) => {
                 },
             },
             updated_at: new Date().toISOString(),
-        })
-        .eq('id', driverId)
-        .select()
-        .maybeSingle();
+        },
+        true
+    );
 
     if (error) throw error;
     return data;

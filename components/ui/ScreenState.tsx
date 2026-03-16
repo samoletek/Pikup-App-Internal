@@ -1,3 +1,4 @@
+// Screen State component: renders its UI and handles related interactions.
 import React from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { colors, spacing, typography } from "../../styles/theme";
