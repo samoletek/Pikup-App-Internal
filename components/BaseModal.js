@@ -126,7 +126,7 @@ const BaseModal = forwardRef(({
         }
     }, [onBackdropPress, animateClose]);
 
-    // Handle visibility changes
+    // Handle visibility changes only; height changes while visible should not retrigger open animation.
     useEffect(() => {
         if (visible) {
             // Reset closing state when modal opens
@@ -146,7 +146,7 @@ const BaseModal = forwardRef(({
             translateY.setValue(height);
             keyboardTranslateY.setValue(0);
         }
-    }, [height, keyboardTranslateY, translateY, visible]);
+    }, [keyboardTranslateY, translateY, visible]);
 
     useEffect(() => {
         if (!visible || !avoidKeyboard) {
