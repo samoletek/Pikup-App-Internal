@@ -28,6 +28,10 @@ export default function useDeliveryNavigationData({
   updateNavigationProgress,
 }) {
   const locationSubscription = useRef(null);
+  const dropoffLocationRef = useRef(null);
+  const routeStepsRef = useRef(routeSteps || []);
+  const currentStepIndexRef = useRef(currentStepIndex || 0);
+  const currentHeadingRef = useRef(0);
 
   const [driverLocation, setDriverLocation] = useState(initialDriverLocation);
   const [dropoffLocation, setDropoffLocation] = useState(null);
@@ -39,6 +43,22 @@ export default function useDeliveryNavigationData({
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const [currentHeading, setCurrentHeading] = useState(0);
 
+  useEffect(() => {
+    dropoffLocationRef.current = dropoffLocation;
+  }, [dropoffLocation]);
+
+  useEffect(() => {
+    routeStepsRef.current = routeSteps || [];
+  }, [routeSteps]);
+
+  useEffect(() => {
+    currentStepIndexRef.current = currentStepIndex || 0;
+  }, [currentStepIndex]);
+
+  useEffect(() => {
+    currentHeadingRef.current = currentHeading || 0;
+  }, [currentHeading]);
+
   const updateNavigationCamera = useCallback((location, speed, distanceToNextTurn) => {
     if (!mapRef.current) return;
 
@@ -46,13 +66,13 @@ export default function useDeliveryNavigationData({
       location,
       speedMetersPerSecond: speed,
       distanceToNextTurn,
-      heading: currentHeading || 0,
+      heading: currentHeadingRef.current,
     });
 
     if (cameraConfig) {
       mapRef.current.setCamera(cameraConfig);
     }
-  }, [currentHeading, mapRef]);
+  }, [mapRef]);
 
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
@@ -133,8 +153,8 @@ export default function useDeliveryNavigationData({
           }
 
           const distanceToNextTurn = calculateDistanceToNextTurnMeters({
-            routeSteps,
-            currentStepIndex,
+            routeSteps: routeStepsRef.current,
+            currentStepIndex: currentStepIndexRef.current,
             location: newLocation,
           });
 
@@ -144,8 +164,9 @@ export default function useDeliveryNavigationData({
             distanceToNextTurn
           );
 
-          if (dropoffLocation) {
-            void generateRealRoute(newLocation, dropoffLocation);
+          const destination = dropoffLocationRef.current;
+          if (destination) {
+            void generateRealRoute(newLocation, destination);
           }
 
           updateNavigationProgress(newLocation);
@@ -156,10 +177,7 @@ export default function useDeliveryNavigationData({
       logger.error('DeliveryNavigationData', 'Error starting location tracking', error);
     }
   }, [
-    currentStepIndex,
-    dropoffLocation,
     generateRealRoute,
-    routeSteps,
     updateDriverLocationInDB,
     updateNavigationCamera,
     updateNavigationProgress,
@@ -200,6 +218,7 @@ export default function useDeliveryNavigationData({
 
       const dropoffCoords = extractDropoffLocation(currentLocation);
       if (dropoffCoords) {
+        dropoffLocationRef.current = dropoffCoords;
         setDropoffLocation(dropoffCoords);
         await generateRealRoute(currentLocation, dropoffCoords);
       }
@@ -249,7 +268,9 @@ export default function useDeliveryNavigationData({
     return () => {
       stopLocationTracking();
     };
-  }, [initializeDeliveryTracking, stopLocationTracking]);
+    // Delivery bootstrap is intentionally one-time; retry action re-initializes explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (request?.id) {

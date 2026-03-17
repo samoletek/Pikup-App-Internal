@@ -28,6 +28,16 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
   const isMountedRef = useRef(true);
   const retryCountRef = useRef(0);
   const lastStatusRef = useRef(null);
+  const onCancelRef = useRef(onCancel);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Maximum retry attempts for failed API calls
   const MAX_RETRIES = 3;
@@ -73,8 +83,9 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
     }
     
     // Call custom onCancel callback if provided
-    if (onCancel) {
-      onCancel(request);
+    const cancelHandler = onCancelRef.current;
+    if (cancelHandler) {
+      cancelHandler(request);
       return;
     }
     
@@ -96,7 +107,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
       ],
       { cancelable: false }
     );
-  }, [currentScreen, requestId, onCancel, navigation]);
+  }, [currentScreen, requestId, navigation]);
 
   /**
    * Handle monitoring errors
@@ -119,11 +130,12 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
       }
       
       // Call custom error handler if provided
-      if (onError) {
-        onError(error);
+      const errorHandler = onErrorRef.current;
+      if (errorHandler) {
+        errorHandler(error);
       }
     }
-  }, [currentScreen, onError]);
+  }, [currentScreen]);
 
   /**
    * Main monitoring function
