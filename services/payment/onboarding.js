@@ -13,6 +13,38 @@ import {
 } from './common';
 import { updateDriverPaymentProfile } from './profile';
 
+const getEdgeFunctionErrorMessage = async (error, fallbackMessage) => {
+  const normalized = normalizeError(error, fallbackMessage);
+  const context = error?.context;
+
+  if (!context || typeof context.clone !== 'function') {
+    return normalized.message;
+  }
+
+  try {
+    const payload = await context.clone().json();
+    return payload?.error || payload?.message || normalized.message;
+  } catch (_jsonError) {
+    try {
+      const text = await context.clone().text();
+      return text || normalized.message;
+    } catch (_textError) {
+      return normalized.message;
+    }
+  }
+};
+
+const syncDriverPaymentProfileBestEffort = async (driverId, updates, scope) => {
+  if (!driverId) return;
+
+  try {
+    await updateDriverPaymentProfile(driverId, updates);
+  } catch (profileError) {
+    const normalized = normalizeError(profileError, 'Failed to sync driver payment profile');
+    logger.warn('PaymentService', `${scope}: profile sync skipped`, normalized, profileError);
+  }
+};
+
 /**
  * Create Stripe Connect account for driver.
  */
@@ -26,29 +58,32 @@ export const createDriverConnectAccount = async (driverInfo = {}, currentUser = 
     const refreshUrl = driverInfo.refreshUrl || defaultOnboardingRefreshUrl;
     const returnUrl = driverInfo.returnUrl || defaultOnboardingReturnUrl;
 
-    const { data, error } = await invokeCreateDriverConnectAccount({
-      driverId,
-      email: driverInfo.email || currentUser?.email || null,
-      refreshUrl,
-      returnUrl,
-    });
+    const { data, error } = await invokeCreateDriverConnectAccount(
+      {
+        driverId,
+        email: driverInfo.email || currentUser?.email || null,
+        refreshUrl,
+        returnUrl,
+      },
+      currentUser?.accessToken || null
+    );
 
     if (error) {
-      const normalized = normalizeError(error, 'Failed to create payout account');
-      logger.error('PaymentService', 'createDriverConnectAccount failed', normalized, error);
-      return failureResult(normalized.message);
+      const errorMessage = await getEdgeFunctionErrorMessage(error, 'Failed to create payout account');
+      logger.error('PaymentService', 'createDriverConnectAccount failed', { message: errorMessage }, error);
+      return failureResult(errorMessage);
     }
 
     if (!data?.success || !data?.accountId) {
       return failureResult(data?.error || 'Failed to create Stripe Connect account');
     }
 
-    await updateDriverPaymentProfile(driverId, {
+    await syncDriverPaymentProfileBestEffort(driverId, {
       connectAccountId: data.accountId,
       onboardingComplete: false,
       canReceivePayments: false,
       onboardingLastCheckedAt: new Date().toISOString(),
-    });
+    }, 'createDriverConnectAccount');
 
     return successResult({
       connectAccountId: data.accountId,
@@ -73,17 +108,20 @@ export const getDriverOnboardingLink = async (
   try {
     const driverId = getUserId(currentUser);
 
-    const { data, error } = await invokeDriverOnboardingLink({
-      driverId,
-      connectAccountId,
-      refreshUrl: refreshUrl || defaultOnboardingRefreshUrl,
-      returnUrl: returnUrl || defaultOnboardingReturnUrl,
-    });
+    const { data, error } = await invokeDriverOnboardingLink(
+      {
+        driverId,
+        connectAccountId,
+        refreshUrl: refreshUrl || defaultOnboardingRefreshUrl,
+        returnUrl: returnUrl || defaultOnboardingReturnUrl,
+      },
+      currentUser?.accessToken || null
+    );
 
     if (error) {
-      const normalized = normalizeError(error, 'Failed to open Stripe onboarding');
-      logger.error('PaymentService', 'getDriverOnboardingLink failed', normalized, error);
-      return failureResult(normalized.message);
+      const errorMessage = await getEdgeFunctionErrorMessage(error, 'Failed to open Stripe onboarding');
+      logger.error('PaymentService', 'getDriverOnboardingLink failed', { message: errorMessage }, error);
+      return failureResult(errorMessage);
     }
     if (!data?.success || !data?.onboardingUrl) {
       return failureResult(data?.error || 'Failed to create Stripe onboarding link');
@@ -107,27 +145,34 @@ export const checkDriverOnboardingStatus = async (connectAccountId = null, curre
   try {
     const driverId = getUserId(currentUser);
 
-    const { data, error } = await invokeDriverOnboardingStatus({
-      driverId,
-      connectAccountId,
-    });
+    const { data, error } = await invokeDriverOnboardingStatus(
+      {
+        driverId,
+        connectAccountId,
+      },
+      currentUser?.accessToken || null
+    );
 
     if (error) {
-      const normalized = normalizeError(error, 'Unable to verify payout account status');
-      logger.error('PaymentService', 'checkDriverOnboardingStatus failed', normalized, error);
-      return failureResult(normalized.message);
+      const errorMessage = await getEdgeFunctionErrorMessage(error, 'Unable to verify payout account status');
+      logger.error('PaymentService', 'checkDriverOnboardingStatus failed', { message: errorMessage }, error);
+      return failureResult(errorMessage);
     }
     if (!data?.success) {
       return failureResult(data?.error || 'Could not load onboarding status');
     }
 
     if (driverId) {
-      await updateDriverPaymentProfile(driverId, {
-        connectAccountId: data.accountId || connectAccountId || null,
-        onboardingComplete: Boolean(data.onboardingComplete),
-        canReceivePayments: Boolean(data.canReceivePayments),
-        onboardingLastCheckedAt: new Date().toISOString(),
-      });
+      await syncDriverPaymentProfileBestEffort(
+        driverId,
+        {
+          connectAccountId: data.accountId || connectAccountId || null,
+          onboardingComplete: Boolean(data.onboardingComplete),
+          canReceivePayments: Boolean(data.canReceivePayments),
+          onboardingLastCheckedAt: new Date().toISOString(),
+        },
+        'checkDriverOnboardingStatus'
+      );
     }
 
     return successResult({

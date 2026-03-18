@@ -99,11 +99,15 @@ export default function useOnboardingActions({
         throw new Error(onboardingResult?.error || 'Failed to get onboarding link');
       }
 
-      await updateDriverPaymentProfile?.(driverId, {
-        connectAccountId: onboardingResult.connectAccountId || connectAccountId,
-        onboardingComplete: false,
-        canReceivePayments: false,
-      });
+      try {
+        await updateDriverPaymentProfile?.(driverId, {
+          connectAccountId: onboardingResult.connectAccountId || connectAccountId,
+          onboardingComplete: false,
+          canReceivePayments: false,
+        });
+      } catch (profileSyncError) {
+        logger.warn('OnboardingActions', 'Skipping non-blocking profile sync before Stripe redirect', profileSyncError);
+      }
 
       await Linking.openURL(onboardingResult.onboardingUrl);
 

@@ -100,3 +100,18 @@ entrypoint = "./functions/send-phone-otp/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/verify-phone-otp/index.ts"
+
+[functions.create-driver-connect-account]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-driver-connect-account/index.ts"
+
+[functions.get-driver-onboarding-link]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-driver-onboarding-link/index.ts"
+
+[functions.check-driver-onboarding-status]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/check-driver-onboarding-status/index.ts"
