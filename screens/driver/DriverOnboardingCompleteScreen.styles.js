@@ -40,6 +40,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  pendingIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   pulseRing1: {
     position: 'absolute',
     width: 160,
@@ -215,6 +219,25 @@ const styles = StyleSheet.create({
   buttonSection: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  primaryActionButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+  },
+  primaryActionButtonSuccess: {
+    backgroundColor: colors.success,
+  },
+  primaryActionButtonText: {
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.bold,
+  },
+  primaryActionHint: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   continueButton: {
     borderRadius: borderRadius.lg,

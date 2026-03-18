@@ -48,6 +48,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     getDriverTrips,
   } = useDriverActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
+  const [showDeclinedBannerFromRoute, setShowDeclinedBannerFromRoute] = useState(
+    Boolean(route?.params?.showOnboardingDeclinedBanner)
+  );
   const [isOnline, setIsOnline] = useState(false);
   const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
   const [activeJob, setActiveJob] = useState(null);
@@ -84,6 +87,41 @@ export default function DriverHomeScreen({ navigation, route }) {
   const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
 
   const mapRef = useRef(null);
+  const draftVerificationStatus = String(
+    currentUser?.metadata?.onboardingDraft?.verificationStatus || ''
+  ).toLowerCase();
+  const metadataIdentityVerificationStatus = String(
+    currentUser?.metadata?.identityVerificationStatus || ''
+  ).toLowerCase();
+  const metadataOnboardingStatus = String(
+    currentUser?.metadata?.onboardingStatus || ''
+  ).toLowerCase();
+  const isIdentityVerificationDeclined = (
+    draftVerificationStatus === 'failed' ||
+    metadataIdentityVerificationStatus === 'failed'
+  );
+  const isOnboardingDeclined = (
+    isIdentityVerificationDeclined ||
+    metadataOnboardingStatus === 'failed' ||
+    metadataOnboardingStatus === 'declined' ||
+    metadataOnboardingStatus === 'rejected'
+  );
+  const isOnboardingApproved = (
+    Boolean(
+      currentUser?.onboarding_complete ??
+      currentUser?.onboardingComplete ??
+      currentUser?.can_receive_payments ??
+      currentUser?.canReceivePayments ??
+      currentUser?.metadata?.onboardingComplete ??
+      currentUser?.metadata?.canReceivePayments ??
+      false
+    ) ||
+    metadataOnboardingStatus === 'verified'
+  );
+  const showDeclinedSupportBanner = (
+    !isOnboardingApproved &&
+    (showDeclinedBannerFromRoute || isOnboardingDeclined)
+  );
 
   const {
     driverLocation,
@@ -197,6 +235,18 @@ export default function DriverHomeScreen({ navigation, route }) {
     incomingRequestIdRef.current = incomingRequest?.id || null;
   }, [incomingRequest?.id]);
 
+  useEffect(() => {
+    if (route?.params?.showOnboardingDeclinedBanner) {
+      setShowDeclinedBannerFromRoute(true);
+    }
+  }, [route?.params?.showOnboardingDeclinedBanner]);
+
+  useEffect(() => {
+    if (isOnboardingApproved && showDeclinedBannerFromRoute) {
+      setShowDeclinedBannerFromRoute(false);
+    }
+  }, [isOnboardingApproved, showDeclinedBannerFromRoute]);
+
   useDriverRequestPoolRealtime({
     currentUserId,
     isOnline,
@@ -308,6 +358,10 @@ export default function DriverHomeScreen({ navigation, route }) {
     showIncomingModal,
   });
 
+  const handleOpenDeclinedSupport = React.useCallback(() => {
+    navigation.navigate('CustomerHelpScreen');
+  }, [navigation]);
+
   const contentProps = buildDriverHomeContentProps({
     styles, region, tabBarHeight, shouldShowOnlineDriverMarker, onlineDriverMarkerCoordinate,
     onlineDriverPulseOpacity, onlineDriverPulseSize, isOnline, hasActiveTrip, showIncomingModal,
@@ -341,6 +395,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     onPhoneVerified: handlePhoneVerified,
     phoneVerifyUserId: currentUser?.uid || currentUser?.id,
     onCloseRecentTrips: handleCloseRecentTrips,
+    showDeclinedSupportBanner,
+    onOpenDeclinedSupport: handleOpenDeclinedSupport,
   });
 
   return <DriverHomeScreenContent {...contentProps} />;

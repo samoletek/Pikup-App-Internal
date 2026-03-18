@@ -187,6 +187,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: zLayers.toast + 1,
   },
+  identityDeclinedBanner: {
+    position: 'absolute',
+    left: spacing.base,
+    right: spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.warning,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm + 2,
+    zIndex: zLayers.toast + 3,
+    ...shadows.md,
+  },
+  identityDeclinedBannerText: {
+    flex: 1,
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: 18,
+  },
 });
 
 export default styles;

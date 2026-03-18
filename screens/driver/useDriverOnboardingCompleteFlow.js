@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Animated, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors } from "../../styles/theme";
 import { ONBOARDING_DRAFT_STORAGE_PREFIX } from "./DriverOnboardingScreen.constants";
 import { logger } from "../../services/logger";
 
@@ -171,6 +170,13 @@ export default function useDriverOnboardingCompleteFlow({
     }
   }, [connectAccountId, getDriverOnboardingLink]);
 
+  const handleGoHome = useCallback(() => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'DriverTabs' }],
+    });
+  }, [navigation]);
+
   const handleViewEarnings = useCallback(() => {
     navigation.navigate("DriverEarningsScreen");
   }, [navigation]);
@@ -179,17 +185,11 @@ export default function useDriverOnboardingCompleteFlow({
     navigation.navigate("DriverPaymentSettingsScreen");
   }, [navigation]);
 
-  const continueButtonGradientColors = (
-    verificationStatus === "verified"
-      ? [colors.success, colors.success]
-      : [colors.text.subtle, colors.text.subtle]
-  );
-
   return {
     checkmarkAnim,
-    continueButtonGradientColors,
     fadeAnim,
     handleContinue,
+    handleGoHome,
     handleResumeOnboarding,
     handleSettings,
     handleViewEarnings,
