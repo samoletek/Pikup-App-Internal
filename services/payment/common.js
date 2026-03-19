@@ -5,8 +5,8 @@ export const isNoRowsError = (error) => error?.code === 'PGRST116';
 
 export const getUserId = (currentUser) => currentUser?.uid || currentUser?.id || null;
 
-export const defaultOnboardingRefreshUrl = `${appConfig.stripe.urlScheme}://driver-onboarding`;
-export const defaultOnboardingReturnUrl = `${appConfig.stripe.urlScheme}://driver-onboarding-complete`;
+export const defaultOnboardingRefreshUrl = appConfig.stripe.onboardingRefreshUrl;
+export const defaultOnboardingReturnUrl = appConfig.stripe.onboardingReturnUrl;
 
 export const getDriverProfileRow = async (driverId) => {
   if (!driverId) return null;

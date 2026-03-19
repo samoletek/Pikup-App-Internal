@@ -5,7 +5,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const stripe = new Stripe(stripeKey, {
   apiVersion: "2022-11-15",
@@ -14,6 +13,24 @@ const stripe = new Stripe(stripeKey, {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const DEFAULT_REFRESH_URL = "https://pikup-app.com/driver-onboarding";
+const DEFAULT_RETURN_URL = "https://pikup-app.com/driver-onboarding-complete";
+
+const toHttpsRedirectUrl = (value: unknown, fallback: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+    return fallback;
+  } catch (_error) {
+    return fallback;
+  }
 };
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -41,11 +58,6 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const supabaseAdmin = createClient(
-      supabaseUrl,
-      supabaseServiceRoleKey || supabaseAnonKey
-    );
-
     const {
       data: { user },
       error: userError,
@@ -57,16 +69,14 @@ serve(async (req) => {
 
     const payload = await req.json();
     const driverId = String(payload?.driverId || user.id);
-    const refreshUrl =
-      String(payload?.refreshUrl || "").trim() || "pikup://driver-onboarding";
-    const returnUrl =
-      String(payload?.returnUrl || "").trim() || "pikup://driver-onboarding-complete";
+    const refreshUrl = toHttpsRedirectUrl(payload?.refreshUrl, DEFAULT_REFRESH_URL);
+    const returnUrl = toHttpsRedirectUrl(payload?.returnUrl, DEFAULT_RETURN_URL);
 
     if (driverId !== user.id) {
       return jsonResponse({ success: false, error: "Forbidden" }, 403);
     }
 
-    const { data: driverRow, error: driverError } = await supabaseAdmin
+    const { data: driverRow, error: driverError } = await supabaseClient
       .from("drivers")
       .select("id, email, stripe_account_id, metadata")
       .eq("id", driverId)
@@ -94,7 +104,7 @@ serve(async (req) => {
           ? driverRow.metadata
           : {};
 
-      await supabaseAdmin
+      const { error: updateError } = await supabaseClient
         .from("drivers")
         .update({
           stripe_account_id: accountId,
@@ -105,6 +115,10 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", driverId);
+
+      if (updateError) {
+        throw updateError;
+      }
     }
 
     const accountLink = await stripe.accountLinks.create({

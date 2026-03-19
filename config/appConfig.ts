@@ -26,6 +26,14 @@ export const appConfig = {
     publishableKey: readEnv("EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"),
     merchantId: readEnv("EXPO_PUBLIC_STRIPE_MERCHANT_ID", "merchant.com.pikup"),
     urlScheme: readEnv("EXPO_PUBLIC_URL_SCHEME", "pikup"),
+    onboardingRefreshUrl: readEnv(
+      "EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL",
+      "https://pikup-app.com/driver-onboarding"
+    ),
+    onboardingReturnUrl: readEnv(
+      "EXPO_PUBLIC_STRIPE_ONBOARDING_RETURN_URL",
+      "https://pikup-app.com/driver-onboarding-complete"
+    ),
   },
   mapbox: {
     publicToken: readEnv("EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN"),
