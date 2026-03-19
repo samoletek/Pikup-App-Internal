@@ -63,6 +63,8 @@ export const buildDriverHomeContentProps = ({
   onCloseRecentTrips,
   recentTrips,
   recentTripsLoading,
+  showDeclinedSupportBanner,
+  onOpenDeclinedSupport,
 }) => ({
   styles,
   region,
@@ -128,4 +130,6 @@ export const buildDriverHomeContentProps = ({
   onCloseRecentTrips,
   recentTrips,
   recentTripsLoading,
+  showDeclinedSupportBanner,
+  onOpenDeclinedSupport,
 });

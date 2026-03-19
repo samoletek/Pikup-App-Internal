@@ -1,6 +1,6 @@
 // Driver Home Screen Content component: renders its UI and handles related interactions.
 import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../styles/theme';
 import OfflineDashboard from '../OfflineDashboard';
@@ -77,6 +77,8 @@ export default function DriverHomeScreenContent({
   onCloseRecentTrips,
   recentTrips,
   recentTripsLoading,
+  showDeclinedSupportBanner,
+  onOpenDeclinedSupport,
 }) {
   return (
     <View style={styles.container}>
@@ -122,6 +124,20 @@ export default function DriverHomeScreenContent({
           onViewScheduledRequests={onViewScheduledRequests}
         />
       )}
+
+      {showDeclinedSupportBanner ? (
+        <TouchableOpacity
+          style={[styles.identityDeclinedBanner, { top: insetsTop + 40 }]}
+          onPress={onOpenDeclinedSupport}
+          activeOpacity={0.9}
+        >
+          <Ionicons name="alert-circle" size={18} color={colors.white} />
+          <Text style={styles.identityDeclinedBannerText}>
+            Onboarding was not approved. Tap to contact support.
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.white} />
+        </TouchableOpacity>
+      ) : null}
 
       <IncomingRequestMiniBar
         visible={isMinimized && incomingRequest}

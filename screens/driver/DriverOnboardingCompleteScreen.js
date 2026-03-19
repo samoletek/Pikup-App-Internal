@@ -28,9 +28,9 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
 
   const {
     checkmarkAnim,
-    continueButtonGradientColors,
     fadeAnim,
     handleContinue,
+    handleGoHome,
     handleResumeOnboarding,
     handleSettings,
     handleViewEarnings,
@@ -46,6 +46,21 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     getDriverOnboardingLink,
     navigation,
   });
+  const isVerified = verificationStatus === "verified";
+  const isProcessing = verificationStatus === "processing";
+  const isError = verificationStatus === "error";
+  const statusCircleColor = isVerified ? colors.success : colors.warning;
+  const statusRingColor = isVerified ? colors.successLight : colors.warningLight;
+  const primaryButtonTitle = isVerified
+    ? "Start Driving"
+    : isError
+      ? "Resume Stripe Onboarding"
+      : "Go Home";
+  const primaryButtonDescription = isVerified
+    ? null
+    : isError
+      ? "Stripe setup needs another try. Tap to reopen onboarding."
+      : "We are reviewing your account now. No action is required from you.";
 
   const renderSuccessIcon = () => (
     <Animated.View
@@ -58,38 +73,60 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       ]}
     >
       <LinearGradient
-        colors={[colors.success, colors.success]}
+        colors={[statusCircleColor, statusCircleColor]}
         style={styles.successIconGradient}
       >
-        <Animated.View
-          style={[
-            styles.checkmarkContainer,
-            {
-              transform: [{ scale: checkmarkAnim }],
-            },
-          ]}
-        >
-          <Ionicons name="checkmark" size={48} color={colors.white} />
-        </Animated.View>
+        {isVerified ? (
+          <Animated.View
+            style={[
+              styles.checkmarkContainer,
+              {
+                transform: [{ scale: checkmarkAnim }],
+              },
+            ]}
+          >
+            <Ionicons name="checkmark" size={52} color={colors.white} />
+          </Animated.View>
+        ) : (
+          <View style={styles.pendingIconContainer}>
+            <Ionicons name="time-outline" size={46} color={colors.white} />
+          </View>
+        )}
       </LinearGradient>
 
-      <View style={styles.pulseRing1} />
-      <View style={styles.pulseRing2} />
+      <View style={[styles.pulseRing1, { borderColor: statusRingColor }]} />
+      <View style={[styles.pulseRing2, { borderColor: statusRingColor }]} />
     </Animated.View>
   );
 
   const renderVerificationStatus = () => {
-    if (verificationStatus === "processing") {
+    if (isProcessing) {
       return (
         <View style={styles.verificationCard}>
           <View style={styles.verificationHeader}>
             <View style={styles.processingIcon}>
-              <Ionicons name="time" size={20} color={colors.primary} />
+              <Ionicons name="time-outline" size={20} color={colors.warning} />
             </View>
-            <Text style={styles.verificationTitle}>Verifying Your Account</Text>
+            <Text style={styles.verificationTitle}>Under Review</Text>
           </View>
           <Text style={styles.verificationSubtitle}>
-            We're reviewing your information. This usually takes a few minutes.
+            We are processing your account verification. Please wait, no further action is needed.
+          </Text>
+        </View>
+      );
+    }
+
+    if (isError) {
+      return (
+        <View style={styles.verificationCard}>
+          <View style={styles.verificationHeader}>
+            <View style={styles.processingIcon}>
+              <Ionicons name="alert-circle-outline" size={20} color={colors.secondary} />
+            </View>
+            <Text style={styles.verificationTitle}>Verification Needs Attention</Text>
+          </View>
+          <Text style={styles.verificationSubtitle}>
+            We could not confirm your Stripe onboarding yet. Tap the button below to resume it.
           </Text>
         </View>
       );
@@ -209,7 +246,9 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
           >
             <Text style={styles.congratsTitle}>Congratulations!</Text>
             <Text style={styles.congratsSubtitle}>
-              Welcome to the PikUp driver community! Your account setup is complete.
+              {isVerified
+                ? "Welcome to the PikUp driver community! Your account setup is complete."
+                : "Your setup is submitted. We are reviewing your account details now."}
             </Text>
           </Animated.View>
         </View>
@@ -217,42 +256,29 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
         {renderVerificationStatus()}
 
         {verificationStatus === "verified" ? renderNextSteps() : null}
-        {verificationStatus === "error" ? (
-          <AppButton
-            title="Resume Stripe Onboarding"
-            variant="ghost"
-            style={styles.retryButton}
-            labelStyle={styles.retryButtonText}
-            onPress={handleResumeOnboarding}
-            leftIcon={<Ionicons name="refresh" size={16} color={colors.primary} />}
-          />
-        ) : null}
-
         {renderFeatureHighlights()}
 
         <View style={styles.buttonSection}>
-          <TouchableOpacity
+          <AppButton
+            title={isLoading && isVerified ? "Starting..." : primaryButtonTitle}
+            onPress={isVerified ? handleContinue : isError ? handleResumeOnboarding : handleGoHome}
+            loading={isLoading && isVerified}
             style={[
-              styles.continueButton,
-              verificationStatus !== "verified" && styles.continueButtonDisabled,
+              styles.primaryActionButton,
+              isVerified && styles.primaryActionButtonSuccess,
             ]}
-            onPress={handleContinue}
-            disabled={isLoading || verificationStatus !== "verified"}
-          >
-            <LinearGradient
-              colors={continueButtonGradientColors}
-              style={styles.continueButtonGradient}
-            >
-              <Text
-                style={[
-                  styles.continueButtonText,
-                  verificationStatus !== "verified" && styles.continueButtonTextDisabled,
-                ]}
-              >
-                {isLoading ? "Starting..." : "Start Driving"}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            labelStyle={styles.primaryActionButtonText}
+            leftIcon={
+              isVerified
+                ? <Ionicons name="car" size={16} color={colors.white} />
+                : isError
+                  ? <Ionicons name="refresh" size={16} color={colors.white} />
+                  : <Ionicons name="home-outline" size={16} color={colors.white} />
+            }
+          />
+          {primaryButtonDescription ? (
+            <Text style={styles.primaryActionHint}>{primaryButtonDescription}</Text>
+          ) : null}
         </View>
 
         <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />

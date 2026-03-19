@@ -442,6 +442,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.primary,
   },
+  nextButtonDeclined: {
+    backgroundColor: colors.error,
+    shadowColor: colors.error,
+  },
   nextButtonFull: {
     flex: 1,
   },
