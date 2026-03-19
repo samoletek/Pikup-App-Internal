@@ -3,6 +3,11 @@ import { Alert, Keyboard } from 'react-native';
 import MapboxLocationService from '../../../services/MapboxLocationService';
 import { appConfig } from '../../../config/appConfig';
 import { logger } from '../../../services/logger';
+import { SUPPORTED_ORDER_STATE_CODES } from '../../../constants/orderAvailability';
+import {
+  extractStateCodeFromMapboxContext,
+  isSupportedOrderStateCode,
+} from '../../../utils/locationState';
 
 export const MAX_SCHEDULE_DAYS_AHEAD = 30;
 
@@ -125,7 +130,11 @@ export default function useAddressSearchStepState({
             address: feature.place_name.replace(`${feature.text}, `, ''),
             full_description: feature.place_name,
             coordinates: { latitude: feature.center[1], longitude: feature.center[0] },
-          }));
+            stateCode: extractStateCodeFromMapboxContext(feature.context),
+            context: feature.context || [],
+          })).filter((suggestion) => (
+            isSupportedOrderStateCode(suggestion.stateCode, SUPPORTED_ORDER_STATE_CODES)
+          ));
 
           if (fieldType === 'pickup') {
             setPickupSuggestions(formattedSuggestions);
@@ -145,7 +154,12 @@ export default function useAddressSearchStepState({
 
   const handlePlaceSelection = useCallback((place, fieldType) => {
     Keyboard.dismiss();
-    const locationData = { address: place.full_description, coordinates: place.coordinates };
+    const locationData = {
+      address: place.full_description,
+      coordinates: place.coordinates,
+      stateCode: place.stateCode || null,
+      context: place.context || [],
+    };
     setOrderData((prev) => ({ ...prev, [fieldType]: locationData }));
     clearSuggestions(fieldType);
     setActiveField(null);
@@ -165,7 +179,14 @@ export default function useAddressSearchStepState({
         const coordinates = { latitude: location.latitude, longitude: location.longitude };
         const fallbackAddress = `Current location (${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)})`;
 
-        setOrderData((prev) => ({ ...prev, [fieldType]: { address: fallbackAddress, coordinates } }));
+        setOrderData((prev) => ({
+          ...prev,
+          [fieldType]: {
+            address: fallbackAddress,
+            coordinates,
+            stateCode: null,
+          },
+        }));
         clearSuggestions(fieldType);
         setActiveField(null);
 
@@ -187,6 +208,7 @@ export default function useAddressSearchStepState({
                 [fieldType]: {
                   ...prev[fieldType],
                   address: addressData.address,
+                  stateCode: addressData.stateCode || prev[fieldType]?.stateCode || null,
                 },
               };
             });
@@ -203,13 +225,27 @@ export default function useAddressSearchStepState({
   }, [clearSuggestions, setOrderData]);
 
   const updateAddressInput = useCallback((fieldType, text) => {
-    setOrderData((prev) => ({ ...prev, [fieldType]: { address: text, coordinates: null } }));
+    setOrderData((prev) => ({
+      ...prev,
+      [fieldType]: {
+        address: text,
+        coordinates: null,
+        stateCode: null,
+      },
+    }));
     setActiveField(fieldType);
     searchPlaces(text, fieldType);
   }, [searchPlaces, setOrderData]);
 
   const clearAddressInput = useCallback((fieldType) => {
-    setOrderData((prev) => ({ ...prev, [fieldType]: { address: '', coordinates: null } }));
+    setOrderData((prev) => ({
+      ...prev,
+      [fieldType]: {
+        address: '',
+        coordinates: null,
+        stateCode: null,
+      },
+    }));
     clearSuggestions(fieldType);
   }, [clearSuggestions, setOrderData]);
 

@@ -5,6 +5,11 @@ import {
     isTripOutsideScheduledWindow,
     sortTripsForPool,
 } from './tripDispatchUtils';
+import { SUPPORTED_ORDER_STATE_CODES } from '../constants/orderAvailability';
+import {
+    isSupportedOrderStateCode,
+    isTripWithinSupportedStates,
+} from '../utils/locationState';
 
 export const filterTripsForAvailability = ({
     trips,
@@ -12,6 +17,8 @@ export const filterTripsForAvailability = ({
     driverLocation,
     driverId,
     mergedPreferences,
+    driverStateCode = null,
+    supportedStateCodes = SUPPORTED_ORDER_STATE_CODES,
 }) => {
     const hiddenReasonCounts = {};
     const filteredTrips = [];
@@ -20,10 +27,37 @@ export const filterTripsForAvailability = ({
     let filteredByTimeWindowCount = 0;
     let filteredByAssignedDriverCount = 0;
     let filteredByPreferenceCount = 0;
+    let filteredByStateCount = 0;
+
+    const isDriverStateAllowed = isSupportedOrderStateCode(
+        driverStateCode,
+        supportedStateCodes
+    );
+
+    if (!isDriverStateAllowed) {
+        return {
+            hiddenReasonCounts,
+            stats: {
+                filteredByPoolCount,
+                filteredByDistanceCount,
+                filteredByTimeWindowCount,
+                filteredByAssignedDriverCount,
+                filteredByPreferenceCount,
+                filteredByStateCount: (trips || []).length,
+                driverStateRestricted: true,
+            },
+            sortedTrips: [],
+        };
+    }
 
     trips.forEach((trip) => {
         if (trip?.driverId && trip.driverId !== driverId) {
             filteredByAssignedDriverCount += 1;
+            return;
+        }
+
+        if (!isTripWithinSupportedStates(trip, supportedStateCodes)) {
+            filteredByStateCount += 1;
             return;
         }
 
@@ -96,6 +130,8 @@ export const filterTripsForAvailability = ({
             filteredByTimeWindowCount,
             filteredByAssignedDriverCount,
             filteredByPreferenceCount,
+            filteredByStateCount,
+            driverStateRestricted: false,
         },
         sortedTrips: sortTripsForPool(filteredTrips, {
             requestPool,

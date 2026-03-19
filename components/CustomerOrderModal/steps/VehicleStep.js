@@ -138,6 +138,8 @@ const VehicleStep = ({ orderData, setOrderData }) => {
 
                 await Promise.all(vehicles.map(async (vehicle) => {
                     const result = await calculatePrice(vehicle, dist, dur, {
+                        pickup: orderData.pickup || null,
+                        dropoff: orderData.dropoff || null,
                         items: orderData.items || [],
                         laborOptions: {
                             items: orderData.items || [],
@@ -160,6 +162,8 @@ const VehicleStep = ({ orderData, setOrderData }) => {
         vehicles,
         orderData.distance,
         orderData.duration,
+        orderData.pickup,
+        orderData.dropoff,
         orderData.items,
         orderData.pickupDetails,
         orderData.dropoffDetails,

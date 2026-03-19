@@ -43,27 +43,64 @@ export default function useCustomerHomeFlow({
     return ACTIVE_DELIVERY_STEP_META[normalizedStatus] || null;
   }, [activeDelivery]);
 
+  const resolveLocationWithStateCode = useCallback(async (rawLocation) => {
+    if (
+      !Number.isFinite(Number(rawLocation?.latitude)) ||
+      !Number.isFinite(Number(rawLocation?.longitude))
+    ) {
+      return null;
+    }
+
+    const normalizedLocation = {
+      latitude: Number(rawLocation.latitude),
+      longitude: Number(rawLocation.longitude),
+      stateCode: String(rawLocation.stateCode || '').trim().toUpperCase() || null,
+    };
+
+    if (normalizedLocation.stateCode) {
+      return normalizedLocation;
+    }
+
+    try {
+      const geocodedLocation = await MapboxLocationService.reverseGeocode(
+        normalizedLocation.latitude,
+        normalizedLocation.longitude
+      );
+      const resolvedStateCode = String(geocodedLocation?.stateCode || '')
+        .trim()
+        .toUpperCase();
+
+      return {
+        ...normalizedLocation,
+        stateCode: resolvedStateCode || null,
+      };
+    } catch (error) {
+      logger.warn('CustomerHomeFlow', 'Unable to resolve customer geo state from coordinates', error);
+      return normalizedLocation;
+    }
+  }, []);
+
   const loadCurrentLocation = useCallback(async () => {
     try {
       const savedLocation = await MapboxLocationService.getLastKnownLocation();
       if (savedLocation?.latitude && savedLocation?.longitude) {
-        setUserLocation({
-          latitude: savedLocation.latitude,
-          longitude: savedLocation.longitude,
-        });
+        const normalizedSavedLocation = await resolveLocationWithStateCode(savedLocation);
+        if (normalizedSavedLocation) {
+          setUserLocation(normalizedSavedLocation);
+        }
       }
 
       const location = await MapboxLocationService.getCurrentLocation();
       if (location?.latitude && location?.longitude) {
-        setUserLocation({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        });
+        const normalizedCurrentLocation = await resolveLocationWithStateCode(location);
+        if (normalizedCurrentLocation) {
+          setUserLocation(normalizedCurrentLocation);
+        }
       }
     } catch (error) {
       logger.error("CustomerHomeFlow", "Location error", error);
     }
-  }, []);
+  }, [resolveLocationWithStateCode]);
 
   useEffect(() => {
     void loadCurrentLocation();
@@ -113,7 +150,10 @@ export default function useCustomerHomeFlow({
       }
 
       const orderSubmission = await submitCustomerOrder({
-        orderData,
+        orderData: {
+          ...orderData,
+          customerLocation: userLocation || null,
+        },
         currentUserId,
         uploadToSupabase,
         createPaymentIntent,
@@ -146,6 +186,7 @@ export default function useCustomerHomeFlow({
       currentUser?.phone_verified,
       activeDelivery,
       pendingBooking,
+      userLocation,
       currentUserId,
       uploadToSupabase,
       createPaymentIntent,

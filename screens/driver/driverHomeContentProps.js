@@ -65,6 +65,9 @@ export const buildDriverHomeContentProps = ({
   recentTripsLoading,
   showDeclinedSupportBanner,
   onOpenDeclinedSupport,
+  isDriverGeoRestricted,
+  driverAvailabilityComingSoonTitle,
+  driverAvailabilityComingSoonMessage,
 }) => ({
   styles,
   region,
@@ -132,4 +135,7 @@ export const buildDriverHomeContentProps = ({
   recentTripsLoading,
   showDeclinedSupportBanner,
   onOpenDeclinedSupport,
+  isDriverGeoRestricted,
+  driverAvailabilityComingSoonTitle,
+  driverAvailabilityComingSoonMessage,
 });

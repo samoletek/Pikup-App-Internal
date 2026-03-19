@@ -15,6 +15,8 @@ import {
 } from './tripAvailabilityUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { SUPPORTED_ORDER_STATE_CODES } from '../constants/orderAvailability';
+import { resolveLocationStateCode } from '../utils/locationState';
 import {
   fetchCustomersByIds,
   fetchDriverMetadata,
@@ -26,25 +28,30 @@ const resolveDriverLocation = (rawLocation) => {
     return null;
   }
 
+  const stateCode = resolveLocationStateCode(rawLocation);
+
   return {
     latitude: Number(rawLocation.latitude),
     longitude: Number(rawLocation.longitude),
+    stateCode: stateCode || null,
   };
 };
 
-const loadDriverPreferences = async (driverId) => {
+const loadDriverProfileData = async (driverId) => {
   if (!driverId) {
-    return null;
+    return { mergedPreferences: null };
   }
 
   const { data: driverProfile, error } = await fetchDriverMetadata(driverId);
 
   if (error) {
     logger.warn('TripDriverAvailability', 'Unable to load driver preferences for request filtering', error);
-    return null;
+    return { mergedPreferences: null };
   }
 
-  return extractDriverPreferencesFromDriverProfile(driverProfile);
+  return {
+    mergedPreferences: extractDriverPreferencesFromDriverProfile(driverProfile),
+  };
 };
 
 const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
@@ -54,6 +61,8 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
     filteredByTimeWindowCount,
     filteredByAssignedDriverCount,
     filteredByPreferenceCount,
+    filteredByStateCount,
+    driverStateRestricted,
   } = stats;
 
   if (mergedPreferences && filteredByPreferenceCount > 0) {
@@ -68,13 +77,17 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
     filteredByPoolCount > 0 ||
     filteredByDistanceCount > 0 ||
     filteredByTimeWindowCount > 0 ||
-    filteredByAssignedDriverCount > 0
+    filteredByAssignedDriverCount > 0 ||
+    filteredByStateCount > 0 ||
+    driverStateRestricted
   ) {
     logger.info('TripDriverAvailability', 'Filtered requests by dispatch windows', {
       filteredByPoolCount,
       filteredByDistanceCount,
       filteredByTimeWindowCount,
       filteredByAssignedDriverCount,
+      filteredByStateCount,
+      driverStateRestricted,
     });
   }
 };
@@ -122,7 +135,8 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
 
   const trips = Array.isArray(data) ? data.map(mapTripFromDb) : [];
   const driverId = currentUser?.uid || currentUser?.id;
-  const mergedPreferences = await loadDriverPreferences(driverId);
+  const { mergedPreferences } = await loadDriverProfileData(driverId);
+  const driverStateCode = resolveLocationStateCode(driverLocation);
 
   const { hiddenReasonCounts, stats, sortedTrips } = filterTripsForAvailability({
     trips,
@@ -130,6 +144,8 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
     driverLocation,
     driverId,
     mergedPreferences,
+    driverStateCode,
+    supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
   });
 
   logFilterStats({ mergedPreferences, hiddenReasonCounts, stats });

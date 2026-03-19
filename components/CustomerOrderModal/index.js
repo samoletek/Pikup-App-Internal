@@ -42,6 +42,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         visible,
         paymentMethods,
         defaultPaymentMethod,
+        userLocation,
     });
     const {
         isSubmitting,

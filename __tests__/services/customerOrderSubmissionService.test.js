@@ -16,8 +16,8 @@ const createBaseOrderData = (overrides = {}) => ({
   items: [{ name: 'Laptop' }],
   scheduleType: 'asap',
   selectedVehicle: { type: 'car' },
-  pickup: { address: 'A' },
-  dropoff: { address: 'B' },
+  pickup: { address: 'A', stateCode: 'GA' },
+  dropoff: { address: 'B', stateCode: 'GA' },
   insuranceQuote: {
     offerId: 'offer_test_1',
     premium: 2.5,

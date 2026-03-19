@@ -79,7 +79,12 @@ export default function DriverHomeScreenContent({
   recentTripsLoading,
   showDeclinedSupportBanner,
   onOpenDeclinedSupport,
+  isDriverGeoRestricted,
+  driverAvailabilityComingSoonTitle,
+  driverAvailabilityComingSoonMessage,
 }) {
+  const showGeoRestrictedBanner = isDriverGeoRestricted && !isOnline && !hasActiveTrip;
+
   return (
     <View style={styles.container}>
       <DriverHomeMapLayer
@@ -122,21 +127,36 @@ export default function DriverHomeScreenContent({
           onGoOnline={onGoOnline}
           onGoOnlineScheduled={onGoOnlineScheduled}
           onViewScheduledRequests={onViewScheduledRequests}
+          isDriverGeoRestricted={isDriverGeoRestricted}
         />
       )}
 
-      {showDeclinedSupportBanner ? (
-        <TouchableOpacity
-          style={[styles.identityDeclinedBanner, { top: insetsTop + 40 }]}
-          onPress={onOpenDeclinedSupport}
-          activeOpacity={0.9}
-        >
-          <Ionicons name="alert-circle" size={18} color={colors.white} />
-          <Text style={styles.identityDeclinedBannerText}>
-            Onboarding was not approved. Tap to contact support.
-          </Text>
-          <Ionicons name="chevron-forward" size={18} color={colors.white} />
-        </TouchableOpacity>
+      {showDeclinedSupportBanner || showGeoRestrictedBanner ? (
+        <View style={[styles.topNoticeStack, { top: insetsTop + 40 }]}>
+          {showDeclinedSupportBanner ? (
+            <TouchableOpacity
+              style={styles.identityDeclinedBanner}
+              onPress={onOpenDeclinedSupport}
+              activeOpacity={0.9}
+            >
+              <Ionicons name="alert-circle" size={18} color={colors.white} />
+              <Text style={styles.identityDeclinedBannerText}>
+                Onboarding was not approved. Tap to contact support.
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.white} />
+            </TouchableOpacity>
+          ) : null}
+
+          {showGeoRestrictedBanner ? (
+            <View style={styles.comingSoonTopBanner}>
+              <Ionicons name="time-outline" size={16} color={colors.white} />
+              <Text style={styles.comingSoonTopBannerText}>
+                {(driverAvailabilityComingSoonTitle || 'Coming Soon')}: {' '}
+                {driverAvailabilityComingSoonMessage || 'Driver mode is not available in your current area yet.'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       <IncomingRequestMiniBar
@@ -190,6 +210,7 @@ export default function DriverHomeScreenContent({
           onGoOnlineScheduled={onGoOnlineScheduled}
           navigation={navigation}
           onExpandedChange={onDashboardExpandedChange}
+          isDriverGeoRestricted={isDriverGeoRestricted}
         />
       )}
 

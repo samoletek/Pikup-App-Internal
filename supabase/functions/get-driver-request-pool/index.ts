@@ -19,9 +19,13 @@ import {
   OFFER_ACTIONS,
   OFFER_STATUSES,
   REQUEST_POOLS,
+  resolveLocationStateCode,
   resolveDispatchRequirements,
   SCHEDULED_LOOKAHEAD_HOURS,
   SCHEDULED_PAST_GRACE_MINUTES,
+  SUPPORTED_ORDER_STATE_CODES,
+  isSupportedOrderStateCode,
+  isTripWithinSupportedStates,
   sortTripsForPool,
   toObject,
   type AnyRecord,
@@ -91,6 +95,11 @@ serve(async (req) => {
     if (!driverProfile) {
       return jsonResponse({ error: "Driver profile not found" }, 403)
     }
+    const driverStateCode = resolveLocationStateCode(driverLocation)
+    const driverStateRestricted = !isSupportedOrderStateCode(
+      driverStateCode,
+      SUPPORTED_ORDER_STATE_CODES
+    )
 
     if (offerAction === OFFER_ACTIONS.DECLINE) {
       if (!actionTripId) {
@@ -227,6 +236,35 @@ serve(async (req) => {
       })
     }
 
+    if (driverStateRestricted) {
+      return jsonResponse({
+        requests: [],
+        meta: {
+          requestPool,
+          totalPending: 0,
+          returnedCount: 0,
+          filteredByPool: 0,
+          filteredByDistance: 0,
+          filteredByTimeWindow: 0,
+          filteredByPreference: 0,
+          filteredByOfferDeclined: 0,
+          filteredByOfferExpired: 0,
+          filteredByState: 0,
+          hiddenReasonCounts: {},
+          driverStateCode,
+          driverStateRestricted: true,
+          supportedOrderStateCodes: SUPPORTED_ORDER_STATE_CODES,
+          dispatchPolicy: {
+            asapMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP],
+            scheduledMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED],
+            scheduledLookaheadHours: SCHEDULED_LOOKAHEAD_HOURS,
+            scheduledPastGraceMinutes: SCHEDULED_PAST_GRACE_MINUTES,
+            requestOfferTtlSeconds: DRIVER_REQUEST_OFFER_TTL_SECONDS,
+          },
+        },
+      })
+    }
+
     const mergedPreferences = extractDriverPreferencesFromDriverRow(driverProfile)
 
     const { data: tripRows, error: tripsError } = await dbClient
@@ -246,12 +284,19 @@ serve(async (req) => {
     let filteredByDistance = 0
     let filteredByTimeWindow = 0
     let filteredByPreference = 0
+    let filteredByState = 0
 
     trips.forEach((trip) => {
       const normalizedRequirements = resolveDispatchRequirements(trip)
       const normalizedTrip = {
         ...trip,
         dispatchRequirements: normalizedRequirements,
+      }
+
+      const stateCoverage = isTripWithinSupportedStates(normalizedTrip, SUPPORTED_ORDER_STATE_CODES)
+      if (!stateCoverage.supported) {
+        filteredByState += 1
+        return
       }
 
       if (
@@ -565,7 +610,11 @@ serve(async (req) => {
         filteredByPreference,
         filteredByOfferDeclined,
         filteredByOfferExpired,
+        filteredByState,
         hiddenReasonCounts,
+        driverStateCode,
+        driverStateRestricted: false,
+        supportedOrderStateCodes: SUPPORTED_ORDER_STATE_CODES,
         dispatchPolicy: {
           asapMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP],
           scheduledMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED],

@@ -2,11 +2,18 @@ import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { getDriverReadinessProfile } from '../services/DriverService';
+import MapboxLocationService from '../services/MapboxLocationService';
 import { logger } from '../services/logger';
 import {
   REQUEST_POOLS,
   shouldBypassDriverReadiness,
 } from '../screens/driver/DriverHomeScreen.utils';
+import {
+  DRIVER_AVAILABILITY_COMING_SOON_MESSAGE as DRIVER_GEO_RESTRICTED_MESSAGE,
+  DRIVER_AVAILABILITY_COMING_SOON_TITLE as DRIVER_GEO_RESTRICTED_TITLE,
+  SUPPORTED_ORDER_STATE_CODES,
+} from '../constants/orderAvailability';
+import { isSupportedOrderStateCode } from '../utils/locationState';
 
 export default function useDriverAvailabilityActions({
   currentUser,
@@ -31,6 +38,7 @@ export default function useDriverAvailabilityActions({
   setShowIncomingModal,
   setIsMinimized,
   setIncomingRequest,
+  isDriverGeoRestricted = false,
 }) {
   const checkDriverReadiness = useCallback(async () => {
     const driverId = currentUser?.uid || currentUser?.id;
@@ -128,7 +136,33 @@ export default function useDriverAvailabilityActions({
         longitude: location.coords.longitude,
       };
 
-      setDriverLocation(driverPos);
+      let driverStateCode = null;
+      try {
+        const geocodedLocation = await MapboxLocationService.reverseGeocode(
+          driverPos.latitude,
+          driverPos.longitude
+        );
+        driverStateCode = String(geocodedLocation?.stateCode || '')
+          .trim()
+          .toUpperCase();
+      } catch (reverseGeocodeError) {
+        logger.warn('DriverAvailability', 'Unable to resolve driver geo state before going online', reverseGeocodeError);
+      }
+
+      if (!driverStateCode) {
+        Alert.alert(
+          'Location Required',
+          'We could not verify your current service area. Please try again with location enabled.'
+        );
+        return;
+      }
+
+      if (!isSupportedOrderStateCode(driverStateCode, SUPPORTED_ORDER_STATE_CODES)) {
+        Alert.alert(DRIVER_GEO_RESTRICTED_TITLE, DRIVER_GEO_RESTRICTED_MESSAGE);
+        return;
+      }
+
+      setDriverLocation({ ...driverPos, stateCode: driverStateCode });
       const sessionId = await setDriverOnline(currentUserId, driverPos, mode);
 
       setActiveRequestPool(requestPool);
@@ -170,6 +204,11 @@ export default function useDriverAvailabilityActions({
       return;
     }
 
+    if (isDriverGeoRestricted) {
+      Alert.alert(DRIVER_GEO_RESTRICTED_TITLE, DRIVER_GEO_RESTRICTED_MESSAGE);
+      return;
+    }
+
     if (isOnline) {
       if (activeRequestPool !== targetPool) {
         setActiveRequestPool(targetPool);
@@ -197,6 +236,7 @@ export default function useDriverAvailabilityActions({
     activeRequestPool,
     confirmGoOnline,
     hasActiveTrip,
+    isDriverGeoRestricted,
     isOnline,
     loadRequests,
     openActiveTrip,

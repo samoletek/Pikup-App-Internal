@@ -59,6 +59,20 @@ const ReviewPriceBreakdownCard = ({
       </View>
     )}
 
+    {pricing?.serviceFee > 0 && (
+      <View style={styles.priceRow}>
+        <Text style={styles.priceLabel}>Service & Technology Fee</Text>
+        <Text style={styles.priceValue}>${pricing.serviceFee.toFixed(2)}</Text>
+      </View>
+    )}
+
+    {pricing?.tax > 0 && (
+      <View style={styles.priceRow}>
+        <Text style={styles.priceLabel}>Sales Tax (Labor)</Text>
+        <Text style={styles.priceValue}>${pricing.tax.toFixed(2)}</Text>
+      </View>
+    )}
+
     {(pricing?.insuranceApplied || pricing?.mandatoryInsurance > 0) && (
       <View>
         <View style={styles.priceRow}>

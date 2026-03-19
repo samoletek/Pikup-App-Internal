@@ -349,10 +349,29 @@ export const styles = StyleSheet.create({
         backgroundColor: colors.primaryDark,
         shadowColor: colors.primaryDark,
     },
+    goOnlineBtnDisabled: {
+        opacity: 0.78,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
     goOnlineText: {
         fontSize: 16,
         fontWeight: '600',
         color: colors.text.primary,
+    },
+    goOnlineTextDisabled: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.text.primary,
+        textAlign: 'center',
+        flexShrink: 1,
+    },
+    lockedButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        paddingHorizontal: spacing.sm,
     },
     goOnlineScheduledText: {
         fontSize: 16,

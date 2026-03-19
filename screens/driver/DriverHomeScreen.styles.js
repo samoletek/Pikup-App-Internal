@@ -187,18 +187,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: zLayers.toast + 1,
   },
-  identityDeclinedBanner: {
+  topNoticeStack: {
     position: 'absolute',
     left: spacing.base,
     right: spacing.base,
+    zIndex: zLayers.toast + 3,
+    gap: spacing.xs,
+  },
+  identityDeclinedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.warning,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm + 2,
-    zIndex: zLayers.toast + 3,
+    paddingVertical: spacing.sm,
     ...shadows.md,
   },
   identityDeclinedBannerText: {
@@ -207,6 +210,23 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
     lineHeight: 18,
+  },
+  comingSoonTopBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.warning,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    ...shadows.md,
+  },
+  comingSoonTopBannerText: {
+    flex: 1,
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    lineHeight: 16,
   },
 });
 

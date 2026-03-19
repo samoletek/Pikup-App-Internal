@@ -9,6 +9,85 @@ export const REQUEST_POOLS = Object.freeze({
   SCHEDULED: "scheduled",
 })
 
+export const DEFAULT_SUPPORTED_ORDER_STATES = Object.freeze(["GA"])
+
+export const readEnvCsv = (names: string[], fallback: string[] = []) => {
+  for (const name of names) {
+    const raw = Deno.env.get(name)
+    if (!raw) continue
+
+    const values = raw
+      .split(",")
+      .map((value) => value.trim().toUpperCase())
+      .filter(Boolean)
+
+    if (values.length > 0) {
+      return values
+    }
+  }
+
+  return fallback
+}
+
+export const SUPPORTED_ORDER_STATE_CODES = readEnvCsv(
+  ["SUPPORTED_ORDER_STATE_CODES", "EXPO_PUBLIC_SUPPORTED_ORDER_STATE_CODES"],
+  [...DEFAULT_SUPPORTED_ORDER_STATES]
+)
+
+export const STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: "AL",
+  ALASKA: "AK",
+  ARIZONA: "AZ",
+  ARKANSAS: "AR",
+  CALIFORNIA: "CA",
+  COLORADO: "CO",
+  CONNECTICUT: "CT",
+  DELAWARE: "DE",
+  FLORIDA: "FL",
+  GEORGIA: "GA",
+  HAWAII: "HI",
+  IDAHO: "ID",
+  ILLINOIS: "IL",
+  INDIANA: "IN",
+  IOWA: "IA",
+  KANSAS: "KS",
+  KENTUCKY: "KY",
+  LOUISIANA: "LA",
+  MAINE: "ME",
+  MARYLAND: "MD",
+  MASSACHUSETTS: "MA",
+  MICHIGAN: "MI",
+  MINNESOTA: "MN",
+  MISSISSIPPI: "MS",
+  MISSOURI: "MO",
+  MONTANA: "MT",
+  NEBRASKA: "NE",
+  NEVADA: "NV",
+  "NEW HAMPSHIRE": "NH",
+  "NEW JERSEY": "NJ",
+  "NEW MEXICO": "NM",
+  "NEW YORK": "NY",
+  "NORTH CAROLINA": "NC",
+  "NORTH DAKOTA": "ND",
+  OHIO: "OH",
+  OKLAHOMA: "OK",
+  OREGON: "OR",
+  PENNSYLVANIA: "PA",
+  "RHODE ISLAND": "RI",
+  "SOUTH CAROLINA": "SC",
+  "SOUTH DAKOTA": "SD",
+  TENNESSEE: "TN",
+  TEXAS: "TX",
+  UTAH: "UT",
+  VERMONT: "VT",
+  VIRGINIA: "VA",
+  WASHINGTON: "WA",
+  "WEST VIRGINIA": "WV",
+  WISCONSIN: "WI",
+  WYOMING: "WY",
+  "DISTRICT OF COLUMBIA": "DC",
+}
+
 export const readEnvNumber = (
   names: string[],
   fallback: number,
@@ -231,6 +310,131 @@ export const getAddress = (location: AnyRecord | null, fallback = "") => {
   if (!location) return fallback
   const address = String(location.address || location.formatted_address || "").trim()
   return address || fallback
+}
+
+export const normalizeStateCode = (value: unknown): string | null => {
+  const raw = String(value || "").trim().toUpperCase()
+  if (!raw) return null
+
+  const normalized = raw.startsWith("US-") ? raw.slice(3) : raw
+  if (normalized.length !== 2) return null
+  return normalized
+}
+
+export const extractStateCodeFromAddress = (address: unknown): string | null => {
+  const value = String(address || "").trim().toUpperCase()
+  if (!value) return null
+
+  const zipMatch = value.match(
+    /,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?(?:\s*,?\s*(?:USA|UNITED STATES))?\s*$/
+  )
+  if (zipMatch?.[1]) {
+    return normalizeStateCode(zipMatch[1])
+  }
+
+  const stateMatch = value.match(/,\s*([A-Z]{2})(?:\s*,|\s*$)/)
+  if (stateMatch?.[1]) {
+    return normalizeStateCode(stateMatch[1])
+  }
+
+  const stateNameWithZipMatch = value.match(/,\s*([A-Z ]+?)\s+\d{5}(?:-\d{4})?(?:\s*,|\s*$)/)
+  if (stateNameWithZipMatch?.[1]) {
+    const normalizedStateName = stateNameWithZipMatch[1].replace(/\s+/g, " ").trim()
+    const stateFromName = STATE_NAME_TO_CODE[normalizedStateName]
+    if (stateFromName) {
+      return stateFromName
+    }
+  }
+
+  return null
+}
+
+export const extractStateCodeFromMapboxContext = (context: unknown): string | null => {
+  const entries = toArray<AnyRecord>(context)
+  const regionEntry = entries.find((entry) => String(entry?.id || "").startsWith("region"))
+  if (!regionEntry) return null
+  return normalizeStateCode(regionEntry.short_code || regionEntry.text || "")
+}
+
+export const resolveLocationStateCode = (location: unknown): string | null => {
+  const locationRecord = toObject(location)
+  const directState = normalizeStateCode(
+    locationRecord.stateCode ||
+      locationRecord.state ||
+      locationRecord.region ||
+      locationRecord.regionCode
+  )
+  if (directState) return directState
+
+  const contextState = extractStateCodeFromMapboxContext(locationRecord.context)
+  if (contextState) return contextState
+
+  return extractStateCodeFromAddress(
+    locationRecord.address || locationRecord.formatted_address || locationRecord.formattedAddress || ""
+  )
+}
+
+export const isSupportedOrderStateCode = (
+  stateCode: unknown,
+  supportedStateCodes: string[] = SUPPORTED_ORDER_STATE_CODES
+): boolean => {
+  const normalized = normalizeStateCode(stateCode)
+  if (!normalized) return false
+
+  return supportedStateCodes
+    .map((code) => normalizeStateCode(code))
+    .filter(Boolean)
+    .includes(normalized)
+}
+
+export const isTripWithinSupportedStates = (
+  tripLike: AnyRecord,
+  supportedStateCodes: string[] = SUPPORTED_ORDER_STATE_CODES
+) => {
+  const pickup = toObject(tripLike.pickup || tripLike.pickup_location)
+  const dropoff = toObject(tripLike.dropoff || tripLike.dropoff_location)
+  const pickupStateCode = resolveLocationStateCode(pickup)
+  const dropoffStateCode = resolveLocationStateCode(dropoff)
+
+  if (!pickupStateCode || !dropoffStateCode) {
+    return {
+      supported: false,
+      pickupStateCode,
+      dropoffStateCode,
+      reason: "state_unresolved",
+    }
+  }
+
+  const supported =
+    isSupportedOrderStateCode(pickupStateCode, supportedStateCodes) &&
+    isSupportedOrderStateCode(dropoffStateCode, supportedStateCodes)
+
+  return {
+    supported,
+    pickupStateCode,
+    dropoffStateCode,
+    reason: supported ? null : "unsupported_state",
+  }
+}
+
+export const resolveDriverStateCodeFromProfile = (driverProfile: AnyRecord) => {
+  const metadata = toObject(driverProfile.metadata)
+  const onboardingDraft = toObject(metadata.onboardingDraft)
+  const draftFormData = toObject(onboardingDraft.formData)
+  const draftAddress = toObject(draftFormData.address)
+  const metadataAddress = toObject(metadata.address)
+  const profileAddress = toObject(driverProfile.address)
+
+  return (
+    normalizeStateCode(driverProfile.state || driverProfile.state_code) ||
+    normalizeStateCode(
+      draftAddress.state ||
+        metadataAddress.state ||
+        profileAddress.state ||
+        metadata.state
+    ) ||
+    null
+  )
 }
 
 export const mapTripFromDb = (tripRow: AnyRecord): AnyRecord => {

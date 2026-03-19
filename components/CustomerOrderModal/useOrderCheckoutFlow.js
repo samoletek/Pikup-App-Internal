@@ -78,6 +78,8 @@ export default function useOrderCheckoutFlow({
     const duration = orderData.duration || 0;
 
     return calculatePrice(vehicle, distance, duration, {
+      pickup: orderData.pickup || null,
+      dropoff: orderData.dropoff || null,
       items: orderData.items || [],
       laborOptions: {
         items: orderData.items || [],

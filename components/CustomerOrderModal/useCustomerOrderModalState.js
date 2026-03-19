@@ -10,11 +10,21 @@ import {
 } from './constants';
 import { getItemValidationErrors, validateLocationDetails } from './utils/validation';
 import { SCREEN_WIDTH } from './styles';
+import {
+    COMING_SOON_UNSUPPORTED_STATE_MESSAGE,
+    SUPPORTED_ORDER_STATE_CODES,
+} from '../../constants/orderAvailability';
+import {
+    evaluateOrderStateCoverage,
+    isSupportedOrderStateCode,
+    resolveLocationStateCode,
+} from '../../utils/locationState';
 
 export default function useCustomerOrderModalState({
     visible,
     paymentMethods,
     defaultPaymentMethod,
+    userLocation,
 }) {
     const [currentStep, setCurrentStep] = useState(1);
     const slideAnim = useRef(new Animated.Value(0)).current;
@@ -147,7 +157,21 @@ export default function useCustomerOrderModalState({
 
     const validateStep = useCallback(() => {
         switch (currentStep) {
-            case 1:
+            case 1: {
+                const customerStateCode = resolveLocationStateCode(userLocation || null);
+                if (!customerStateCode) {
+                    Alert.alert(
+                        'Location Required',
+                        'Please enable location services so we can confirm service availability in your area.'
+                    );
+                    return false;
+                }
+
+                if (!isSupportedOrderStateCode(customerStateCode, SUPPORTED_ORDER_STATE_CODES)) {
+                    Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
+                    return false;
+                }
+
                 if (!orderData.pickup.address.trim()) {
                     Alert.alert('Missing Info', 'Please enter a pickup address.');
                     return false;
@@ -163,7 +187,27 @@ export default function useCustomerOrderModalState({
                     Alert.alert('Same Address', 'Pickup and dropoff addresses cannot be the same.');
                     return false;
                 }
+
+                const stateCoverage = evaluateOrderStateCoverage({
+                    pickup: orderData.pickup,
+                    dropoff: orderData.dropoff,
+                    supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
+                    requireResolvedState: true,
+                });
+                if (!stateCoverage.isSupported) {
+                    if (stateCoverage.reason === 'state_unresolved') {
+                        Alert.alert(
+                            'Address Required',
+                            'Please select pickup and dropoff addresses from suggestions.'
+                        );
+                        return false;
+                    }
+
+                    Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
+                    return false;
+                }
                 return true;
+            }
             case 2: {
                 if (orderData.items.length === 0) {
                     Alert.alert('Missing Info', 'Please add at least one item.');
@@ -240,7 +284,7 @@ export default function useCustomerOrderModalState({
             default:
                 return true;
         }
-    }, [currentStep, orderData]);
+    }, [currentStep, orderData, userLocation]);
 
     const resetLocalState = useCallback(() => {
         setCurrentStep(1);

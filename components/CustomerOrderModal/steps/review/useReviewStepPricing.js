@@ -45,13 +45,19 @@ export const useReviewStepPricing = ({
     const billable = Math.max(0, laborAdjustment - bufferMinutes);
     const newLaborFee = Math.round(billable * (pricing.laborPerMin || 0) * 100) / 100;
     const laborDiff = newLaborFee - (pricing.laborFee || 0);
+    const taxRate = Number(pricing.taxRate || 0);
+    const newTaxableLaborAmount = newLaborFee;
+    const newTax = Math.round(newTaxableLaborAmount * taxRate * 100) / 100;
+    const taxDiff = newTax - (pricing.tax || 0);
 
     return {
       ...pricing,
       laborFee: newLaborFee,
       laborMinutes: laborAdjustment,
       laborBillableMinutes: billable,
-      total: Math.round((pricing.total + laborDiff) * 100) / 100,
+      taxableLaborAmount: newTaxableLaborAmount,
+      tax: newTax,
+      total: Math.round((pricing.total + laborDiff + taxDiff) * 100) / 100,
     };
   }, [pricing, laborSliderConfig, laborAdjustment]);
 
