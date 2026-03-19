@@ -15,11 +15,26 @@ import { appConfig } from './config/appConfig';
 import { ensureMapboxConfigured } from './config/mapbox';
 import { logger } from './services/logger';
 
+const normalizeDeepLinkUrl = (url) => {
+  if (!url || typeof url !== 'string') return url;
+
+  const hashIndex = url.indexOf('#');
+  if (hashIndex < 0) return url;
+
+  const hashPayload = url.slice(hashIndex + 1);
+  if (!hashPayload || !hashPayload.includes('=')) return url;
+
+  const base = url.slice(0, hashIndex);
+  const separator = base.includes('?') ? '&' : '?';
+  return `${base}${separator}${hashPayload}`;
+};
+
 // Deep linking configuration
 const linking = {
   prefixes: [
     'pikup://',
     'https://pikup-app.com',
+    'https://www.pikup-app.com',
   ],
   config: {
     screens: {
@@ -28,15 +43,16 @@ const linking = {
         screens: {},
       },
       CustomerRewardsScreen: 'invite/:code',
+      ResetPasswordScreen: 'reset-password',
     },
   },
   async getInitialURL() {
     const url = await Linking.getInitialURL();
-    return url;
+    return normalizeDeepLinkUrl(url);
   },
   subscribe(listener) {
     const subscription = Linking.addEventListener('url', ({ url }) => {
-      listener(url);
+      listener(normalizeDeepLinkUrl(url));
     });
     return () => subscription.remove();
   },

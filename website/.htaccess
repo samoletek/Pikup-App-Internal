@@ -1,13 +1,24 @@
 RewriteEngine On
 
-# Serve .well-known files with correct content type
-<IfModule mod_headers.c>
-  <FilesMatch "apple-app-site-association">
-    Header set Content-Type "application/json"
-  </FilesMatch>
+# Do not let WordPress rewrites swallow Universal/App Link files.
+RewriteRule ^\.well-known/(apple-app-site-association|assetlinks\.json)$ - [L]
+
+# Fallback web behavior when app is not installed.
+RewriteRule ^invite/([^/]+)/?$ /?invite=$1 [R=302,L]
+RewriteRule ^reset-password/?$ / [R=302,L]
+
+# Serve .well-known files as JSON (apple-app-site-association has no extension).
+<IfModule mod_mime.c>
+  <Files "apple-app-site-association">
+    ForceType application/json
+  </Files>
 </IfModule>
 
-# Redirect /invite/CODE to homepage (fallback when app is not installed)
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^invite/(.+)$ / [R=302,L]
+<IfModule mod_headers.c>
+  <Files "apple-app-site-association">
+    Header set Content-Type "application/json"
+  </Files>
+  <Files "assetlinks.json">
+    Header set Content-Type "application/json"
+  </Files>
+</IfModule>

@@ -1,14 +1,14 @@
 [
-    {
-        "relation": [
-            "delegate_permission/common.handle_all_urls"
-        ],
-        "target": {
-            "namespace": "android_app",
-            "package_name": "com.pikup.main",
-            "sha256_cert_fingerprints": [
-                "TODO:REPLACE_WITH_YOUR_SHA256_FINGERPRINT"
-            ]
-        }
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.pikup.main",
+      "sha256_cert_fingerprints": [
+        "53:C3:8D:60:CC:43:F1:9A:8C:F1:93:FA:77:BE:1A:54:CB:EB:B0:9F:49:B2:9D:9A:F1:C7:DE:E0:1D:3D:9F:5C"
+      ]
     }
+  }
 ]

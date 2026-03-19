@@ -57,7 +57,7 @@
 - [x] #9 Loading states (spinners, disabled buttons)
 - [x] #10 Error handling on all failures
 - [x] #11 Back button on Sign Up screen
-- [ ] #8.1 Forgot Password - Supabase integration (UI - Done)
+- [x] #8.1 Forgot Password - Supabase integration (UI - Done)
 
 ### Customer Flow - Home Screen
 - [x] #12 Logo positioning fix
@@ -168,7 +168,7 @@
 - [x] #60 Cascading vehicle picker [CHANGED: AI car analysis]
 - [x] #61 Convert to multi-step onboarding form
 - [x] #111 Auto-detect vehicle category via AI/API (VIN/license/photo) *
-- [ ] #112 Vehicle age limit 40 years - drew
+- [x] #112 Vehicle age limit 40 years - drew
 
 ### Driver UI Enhancements *
 - [x] #113 Weekly Milestones display (progress bars, bonuses)
@@ -231,7 +231,7 @@ NEW EDITS:
 - [x] Location details logic: For `Store`, do not request `Building name` or `Unit number`
 
 - [ ] Fixes: Repair `Download my data`
-- [ ] Fixes: Complete `Forgot password` backend flow so Supabase sends reset emails correctly
+- [x] Fixes: Complete `Forgot password` backend flow so Supabase sends reset emails correctly
 
 ### Milestone 3 Deliverables
 - [x] Complete AI-powered item analysis flow
@@ -282,12 +282,12 @@ NEW EDITS:
 - [x] #85 75% earnings calculation verification - drew (25/75)
 
 ### Milestone 4 Deliverables
-- [ ] Complete driver home screen with order notifications
-- [ ] Order matching algorithm (distance + preferences)
-- [ ] Working earnings dashboard with realtime sync
+- [x] Complete driver home screen with order notifications
+- [x] Order matching algorithm (distance + preferences)
+- [x] Working earnings dashboard with realtime sync
 - [ ] Stripe payments tested (customer + driver)
 - [ ] Insurance integration (pending Redkik API access)
-- [ ] Full cross-platform testing (iOS + Android)
+- [-] Full cross-platform testing (iOS + Android)
 - [ ] App Store + Play Store submission
 
 ---

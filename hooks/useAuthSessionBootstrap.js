@@ -48,6 +48,12 @@ export default function useAuthSessionBootstrap({
       if (!mounted) return;
 
       try {
+        const shouldSuppressBootstrap = AuthService.consumeRecoveryBootstrapSuppression?.();
+        if (shouldSuppressBootstrap && (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session))) {
+          setIsInitializing(false);
+          return;
+        }
+
         if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
           if (!session) return;
 

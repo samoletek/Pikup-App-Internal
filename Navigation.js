@@ -11,6 +11,7 @@ import WelcomeScreen from "./screens/shared/WelcomeScreen";
 import AuthScreen from "./screens/shared/AuthScreen";
 import PersonalInfoScreen from "./screens/shared/PersonalInfoScreen";
 import AboutScreen from "./screens/shared/AboutScreen";
+import ResetPasswordScreen from "./screens/shared/ResetPasswordScreen";
 // RoleSelectionScreen removed - role selection is now on WelcomeScreen
 import MessageScreen from "./screens/shared/MessageScreen";
 import DeliveryFeedbackScreen from "./screens/shared/DeliveryFeedbackScreen";
@@ -55,6 +56,7 @@ const AuthStack = () => (
   <Stack.Navigator screenOptions={stackScreenOptions}>
     <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
     <Stack.Screen name="AuthScreen" component={AuthScreen} />
+    <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
   </Stack.Navigator>
 );
 
@@ -77,6 +79,7 @@ const CustomerStack = () => (
     <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
     <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
     <Stack.Screen name="PaymentMethodsScreen" component={PaymentMethodsScreen} />
+    <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
 
     {/* Shared / Interaction Screens */}
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
@@ -101,6 +104,7 @@ const DriverStack = () => (
     <Stack.Screen name="AboutScreen" component={AboutScreen} />
     <Stack.Screen name="CustomerSafetyScreen" component={CustomerSafetyScreen} />
     <Stack.Screen name="CustomerSettingsScreen" component={CustomerSettingsScreen} />
+    <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
 
     {/* Trip Execution Flow */}
     <Stack.Screen name="RouteConfirmationScreen" component={RouteConfirmationScreen} />

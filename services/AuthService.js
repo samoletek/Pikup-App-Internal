@@ -23,6 +23,7 @@ import { normalizeError } from './errorService';
 import {
   invokeCheckUserExists,
   resetPasswordForEmail,
+  setAuthenticatedSession,
   signInWithPassword,
   signOut as signOutAuth,
   signUpWithPassword,
@@ -35,6 +36,43 @@ export {
 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let suppressNextAuthBootstrapFromRecovery = false;
+
+export const consumeRecoveryBootstrapSuppression = () => {
+  if (!suppressNextAuthBootstrapFromRecovery) {
+    return false;
+  }
+
+  suppressNextAuthBootstrapFromRecovery = false;
+  return true;
+};
+
+const extractParamsFromUrl = (url) => {
+  if (!url || typeof url !== 'string') return {};
+
+  const params = {};
+  const mergeSegment = (segment) => {
+    if (!segment) return;
+    const regex = /([^&=]+)=([^&]*)/g;
+    let match;
+    while ((match = regex.exec(segment))) {
+      params[decodeURIComponent(match[1])] = decodeURIComponent(match[2]);
+    }
+  };
+
+  const hashIndex = url.indexOf('#');
+  if (hashIndex >= 0) {
+    mergeSegment(url.slice(hashIndex + 1));
+  }
+
+  const queryIndex = url.indexOf('?');
+  if (queryIndex >= 0) {
+    const endIndex = hashIndex >= 0 ? hashIndex : url.length;
+    mergeSegment(url.slice(queryIndex + 1, endIndex));
+  }
+
+  return params;
+};
 
 /**
  * Sign up new user
@@ -252,13 +290,75 @@ export const resetPassword = async (email) => {
         throw new Error('Email is required.');
     }
 
-    const { error } = await resetPasswordForEmail(email);
+    const redirectTo = 'https://pikup-app.com/reset-password';
+    const { error } = await resetPasswordForEmail(email, { redirectTo });
 
     if (error) {
         throw error;
     }
 
     return true;
+};
+
+/**
+ * Restore Supabase session from password recovery callback tokens.
+ * @param {Object} params
+ * @param {string} params.accessToken
+ * @param {string} params.refreshToken
+ * @param {string} params.callbackUrl
+ * @returns {Promise<boolean>}
+ */
+export const establishRecoverySession = async ({
+  accessToken = null,
+  refreshToken = null,
+  callbackUrl = null,
+} = {}) => {
+  let resolvedAccessToken = accessToken;
+  let resolvedRefreshToken = refreshToken;
+
+  if ((!resolvedAccessToken || !resolvedRefreshToken) && callbackUrl) {
+    const callbackParams = extractParamsFromUrl(callbackUrl);
+    resolvedAccessToken = resolvedAccessToken || callbackParams.access_token;
+    resolvedRefreshToken = resolvedRefreshToken || callbackParams.refresh_token;
+  }
+
+  if (!resolvedAccessToken || !resolvedRefreshToken) {
+    throw new Error('Reset link is invalid or expired. Please request a new email.');
+  }
+
+  suppressNextAuthBootstrapFromRecovery = true;
+  const { error } = await setAuthenticatedSession({
+    accessToken: resolvedAccessToken,
+    refreshToken: resolvedRefreshToken,
+  });
+
+  if (error) {
+    suppressNextAuthBootstrapFromRecovery = false;
+    throw error;
+  }
+
+  return true;
+};
+
+/**
+ * Finalize password reset after recovery session is established.
+ * @param {string} newPassword
+ * @returns {Promise<boolean>}
+ */
+export const completePasswordRecovery = async (newPassword) => {
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error('Password must be at least 6 characters.');
+  }
+
+  const { error } = await updateAuthenticatedUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return true;
 };
 
 export const checkUserExists = async (email) => {

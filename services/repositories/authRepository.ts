@@ -240,8 +240,11 @@ export const updateAuthenticatedUser = async (updates: Record<string, unknown>) 
   return supabase.auth.updateUser(updates);
 };
 
-export const resetPasswordForEmail = async (email: string) => {
-  return supabase.auth.resetPasswordForEmail(email);
+export const resetPasswordForEmail = async (
+  email: string,
+  options: { redirectTo?: string } = {},
+) => {
+  return supabase.auth.resetPasswordForEmail(email, options);
 };
 
 export const invokeCheckUserExists = async (email: CheckUserExistsRequest["email"]) => {
