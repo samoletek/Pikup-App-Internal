@@ -2,6 +2,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from './logger';
 import { fetchPricingConfigRows } from './repositories/pricingRepository';
 import { normalizeError } from './errorService';
+import {
+    DEFAULT_MANPOWER_SALES_TAX_RATE,
+    SUPPORTED_ORDER_STATE_CODES,
+} from '../constants/orderAvailability';
+import {
+    evaluateOrderStateCoverage,
+    normalizeStateCode,
+} from '../utils/locationState';
 
 const PRICING_CACHE_KEY = '@pikup_pricing_config';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -217,6 +225,36 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
 
     const fareAfterSurge = grossFare + surgeFee;
 
+    const orderStateCoverage = evaluateOrderStateCoverage({
+        pickup: options.pickup || null,
+        dropoff: options.dropoff || null,
+        supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
+        requireResolvedState: false,
+    });
+    const dropoffStateCode = normalizeStateCode(
+        options?.dropoff?.stateCode ||
+        options?.dropoff?.state ||
+        orderStateCoverage.dropoffStateCode
+    );
+
+    const stateTaxRateConfig = (
+        platformFees.stateSalesTaxRates ||
+        platformFees.salesTaxRates ||
+        platformFees.salesTaxByState ||
+        {}
+    );
+    const fallbackTaxRate = Number(platformFees.defaultSalesTaxRate);
+    const defaultSalesTaxRate = Number.isFinite(fallbackTaxRate)
+        ? fallbackTaxRate
+        : DEFAULT_MANPOWER_SALES_TAX_RATE;
+    const dropoffSalesTaxRate = dropoffStateCode
+        ? Number(stateTaxRateConfig[dropoffStateCode] ?? defaultSalesTaxRate)
+        : 0;
+    const taxableLaborAmount = laborFee > 0 ? laborFee : 0;
+    const tax = taxableLaborAmount > 0
+        ? taxableLaborAmount * (Number.isFinite(dropoffSalesTaxRate) ? dropoffSalesTaxRate : defaultSalesTaxRate)
+        : 0;
+
     // Platform fees
     const pricingItems = Array.isArray(options.items)
         ? options.items
@@ -232,7 +270,7 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const serviceFee = fareAfterSurge * serviceFeePercent;
 
     // Total
-    const total = fareAfterSurge + serviceFee + mandatoryInsurance;
+    const total = fareAfterSurge + serviceFee + mandatoryInsurance + tax;
 
     // Driver payout
     const driverPayoutPercent = platformFees.driverPayoutPercent || 0.75;
@@ -252,6 +290,10 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         surgeFee: round2(surgeFee),
         surgeLabel,
         serviceFee: round2(serviceFee),
+        tax: round2(tax),
+        taxRate: Number.isFinite(dropoffSalesTaxRate) ? dropoffSalesTaxRate : defaultSalesTaxRate,
+        taxableLaborAmount: round2(taxableLaborAmount),
+        dropoffStateCode,
         mandatoryInsurance: round2(mandatoryInsurance),
         insuranceApplied: hasInsuredNewItem,
         total: round2(total),

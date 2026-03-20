@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { movedEnough } from '../screens/driver/DriverHomeScreen.utils';
 import { logger } from '../services/logger';
+import MapboxLocationService from '../services/MapboxLocationService';
 
 const HEARTBEAT_INTERVAL_MS = 20000;
+const STATE_RESOLUTION_MIN_MOVE_METERS = 1000;
+const STATE_RESOLUTION_MIN_INTERVAL_MS = 120000;
 
 export default function useDriverHomeLocationTracking({
   currentUser,
@@ -15,9 +18,14 @@ export default function useDriverHomeLocationTracking({
 }) {
   const [region, setRegion] = useState(null);
   const [driverLocation, setDriverLocation] = useState(null);
+  const [driverLocationStateCode, setDriverLocationStateCode] = useState(null);
+  const [hasResolvedDriverLocationState, setHasResolvedDriverLocationState] = useState(false);
   const locationSubscription = useRef(null);
   const lastHeartbeatAt = useRef(0);
   const latestDriverLocationRef = useRef(null);
+  const lastStateResolutionLocationRef = useRef(null);
+  const lastStateResolutionAtRef = useRef(0);
+  const stateResolutionInFlightRef = useRef(false);
 
   useEffect(() => {
     latestDriverLocationRef.current = driverLocation;
@@ -29,6 +37,61 @@ export default function useDriverHomeLocationTracking({
       locationSubscription.current = null;
     }
   }, []);
+
+  const shouldResolveDriverState = useCallback((nextLocation, force = false) => {
+    if (!nextLocation) {
+      return false;
+    }
+    if (force || !lastStateResolutionLocationRef.current) {
+      return true;
+    }
+
+    const enoughTimeElapsed =
+      Date.now() - lastStateResolutionAtRef.current >= STATE_RESOLUTION_MIN_INTERVAL_MS;
+    const movedFarEnough = movedEnough(
+      lastStateResolutionLocationRef.current,
+      nextLocation,
+      STATE_RESOLUTION_MIN_MOVE_METERS
+    );
+    return enoughTimeElapsed || movedFarEnough;
+  }, []);
+
+  const resolveDriverStateCode = useCallback(async (nextLocation, force = false) => {
+    if (!shouldResolveDriverState(nextLocation, force) || stateResolutionInFlightRef.current) {
+      return;
+    }
+
+    stateResolutionInFlightRef.current = true;
+    lastStateResolutionLocationRef.current = nextLocation;
+    lastStateResolutionAtRef.current = Date.now();
+
+    try {
+      const geocodedLocation = await MapboxLocationService.reverseGeocode(
+        Number(nextLocation.latitude),
+        Number(nextLocation.longitude)
+      );
+      const normalizedStateCode = String(geocodedLocation?.stateCode || '')
+        .trim()
+        .toUpperCase();
+
+      setDriverLocationStateCode(normalizedStateCode || null);
+      setDriverLocation((prevLocation) => {
+        if (!prevLocation) {
+          return prevLocation;
+        }
+        return {
+          ...prevLocation,
+          stateCode: normalizedStateCode || null,
+        };
+      });
+      setHasResolvedDriverLocationState(true);
+    } catch (error) {
+      logger.warn('DriverHomeLocationTracking', 'Unable to resolve driver state from coordinates', error);
+      setHasResolvedDriverLocationState(true);
+    } finally {
+      stateResolutionInFlightRef.current = false;
+    }
+  }, [shouldResolveDriverState]);
 
   const initializeLocation = useCallback(async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
@@ -45,6 +108,7 @@ export default function useDriverHomeLocationTracking({
     const nextLocation = {
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
+      stateCode: null,
     };
 
     setRegion({
@@ -54,7 +118,8 @@ export default function useDriverHomeLocationTracking({
     });
     setDriverLocation(nextLocation);
     latestDriverLocationRef.current = nextLocation;
-  }, []);
+    void resolveDriverStateCode(nextLocation, true);
+  }, [resolveDriverStateCode]);
 
   const startLocationTracking = useCallback(async () => {
     locationSubscription.current = await Location.watchPositionAsync(
@@ -69,8 +134,14 @@ export default function useDriverHomeLocationTracking({
           longitude: loc.coords.longitude,
         };
         const previousLocation = latestDriverLocationRef.current;
-        latestDriverLocationRef.current = newLocation;
-        setDriverLocation(newLocation);
+        setDriverLocation((prevLocation) => {
+          const nextLocation = {
+            ...newLocation,
+            stateCode: prevLocation?.stateCode || null,
+          };
+          latestDriverLocationRef.current = nextLocation;
+          return nextLocation;
+        });
 
         const currentUserId = currentUser?.uid || currentUser?.id;
         if (isOnline && currentUserId) {
@@ -86,6 +157,8 @@ export default function useDriverHomeLocationTracking({
         if (activeJobId) {
           updateDriverLocation(activeJobId, newLocation);
         }
+
+        void resolveDriverStateCode(newLocation);
       }
     );
   }, [
@@ -93,6 +166,7 @@ export default function useDriverHomeLocationTracking({
     currentUser?.id,
     currentUser?.uid,
     isOnline,
+    resolveDriverStateCode,
     updateDriverHeartbeat,
     updateDriverLocation,
   ]);
@@ -115,6 +189,8 @@ export default function useDriverHomeLocationTracking({
 
   return {
     driverLocation,
+    driverLocationStateCode,
+    hasResolvedDriverLocationState,
     region,
     setDriverLocation,
   };

@@ -50,12 +50,19 @@ export const resolveFinalPricing = async ({
     const billable = Math.max(0, laborAdjustment - bufferMinutes);
     const newLaborFee = Math.round(billable * (rawPricing.laborPerMin || 0) * 100) / 100;
     const laborDiff = newLaborFee - (rawPricing.laborFee || 0);
+    const taxRate = Number(rawPricing.taxRate || 0);
+    const newTaxableLaborAmount = newLaborFee;
+    const newTax = Math.round(newTaxableLaborAmount * taxRate * 100) / 100;
+    const taxDiff = newTax - (rawPricing.tax || 0);
+
     basePricing = {
       ...rawPricing,
       laborFee: newLaborFee,
       laborMinutes: laborAdjustment,
       laborBillableMinutes: billable,
-      total: Math.round((rawPricing.total + laborDiff) * 100) / 100,
+      taxableLaborAmount: newTaxableLaborAmount,
+      tax: newTax,
+      total: Math.round((rawPricing.total + laborDiff + taxDiff) * 100) / 100,
     };
   }
 

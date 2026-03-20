@@ -20,6 +20,7 @@ export default function DriverHomeBottomPanel({
   onGoOnline,
   onGoOnlineScheduled,
   onViewScheduledRequests,
+  isDriverGeoRestricted,
 }) {
   return (
     <View style={styles.bottomPanel}>
@@ -98,6 +99,41 @@ export default function DriverHomeBottomPanel({
             <Text style={styles.goOfflineText}>Go Offline</Text>
           </TouchableOpacity>
         </>
+      ) : isDriverGeoRestricted ? (
+        <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
+          <TouchableOpacity
+            style={[
+              styles.offlineRoleButton,
+              styles.offlineRoleButtonDisabled,
+              isCompact && styles.offlineRoleButtonCompact,
+            ]}
+            disabled
+            activeOpacity={1}
+          >
+            <View style={styles.lockedButtonContent}>
+              <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
+              <Text style={styles.offlineRoleButtonTextDisabled}>Go Online</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.offlineRoleButton,
+              styles.offlineRoleButtonDark,
+              styles.offlineRoleButtonDisabled,
+              isCompact && styles.offlineRoleButtonCompact,
+            ]}
+            disabled
+            activeOpacity={1}
+          >
+            <View style={styles.lockedButtonContent}>
+              <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
+              <Text style={styles.offlineRoleButtonTextDisabled}>
+                Go Online Scheduled
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       ) : (
         <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
           <TouchableOpacity
@@ -298,10 +334,29 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 0,
   },
+  offlineRoleButtonDisabled: {
+    opacity: 0.78,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   offlineRoleButtonText: {
     color: colors.text.primary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  offlineRoleButtonTextDisabled: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    flexShrink: 1,
+  },
+  lockedButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
   goOfflineButton: {
     backgroundColor: colors.background.elevated,

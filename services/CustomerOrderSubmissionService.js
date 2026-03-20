@@ -2,6 +2,15 @@ import { uploadOrderItemsMedia } from './OrderItemMediaService';
 import { failureResult, successResult } from './contracts/result';
 import { logger } from './logger';
 import { logFlowError, logFlowInfo, startFlowContext } from './flowContext';
+import {
+  COMING_SOON_UNSUPPORTED_STATE_MESSAGE,
+  SUPPORTED_ORDER_STATE_CODES,
+} from '../constants/orderAvailability';
+import {
+  evaluateOrderStateCoverage,
+  isSupportedOrderStateCode,
+  resolveLocationStateCode,
+} from '../utils/locationState';
 
 const DEFAULT_INSURANCE_RETRY_DELAY_MS = 1500;
 
@@ -145,6 +154,35 @@ export const submitCustomerOrder = async ({
 
   const selectedPaymentMethod = orderData?.selectedPaymentMethod;
   const totalAmount = Number(orderData?.pricing?.total || 0);
+  const customerStateCode = resolveLocationStateCode(orderData?.customerLocation || null);
+  if (customerStateCode && !isSupportedOrderStateCode(customerStateCode, SUPPORTED_ORDER_STATE_CODES)) {
+    return failureResult(COMING_SOON_UNSUPPORTED_STATE_MESSAGE, null, {
+      notices: [],
+      correlationId: flowContext.correlationId,
+    });
+  }
+
+  const stateCoverage = evaluateOrderStateCoverage({
+    pickup: orderData?.pickup || null,
+    dropoff: orderData?.dropoff || null,
+    supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
+    requireResolvedState: true,
+  });
+
+  if (!stateCoverage.isSupported && stateCoverage.reason === 'state_unresolved') {
+    return failureResult('Please select pickup and dropoff addresses from suggestions.', null, {
+      notices: [],
+      correlationId: flowContext.correlationId,
+    });
+  }
+
+  if (!stateCoverage.isSupported && stateCoverage.reason === 'unsupported_state') {
+    return failureResult(COMING_SOON_UNSUPPORTED_STATE_MESSAGE, null, {
+      notices: [],
+      correlationId: flowContext.correlationId,
+    });
+  }
+
   if (!selectedPaymentMethod?.stripePaymentMethodId) {
     return failureResult('Please select a saved payment method.', null, {
       notices: [],

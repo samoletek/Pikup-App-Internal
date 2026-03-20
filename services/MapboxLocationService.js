@@ -135,9 +135,15 @@ class MapboxLocationService {
 
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
+        const context = Array.isArray(feature.context) ? feature.context : [];
+        const stateEntry = context.find((entry) => String(entry?.id || '').startsWith('region'));
+        const rawStateCode = String(stateEntry?.short_code || '').trim().toUpperCase();
+        const stateCode = rawStateCode.startsWith('US-') ? rawStateCode.slice(3) : rawStateCode;
+
         return {
           address: feature.place_name,
           formatted_address: feature.place_name,
+          stateCode: stateCode || null,
         };
       } else {
         throw new Error('Reverse geocoding failed: No results found');

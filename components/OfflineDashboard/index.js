@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthIdentity, useDriverActions } from '../../contexts/AuthContext';
 import { logger } from '../../services/logger';
 import OfflineDashboardBody from './OfflineDashboardBody';
@@ -16,6 +17,7 @@ export default function OfflineDashboard({
     onGoOnlineScheduled,
     navigation,
     onExpandedChange,
+    isDriverGeoRestricted,
 }) {
     const { currentUser } = useAuthIdentity();
     const { getDriverSessionStats, getDriverStats } = useDriverActions();
@@ -288,18 +290,49 @@ export default function OfflineDashboard({
                         style={[styles.buttonContainer, { opacity: goOnlineButtonOpacity }]}
                         pointerEvents={isExpanded ? 'none' : 'auto'}
                     >
-                        <View style={styles.buttonStack}>
-                            <TouchableOpacity style={styles.goOnlineBtn} onPress={onGoOnline} activeOpacity={0.8}>
-                                <Text style={styles.goOnlineText}>Go Online</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.goOnlineBtn, styles.goOnlineScheduledBtn]}
-                                onPress={onGoOnlineScheduled}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={styles.goOnlineScheduledText}>Go Online Scheduled</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {isDriverGeoRestricted ? (
+                            <View style={styles.buttonStack}>
+                                <TouchableOpacity
+                                    style={[styles.goOnlineBtn, styles.goOnlineBtnDisabled]}
+                                    disabled
+                                    activeOpacity={1}
+                                >
+                                    <View style={styles.lockedButtonContent}>
+                                        <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
+                                        <Text style={styles.goOnlineTextDisabled}>Go Online</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.goOnlineBtn,
+                                        styles.goOnlineScheduledBtn,
+                                        styles.goOnlineBtnDisabled,
+                                    ]}
+                                    disabled
+                                    activeOpacity={1}
+                                >
+                                    <View style={styles.lockedButtonContent}>
+                                        <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
+                                        <Text style={styles.goOnlineTextDisabled}>
+                                            Go Online Scheduled
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <View style={styles.buttonStack}>
+                                <TouchableOpacity style={styles.goOnlineBtn} onPress={onGoOnline} activeOpacity={0.8}>
+                                    <Text style={styles.goOnlineText}>Go Online</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.goOnlineBtn, styles.goOnlineScheduledBtn]}
+                                    onPress={onGoOnlineScheduled}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.goOnlineScheduledText}>Go Online Scheduled</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </Animated.View>
 
                 </LinearGradient>

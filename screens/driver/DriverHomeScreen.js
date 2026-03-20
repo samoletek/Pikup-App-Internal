@@ -26,6 +26,14 @@ import {
   REQUEST_POOLS,
   formatRequestTime,
 } from './DriverHomeScreen.utils';
+import {
+  DRIVER_AVAILABILITY_COMING_SOON_MESSAGE,
+  DRIVER_AVAILABILITY_COMING_SOON_TITLE,
+  SUPPORTED_ORDER_STATE_CODES,
+} from '../../constants/orderAvailability';
+import {
+  isSupportedOrderStateCode,
+} from '../../utils/locationState';
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -122,9 +130,10 @@ export default function DriverHomeScreen({ navigation, route }) {
     !isOnboardingApproved &&
     (showDeclinedBannerFromRoute || isOnboardingDeclined)
   );
-
   const {
     driverLocation,
+    driverLocationStateCode,
+    hasResolvedDriverLocationState,
     region,
     setDriverLocation,
   } = useDriverHomeLocationTracking({
@@ -135,6 +144,11 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverHeartbeat,
     updateDriverLocation,
   });
+  const isDriverGeoRestricted = (
+    hasResolvedDriverLocationState &&
+    Boolean(driverLocationStateCode) &&
+    !isSupportedOrderStateCode(driverLocationStateCode, SUPPORTED_ORDER_STATE_CODES)
+  );
 
   const {
     incomingRoute,
@@ -257,6 +271,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowIncomingModal,
     setIsMinimized,
     setIncomingRequest,
+    isDriverGeoRestricted,
   });
 
   const {
@@ -286,6 +301,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowIncomingModal,
     setIsMinimized,
     setIncomingRequest,
+    isDriverGeoRestricted,
   });
 
   const {
@@ -397,6 +413,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     onCloseRecentTrips: handleCloseRecentTrips,
     showDeclinedSupportBanner,
     onOpenDeclinedSupport: handleOpenDeclinedSupport,
+    isDriverGeoRestricted,
+    driverAvailabilityComingSoonTitle: DRIVER_AVAILABILITY_COMING_SOON_TITLE,
+    driverAvailabilityComingSoonMessage: DRIVER_AVAILABILITY_COMING_SOON_MESSAGE,
   });
 
   return <DriverHomeScreenContent {...contentProps} />;

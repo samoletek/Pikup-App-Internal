@@ -40,8 +40,8 @@ export const createAiVehicleRecommendationDefaults = () => ({
 });
 
 export const createInitialOrderData = () => ({
-    pickup: { address: '', coordinates: null },
-    dropoff: { address: '', coordinates: null },
+    pickup: { address: '', coordinates: null, stateCode: null },
+    dropoff: { address: '', coordinates: null, stateCode: null },
     scheduleType: 'asap',
     scheduledDateTime: null,
     items: [],
