@@ -56,7 +56,8 @@ export const filterTripsForAvailability = ({
             return;
         }
 
-        if (!isTripWithinSupportedStates(trip, supportedStateCodes)) {
+        const tripStateCoverage = isTripWithinSupportedStates(trip, supportedStateCodes);
+        if (!tripStateCoverage.supported) {
             filteredByStateCount += 1;
             return;
         }
