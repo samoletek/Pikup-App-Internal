@@ -9,6 +9,55 @@ const corsHeaders = {
 
 const IGNORABLE_PG_CODES = new Set(["42P01", "42703"])
 
+type RowRecord = Record<string, unknown>
+
+const isRowRecord = (value: unknown): value is RowRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+const asRowList = (value: unknown): RowRecord[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is RowRecord => isRowRecord(entry))
+}
+
+const csvValue = (value: unknown): string => {
+  if (value === null || value === undefined) return ""
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value)
+  }
+
+  try {
+    return JSON.stringify(value)
+  } catch (_error) {
+    return String(value)
+  }
+}
+
+const escapeCsv = (raw: string): string => {
+  if (!/[",\n]/.test(raw)) return raw
+  return `"${raw.replace(/"/g, "\"\"")}"`
+}
+
+const toCsv = (rows: RowRecord[]): string => {
+  if (rows.length === 0) {
+    return "\uFEFFNo data available\n"
+  }
+
+  const columnSet = new Set<string>()
+  for (const row of rows) {
+    for (const key of Object.keys(row)) {
+      columnSet.add(key)
+    }
+  }
+
+  const columns = Array.from(columnSet)
+  const header = columns.map(escapeCsv).join(",")
+  const body = rows.map((row) =>
+    columns.map((column) => escapeCsv(csvValue(row[column]))).join(",")
+  )
+
+  return `\uFEFF${[header, ...body].join("\n")}`
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -151,25 +200,6 @@ serve(async (req) => {
       )
     }
 
-    const exportData: Record<string, unknown> = {
-      export_info: {
-        exported_at: new Date().toISOString(),
-        user_id: userId,
-        email: user.email,
-        role,
-        format_version: "1.1",
-      },
-      profile: profile || null,
-      trips: trips || [],
-      conversations: conversations || [],
-      messages: messages || [],
-      feedbacks: feedbacks || [],
-    }
-
-    if (role === "customer") {
-      exportData.claims = claims || []
-    }
-
     // Send data via email using SMTP
     const smtpHostname = Deno.env.get("SMTP_HOSTNAME")
     const smtpPort = Number(Deno.env.get("SMTP_PORT") || "465")
@@ -180,9 +210,85 @@ serve(async (req) => {
       throw new Error("Email service is not configured. Please contact support.")
     }
 
-    const jsonContent = JSON.stringify(exportData, null, 2)
     const encoder = new TextEncoder()
-    const jsonBytes = encoder.encode(jsonContent)
+
+    const profileRows = isRowRecord(profile) ? [profile] : []
+    const tripRows = asRowList(trips)
+    const conversationRows = asRowList(conversations)
+    const messageRows = asRowList(messages)
+    const feedbackRows = asRowList(feedbacks)
+    const claimRows = role === "customer" ? asRowList(claims) : []
+
+    const summaryLines = [
+      "PikUp Data Export Summary",
+      `Generated at: ${new Date().toISOString()}`,
+      `User ID: ${userId}`,
+      `Email: ${user.email ?? "unknown"}`,
+      `Role: ${role}`,
+      "",
+      `Profile records: ${profileRows.length}`,
+      `Trips: ${tripRows.length}`,
+      `Conversations: ${conversationRows.length}`,
+      `Messages: ${messageRows.length}`,
+      `Feedback entries: ${feedbackRows.length}`,
+    ]
+
+    if (role === "customer") {
+      summaryLines.push(`Claims: ${claimRows.length}`)
+    }
+
+    summaryLines.push(
+      "",
+      "Attached CSV files can be opened in Excel, Numbers, Google Sheets, or any text editor."
+    )
+
+    const attachments = [
+      {
+        filename: "pikup-export-summary.txt",
+        content: encoder.encode(summaryLines.join("\n")),
+        contentType: "text/plain; charset=utf-8",
+        encoding: "binary",
+      },
+      {
+        filename: "profile.csv",
+        content: encoder.encode(toCsv(profileRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      },
+      {
+        filename: "trips.csv",
+        content: encoder.encode(toCsv(tripRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      },
+      {
+        filename: "conversations.csv",
+        content: encoder.encode(toCsv(conversationRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      },
+      {
+        filename: "messages.csv",
+        content: encoder.encode(toCsv(messageRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      },
+      {
+        filename: "feedbacks.csv",
+        content: encoder.encode(toCsv(feedbackRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      },
+    ]
+
+    if (role === "customer") {
+      attachments.push({
+        filename: "claims.csv",
+        content: encoder.encode(toCsv(claimRows)),
+        contentType: "text/csv; charset=utf-8",
+        encoding: "binary",
+      })
+    }
 
     const client = new SMTPClient({
       connection: {
@@ -200,30 +306,24 @@ serve(async (req) => {
       await client.send({
         from: smtpUsername,
         to: user.email!,
-        subject: "Your PikUp Data Export",
+        subject: "Your PikUp Data Export (CSV)",
         html: `
           <h2>Your Data Export</h2>
           <p>Hi there,</p>
-          <p>You requested an export of your PikUp data. Please find the attached JSON file containing all your personal data.</p>
+          <p>You requested an export of your PikUp data.</p>
+          <p>We attached CSV files you can open in Excel, Google Sheets, or Numbers.</p>
           <p>This export includes your profile information, trip history, conversations, messages, and feedback.</p>
           <br/>
           <p>— The PikUp Team</p>
         `,
-        attachments: [
-          {
-            filename: `pikup-data-${Date.now()}.json`,
-            content: jsonBytes,
-            contentType: "application/json",
-            encoding: "binary",
-          },
-        ],
+        attachments,
       })
     } finally {
       await client.close()
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: "Data export sent to your email." }),
+      JSON.stringify({ success: true, message: "Data export email with CSV attachments sent." }),
       {
         headers: {
           ...corsHeaders,
