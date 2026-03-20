@@ -1,8 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Alert } from 'react-native';
 import Constants from 'expo-constants';
-import { logger } from '../../services/logger';
-import { requestUserDataExport } from '../../services/userDataExportService';
 
 export default function useCustomerSettingsData({
   navigation,
@@ -20,7 +17,6 @@ export default function useCustomerSettingsData({
       accountActivity: true,
     },
   });
-  const [downloadingData, setDownloadingData] = useState(false);
   const isDriver = userType === 'driver';
   const rootTabsRoute = isDriver ? 'DriverTabs' : 'CustomerTabs';
   const appVersion =
@@ -39,39 +35,13 @@ export default function useCustomerSettingsData({
     }));
   }, []);
 
-  const handleDownloadMyData = useCallback(async () => {
-    if (downloadingData) return;
-
-    Alert.alert(
-      'Download My Data',
-      "We'll send a copy of all your personal data to your email address. Continue?",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: async () => {
-            setDownloadingData(true);
-            try {
-              await requestUserDataExport({ role: isDriver ? 'driver' : 'customer' });
-
-              Alert.alert(
-                'Check Your Email',
-                'Your data export has been sent to your email address. It may take a few minutes to arrive.'
-              );
-            } catch (error) {
-              logger.error('CustomerSettingsData', 'Error requesting data export', error);
-              Alert.alert(
-                'Error',
-                error?.message || 'Failed to send your data. Please try again.'
-              );
-            } finally {
-              setDownloadingData(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [downloadingData, isDriver]);
+  const exportDataRow = useMemo(() => ({
+    icon: 'lock-closed-outline',
+    label: 'Export My Data',
+    subtitle: "Temporarily unavailable. We're working on it.",
+    disabled: true,
+    lock: true,
+  }), []);
 
   const accountRows = useMemo(() => {
     if (notificationsOnly) return [];
@@ -105,10 +75,7 @@ export default function useCustomerSettingsData({
         },
         {
           key: 'driver-export-data',
-          icon: 'mail-outline',
-          label: 'Export My Data',
-          onPress: handleDownloadMyData,
-          loading: downloadingData,
+          ...exportDataRow,
         },
       ];
     }
@@ -141,13 +108,10 @@ export default function useCustomerSettingsData({
       },
       {
         key: 'customer-export-data',
-        icon: 'mail-outline',
-        label: 'Export My Data',
-        onPress: handleDownloadMyData,
-        loading: downloadingData,
+        ...exportDataRow,
       },
     ];
-  }, [downloadingData, handleDownloadMyData, isDriver, navigation, notificationsOnly]);
+  }, [exportDataRow, isDriver, navigation, notificationsOnly]);
 
   const handleBackPress = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -161,7 +125,6 @@ export default function useCustomerSettingsData({
   return {
     accountRows,
     appVersion,
-    downloadingData,
     handleBackPress,
     notificationsOnly,
     settings,

@@ -44,32 +44,56 @@ export default function CustomerSettingsScreen({ navigation, route }) {
     rowKey,
     icon,
     label,
+    subtitle,
     onPress,
     loading = false,
     value,
+    disabled = false,
+    lock = false,
     isLast = false,
     isExternal = false,
   }) => (
     <TouchableOpacity
       key={rowKey}
-      style={[styles.row, isLast && styles.rowLast]}
-      onPress={onPress}
+      style={[
+        styles.row,
+        isLast && styles.rowLast,
+        (disabled || loading) && styles.rowDisabled,
+      ]}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled || loading}
       accessibilityRole="button"
+      accessibilityState={{ disabled: disabled || loading }}
     >
       <View style={styles.rowLeft}>
-        {icon ? <Ionicons name={icon} size={20} color={colors.primary} /> : null}
-        <Text style={styles.rowTitle}>{label}</Text>
+        {icon ? (
+          <Ionicons
+            name={icon}
+            size={20}
+            color={disabled ? colors.text.tertiary : colors.primary}
+          />
+        ) : null}
+        <View style={styles.rowText}>
+          <Text style={[styles.rowTitle, disabled && styles.rowTitleDisabled]}>{label}</Text>
+          {subtitle ? (
+            <Text style={[styles.rowSubtitle, disabled && styles.rowSubtitleDisabled]}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.rowRight}>
-        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+        {value ? (
+          <Text style={[styles.rowValue, disabled && styles.rowValueDisabled]}>{value}</Text>
+        ) : null}
         {loading ? (
           <ActivityIndicator size="small" color={colors.primary} />
         ) : (
           <Ionicons
-            name={isExternal ? "open-outline" : "chevron-forward"}
+            name={lock ? "lock-closed" : isExternal ? "open-outline" : "chevron-forward"}
             size={18}
-            color={colors.text.tertiary}
+            color={disabled ? colors.text.muted : colors.text.tertiary}
           />
         )}
       </View>

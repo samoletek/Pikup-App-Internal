@@ -49,27 +49,48 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.strong,
   },
+  rowDisabled: {
+    opacity: 0.72,
+  },
   rowLast: {
     borderBottomWidth: 0,
   },
   rowLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
+  },
+  rowText: {
+    flex: 1,
+    marginLeft: spacing.md,
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: spacing.sm,
   },
   rowTitle: {
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
-    marginLeft: spacing.md,
+  },
+  rowTitleDisabled: {
+    color: colors.text.secondary,
+  },
+  rowSubtitle: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  rowSubtitleDisabled: {
+    color: colors.text.muted,
   },
   rowValue: {
     color: colors.text.tertiary,
     fontSize: typography.fontSize.base,
     marginRight: spacing.xs,
+  },
+  rowValueDisabled: {
+    color: colors.text.muted,
   },
   switchRow: {
     minHeight: 72,
