@@ -230,7 +230,7 @@ NEW EDITS:
 - [x] AI screen copy: Rename `Identify with AI` action to `Scan`
 - [x] Location details logic: For `Store`, do not request `Building name` or `Unit number`
 
-- [ ] Fixes: Repair `Download my data`
+- [-] Fixes: Repair `Download my data`
 - [x] Fixes: Complete `Forgot password` backend flow so Supabase sends reset emails correctly
 
 ### Milestone 3 Deliverables
@@ -250,7 +250,7 @@ NEW EDITS:
 **Focus:** Driver screens, matching algorithm, payments, deployment
 
 ### Customer Flow - Account Screen
-- [ ] #57 Referral program with deep links (bluehost requires, domain setup for deeplinks)
+- [-] #57 Referral program with deep links (bluehost requires, domain setup for deeplinks)
 
 ### Driver Flow - Home Screen
 - [x] #62 Large buttons for driver (use while driving) - khan
