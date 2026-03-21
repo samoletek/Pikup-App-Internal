@@ -83,3 +83,30 @@ export const isActiveTripStatus = (status) => {
   const normalized = normalizeTripStatus(status);
   return ACTIVE_TRIP_STATUSES.includes(normalized);
 };
+
+export const getTripScheduledAtMs = (trip) => {
+  const rawScheduledTime = trip?.scheduledTime || trip?.scheduled_time || null;
+  if (!rawScheduledTime) {
+    return Number.NaN;
+  }
+
+  return new Date(rawScheduledTime).getTime();
+};
+
+export const isFutureScheduledTrip = (trip, nowDate = new Date()) => {
+  if (!trip) {
+    return false;
+  }
+
+  const normalizedStatus = normalizeTripStatus(trip.status);
+  if (normalizedStatus !== TRIP_STATUS.ACCEPTED && normalizedStatus !== TRIP_STATUS.PENDING) {
+    return false;
+  }
+
+  const scheduledAtMs = getTripScheduledAtMs(trip);
+  if (!Number.isFinite(scheduledAtMs)) {
+    return false;
+  }
+
+  return scheduledAtMs > nowDate.getTime();
+};

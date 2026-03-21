@@ -8,6 +8,8 @@ const REDKIK_CLIENT_ID = Deno.env.get("REDKIK_CLIENT_ID") ?? ""
 const REDKIK_CLIENT_SECRET = Deno.env.get("REDKIK_CLIENT_SECRET") ?? ""
 // Optional fallback customer id when setup API returns no registered customers.
 const REDKIK_ORG_ID = Deno.env.get("REDKIK_ORG_ID") ?? ""
+// Environment flag: "production" uses standard policy, anything else uses "PU Test" alias.
+const REDKIK_ENV = Deno.env.get("REDKIK_ENV") ?? ""
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,10 +97,14 @@ function storeTokens(data: Record<string, unknown>): string {
   cachedRefreshToken = (data.refresh_token || data.refreshToken || null) as string | null
 
   // Redkik returns expires_in in milliseconds (86400000 = 24h).
-  // If value > 10000 treat as ms, otherwise treat as seconds.
-  const rawExpires = (data.expires_in as number) || 3600000
-  const expiresInMs = rawExpires > 10000 ? rawExpires : rawExpires * 1000
-  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 1 min safety margin
+  // If value > MS_VS_SECONDS_THRESHOLD treat as ms, otherwise treat as seconds.
+  const DEFAULT_TOKEN_EXPIRES_MS = 3_600_000 // 1 hour
+  const MS_VS_SECONDS_THRESHOLD = 10_000
+  const TOKEN_REFRESH_MARGIN_MS = 60_000 // 1 min safety margin
+
+  const rawExpires = (data.expires_in as number) || DEFAULT_TOKEN_EXPIRES_MS
+  const expiresInMs = rawExpires > MS_VS_SECONDS_THRESHOLD ? rawExpires : rawExpires * 1000
+  tokenExpiresAt = Date.now() + expiresInMs - TOKEN_REFRESH_MARGIN_MS
 
   return token
 }
@@ -220,14 +226,91 @@ function getCurrencyDivider(setup: SetupData, currencyId: string): number {
   return c?.divisionModifier || 100
 }
 
-// Resolve first commodity ID (or find General Goods)
-function findDefaultCommodity(setup: SetupData): string {
+// ----- Commodity mapping -----
+
+// Keywords that indicate an item is "Home Electronics" rather than "General Merchandise".
+// Use word-boundary-safe terms to avoid false positives (e.g. "phone case" ≠ electronics).
+const ELECTRONICS_KEYWORDS = [
+  "tv", "television", "monitor", "laptop", "computer", "desktop", "tablet",
+  "smartphone", "iphone", "ipad", "macbook", "chromebook",
+  "smartwatch", "apple watch", "airpods", "earbuds", "headphones", "headset",
+  "soundbar", "home theater", "streaming device", "roku", "fire stick", "apple tv",
+  "smart thermostat", "smart doorbell", "security camera", "smart speaker", "echo dot",
+  "google home", "google nest", "ring doorbell",
+  "playstation", "xbox", "nintendo switch", "game console", "vr headset",
+  "gopro", "drone", "digital camera", "action cam",
+]
+
+const ELECTRONICS_CATEGORIES = [
+  "electronics", "computers", "phones", "gaming", "smart home",
+  "audio", "photography", "mobile",
+]
+
+function isElectronicsItem(item: QuoteItem): boolean {
+  const name = (item.name || "").toLowerCase()
+  const category = (item.category || "").toLowerCase()
+  const description = (item.description || "").toLowerCase()
+  const text = `${name} ${description}`
+
+  if (ELECTRONICS_CATEGORIES.some((cat) => category.includes(cat))) return true
+  if (ELECTRONICS_KEYWORDS.some((kw) => text.includes(kw))) return true
+  return false
+}
+
+// Value limits per commodity type
+const VALUE_LIMITS = {
+  general: { min: 1, max: 8000 },
+  electronics: { min: 1, max: 4000 },
+}
+
+// Minimum premium Redkik charges for either commodity type
+const REDKIK_MINIMUM_PREMIUM = 11.00
+
+// Service fee rules applied on top of the Redkik premium
+const SERVICE_FEE_MINIMUM = 1.99
+const SERVICE_FEE_PERCENT = 0.18 // 18%
+
+// Minimum insured value sent to Redkik (in cents) — $1.00
+const MIN_INSURED_VALUE_CENTS = 100
+
+// Trip duration constants for insurance coverage window
+const TRIP_DURATION_BUFFER_MINUTES = 120 // 2h buffer added to trip duration
+const TRIP_DURATION_FALLBACK_MS = 6 * 60 * 60 * 1000 // 6h default when no duration provided
+
+// Redkik transport type enum
+const TRANSPORT_TYPE_ROAD = 1
+
+function findCommodityId(setup: SetupData, type: "general" | "electronics"): string {
+  if (type === "electronics") {
+    const elec = setup.commodities.find(
+      (c) => c.name.toLowerCase().includes("electronic") || c.name.toLowerCase().includes("home electronics")
+    )
+    if (elec) return elec.id
+  }
   const general = setup.commodities.find(
     (c) => c.name.toLowerCase().includes("general")
   )
   if (general) return general.id
   if (setup.commodities.length > 0) return setup.commodities[0].id
-  return "ebe38cf9-df60-4f69-9210-a439981e6989"
+  throw new Error("Redkik setup returned no commodities — cannot build quote payload")
+}
+
+function findPolicyByAlias(setup: SetupData, alias: string): string | null {
+  const policy = setup.policies.find(
+    (p) => p.alias.toLowerCase().includes(alias.toLowerCase())
+  )
+  return policy?.id || null
+}
+
+function calculateServiceFee(redkikPremium: number): number {
+  if (redkikPremium <= REDKIK_MINIMUM_PREMIUM) {
+    return SERVICE_FEE_MINIMUM
+  }
+  return Math.round(redkikPremium * SERVICE_FEE_PERCENT * 100) / 100
+}
+
+function calculateTotalInsuranceCost(redkikPremium: number): number {
+  return Math.round((redkikPremium + calculateServiceFee(redkikPremium)) * 100) / 100
 }
 
 // Find a pre-registered customer or return the first available
@@ -244,6 +327,7 @@ interface QuoteItem {
   value?: number
   weight?: number
   condition?: string
+  category?: string
 }
 
 interface QuoteParams {
@@ -282,11 +366,31 @@ interface RedkikRequestBody {
   bookingId?: string
 }
 
+interface ValueValidationResult {
+  valid: boolean
+  errors: string[]
+}
+
+function validateItemValues(items: QuoteItem[]): ValueValidationResult {
+  const errors: string[] = []
+  for (const item of items) {
+    const value = Number(item.value) || 0
+    if (value <= 0) continue
+    const isElec = isElectronicsItem(item)
+    const limits = isElec ? VALUE_LIMITS.electronics : VALUE_LIMITS.general
+    const label = item.name || "Item"
+    if (value < limits.min) {
+      errors.push(`${label}: value $${value} is below minimum $${limits.min}`)
+    }
+    if (value > limits.max) {
+      errors.push(`${label}: value $${value} exceeds maximum $${limits.max} for ${isElec ? "electronics" : "general merchandise"}`)
+    }
+  }
+  return { valid: errors.length === 0, errors }
+}
+
 function buildQuotePayload(params: QuoteParams, setup: SetupData) {
-  const totalValue = (params.items || []).reduce(
-    (sum, item) => sum + (Number(item.value) || 0),
-    0
-  )
+  const items = params.items || []
 
   const now = new Date()
   const startMs = params.scheduledTime
@@ -294,34 +398,81 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     : now.getTime()
   const startDate = new Date(startMs).toISOString()
 
-  // End date: trip duration (with 2h buffer) or fallback 6h from start
+  // End date: trip duration (with buffer) or fallback from start
   const tripDurationMs = params.durationMinutes
-    ? (params.durationMinutes + 120) * 60 * 1000
-    : 6 * 60 * 60 * 1000
+    ? (params.durationMinutes + TRIP_DURATION_BUFFER_MINUTES) * 60 * 1000
+    : TRIP_DURATION_FALLBACK_MS
   const endDate = new Date(startMs + tripDurationMs).toISOString()
 
-  const commodityDescription = (params.items || [])
+  const commodityDescription = items
     .map((i) => i.name || "Item")
     .join(", ")
 
-  const commodityId = findDefaultCommodity(setup)
   const currencyId = setup.defaultCurrencyId || "USD"
-  const insuredValue = Math.max(Math.round(totalValue * 100), 100)
+
+  // Split items into General Merchandise vs Home Electronics
+  const generalItems = items.filter((i) => !isElectronicsItem(i))
+  const electronicsItems = items.filter((i) => isElectronicsItem(i))
+
+  const generalCommodityId = findCommodityId(setup, "general")
+  const electronicsCommodityId = findCommodityId(setup, "electronics")
+
+  // If Redkik has no separate electronics commodity, both resolve to the same ID.
+  // In that case, merge all items into one commodity to avoid duplicate entries.
+  const hasSeparateElectronics = electronicsCommodityId !== generalCommodityId
+
+  const commodities: Array<{ commodityId: string; insuredValue: number; currencyId: string }> = []
+
+  if (!hasSeparateElectronics) {
+    // No separate electronics commodity — send everything under general
+    const totalValue = items.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
+    commodities.push({
+      commodityId: generalCommodityId,
+      insuredValue: Math.max(Math.round(totalValue * 100), MIN_INSURED_VALUE_CENTS),
+      currencyId,
+    })
+  } else {
+    if (generalItems.length > 0) {
+      const generalValue = generalItems.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
+      commodities.push({
+        commodityId: generalCommodityId,
+        insuredValue: Math.max(Math.round(generalValue * 100), MIN_INSURED_VALUE_CENTS),
+        currencyId,
+      })
+    }
+
+    if (electronicsItems.length > 0) {
+      const electronicsValue = electronicsItems.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
+      commodities.push({
+        commodityId: electronicsCommodityId,
+        insuredValue: Math.max(Math.round(electronicsValue * 100), MIN_INSURED_VALUE_CENTS),
+        currencyId,
+      })
+    }
+  }
+
+  // Fallback: if no commodities were built (shouldn't happen), use default
+  if (commodities.length === 0) {
+    const totalValue = items.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
+    commodities.push({
+      commodityId: generalCommodityId,
+      insuredValue: Math.max(Math.round(totalValue * 100), MIN_INSURED_VALUE_CENTS),
+      currencyId,
+    })
+  }
+
+  const totalInsuredValue = commodities.reduce((sum, c) => sum + c.insuredValue, 0)
 
   const payload: Record<string, unknown> = {
     isPublic: false,
-    commodities: [{
-      commodityId,
-      insuredValue,
-      currencyId,
-    }],
+    commodities,
     commodityDescription,
-    insuredValue,
+    insuredValue: totalInsuredValue,
     originFormatted: params.pickup?.address || "",
     destinationFormatted: params.dropoff?.address || "",
     startDate,
     endDate,
-    transportType: 1, // ROAD per Redkik docs
+    transportType: TRANSPORT_TYPE_ROAD,
   }
 
   // Use pre-registered customer from setup, or org UUID as fallback
@@ -332,8 +483,12 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     payload.customerId = REDKIK_ORG_ID
   }
 
-  // Attach policy if available from setup
-  if (setup.policies.length > 0) {
+  // Policy selection: prefer "PU Test" in test/dev environments, otherwise first available.
+  const isProductionEnv = REDKIK_ENV === "production" || REDKIK_BASE_URL.includes("sales.app.redkik.com")
+  const testPolicyId = !isProductionEnv ? findPolicyByAlias(setup, "PU Test") : null
+  if (testPolicyId) {
+    payload.policyId = testPolicyId
+  } else if (setup.policies.length > 0) {
     payload.policyId = setup.policies[0].id
   }
 
@@ -525,12 +680,22 @@ serve(async (req) => {
           return jsonResponse({ error: "Items must have a positive total value for insurance" }, 400)
         }
 
+        // Step 0: Validate item values against commodity limits
+        const validation = validateItemValues(items as QuoteItem[])
+        if (!validation.valid) {
+          return jsonResponse({
+            error: "Item values out of insurable range",
+            code: "VALUE_OUT_OF_RANGE",
+            validationErrors: validation.errors,
+          }, 400)
+        }
+
         // Step 1: Get setup data (cached) for correct UUIDs
         const setup = await getSetupData(token)
 
-        // Step 2: Request quote with correct payload
+        // Step 2: Request quote with correct payload (multi-commodity)
         const quoteResponse = await requestQuote(token, {
-          items, pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName,
+          items: items as QuoteItem[], pickup, dropoff, scheduledTime, durationMinutes, customerEmail, customerName,
         }, setup)
 
         // Response is an array of offers — take the first accepted one
@@ -554,7 +719,7 @@ serve(async (req) => {
         const divider = Number(
           acceptedOffer.currencyDivisionModifier || getCurrencyDivider(setup, setup.defaultCurrencyId)
         )
-        const premium = Number(acceptedOffer.totalCost || 0) / divider
+        const redkikPremium = Number(acceptedOffer.totalCost || 0) / divider
 
         if (!offerId) {
           console.error("Redkik offer missing id:", JSON.stringify(acceptedOffer))
@@ -563,7 +728,7 @@ serve(async (req) => {
             502
           )
         }
-        if (premium <= 0) {
+        if (redkikPremium <= 0) {
           console.error("Redkik offer zero premium:", JSON.stringify(acceptedOffer))
           return jsonResponse(
             { error: "Insurance quote returned invalid premium", code: "INVALID_PREMIUM" },
@@ -571,9 +736,15 @@ serve(async (req) => {
           )
         }
 
+        // Step 4: Calculate service fee and total insurance cost
+        const serviceFee = calculateServiceFee(redkikPremium)
+        const totalInsuranceCost = calculateTotalInsuranceCost(redkikPremium)
+
         return jsonResponse({
           offerId,
-          premium,
+          premium: totalInsuranceCost,
+          redkikPremium,
+          serviceFee,
           canPurchase: !blocked,
           amendments: amendments.map((a) => ({
             type: a.type || "info",
@@ -584,7 +755,9 @@ serve(async (req) => {
             insurerPremium: Number(acceptedOffer.insurerPremium || 0) / divider,
             technologyFee: Number(acceptedOffer.technologyFee || 0) / divider,
             bookingFee: Number(acceptedOffer.bookingFee || 0) / divider,
-            totalCost: premium,
+            redkikPremium,
+            serviceFee,
+            totalCost: totalInsuranceCost,
             deductibles: Array.isArray(acceptedOffer.deductibles) ? acceptedOffer.deductibles : [],
             accepted: Boolean(acceptedOffer.accepted),
             currencySymbol: String(acceptedOffer.currencySymbol || "$"),

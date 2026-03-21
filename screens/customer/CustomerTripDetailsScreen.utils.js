@@ -70,7 +70,14 @@ export const toDisplayTrip = (trip, fallback) => {
     source.createdAt || source.created_at || source.timestamp || source.date || null;
 
   const status = normalizeTripStatus(source.status);
-  const meta = statusMeta(status);
+  const scheduledTime = source.scheduledTime || source.scheduled_time || null;
+  const scheduledAtMs = new Date(scheduledTime || '').getTime();
+  const isScheduledFuture = (
+    Number.isFinite(scheduledAtMs) &&
+    scheduledAtMs > Date.now() &&
+    (status === 'accepted' || status === 'pending')
+  );
+  const meta = statusMeta(status, { isScheduledFuture });
   const id = String(source.id || fallback?.id || "Unknown");
 
   const driverDisplay = resolveDriverDisplayFromRequest(source, {
@@ -102,7 +109,7 @@ export const toDisplayTrip = (trip, fallback) => {
     pickupAddress,
     dropoffAddress,
     vehicleType: firstText(source.vehicleType, source.vehicle?.type) || "Vehicle",
-    scheduleLabel: formatScheduleLabel(source.scheduledTime || source.scheduled_time),
+    scheduleLabel: formatScheduleLabel(scheduledTime),
     itemsCount,
     itemDescription: primaryItem,
     driverName,

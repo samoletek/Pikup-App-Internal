@@ -15,13 +15,29 @@ import MediaViewer from "../../components/MediaViewer";
 import ScreenHeader from "../../components/ScreenHeader";
 import ChatMessageItem from "../../components/messages/ChatMessageItem";
 import { getMessageMediaType } from "../../components/messages/messageMediaUtils";
-import { useAuthIdentity, useMessagingActions } from "../../contexts/AuthContext";
+import {
+  useAuthIdentity,
+  useMessagingActions,
+  useProfileActions,
+} from "../../contexts/AuthContext";
 import useConversationMessages from "../../hooks/useConversationMessages";
 import useKeyboardHeight from "../../hooks/useKeyboardHeight";
 import useMessageComposer from "../../hooks/useMessageComposer";
 import useMessageMediaSizing from "../../hooks/useMessageMediaSizing";
 import styles from "./MessageScreen.styles";
 import { colors, layout, spacing } from "../../styles/theme";
+import { resolveDisplayNameFromUser } from "../../utils/participantIdentity";
+
+const isGenericChatTitle = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized === "chat" ||
+    normalized === "customer" ||
+    normalized === "driver" ||
+    normalized === "not assigned"
+  );
+};
 
 export default function MessageScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -33,12 +49,28 @@ export default function MessageScreen({ navigation, route }) {
     markMessageAsRead,
     loadOlderMessages,
   } = useMessagingActions();
+  const { getUserProfile } = useProfileActions();
 
-  const { conversationId, driverName, customerName, driverInfo } = route.params || {};
+  const {
+    conversationId,
+    requestId,
+    driverName,
+    customerName,
+    driverInfo,
+    driverId,
+    customerId,
+    peerId,
+    peerName,
+  } = route.params || {};
   const hasConversationId = Boolean(conversationId);
-  const title = driverName || customerName || driverInfo?.name || "Chat";
+  const title = peerName || driverName || customerName || driverInfo?.name || "Chat";
+  const [headerTitle, setHeaderTitle] = useState(title);
   const currentUserId = currentUser?.uid || currentUser?.id;
   const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const profilePeerId =
+    userType === "driver"
+      ? customerId || peerId
+      : driverId || peerId;
 
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerMediaUri, setViewerMediaUri] = useState(null);
@@ -101,6 +133,49 @@ export default function MessageScreen({ navigation, route }) {
     );
   }, [hasConversationId]);
 
+  useEffect(() => {
+    setHeaderTitle(title);
+  }, [title]);
+
+  useEffect(() => {
+    if (!profilePeerId || typeof getUserProfile !== "function") {
+      return undefined;
+    }
+
+    if (!isGenericChatTitle(headerTitle)) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadPeerName = async () => {
+      try {
+        const profile = await getUserProfile(profilePeerId, {
+          requestId: requestId || undefined,
+        });
+        if (isCancelled) {
+          return;
+        }
+
+        const fallback = userType === "driver" ? "Customer" : "Driver";
+        const resolvedName = resolveDisplayNameFromUser(profile, fallback);
+        if (!isGenericChatTitle(resolvedName)) {
+          setHeaderTitle(resolvedName);
+        }
+      } catch (_error) {
+        if (isCancelled) {
+          return;
+        }
+      }
+    };
+
+    loadPeerName();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [getUserProfile, headerTitle, profilePeerId, requestId, userType]);
+
   const openMediaViewer = useCallback((mediaUri, mediaType) => {
     if (!mediaUri) {
       return;
@@ -148,7 +223,7 @@ export default function MessageScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        title={title}
+        title={headerTitle}
         onBack={() => navigation.goBack()}
         topInset={insets.top}
         showBack

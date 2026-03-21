@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
 import { logger } from '../services/logger';
 import { subscribeToTripUpdates } from '../services/tripRealtimeService';
@@ -9,7 +9,9 @@ import {
 } from '../screens/customer/CustomerTripDetailsScreen.utils';
 
 export default function useCustomerTripDetailsData({
+  currentUser,
   getRequestById,
+  getUserProfile,
   initialSnapshot,
   isMockTrip,
   tripId,
@@ -20,10 +22,12 @@ export default function useCustomerTripDetailsData({
   const [refreshing, setRefreshing] = useState(false);
   const [pickupPhotoUris, setPickupPhotoUris] = useState([]);
   const [dropoffPhotoUris, setDropoffPhotoUris] = useState([]);
+  const [driverProfile, setDriverProfile] = useState(null);
+  const driverProfileCacheRef = useRef(new Map());
 
   const displayTrip = useMemo(
-    () => toDisplayTrip(tripData, tripSummary),
-    [tripData, tripSummary]
+    () => toDisplayTrip(tripData, tripSummary, { currentUser, driverProfile }),
+    [currentUser, driverProfile, tripData, tripSummary]
   );
 
   const loadTrip = useCallback(
@@ -114,6 +118,50 @@ export default function useCustomerTripDetailsData({
       clearInterval(intervalId);
     };
   }, [tripId, isMockTrip, displayTrip.status, loadTrip]);
+
+  useEffect(() => {
+    const driverId = displayTrip.driverId ? String(displayTrip.driverId) : "";
+
+    if (!driverId || typeof getUserProfile !== "function") {
+      setDriverProfile(null);
+      return undefined;
+    }
+
+    if (driverProfileCacheRef.current.has(driverId)) {
+      setDriverProfile(driverProfileCacheRef.current.get(driverId));
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadDriverProfile = async () => {
+      try {
+        const profile = await getUserProfile(driverId, {
+          requestId: tripId || undefined,
+        });
+        if (isCancelled) {
+          return;
+        }
+
+        const normalizedProfile = profile || null;
+        driverProfileCacheRef.current.set(driverId, normalizedProfile);
+        setDriverProfile(normalizedProfile);
+      } catch (_error) {
+        if (isCancelled) {
+          return;
+        }
+
+        driverProfileCacheRef.current.set(driverId, null);
+        setDriverProfile(null);
+      }
+    };
+
+    loadDriverProfile();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [displayTrip.driverId, getUserProfile, tripId]);
 
   useEffect(() => {
     let isCancelled = false;

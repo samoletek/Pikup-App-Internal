@@ -21,6 +21,7 @@ import {
   fetchCustomersByIds,
   fetchDriverMetadata,
   fetchPendingTrips,
+  fetchTripsByDriverAndStatuses,
 } from './repositories/tripRepository';
 
 const resolveDriverLocation = (rawLocation) => {
@@ -36,6 +37,15 @@ const resolveDriverLocation = (rawLocation) => {
     stateCode: stateCode || null,
   };
 };
+
+const ACTIVE_DRIVER_STATUSES_FOR_SCHEDULE_CONFLICT = Object.freeze([
+  'accepted',
+  'in_progress',
+  'arrived_at_pickup',
+  'picked_up',
+  'en_route_to_dropoff',
+  'arrived_at_dropoff',
+]);
 
 const loadDriverProfileData = async (driverId) => {
   if (!driverId) {
@@ -61,6 +71,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
     filteredByTimeWindowCount,
     filteredByAssignedDriverCount,
     filteredByPreferenceCount,
+    filteredByScheduleConflictCount,
     filteredByStateCount,
     driverStateRestricted,
   } = stats;
@@ -78,6 +89,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
     filteredByDistanceCount > 0 ||
     filteredByTimeWindowCount > 0 ||
     filteredByAssignedDriverCount > 0 ||
+    filteredByScheduleConflictCount > 0 ||
     filteredByStateCount > 0 ||
     driverStateRestricted
   ) {
@@ -86,6 +98,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
       filteredByDistanceCount,
       filteredByTimeWindowCount,
       filteredByAssignedDriverCount,
+      filteredByScheduleConflictCount,
       filteredByStateCount,
       driverStateRestricted,
     });
@@ -137,12 +150,29 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
   const driverId = currentUser?.uid || currentUser?.id;
   const { mergedPreferences } = await loadDriverProfileData(driverId);
   const driverStateCode = resolveLocationStateCode(driverLocation);
+  const { data: activeDriverRows, error: activeDriverTripsError } = await fetchTripsByDriverAndStatuses({
+    driverId,
+    statuses: [...ACTIVE_DRIVER_STATUSES_FOR_SCHEDULE_CONFLICT],
+    columns: '*',
+  });
+
+  if (activeDriverTripsError) {
+    logger.warn(
+      'TripDriverAvailability',
+      'Unable to load active driver trips for schedule conflict filtering',
+      activeDriverTripsError
+    );
+  }
+  const driverActiveTrips = Array.isArray(activeDriverRows)
+    ? activeDriverRows.map(mapTripFromDb)
+    : [];
 
   const { hiddenReasonCounts, stats, sortedTrips } = filterTripsForAvailability({
     trips,
     requestPool,
     driverLocation,
     driverId,
+    driverActiveTrips,
     mergedPreferences,
     driverStateCode,
     supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,

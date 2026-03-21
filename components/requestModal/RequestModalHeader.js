@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../styles/theme';
 
 export default function RequestModalHeader({
+  title = 'Available Requests',
+  countLabel,
   requestsCount,
   onClose,
   panHandlers,
@@ -16,16 +18,14 @@ export default function RequestModalHeader({
         <View style={styles.modalHandle} />
       </View>
       <View style={styles.headerContent}>
-        <Text style={styles.modalTitle}>Available Requests</Text>
+        <Text style={styles.modalTitle}>{title}</Text>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <Ionicons name="close" size={24} color={colors.white} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.countContainer}>
-        <Text style={styles.countText}>
-          {requestsCount} request{requestsCount !== 1 ? 's' : ''} nearby
-        </Text>
+        <Text style={styles.countText}>{countLabel || `${requestsCount} request${requestsCount !== 1 ? 's' : ''} nearby`}</Text>
       </View>
     </View>
   );

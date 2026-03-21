@@ -261,8 +261,9 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         : (options.laborOptions?.items || []);
     const hasInsuredNewItem = pricingItems.some(isItemEligibleForInsurance);
     const serviceFeePercent = platformFees.serviceFeePercent || 0.25;
-    // Flat insurance rate shown before Redkik quote arrives (replaced by actual Redkik premium at checkout).
-    // The technology fee inside the Redkik premium is Pikup's revenue — no extra spread needed.
+    // Flat insurance estimate shown before Redkik quote arrives.
+    // Replaced by actual Redkik premium + service fee at checkout.
+    // Default: $11 Redkik minimum + $1.99 processing fee = $12.99
     const mandatoryInsurance = hasInsuredNewItem
         ? (platformFees.mandatoryInsurance || 12.99)
         : 0;

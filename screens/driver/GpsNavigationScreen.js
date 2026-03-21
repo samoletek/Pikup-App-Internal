@@ -29,7 +29,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { currentUser, userType } = useAuthIdentity();
-  const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus } = useTripActions();
+  const { startDriving, arriveAtPickup, getRequestById, updateDriverLocation } = useTripActions();
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
   const { getUserProfile } = useProfileActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
@@ -68,7 +68,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     request,
     getRequestById,
     startDriving,
-    updateDriverStatus,
+    updateDriverLocation,
     applyRouteSteps,
     routeSteps,
     currentStepIndex,
@@ -124,6 +124,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
   const {
     customerAvatarUrl,
+    customerDisplayName,
     setCustomerAvatarUrl,
   } = useCustomerAvatarFromTripRequest({
     requestData,
@@ -189,7 +190,11 @@ export default function GpsNavigationScreen({ route, navigation }) {
     requestData,
     routeRequest: route.params?.request,
     getRequestById,
+    getUserProfile,
     currentUserId,
+    customerIdHint: activeRequestCustomerId,
+    driverIdHint: activeRequestDriverId,
+    customerNameHint: customerDisplayName,
     createConversation,
     navigation,
     clearUnread: () => setHasUnreadChat(false),
@@ -251,6 +256,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
       cardGradientColors={cardGradientColors}
       estimatedTime={estimatedTime}
       requestData={requestData}
+      customerName={customerDisplayName}
       customerAvatarUrl={customerAvatarUrl}
       onCustomerAvatarError={() => setCustomerAvatarUrl(null)}
       openChat={openChat}

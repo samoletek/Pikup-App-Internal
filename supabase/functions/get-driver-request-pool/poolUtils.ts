@@ -935,6 +935,110 @@ export const toTimestampOrInfinity = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY
 }
 
+const getPositiveMinutes = (value: unknown): number | null => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null
+  }
+  return Math.round(parsed)
+}
+
+export const resolveTripEstimatedDurationMinutes = (trip: AnyRecord = {}) => {
+  const requirements = resolveDispatchRequirements(trip)
+  const pickupDetails = getTripPickupDetails(trip)
+  const dropoffDetails = getTripDropoffDetails(trip)
+  const items = getTripItems(trip)
+  const distanceMiles = Math.max(
+    0,
+    toNumber(
+      requirements?.estimatedDistanceMiles ??
+        trip?.pricing?.distance ??
+        trip?.distance ??
+        trip?.distance_miles,
+      0
+    )
+  )
+
+  const explicitDurationMinutes =
+    getPositiveMinutes(requirements?.estimatedDurationMinutes) ||
+    getPositiveMinutes(
+      trip?.durationMinutes ??
+        trip?.duration_minutes ??
+        trip?.duration ??
+        pickupDetails?.estimatedDurationMinutes
+    )
+
+  if (explicitDurationMinutes) {
+    return Math.min(Math.max(explicitDurationMinutes, 30), 240)
+  }
+
+  const helpRequested = Boolean(
+    pickupDetails?.driverHelpsLoading ||
+      pickupDetails?.driverHelp ||
+      dropoffDetails?.driverHelpsUnloading ||
+      dropoffDetails?.driverHelp
+  )
+  const itemCount = Math.max(items.length, 1)
+  const estimated = Math.round(
+    25 + (distanceMiles * 4) + (Math.min(itemCount, 8) * 3) + (helpRequested ? 20 : 0)
+  )
+  return Math.min(Math.max(estimated, 30), 240)
+}
+
+export const resolveTripScheduleWindow = (trip: AnyRecord = {}) => {
+  const scheduledTimeRaw = trip?.scheduledTime || trip?.scheduled_time || null
+  const scheduledAtMs = Number(new Date(String(scheduledTimeRaw || "")).getTime())
+  if (!Number.isFinite(scheduledAtMs)) {
+    return null
+  }
+
+  const requirements = resolveDispatchRequirements(trip)
+  const distanceMiles = Math.max(
+    0,
+    toNumber(
+      requirements?.estimatedDistanceMiles ??
+        trip?.pricing?.distance ??
+        trip?.distance ??
+        trip?.distance_miles,
+      0
+    )
+  )
+  const leadMinutes = Math.min(Math.max(Math.round(distanceMiles * 2), 10), 90)
+  const durationMinutes = resolveTripEstimatedDurationMinutes(trip)
+  const bufferMinutes = 10
+
+  const startMs = scheduledAtMs - ((leadMinutes + bufferMinutes) * 60 * 1000)
+  const endMs = scheduledAtMs + ((durationMinutes + bufferMinutes) * 60 * 1000)
+
+  return {
+    startMs,
+    endMs,
+  }
+}
+
+export const hasTripScheduleConflict = (
+  candidateTrip: AnyRecord,
+  acceptedTrips: AnyRecord[] = []
+) => {
+  const candidateWindow = resolveTripScheduleWindow(candidateTrip)
+  if (!candidateWindow) {
+    return false
+  }
+
+  return acceptedTrips.some((acceptedTrip) => {
+    if (!acceptedTrip || String(acceptedTrip.id || "") === String(candidateTrip.id || "")) {
+      return false
+    }
+    const acceptedWindow = resolveTripScheduleWindow(acceptedTrip)
+    if (!acceptedWindow) {
+      return false
+    }
+
+    return candidateWindow.startMs < acceptedWindow.endMs &&
+      acceptedWindow.startMs < candidateWindow.endMs
+  })
+}
+
 export const getRequestDistanceLimitMiles = (requestPool: string, scheduleType: string) => {
   if (requestPool === REQUEST_POOLS.ASAP || requestPool === REQUEST_POOLS.SCHEDULED) {
     return MAX_REQUEST_DISTANCE_BY_POOL_MILES[requestPool as keyof typeof MAX_REQUEST_DISTANCE_BY_POOL_MILES]

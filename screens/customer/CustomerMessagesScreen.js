@@ -71,6 +71,15 @@ export default function CustomerMessagesScreen({ navigation }) {
   }, [currentUserId, getConversations]);
 
   const loadPeerProfiles = useCallback(async () => {
+    const requestIdByPeerId = new Map();
+    conversations.forEach((conversation) => {
+      const peerId = conversation.driverId;
+      const requestId = conversation.requestId;
+      if (peerId && requestId && !requestIdByPeerId.has(peerId)) {
+        requestIdByPeerId.set(peerId, requestId);
+      }
+    });
+
     const peerIds = Array.from(
       new Set(
         conversations
@@ -98,7 +107,9 @@ export default function CustomerMessagesScreen({ navigation }) {
         }
 
         try {
-          const profile = await getUserProfile(id);
+          const profile = await getUserProfile(id, {
+            requestId: requestIdByPeerId.get(id) || undefined,
+          });
           return [id, profile];
         } catch (error) {
           logger.error("CustomerMessagesScreen", "Error loading peer profile", { id, error });

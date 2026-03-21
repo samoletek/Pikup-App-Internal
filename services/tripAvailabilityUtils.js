@@ -1,5 +1,6 @@
 import { evaluateTripForDriverPreferences, resolveDispatchRequirements } from './DispatchMatchingService';
 import {
+    hasScheduledTripConflict,
     REQUEST_POOLS,
     isTripOutsideDistanceWindow,
     isTripOutsideScheduledWindow,
@@ -20,6 +21,7 @@ export const filterTripsForAvailability = ({
     requestPool,
     driverLocation,
     driverId,
+    driverActiveTrips = [],
     mergedPreferences,
     driverStateCode = null,
     supportedStateCodes = SUPPORTED_ORDER_STATE_CODES,
@@ -31,6 +33,7 @@ export const filterTripsForAvailability = ({
     let filteredByTimeWindowCount = 0;
     let filteredByAssignedDriverCount = 0;
     let filteredByPreferenceCount = 0;
+    let filteredByScheduleConflictCount = 0;
     let filteredByStateCount = 0;
 
     const isDriverStateAllowed = isSupportedOrderStateCode(
@@ -47,6 +50,7 @@ export const filterTripsForAvailability = ({
                 filteredByTimeWindowCount,
                 filteredByAssignedDriverCount,
                 filteredByPreferenceCount,
+                filteredByScheduleConflictCount,
                 filteredByStateCount: (trips || []).length,
                 driverStateRestricted: true,
             },
@@ -107,6 +111,21 @@ export const filterTripsForAvailability = ({
             return;
         }
 
+        if (
+            normalizedRequirements.scheduleType === REQUEST_POOLS.SCHEDULED &&
+            hasScheduledTripConflict({
+                candidateTrip: normalizedTrip,
+                candidateRequirements: normalizedRequirements,
+                driverActiveTrips,
+            })
+        ) {
+            filteredByScheduleConflictCount += 1;
+            hiddenReasonCounts.blocked_schedule_conflict = (
+                hiddenReasonCounts.blocked_schedule_conflict || 0
+            ) + 1;
+            return;
+        }
+
         if (!mergedPreferences) {
             filteredTrips.push(normalizedTrip);
             return;
@@ -135,6 +154,7 @@ export const filterTripsForAvailability = ({
             filteredByTimeWindowCount,
             filteredByAssignedDriverCount,
             filteredByPreferenceCount,
+            filteredByScheduleConflictCount,
             filteredByStateCount,
             driverStateRestricted: false,
         },
