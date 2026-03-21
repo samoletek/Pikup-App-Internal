@@ -8,6 +8,8 @@ const REDKIK_CLIENT_ID = Deno.env.get("REDKIK_CLIENT_ID") ?? ""
 const REDKIK_CLIENT_SECRET = Deno.env.get("REDKIK_CLIENT_SECRET") ?? ""
 // Optional fallback customer id when setup API returns no registered customers.
 const REDKIK_ORG_ID = Deno.env.get("REDKIK_ORG_ID") ?? ""
+// Environment flag: "production" uses standard policy, anything else uses "PU Test" alias.
+const REDKIK_ENV = Deno.env.get("REDKIK_ENV") ?? ""
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,10 +97,14 @@ function storeTokens(data: Record<string, unknown>): string {
   cachedRefreshToken = (data.refresh_token || data.refreshToken || null) as string | null
 
   // Redkik returns expires_in in milliseconds (86400000 = 24h).
-  // If value > 10000 treat as ms, otherwise treat as seconds.
-  const rawExpires = (data.expires_in as number) || 3600000
-  const expiresInMs = rawExpires > 10000 ? rawExpires : rawExpires * 1000
-  tokenExpiresAt = Date.now() + expiresInMs - 60_000 // 1 min safety margin
+  // If value > MS_VS_SECONDS_THRESHOLD treat as ms, otherwise treat as seconds.
+  const DEFAULT_TOKEN_EXPIRES_MS = 3_600_000 // 1 hour
+  const MS_VS_SECONDS_THRESHOLD = 10_000
+  const TOKEN_REFRESH_MARGIN_MS = 60_000 // 1 min safety margin
+
+  const rawExpires = (data.expires_in as number) || DEFAULT_TOKEN_EXPIRES_MS
+  const expiresInMs = rawExpires > MS_VS_SECONDS_THRESHOLD ? rawExpires : rawExpires * 1000
+  tokenExpiresAt = Date.now() + expiresInMs - TOKEN_REFRESH_MARGIN_MS
 
   return token
 }
@@ -264,6 +270,16 @@ const REDKIK_MINIMUM_PREMIUM = 11.00
 const SERVICE_FEE_MINIMUM = 1.99
 const SERVICE_FEE_PERCENT = 0.18 // 18%
 
+// Minimum insured value sent to Redkik (in cents) — $1.00
+const MIN_INSURED_VALUE_CENTS = 100
+
+// Trip duration constants for insurance coverage window
+const TRIP_DURATION_BUFFER_MINUTES = 120 // 2h buffer added to trip duration
+const TRIP_DURATION_FALLBACK_MS = 6 * 60 * 60 * 1000 // 6h default when no duration provided
+
+// Redkik transport type enum
+const TRANSPORT_TYPE_ROAD = 1
+
 function findCommodityId(setup: SetupData, type: "general" | "electronics"): string {
   if (type === "electronics") {
     const elec = setup.commodities.find(
@@ -276,7 +292,7 @@ function findCommodityId(setup: SetupData, type: "general" | "electronics"): str
   )
   if (general) return general.id
   if (setup.commodities.length > 0) return setup.commodities[0].id
-  return "ebe38cf9-df60-4f69-9210-a439981e6989"
+  throw new Error("Redkik setup returned no commodities — cannot build quote payload")
 }
 
 function findPolicyByAlias(setup: SetupData, alias: string): string | null {
@@ -382,10 +398,10 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     : now.getTime()
   const startDate = new Date(startMs).toISOString()
 
-  // End date: trip duration (with 2h buffer) or fallback 6h from start
+  // End date: trip duration (with buffer) or fallback from start
   const tripDurationMs = params.durationMinutes
-    ? (params.durationMinutes + 120) * 60 * 1000
-    : 6 * 60 * 60 * 1000
+    ? (params.durationMinutes + TRIP_DURATION_BUFFER_MINUTES) * 60 * 1000
+    : TRIP_DURATION_FALLBACK_MS
   const endDate = new Date(startMs + tripDurationMs).toISOString()
 
   const commodityDescription = items
@@ -412,7 +428,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     const totalValue = items.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
     commodities.push({
       commodityId: generalCommodityId,
-      insuredValue: Math.max(Math.round(totalValue * 100), 100),
+      insuredValue: Math.max(Math.round(totalValue * 100), MIN_INSURED_VALUE_CENTS),
       currencyId,
     })
   } else {
@@ -420,7 +436,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
       const generalValue = generalItems.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
       commodities.push({
         commodityId: generalCommodityId,
-        insuredValue: Math.max(Math.round(generalValue * 100), 100),
+        insuredValue: Math.max(Math.round(generalValue * 100), MIN_INSURED_VALUE_CENTS),
         currencyId,
       })
     }
@@ -429,7 +445,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
       const electronicsValue = electronicsItems.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
       commodities.push({
         commodityId: electronicsCommodityId,
-        insuredValue: Math.max(Math.round(electronicsValue * 100), 100),
+        insuredValue: Math.max(Math.round(electronicsValue * 100), MIN_INSURED_VALUE_CENTS),
         currencyId,
       })
     }
@@ -440,7 +456,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     const totalValue = items.reduce((sum, i) => sum + (Number(i.value) || 0), 0)
     commodities.push({
       commodityId: generalCommodityId,
-      insuredValue: Math.max(Math.round(totalValue * 100), 100),
+      insuredValue: Math.max(Math.round(totalValue * 100), MIN_INSURED_VALUE_CENTS),
       currencyId,
     })
   }
@@ -456,7 +472,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     destinationFormatted: params.dropoff?.address || "",
     startDate,
     endDate,
-    transportType: 1, // ROAD per Redkik docs
+    transportType: TRANSPORT_TYPE_ROAD,
   }
 
   // Use pre-registered customer from setup, or org UUID as fallback
@@ -468,8 +484,7 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
   }
 
   // Policy selection: prefer "PU Test" in test/dev environments, otherwise first available.
-  // Production uses sales.app.redkik.com; test/dev uses staging.app.redkik.com or app.redkik.com.
-  const isProductionEnv = REDKIK_BASE_URL.includes("sales.app.redkik.com")
+  const isProductionEnv = REDKIK_ENV === "production" || REDKIK_BASE_URL.includes("sales.app.redkik.com")
   const testPolicyId = !isProductionEnv ? findPolicyByAlias(setup, "PU Test") : null
   if (testPolicyId) {
     payload.policyId = testPolicyId
