@@ -52,6 +52,15 @@ export default function DriverMessagesScreen({ navigation, route }) {
   }, [currentUserId, getConversations]);
 
   const loadPeerProfiles = useCallback(async () => {
+    const requestIdByPeerId = new Map();
+    conversations.forEach((conversation) => {
+      const peerId = conversation.customerId;
+      const requestId = conversation.requestId;
+      if (peerId && requestId && !requestIdByPeerId.has(peerId)) {
+        requestIdByPeerId.set(peerId, requestId);
+      }
+    });
+
     const peerIds = Array.from(
       new Set(
         conversations
@@ -68,7 +77,9 @@ export default function DriverMessagesScreen({ navigation, route }) {
     const profileEntries = await Promise.all(
       missingIds.map(async (id) => {
         try {
-          const profile = await getUserProfile(id);
+          const profile = await getUserProfile(id, {
+            requestId: requestIdByPeerId.get(id) || undefined,
+          });
           return [id, profile];
         } catch (error) {
           logger.error("DriverMessagesScreen", "Error loading peer profile", { id, error });

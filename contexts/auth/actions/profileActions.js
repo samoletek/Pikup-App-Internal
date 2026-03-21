@@ -40,9 +40,9 @@ export const createProfileDomainActions = ({
     }
   };
 
-  const getUserProfile = (targetUser = currentUser) => {
+  const getUserProfile = (targetUser = currentUser, options = {}) => {
     const normalizedTarget = targetUser || currentUser;
-    return ProfileService.getUserProfile(normalizedTarget);
+    return ProfileService.getUserProfile(normalizedTarget, options);
   };
 
   return {

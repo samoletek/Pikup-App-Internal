@@ -29,7 +29,8 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
   const [photoUris, setPhotoUris] = useState([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [viewerVisible, setViewerVisible] = useState(false);
-  const [viewerUri, setViewerUri] = useState(null);
+  const [viewerPhotos, setViewerPhotos] = useState([]);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
 
   const details = useMemo(() => buildRequestDetails(request), [request]);
 
@@ -68,17 +69,21 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
     };
   }, [details]);
 
-  const handleOpenPhotoViewer = useCallback((uri) => {
-    if (!uri) {
+  const handleOpenPhotoViewer = useCallback((photos, index = 0) => {
+    if (!Array.isArray(photos) || photos.length === 0) {
       return;
     }
-    setViewerUri(uri);
+
+    const safeIndex = Math.min(Math.max(Number(index) || 0, 0), photos.length - 1);
+    setViewerPhotos(photos);
+    setViewerStartIndex(safeIndex);
     setViewerVisible(true);
   }, []);
 
   const handleClosePhotoViewer = useCallback(() => {
     setViewerVisible(false);
-    setViewerUri(null);
+    setViewerPhotos([]);
+    setViewerStartIndex(0);
   }, []);
 
   if (!details) {
@@ -225,7 +230,7 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
                   <TouchableOpacity
                     key={`${details.id}-photo-${index}`}
                     activeOpacity={0.9}
-                    onPress={() => handleOpenPhotoViewer(uri)}
+                    onPress={() => handleOpenPhotoViewer(photoUris, index)}
                   >
                     <Image source={{ uri }} style={styles.photo} resizeMode="cover" />
                   </TouchableOpacity>
@@ -240,7 +245,8 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
 
       <MediaViewer
         visible={viewerVisible}
-        mediaUri={viewerUri}
+        mediaItems={viewerPhotos}
+        initialIndex={viewerStartIndex}
         mediaType="image"
         onClose={handleClosePhotoViewer}
       />

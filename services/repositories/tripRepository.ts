@@ -3,9 +3,12 @@ import type { TripRequest } from '../contracts/domain';
 import type {
   DriverRequestPoolRequest,
   DriverRequestPoolResponse,
+  GetTripParticipantsPublicRequest,
+  GetTripParticipantsPublicResponse,
 } from '../../supabase/functions/_shared/contracts';
 
 const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
+const TRIP_PARTICIPANTS_PUBLIC_FUNCTION = 'get-trip-participants-public';
 const DRIVER_PREFERENCE_SELECT_COLUMNS = [
   'metadata',
   'pref_pickup_small_items',
@@ -45,6 +48,22 @@ export const invokeDriverRequestPool = async (payload: DriverRequestPoolRequest)
   return supabase.functions.invoke<DriverRequestPoolResponse>(DRIVER_REQUEST_POOL_FUNCTION, {
     body: payload,
   });
+};
+
+export const invokeTripParticipantsPublic = async (
+  payload: GetTripParticipantsPublicRequest,
+  options: { accessToken?: string | null } = {},
+) => {
+  const accessToken = options.accessToken?.trim();
+  return supabase.functions.invoke<GetTripParticipantsPublicResponse>(
+    TRIP_PARTICIPANTS_PUBLIC_FUNCTION,
+    {
+      body: payload,
+      ...(accessToken
+        ? { headers: { Authorization: `Bearer ${accessToken}` } }
+        : {}),
+    },
+  );
 };
 
 export const fetchDriverMetadata = async (driverId: string) => {

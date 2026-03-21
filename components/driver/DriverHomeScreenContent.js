@@ -45,12 +45,15 @@ export default function DriverHomeScreenContent({
   onGoOnline,
   onGoOnlineScheduled,
   onViewScheduledRequests,
+  onViewAcceptedRequests,
   incomingRequest,
   requestTimeRemaining,
   miniBarPulse,
   onExpandMiniBar,
   formatRequestTime,
   requestModalVisible,
+  requestModalMode,
+  requestModalRequests,
   driverLocation,
   loading,
   error,
@@ -121,6 +124,7 @@ export default function DriverHomeScreenContent({
           onGoOnlineScheduled={onGoOnlineScheduled}
           onViewScheduledRequests={onViewScheduledRequests}
           isDriverGeoRestricted={isDriverGeoRestricted}
+          onViewAcceptedRequests={onViewAcceptedRequests}
         />
       )}
 
@@ -164,7 +168,8 @@ export default function DriverHomeScreenContent({
 
       <RequestModal
         visible={requestModalVisible}
-        requests={availableRequests}
+        mode={requestModalMode}
+        requests={requestModalRequests}
         selectedRequest={selectedRequest}
         currentLocation={driverLocation}
         loading={loading}

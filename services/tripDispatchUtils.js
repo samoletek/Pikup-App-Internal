@@ -1,4 +1,5 @@
 import { appConfig } from '../config/appConfig';
+import { findDriverScheduleConflictForTrip } from './dispatch/scheduleConflicts';
 import { invokeDriverRequestPool } from './repositories/tripRepository';
 import { resolveDispatchRequirements } from './dispatch/requirements';
 
@@ -86,7 +87,9 @@ export const getAvailableRequestsFromEdge = async ({ requestPool, driverLocation
         throw new Error(String(data.error));
     }
 
-    const requests = Array.isArray(data?.trips) ? data.trips : null;
+    const requests =
+        (Array.isArray(data?.trips) ? data.trips : null) ||
+        (Array.isArray(data?.requests) ? data.requests : null);
 
     if (!Array.isArray(requests)) {
         throw new Error('get-driver-request-pool returned an invalid response shape');
@@ -364,3 +367,5 @@ export const sortTripsForPool = (trips, { requestPool = REQUEST_POOLS.ALL, drive
 
     return sorted;
 };
+
+export { findDriverScheduleConflictForTrip };

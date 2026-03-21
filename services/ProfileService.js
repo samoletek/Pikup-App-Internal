@@ -1,6 +1,3 @@
-// services/ProfileService.js
-// Extracted from AuthContext.js - User profile and feedback management
-
 import { uploadToSupabase } from './StorageService';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
@@ -14,6 +11,7 @@ import {
     createRealtimeChannel,
     removeRealtimeChannel,
 } from './repositories/messagingRepository';
+import { resolvePublicTripParticipantProfile } from './profilePublicParticipantService';
 import {
     getDriverFeedback,
     saveFeedback,
@@ -228,14 +226,17 @@ export const deleteProfileImage = async (currentUser, userType) => {
 /**
  * Get full user profile from database
  * @param {Object|string} currentUser - User object or explicit user ID
+ * @param {Object} options
+ * @param {string} options.requestId - Optional trip/request id for secure participant profile fallback
  * @returns {Promise<Object>} User profile data
  */
-export const getUserProfile = async (currentUser) => {
+export const getUserProfile = async (currentUser, options = {}) => {
     const userInput = currentUser ?? null;
     const userId = typeof userInput === 'string'
         ? userInput
         : (userInput?.id || userInput?.uid);
     const fallbackEmail = typeof userInput === 'object' ? userInput?.email : null;
+    const requestId = options?.requestId || null;
 
     if (!userId) {
         throw new Error('User not authenticated');
@@ -243,23 +244,38 @@ export const getUserProfile = async (currentUser) => {
 
     try {
         // Try to get from customers table first
-        let { data: profile } = await fetchProfileByTableAndUserId('customers', userId, {
+        const { data: customerProfile, error: customerProfileError } = await fetchProfileByTableAndUserId('customers', userId, {
             columns: '*',
             maybeSingle: true,
         });
+        if (customerProfileError && !isNoRowsError(customerProfileError)) {
+            throw customerProfileError;
+        }
+        let profile = customerProfile;
 
         if (!profile) {
             // If not found, try drivers table
-            const { data: driverProfile } = await fetchProfileByTableAndUserId('drivers', userId, {
+            const { data: driverProfile, error: driverProfileError } = await fetchProfileByTableAndUserId('drivers', userId, {
                 columns: '*',
                 maybeSingle: true,
             });
+            if (driverProfileError && !isNoRowsError(driverProfileError)) {
+                throw driverProfileError;
+            }
 
             profile = driverProfile;
         }
 
         if (profile) {
             return normalizeProfile(profile, fallbackEmail);
+        }
+
+        const publicProfile = await resolvePublicTripParticipantProfile({
+            requestId,
+            targetUserId: userId,
+        });
+        if (publicProfile) {
+            return normalizeProfile(publicProfile, fallbackEmail);
         }
 
         // Fallback if no profile found
@@ -273,6 +289,14 @@ export const getUserProfile = async (currentUser) => {
         };
 
     } catch (error) {
+        const publicProfile = await resolvePublicTripParticipantProfile({
+            requestId,
+            targetUserId: userId,
+        });
+        if (publicProfile) {
+            return normalizeProfile(publicProfile, fallbackEmail);
+        }
+
         const normalized = normalizeError(error, 'Failed to load user profile');
         logger.error('ProfileService', 'Error getting user profile', normalized, error);
         throw new Error(normalized.message);

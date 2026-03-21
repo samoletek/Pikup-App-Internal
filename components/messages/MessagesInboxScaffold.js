@@ -19,7 +19,7 @@ import {
 import { colors } from "../../styles/theme";
 import styles from "./messagesInboxStyles";
 
-const FILTERS = ["all", "active", "archive"];
+const FILTERS = ["active", "archive"];
 const HEADER_ROW_HEIGHT = 56;
 const SEARCH_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
@@ -47,7 +47,7 @@ export default function MessagesInboxScaffold({
   const scrollY = useRef(new Animated.Value(0)).current;
   const isSnappingRef = useRef(false);
   const [searchText, setSearchText] = useState("");
-  const [selectedFilter, setSelectedFilter] = useState("all");
+  const [selectedFilter, setSelectedFilter] = useState("active");
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -156,15 +156,8 @@ export default function MessagesInboxScaffold({
 
   const renderFilter = (filterKey) => {
     const isActive = selectedFilter === filterKey;
-    const totalCount = Array.isArray(conversations) ? conversations.length : 0;
-    const label =
-      filterKey === "all" ? "All" : filterKey === "active" ? "Active" : "Archive";
-    const count =
-      filterKey === "all"
-        ? totalCount
-        : filterKey === "active"
-          ? activeCount
-          : archiveCount;
+    const label = filterKey === "active" ? "Active" : "Archive";
+    const count = filterKey === "active" ? activeCount : archiveCount;
 
     return (
       <TouchableOpacity

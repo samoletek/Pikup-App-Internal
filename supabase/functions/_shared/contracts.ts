@@ -291,3 +291,27 @@ export type ProcessPayoutResponse = EdgePayload<{
   success: true
   transferId: string
 }>
+
+export type PublicTripParticipantProfile = {
+  id: string
+  role: "customer" | "driver"
+  first_name: string
+  last_name: string
+  email: string | null
+  profile_image_url: string | null
+  avatar_url: string | null
+  rating: number | null
+}
+
+export type GetTripParticipantsPublicRequest = {
+  requestId: string
+  targetUserId?: string | null
+}
+
+export type GetTripParticipantsPublicResponse = EdgePayload<{
+  success: true
+  requestId: string
+  customer: PublicTripParticipantProfile | null
+  driver: PublicTripParticipantProfile | null
+  profile: PublicTripParticipantProfile | null
+}>

@@ -18,7 +18,9 @@ import {
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { updateDriverRowById } from './repositories/paymentRepository';
-import { updateTripById } from './repositories/tripRepository';
+import {
+  updateTripById,
+} from './repositories/tripRepository';
 
 const STATUS_TIMESTAMP_FIELDS = Object.freeze({
   [TRIP_STATUS.IN_PROGRESS]: 'in_progress_at',

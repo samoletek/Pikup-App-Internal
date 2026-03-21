@@ -25,6 +25,7 @@ import useRequestModalRoute from '../hooks/useRequestModalRoute';
 
 export default function RequestModal({
   visible,
+  mode = 'available',
   requests = [],
   selectedRequest,
   currentLocation,
@@ -38,6 +39,11 @@ export default function RequestModal({
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showMap, setShowMap] = useState(true);
+  const isAcceptedMode = mode === 'accepted';
+  const modalTitle = isAcceptedMode ? 'Accepted Requests' : 'Available Requests';
+  const countLabel = isAcceptedMode
+    ? `${requests.length} accepted request${requests.length !== 1 ? 's' : ''}`
+    : `${requests.length} request${requests.length !== 1 ? 's' : ''} nearby`;
 
   const flatListRef = useRef(null);
   const mapRef = useRef(null);
@@ -139,6 +145,16 @@ export default function RequestModal({
     }, 100);
   }, [requests, selectedRequest]);
 
+  useEffect(() => {
+    if (selectedIndex >= requests.length) {
+      setSelectedIndex(0);
+    }
+  }, [requests.length, selectedIndex]);
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [mode]);
+
   const handleScroll = (event) => {
     const scrollPosition = event.nativeEvent.contentOffset.x;
     const index = Math.round(scrollPosition / (CARD_WIDTH + spacing.lg));
@@ -180,6 +196,8 @@ export default function RequestModal({
         ]}
       >
         <RequestModalHeader
+          title={modalTitle}
+          countLabel={countLabel}
           requestsCount={requests.length}
           onClose={onClose}
           panHandlers={panResponder.panHandlers}
@@ -204,6 +222,7 @@ export default function RequestModal({
         <RequestCardsSection
           loading={loading}
           error={error}
+          mode={mode}
           requests={requests}
           onRefresh={onRefresh}
           flatListRef={flatListRef}
