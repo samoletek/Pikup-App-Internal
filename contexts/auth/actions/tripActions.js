@@ -5,6 +5,12 @@ export const createTripDomainActions = ({ currentUser }) => {
     createPickupRequest: (requestData) => TripService.createPickupRequest(requestData, currentUser),
     getUserPickupRequests: () => TripService.getUserPickupRequests(currentUser),
     getAvailableRequests: (options = {}) => TripService.getAvailableRequests(currentUser, options),
+    getPendingDriverScheduledCheckins: () =>
+      TripService.getPendingDriverScheduledCheckins(currentUser),
+    confirmScheduledTripCheckin: (tripId, options = {}) =>
+      TripService.confirmScheduledTripCheckin(tripId, currentUser, options),
+    declineScheduledTripCheckin: (tripId, options = {}) =>
+      TripService.declineScheduledTripCheckin(tripId, currentUser, options),
     declineRequestOffer: (requestId, options = {}) =>
       TripService.declineRequestOffer(requestId, currentUser, options),
     acceptRequest: (requestId) => TripService.acceptRequest(requestId, currentUser),

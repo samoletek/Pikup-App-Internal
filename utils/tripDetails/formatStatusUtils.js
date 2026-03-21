@@ -159,9 +159,19 @@ export const getProgressStep = (status) => {
   return step || null;
 };
 
-export const statusMeta = (status) => {
+export const statusMeta = (status, options = {}) => {
+  const { isScheduledFuture = false } = options;
   const normalized = normalizeTripStatus(status);
   const activeStep = getProgressStep(normalized);
+
+  if (isScheduledFuture) {
+    return {
+      label: "Scheduled",
+      icon: "calendar",
+      textColor: colors.primary,
+      chipBackground: colors.primaryLight,
+    };
+  }
 
   if (normalized === TRIP_STATUS.CANCELLED) {
     return {

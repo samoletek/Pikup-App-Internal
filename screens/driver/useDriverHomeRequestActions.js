@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { isUnavailableAcceptError } from './DriverHomeScreen.utils';
 import { logger } from '../../services/logger';
+import { getTripScheduledAtMs } from '../../constants/tripStatus';
 
 export default function useDriverHomeRequestActions({
   acceptRequest,
@@ -63,15 +64,29 @@ export default function useDriverHomeRequestActions({
       logger.info('DriverHomeRequestActions', 'Accepting request', { requestId: request.id });
       await acceptRequest(request.id);
 
-      setAcceptedRequestId(request.id);
-      setActiveJob(request);
-      setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
+      const scheduledAtMs = getTripScheduledAtMs(request);
+      const isFutureScheduledRequest = Number.isFinite(scheduledAtMs) && scheduledAtMs > Date.now();
 
+      setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
       setShowRequestModal(false);
       setShowAllRequests(false);
+
+      if (isFutureScheduledRequest) {
+        logger.info('DriverHomeRequestActions', 'Scheduled request accepted for future start', {
+          requestId: request.id,
+          scheduledAtMs,
+        });
+        void loadRequests(false);
+        alert('Scheduled request accepted. It will start closer to pickup time.');
+        return;
+      }
+
+      setAcceptedRequestId(request.id);
+      setActiveJob(request);
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       logger.error('DriverHomeRequestActions', 'Error accepting request', error);
+      const normalizedMessage = String(error?.message || '').trim();
 
       if (isUnavailableAcceptError(error)) {
         setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
@@ -83,6 +98,8 @@ export default function useDriverHomeRequestActions({
         clearIncomingRoute();
         void loadRequests(false);
         alert('This request was already taken by another driver.');
+      } else if (normalizedMessage.toLowerCase().includes('conflicts with your accepted schedule')) {
+        alert('This request overlaps with your accepted scheduled trips.');
       } else {
         alert('Could not accept request. Please try again.');
       }

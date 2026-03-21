@@ -13,6 +13,12 @@ export {
 } from './tripDriverRequestService';
 
 export {
+  getPendingDriverScheduledCheckins,
+  confirmScheduledTripCheckin,
+  declineScheduledTripCheckin,
+} from './tripScheduledCheckinService';
+
+export {
   updateRequestStatus,
   updateDriverStatus,
   updateDriverLocation,
