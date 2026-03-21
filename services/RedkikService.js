@@ -62,6 +62,7 @@ const RedkikService = {
             value: Number(item.value) || 0,
             weight: Number(item.weightEstimate || item.weight) || 0,
             condition: item.condition || 'new',
+            category: item.category || '',
           })),
           pickup,
           dropoff,
@@ -78,7 +79,7 @@ const RedkikService = {
       }
 
       if (data?.error) {
-        logger.warn('RedkikService', 'Quote returned error', data.error);
+        logger.warn('RedkikService', 'Quote returned error', data.error, data.validationErrors || []);
         return null;
       }
 
@@ -95,7 +96,9 @@ const RedkikService = {
 
       return {
         offerId: data.offerId,
-        premium: Number(data.premium),
+        premium: Number(data.premium),          // total: redkik premium + service fee
+        redkikPremium: Number(data.redkikPremium || data.premium),
+        serviceFee: Number(data.serviceFee || 0),
         canPurchase: data.canPurchase !== false, // default true if field missing
         amendments: data.amendments || [],
         details: data.details || {},
