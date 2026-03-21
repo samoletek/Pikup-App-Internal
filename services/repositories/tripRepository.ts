@@ -191,6 +191,26 @@ export const fetchTripsByDriverId = async ({
   return query.order('created_at', { ascending });
 };
 
+export const fetchTripsByDriverAndStatuses = async ({
+  driverId,
+  statuses = [],
+  columns = '*',
+}: {
+  driverId: string;
+  statuses: string[];
+  columns?: string;
+}) => {
+  if (!Array.isArray(statuses) || statuses.length === 0) {
+    return { data: [], error: null };
+  }
+
+  return supabase
+    .from('trips')
+    .select(columns)
+    .eq('driver_id', driverId)
+    .in('status', statuses);
+};
+
 export const createRealtimeChannel = (channelName: string) => {
   return supabase.channel(channelName);
 };

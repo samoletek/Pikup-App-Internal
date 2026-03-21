@@ -53,7 +53,17 @@ export default function useDriverHomePresentation({
 
   const activeJobStatus = normalizeTripStatus(activeJob?.status);
   const isScheduledPoolActive = activeRequestPool === REQUEST_POOLS.SCHEDULED;
-  const activeJobStatusLabel = ACTIVE_TRIP_STATUS_LABELS[activeJobStatus] || "Active order";
+  const activeJobScheduledAtMs = new Date(
+    activeJob?.scheduledTime || activeJob?.scheduled_time || ''
+  ).getTime();
+  const isFutureScheduledActiveJob = (
+    activeJobStatus === 'accepted' &&
+    Number.isFinite(activeJobScheduledAtMs) &&
+    activeJobScheduledAtMs > Date.now()
+  );
+  const activeJobStatusLabel = isFutureScheduledActiveJob
+    ? 'Scheduled'
+    : (ACTIVE_TRIP_STATUS_LABELS[activeJobStatus] || 'Active order');
 
   const activeJobDestinationAddress = useMemo(() => {
     if (!activeJob) {

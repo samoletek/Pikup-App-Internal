@@ -96,10 +96,10 @@ export default function CustomerActivityScreen({ navigation }) {
           <Ionicons
             name="time-outline"
             size={14}
-            color={statusColor(trip.status)}
+            color={statusColor(trip.activityStatus)}
           />
-          <Text style={[styles.statusText, { color: statusColor(trip.status) }]}>
-            {statusLabel(trip.status)}
+          <Text style={[styles.statusText, { color: statusColor(trip.activityStatus) }]}>
+            {statusLabel(trip.activityStatus)}
           </Text>
         </View>
         <Text style={styles.tripAmount}>{trip.amount}</Text>
@@ -211,7 +211,7 @@ export default function CustomerActivityScreen({ navigation }) {
             <Ionicons name="file-tray-outline" size={56} color={colors.border.strong} />
             <Text style={styles.emptyTitle}>No past trips yet</Text>
             <Text style={styles.emptySubtitle}>
-              Completed and cancelled trips will appear here
+              Scheduled, completed and cancelled trips will appear here
             </Text>
           </View>
         )}

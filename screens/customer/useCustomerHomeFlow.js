@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import {
+  TRIP_STATUS,
   normalizeTripStatus,
 } from "../../constants/tripStatus";
 import MapboxLocationService from "../../services/MapboxLocationService";
@@ -65,6 +66,19 @@ export default function useCustomerHomeFlow({
     }
 
     const normalizedStatus = normalizeTripStatus(activeDelivery.status);
+    const scheduledAtMs = new Date(
+      activeDelivery.scheduledTime || activeDelivery.scheduled_time || ''
+    ).getTime();
+    if (
+      normalizedStatus === TRIP_STATUS.ACCEPTED &&
+      Number.isFinite(scheduledAtMs) &&
+      scheduledAtMs > Date.now()
+    ) {
+      return {
+        label: 'Scheduled',
+        icon: 'calendar',
+      };
+    }
     return ACTIVE_DELIVERY_STEP_META[normalizedStatus] || null;
   }, [activeDelivery]);
 

@@ -1,5 +1,6 @@
 import { appConfig } from '../config/appConfig';
 import { invokeDriverRequestPool } from './repositories/tripRepository';
+import { resolveDispatchRequirements } from './dispatch/requirements';
 
 const parseEnvNumber = (value, fallback, { min = null, max = null } = {}) => {
     const parsed = Number(value);
@@ -170,10 +171,10 @@ export const isTripOutsideScheduledWindow = (requirements, nowDate = new Date())
 };
 
 export const isTripOutsideDistanceWindow = ({
-    trip,
-    requirements,
-    requestPool,
-    driverLocation,
+  trip,
+  requirements,
+  requestPool,
+  driverLocation,
 }) => {
     if (!hasValidCoordinatePair(driverLocation)) {
         return false;
@@ -185,8 +186,120 @@ export const isTripOutsideDistanceWindow = ({
         return false;
     }
 
-    const maxDistanceMiles = getRequestDistanceLimitMiles(requestPool, requirements?.scheduleType);
-    return distanceMiles > maxDistanceMiles;
+  const maxDistanceMiles = getRequestDistanceLimitMiles(requestPool, requirements?.scheduleType);
+  return distanceMiles > maxDistanceMiles;
+};
+
+const getPositiveMinutes = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.round(parsed);
+};
+
+export const resolveTripEstimatedDurationMinutes = (trip = {}, requirements = null) => {
+  const normalizedRequirements = requirements || resolveDispatchRequirements(trip);
+  const pickupDetails = trip?.pickup?.details || trip?.pickup_location?.details || {};
+  const dropoffDetails = trip?.dropoff?.details || trip?.dropoff_location?.details || {};
+  const items = Array.isArray(trip?.items)
+    ? trip.items
+    : trip?.item && typeof trip.item === 'object'
+      ? [trip.item]
+      : [];
+  const distanceMiles = Math.max(
+    0,
+    Number(
+      normalizedRequirements?.estimatedDistanceMiles ??
+      trip?.pricing?.distance ??
+      trip?.distance ??
+      trip?.distance_miles ??
+      0
+    ) || 0
+  );
+
+  const explicitDurationMinutes =
+    getPositiveMinutes(normalizedRequirements?.estimatedDurationMinutes) ||
+    getPositiveMinutes(
+      trip?.durationMinutes ??
+      trip?.duration_minutes ??
+      trip?.duration ??
+      pickupDetails?.estimatedDurationMinutes
+    );
+
+  if (explicitDurationMinutes) {
+    return Math.min(Math.max(explicitDurationMinutes, 30), 240);
+  }
+
+  const helpRequested = Boolean(
+    pickupDetails?.driverHelpsLoading ||
+    pickupDetails?.driverHelp ||
+    dropoffDetails?.driverHelpsUnloading ||
+    dropoffDetails?.driverHelp
+  );
+  const itemCount = Math.max(items.length, 1);
+  const estimatedMinutes = Math.round(
+    25 + (distanceMiles * 4) + (Math.min(itemCount, 8) * 3) + (helpRequested ? 20 : 0)
+  );
+
+  return Math.min(Math.max(estimatedMinutes, 30), 240);
+};
+
+export const resolveTripScheduleWindow = (trip = {}, requirements = null) => {
+  const scheduledAtMs = new Date(trip?.scheduledTime || trip?.scheduled_time || '').getTime();
+  if (!Number.isFinite(scheduledAtMs)) {
+    return null;
+  }
+
+  const normalizedRequirements = requirements || resolveDispatchRequirements(trip);
+  const distanceMiles = Math.max(
+    0,
+    Number(
+      normalizedRequirements?.estimatedDistanceMiles ??
+      trip?.pricing?.distance ??
+      trip?.distance ??
+      trip?.distance_miles ??
+      0
+    ) || 0
+  );
+  const leadMinutes = Math.min(Math.max(Math.round(distanceMiles * 2), 10), 90);
+  const durationMinutes = resolveTripEstimatedDurationMinutes(trip, normalizedRequirements);
+  const bufferMinutes = 10;
+
+  return {
+    startMs: scheduledAtMs - ((leadMinutes + bufferMinutes) * 60 * 1000),
+    endMs: scheduledAtMs + ((durationMinutes + bufferMinutes) * 60 * 1000),
+  };
+};
+
+export const hasScheduledTripConflict = ({
+  candidateTrip,
+  candidateRequirements = null,
+  driverActiveTrips = [],
+}) => {
+  const candidateWindow = resolveTripScheduleWindow(candidateTrip, candidateRequirements);
+  if (!candidateWindow) {
+    return false;
+  }
+
+  return (Array.isArray(driverActiveTrips) ? driverActiveTrips : []).some((activeTrip) => {
+    if (!activeTrip || String(activeTrip.id || '') === String(candidateTrip?.id || '')) {
+      return false;
+    }
+
+    const activeRequirements = resolveDispatchRequirements(activeTrip);
+    if (activeRequirements?.scheduleType !== REQUEST_POOLS.SCHEDULED) {
+      return false;
+    }
+
+    const activeWindow = resolveTripScheduleWindow(activeTrip, activeRequirements);
+    if (!activeWindow) {
+      return false;
+    }
+
+    return candidateWindow.startMs < activeWindow.endMs && activeWindow.startMs < candidateWindow.endMs;
+  });
 };
 
 export const sortTripsForPool = (trips, { requestPool = REQUEST_POOLS.ALL, driverLocation = null } = {}) => {

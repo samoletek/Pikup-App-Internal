@@ -6,6 +6,7 @@ import {
   DRIVER_PREFERENCE_FILTER_SELECT_COLUMNS,
   extractDriverPreferencesFromDriverRow,
   evaluateTripForDriverPreferences,
+  hasTripScheduleConflict,
   isScheduledDispatchTrip,
   isTripOutsideDistanceWindow,
   isTripOutsideScheduledWindow,
@@ -31,7 +32,16 @@ import {
   type AnyRecord,
 } from "./poolUtils.ts"
 
-serve(async (req) => {
+const DRIVER_ACTIVE_STATUSES_FOR_SCHEDULE_CONFLICT = [
+  "accepted",
+  "in_progress",
+  "arrived_at_pickup",
+  "picked_up",
+  "en_route_to_dropoff",
+  "arrived_at_dropoff",
+]
+
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
@@ -95,6 +105,7 @@ serve(async (req) => {
     if (!driverProfile) {
       return jsonResponse({ error: "Driver profile not found" }, 403)
     }
+
     const driverStateCode = resolveLocationStateCode(driverLocation)
     const driverStateRestricted = !isSupportedOrderStateCode(
       driverStateCode,
@@ -249,6 +260,7 @@ serve(async (req) => {
           filteredByPreference: 0,
           filteredByOfferDeclined: 0,
           filteredByOfferExpired: 0,
+          filteredByScheduleConflict: 0,
           filteredByState: 0,
           hiddenReasonCounts: {},
           driverStateCode,
@@ -277,16 +289,32 @@ serve(async (req) => {
       throw tripsError
     }
 
-    const trips = (tripRows || []).map((row) => mapTripFromDb(row as AnyRecord))
+    const trips = (tripRows || []).map((row: AnyRecord) => mapTripFromDb(row as AnyRecord))
+
+    const { data: acceptedDriverTripRows, error: acceptedDriverTripsError } = await dbClient
+      .from("trips")
+      .select("*")
+      .eq("driver_id", user.id)
+      .in("status", DRIVER_ACTIVE_STATUSES_FOR_SCHEDULE_CONFLICT)
+      .not("scheduled_time", "is", null)
+
+    if (acceptedDriverTripsError) {
+      throw acceptedDriverTripsError
+    }
+
+    const acceptedDriverTrips = (acceptedDriverTripRows || [])
+      .map((row: AnyRecord) => mapTripFromDb(row as AnyRecord))
+
     const hiddenReasonCounts: Record<string, number> = {}
     const filteredTrips: AnyRecord[] = []
     let filteredByPool = 0
     let filteredByDistance = 0
     let filteredByTimeWindow = 0
     let filteredByPreference = 0
+    let filteredByScheduleConflict = 0
     let filteredByState = 0
 
-    trips.forEach((trip) => {
+    trips.forEach((trip: AnyRecord) => {
       const normalizedRequirements = resolveDispatchRequirements(trip)
       const normalizedTrip = {
         ...trip,
@@ -332,6 +360,17 @@ serve(async (req) => {
         })
       ) {
         filteredByDistance += 1
+        return
+      }
+
+      if (
+        normalizedRequirements.scheduleType === REQUEST_POOLS.SCHEDULED &&
+        hasTripScheduleConflict(normalizedTrip, acceptedDriverTrips)
+      ) {
+        filteredByScheduleConflict += 1
+        hiddenReasonCounts.blocked_schedule_conflict = (
+          hiddenReasonCounts.blocked_schedule_conflict || 0
+        ) + 1
         return
       }
 
@@ -458,7 +497,7 @@ serve(async (req) => {
       }
 
       const offerExpiresAt = existingOffer.expires_at
-      const offerExpiresAtMs = offerExpiresAt ? new Date(offerExpiresAt).getTime() : Number.NaN
+      const offerExpiresAtMs = offerExpiresAt ? new Date(offerExpiresAt as string | number).getTime() : Number.NaN
       const hasExpired =
         !isScheduledTrip && Number.isFinite(offerExpiresAtMs) && offerExpiresAtMs <= nowMs
 
@@ -563,7 +602,7 @@ serve(async (req) => {
       }
     }
 
-    const requests = sortedTrips.map((trip) => {
+    const requests = sortedTrips.map((trip: AnyRecord) => {
       const customer = customerMap[String(trip.customerId || trip.customer_id || "")] || {
         name: "Customer",
         email: null,
@@ -571,25 +610,25 @@ serve(async (req) => {
 
       return {
         id: trip.id,
-        price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
+        price: `$${Number((trip.pricing as AnyRecord)?.total || 0).toFixed(2)}`,
         pricing: trip.pricing || {},
         type: "Moves",
         vehicle: { type: trip.vehicleType || "Standard" },
         pickup: {
           address: trip.pickupAddress || "Unknown",
-          coordinates: trip.pickup?.coordinates || null,
-          details: trip.pickup?.details || {},
+          coordinates: (trip.pickup as AnyRecord)?.coordinates || null,
+          details: (trip.pickup as AnyRecord)?.details || {},
         },
         dropoff: {
           address: trip.dropoffAddress || "",
-          coordinates: trip.dropoff?.coordinates || null,
-          details: trip.dropoff?.details || {},
+          coordinates: (trip.dropoff as AnyRecord)?.coordinates || null,
+          details: (trip.dropoff as AnyRecord)?.details || {},
         },
         items: trip.items || [],
         item: trip.item || null,
         photos: trip.pickupPhotos || [],
         scheduledTime: trip.scheduledTime || null,
-        expiresAt: trip.dispatchOffer?.expiresAt || null,
+        expiresAt: (trip.dispatchOffer as AnyRecord)?.expiresAt || null,
         dispatchOffer: trip.dispatchOffer || null,
         dispatchRequirements: trip.dispatchRequirements || null,
         customerName: customer.name,
@@ -608,6 +647,7 @@ serve(async (req) => {
         filteredByDistance,
         filteredByTimeWindow,
         filteredByPreference,
+        filteredByScheduleConflict,
         filteredByOfferDeclined,
         filteredByOfferExpired,
         filteredByState,

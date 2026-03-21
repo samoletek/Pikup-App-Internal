@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ACTIVE_TRIP_STATUSES, normalizeTripStatus } from '../constants/tripStatus';
+import {
+  ACTIVE_TRIP_STATUSES,
+  isFutureScheduledTrip,
+  normalizeTripStatus,
+} from '../constants/tripStatus';
 import { getPersistedDriverOnlineStatus } from '../services/driverStateService';
 import { logger } from '../services/logger';
+
+const ACTIVE_TRIP_RESTORE_INTERVAL_MS = 60 * 1000;
 
 export default function useDriverActiveTripRestore({
   currentUserId,
@@ -58,6 +64,10 @@ export default function useDriverActiveTripRestore({
 
           const normalizedStatus = normalizeTripStatus(trip.status);
           if (!ACTIVE_TRIP_STATUSES.includes(normalizedStatus)) {
+            return false;
+          }
+
+          if (isFutureScheduledTrip(trip)) {
             return false;
           }
 
@@ -139,6 +149,20 @@ export default function useDriverActiveTripRestore({
       restoreActiveTrip({ initialLoad: false });
     }, [restoreActiveTrip])
   );
+
+  useEffect(() => {
+    if (!currentUserId || userType !== 'driver') {
+      return undefined;
+    }
+
+    const intervalId = setInterval(() => {
+      void restoreActiveTrip({ initialLoad: false });
+    }, ACTIVE_TRIP_RESTORE_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [currentUserId, restoreActiveTrip, userType]);
 
   return {
     isRestoringActiveTrip,
