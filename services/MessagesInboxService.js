@@ -1,3 +1,9 @@
+import {
+  getAvatarUrlFromProfile as resolveAvatarUrlFromProfile,
+  getDisplayNameFromProfile as resolveDisplayNameFromProfile,
+  getInitialsFromName,
+} from '../utils/profileDisplay';
+
 export const SUPPORT_USER_IDS = new Set([
   'support',
   'ffffffff-ffff-ffff-ffff-ffffffffffff',
@@ -65,26 +71,14 @@ export const formatConversationTimestamp = (timestamp) => {
 };
 
 export const getDisplayNameFromProfile = (profile, fallbackName) => {
-  const firstName = profile?.first_name || profile?.firstName || '';
-  const lastName = profile?.last_name || profile?.lastName || '';
-  const fullName = `${firstName} ${lastName}`.trim();
-
-  return (
-    fullName ||
-    profile?.name ||
-    profile?.email?.split('@')?.[0] ||
-    fallbackName
-  );
+  return resolveDisplayNameFromProfile(profile, fallbackName);
 };
 
 export const getAvatarUrlFromProfile = (profile) =>
-  profile?.profileImageUrl ||
-  profile?.profile_image_url ||
-  profile?.avatar_url ||
-  null;
+  resolveAvatarUrlFromProfile(profile);
 
 export const getAvatarInitial = (displayName) =>
-  String(displayName || '?').trim().charAt(0).toUpperCase() || '?';
+  getInitialsFromName(displayName, '?');
 
 export const getConversationStatus = (conversation) =>
   String(

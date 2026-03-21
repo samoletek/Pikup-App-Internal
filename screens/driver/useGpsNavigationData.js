@@ -184,7 +184,7 @@ export default function useGpsNavigationData({
       }
 
       const latestData = await getRequestById(request.id);
-      setRequestData(latestData);
+      setRequestData((prev) => ({ ...(prev || {}), ...(latestData || {}) }));
 
       if (isCustomerView && latestData?.driverLocation) {
         setDriverLocation(latestData.driverLocation);

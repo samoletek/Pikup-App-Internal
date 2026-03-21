@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import usePickupVerificationPhotos, {
 import useCustomerAvatarFromTripRequest from './useCustomerAvatarFromTripRequest';
 import usePickupConfirmationFlow from './usePickupConfirmationFlow';
 import { resolveRequestCustomerId } from './requestConversationContext.utils';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 import {
   colors,
   layout,
@@ -93,11 +94,17 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     startDelivery,
   });
 
-  const customerName =
-    request?.customerName ||
-    request?.customer?.name ||
-    request?.customer?.displayName ||
-    (request?.customerEmail ? request.customerEmail.split('@')[0] : 'Customer');
+  const customerDisplay = useMemo(
+    () =>
+      resolveCustomerDisplayFromRequest(
+        {
+          ...request,
+          customerAvatarUrl,
+        },
+        { fallbackName: 'Customer' }
+      ),
+    [customerAvatarUrl, request]
+  );
 
   return (
     <View style={styles.container}>
@@ -127,18 +134,18 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           {/* Customer Info */}
           <View style={styles.customerCard}>
             <View style={styles.customerHeader}>
-              {customerAvatarUrl ? (
+              {customerDisplay.avatarUrl ? (
                 <Image
-                  source={{ uri: customerAvatarUrl }}
+                  source={{ uri: customerDisplay.avatarUrl }}
                   style={styles.customerPhoto}
                   onError={() => setCustomerAvatarUrl(null)}
                 />
               ) : (
                 <View style={styles.customerPhotoPlaceholder}>
-                  <Ionicons name="person" size={22} color={colors.text.muted} />
+                  <Text style={styles.customerPhotoInitials}>{customerDisplay.initials}</Text>
                 </View>
               )}
-              <Text style={styles.customerName}>{customerName}</Text>
+              <Text style={styles.customerName}>{customerDisplay.name}</Text>
               <TouchableOpacity
                 style={[styles.chatButton, isCreatingChat && styles.chatButtonDisabled]}
                 onPress={openChat}

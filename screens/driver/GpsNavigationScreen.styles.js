@@ -134,6 +134,18 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  driverImageFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  driverImageFallbackText: {
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
   driverDetails: {
     flex: 1,
     marginLeft: spacing.base - 1,
@@ -245,6 +257,11 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  customerAvatarInitials: {
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
   },
   customerDetails: {
     flex: 1,

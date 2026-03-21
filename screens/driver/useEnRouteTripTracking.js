@@ -3,6 +3,10 @@ import { Dimensions, Animated } from "react-native";
 import * as Location from "expo-location";
 import { logger } from "../../services/logger";
 import {
+  resolveCustomerDisplayFromRequest,
+  resolveDriverDisplayFromRequest,
+} from "../../utils/profileDisplay";
+import {
   ensureNavigationLocationAccess,
   resolveInitialDriverPosition,
   startNavigationLocationWatch,
@@ -116,9 +120,12 @@ export default function useEnRouteTripTracking({
       : request?.pickup?.address || "Pickup location"
   );
 
-  const counterpartName = isCustomerView
-    ? request?.driverName || "Your Driver"
-    : request?.customerName || request?.customerEmail?.split("@")[0] || "Customer";
+  const counterpartDisplay = isCustomerView
+    ? resolveDriverDisplayFromRequest(request, { fallbackName: "Your Driver" })
+    : resolveCustomerDisplayFromRequest(request, { fallbackName: "Customer" });
+  const counterpartName = counterpartDisplay.name;
+  const counterpartAvatarUrl = counterpartDisplay.avatarUrl;
+  const counterpartInitials = counterpartDisplay.initials;
   const counterpartRating = formatRating(
     isCustomerView
       ? request?.driverRating || request?.driver?.rating
@@ -242,6 +249,8 @@ export default function useEnRouteTripTracking({
 
   return {
     counterpartName,
+    counterpartAvatarUrl,
+    counterpartInitials,
     counterpartRating,
     destinationCoordinate,
     distance,

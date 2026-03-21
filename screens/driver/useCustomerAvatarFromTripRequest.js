@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { firstNonEmptyString, resolveCustomerAvatarFromRequest } from './navigationAvatar.utils';
+import { firstAvatarUrl } from '../../utils/profileDisplay';
+import { resolveCustomerAvatarFromRequest } from './navigationAvatar.utils';
 
 export default function useCustomerAvatarFromTripRequest({
   requestData,
@@ -43,7 +44,7 @@ export default function useCustomerAvatarFromTripRequest({
           return;
         }
 
-        const profileAvatar = firstNonEmptyString(
+        const profileAvatar = firstAvatarUrl(
           profile?.profileImageUrl,
           profile?.profile_image_url,
           profile?.avatarUrl,

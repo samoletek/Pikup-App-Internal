@@ -53,7 +53,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     setDriverOnline,
     setDriverOffline,
     updateDriverHeartbeat,
-    getDriverTrips,
   } = useDriverActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const [showDeclinedBannerFromRoute, setShowDeclinedBannerFromRoute] = useState(
@@ -75,11 +74,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   // Phone verification modal
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
 
-  // Recent trips modal
-  const [dashboardExpanded, setDashboardExpanded] = useState(false);
-  const [showRecentTrips, setShowRecentTrips] = useState(false);
-  const [recentTrips, setRecentTrips] = useState([]);
-  const [recentTripsLoading, setRecentTripsLoading] = useState(false);
+  // Offline dashboard expansion state
+  const [, setDashboardExpanded] = useState(false);
 
   // Route for incoming request (Mapbox Directions)
   const cameraRef = useRef(null);
@@ -307,18 +303,14 @@ export default function DriverHomeScreen({ navigation, route }) {
   const {
     handleAcceptRequest,
     handleClosePhoneVerify,
-    handleCloseRecentTrips,
     handleCloseRequestModal,
     handleMessageCustomer,
-    handleOpenRecentTrips,
     handlePhoneVerified,
     handleRequestMarkerPress,
     handleViewRequestDetails,
   } = useDriverHomeRequestActions({
     acceptRequest,
     clearIncomingRoute,
-    currentUserId,
-    getDriverTrips,
     isAcceptingRequestRef,
     loadRequests,
     navigation,
@@ -331,12 +323,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     setIncomingRequest,
     setIsMinimized,
     setPhoneVerifyVisible,
-    setRecentTrips,
-    setRecentTripsLoading,
     setSelectedRequest,
     setShowAllRequests,
     setShowIncomingModal,
-    setShowRecentTrips,
     setShowRequestModal,
     showRequestModal,
   });
@@ -385,8 +374,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     cameraRef, isCompact, isRestoringActiveTrip, activeJob, activeJobStatusLabel,
     activeJobDestinationAddress, activeJobSecondaryLabel, isScheduledPoolActive, waitTime,
     progressValue, incomingRequest, requestTimeRemaining, miniBarPulse, formatRequestTime,
-    driverLocation, loading, error, requestTimerTotal, dashboardExpanded, navigation,
-    phoneVerifyVisible, showRecentTrips, recentTrips, recentTripsLoading,
+    driverLocation, loading, error, requestTimerTotal, navigation,
+    phoneVerifyVisible,
     insetsTop: insets.top,
     onRequestMarkerPress: handleRequestMarkerPress,
     onResumeTrip: () => openActiveTrip(activeJob),
@@ -405,12 +394,10 @@ export default function DriverHomeScreen({ navigation, route }) {
     onIncomingRequestDecline: handleIncomingRequestDecline,
     onIncomingRequestMinimize: handleIncomingRequestMinimize,
     onIncomingSnapChange: handleIncomingSnapChange,
-    onOpenRecentTrips: handleOpenRecentTrips,
     onDashboardExpandedChange: setDashboardExpanded,
     onClosePhoneVerify: handleClosePhoneVerify,
     onPhoneVerified: handlePhoneVerified,
     phoneVerifyUserId: currentUser?.uid || currentUser?.id,
-    onCloseRecentTrips: handleCloseRecentTrips,
     showDeclinedSupportBanner,
     onOpenDeclinedSupport: handleOpenDeclinedSupport,
     isDriverGeoRestricted,

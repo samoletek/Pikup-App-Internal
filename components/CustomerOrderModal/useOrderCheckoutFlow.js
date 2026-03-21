@@ -224,7 +224,8 @@ export default function useOrderCheckoutFlow({
     if (isSubmitting || confirmCountdown > 0) {
       return;
     }
-    if (!validateStep()) {
+    const isStepValid = await Promise.resolve(validateStep());
+    if (!isStepValid) {
       return;
     }
 

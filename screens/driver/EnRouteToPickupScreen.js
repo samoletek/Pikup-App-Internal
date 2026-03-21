@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   Animated,
+  Image,
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,6 +29,8 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
 
   const {
     counterpartName,
+    counterpartAvatarUrl,
+    counterpartInitials,
     counterpartRating,
     destinationCoordinate,
     distance,
@@ -151,7 +154,11 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
           <View style={styles.customerCard}>
             <View style={styles.customerInfo}>
               <View style={styles.customerAvatar}>
-                <Ionicons name="person" size={20} color={colors.white} />
+                {counterpartAvatarUrl ? (
+                  <Image source={{ uri: counterpartAvatarUrl }} style={styles.customerAvatarImage} />
+                ) : (
+                  <Text style={styles.customerAvatarInitials}>{counterpartInitials}</Text>
+                )}
               </View>
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>{counterpartName}</Text>
@@ -182,7 +189,11 @@ export default function EnRouteToPickupScreen({ navigation, route }) {
           <View style={styles.customerCard}>
             <View style={styles.customerInfo}>
               <View style={styles.customerAvatar}>
-                <Ionicons name="person" size={20} color={colors.white} />
+                {counterpartAvatarUrl ? (
+                  <Image source={{ uri: counterpartAvatarUrl }} style={styles.customerAvatarImage} />
+                ) : (
+                  <Text style={styles.customerAvatarInitials}>{counterpartInitials}</Text>
+                )}
               </View>
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>{counterpartName}</Text>

@@ -111,6 +111,7 @@ export const getRecentTrips = (driverTrips = []) =>
     .slice(0, 4)
     .map((trip) => ({
       id: trip.id,
+      request: trip,
       date: formatTripDate(trip.completedAt || trip.timestamp),
       time: formatTripTime(trip.completedAt || trip.timestamp),
       pickup: trip.pickupAddress || trip.pickup?.address || 'Pickup Location',

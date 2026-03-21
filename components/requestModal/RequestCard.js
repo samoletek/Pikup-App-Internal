@@ -1,9 +1,10 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import { Alert, Animated, FlatList, Image, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../styles/theme';
 import { getDisplayPhotos, getScheduledLabel } from './requestModalUtils';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
 function RequestCard({
   item,
@@ -22,6 +23,15 @@ function RequestCard({
   const scheduledLabel = getScheduledLabel(item.scheduledTime);
   const timerValue = timers[item.id];
   const shouldShowTimer = Boolean(timerValue) && !hasScheduledTime;
+  const customerDisplay = resolveCustomerDisplayFromRequest(item, {
+    fallbackName: 'Customer',
+  });
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
+  const customerAvatarUrl = avatarLoadFailed ? null : customerDisplay.avatarUrl;
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [customerDisplay.avatarUrl]);
 
   const handleViewDetails = () => {
     if (typeof onViewDetails === 'function') {
@@ -149,21 +159,19 @@ function RequestCard({
 
         <View style={styles.customerSection}>
           <View style={styles.customerInfo}>
-            <Image
-              source={
-                item.customer?.photo
-                  ? {
-                      uri:
-                        typeof item.customer.photo === 'string'
-                          ? item.customer.photo
-                          : item.customer.photo.uri,
-                    }
-                  : require('../../assets/profile.png')
-              }
-              style={styles.customerPhoto}
-            />
+            {customerAvatarUrl ? (
+              <Image
+                source={{ uri: customerAvatarUrl }}
+                style={styles.customerPhoto}
+                onError={() => setAvatarLoadFailed(true)}
+              />
+            ) : (
+              <View style={styles.customerPhotoFallback}>
+                <Text style={styles.customerPhotoFallbackText}>{customerDisplay.initials}</Text>
+              </View>
+            )}
             <View>
-              <Text style={styles.customerName}>{item.customer?.name || item.customerName || 'Customer'}</Text>
+              <Text style={styles.customerName}>{customerDisplay.name}</Text>
               <View style={styles.ratingContainer}>
                 <Ionicons name="star" size={12} color={colors.gold} />
                 <Text style={styles.rating}>{item.customer?.rating || '5.0'}</Text>

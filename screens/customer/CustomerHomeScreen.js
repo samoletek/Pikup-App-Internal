@@ -29,7 +29,7 @@ import {
 } from "../../styles/theme";
 import useCustomerDeliveryTracking from "../../hooks/useCustomerDeliveryTracking";
 import usePendingBookingSearchUi from "../../hooks/usePendingBookingSearchUi";
-import useCustomerHomeFlow from "./useCustomerHomeFlow";
+import useCustomerHomeFlow, { CUSTOMER_LOCATION_GATE_STATUS } from "./useCustomerHomeFlow";
 
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -53,7 +53,6 @@ export default function CustomerHomeScreen({ navigation }) {
 
   const {
     activeDeliveryStep,
-    canCreateOrder,
     handleCancelPendingBooking,
     handleOpenActiveTripDetails,
     handleOrderConfirm,
@@ -63,6 +62,8 @@ export default function CustomerHomeScreen({ navigation }) {
     searchModalVisible,
     setPhoneVerifyVisible,
     setSearchModalVisible,
+    locationGateNotice,
+    locationGateStatus,
     userLocation,
   } = useCustomerHomeFlow({
     activeDelivery,
@@ -121,6 +122,24 @@ export default function CustomerHomeScreen({ navigation }) {
     return [-84.388, 33.749];
   }, [pendingBooking, searchingMarkerCoordinate, userLocation]);
 
+  const showCreateOrderTrigger = !activeDelivery && !pendingBooking;
+  const isCheckingLocationGate = (
+    locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.CHECKING
+  );
+  const isCreateOrderLockedByLocation = (
+    showCreateOrderTrigger &&
+    locationGateStatus !== CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
+  );
+  const createOrderTriggerTitle = isCreateOrderLockedByLocation
+    ? (isCheckingLocationGate ? "Checking location..." : "Service not available")
+    : "Where to?";
+  const createOrderTriggerBadgeLabel = isCreateOrderLockedByLocation
+    ? (isCheckingLocationGate ? "Please wait" : "Blocked")
+    : "Now";
+  const createOrderTriggerIcon = isCreateOrderLockedByLocation
+    ? (isCheckingLocationGate ? "time" : "lock-closed")
+    : "search";
+
   return (
     <View style={styles.container}>
       <MapboxMap
@@ -166,6 +185,15 @@ export default function CustomerHomeScreen({ navigation }) {
         />
       </View>
 
+      {showCreateOrderTrigger && Boolean(locationGateNotice) ? (
+        <View style={[styles.geoNoticeContainer, { top: insets.top + 40 }]}>
+          <Ionicons name="information-circle" size={16} color={colors.warning} />
+          <Text style={styles.geoNoticeText}>
+            {locationGateNotice}
+          </Text>
+        </View>
+      ) : null}
+
       {activeDelivery && activeDeliveryStep ? (
         <View
           style={[
@@ -207,7 +235,7 @@ export default function CustomerHomeScreen({ navigation }) {
         </View>
       ) : null}
 
-      {canCreateOrder ? (
+      {showCreateOrderTrigger ? (
         <View
           style={[
             styles.floatingTriggerContainer,
@@ -215,15 +243,35 @@ export default function CustomerHomeScreen({ navigation }) {
           ]}
         >
           <TouchableOpacity
-            style={styles.floatingTrigger}
-            onPress={() => setSearchModalVisible(true)}
-            activeOpacity={0.9}
+            style={[
+              styles.floatingTrigger,
+              isCreateOrderLockedByLocation ? styles.floatingTriggerDisabled : null,
+            ]}
+            onPress={isCreateOrderLockedByLocation ? undefined : () => setSearchModalVisible(true)}
+            activeOpacity={isCreateOrderLockedByLocation ? 1 : 0.9}
+            disabled={isCreateOrderLockedByLocation}
           >
-            <View style={styles.triggerIconCircle}>
-              <Ionicons name="search" size={20} color={colors.text.primary} />
+            <View
+              style={[
+                styles.triggerIconCircle,
+                isCreateOrderLockedByLocation ? styles.triggerIconCircleDisabled : null,
+              ]}
+            >
+              <Ionicons
+                name={createOrderTriggerIcon}
+                size={20}
+                color={colors.text.primary}
+              />
             </View>
 
-            <Text style={styles.floatingTriggerText}>Where to?</Text>
+            <Text
+              style={[
+                styles.floatingTriggerText,
+                isCreateOrderLockedByLocation ? styles.floatingTriggerTextDisabled : null,
+              ]}
+            >
+              {createOrderTriggerTitle}
+            </Text>
 
             <View style={styles.triggerTimeBadge}>
               <Ionicons
@@ -232,7 +280,9 @@ export default function CustomerHomeScreen({ navigation }) {
                 color={colors.text.secondary}
                 style={styles.timeIconLeft}
               />
-              <Text style={styles.triggerTimeText}>Now</Text>
+              <Text style={styles.triggerTimeText}>
+                {createOrderTriggerBadgeLabel}
+              </Text>
               <Ionicons
                 name="chevron-down"
                 size={12}
@@ -259,7 +309,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
       <CustomerOrderModal
         key={orderModalKey}
-        visible={searchModalVisible && canCreateOrder}
+        visible={searchModalVisible && !isCreateOrderLockedByLocation}
         onClose={() => setSearchModalVisible(false)}
         onConfirm={async (orderData) => {
           const result = await handleOrderConfirm(orderData);

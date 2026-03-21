@@ -324,6 +324,19 @@ const styles = StyleSheet.create({
     borderRadius: (spacing.xxxl - spacing.sm) / 2,
     backgroundColor: colors.background.elevated,
   },
+  customerPhotoFallback: {
+    width: spacing.xxxl - spacing.sm,
+    height: spacing.xxxl - spacing.sm,
+    borderRadius: (spacing.xxxl - spacing.sm) / 2,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerPhotoFallbackText: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
   customerInfo: {
     marginLeft: spacing.md,
   },

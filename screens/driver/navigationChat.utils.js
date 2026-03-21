@@ -1,4 +1,5 @@
 import { logger } from "../../services/logger";
+import { resolveCustomerDisplayFromRequest } from "../../utils/profileDisplay";
 
 export const openDriverCustomerChat = async ({
   requestData,
@@ -45,11 +46,14 @@ export const openDriverCustomerChat = async ({
     }
   }
 
-  const customerName =
-    req.customerName ||
-    req.customer?.name ||
-    req.customer?.displayName ||
-    (customerEmail ? customerEmail.split("@")[0] : "Customer");
+  const customerDisplay = resolveCustomerDisplayFromRequest(
+    {
+      ...req,
+      customerEmail,
+    },
+    { fallbackName: "Customer" }
+  );
+  const customerName = customerDisplay.name;
 
   if (!requestId || !currentUserId) {
     logger.error("NavigationChatUtils", "Missing required data for chat", {
@@ -65,7 +69,7 @@ export const openDriverCustomerChat = async ({
     customerId || null,
     currentUserId,
     customerName,
-    req.assignedDriverName || ""
+    req.assignedDriverName || req.driverName || req.driver?.name || "Driver"
   );
 
   if (!conversationId) {
@@ -75,7 +79,7 @@ export const openDriverCustomerChat = async ({
   navigation.navigate("MessageScreen", {
     conversationId,
     requestId,
-    driverName: customerName,
+    customerName,
   });
 
   return true;

@@ -10,7 +10,6 @@ import IncomingRequestMiniBar from './IncomingRequestMiniBar';
 import RequestModal from '../RequestModal';
 import IncomingRequestModal from '../IncomingRequestModal';
 import PhoneVerificationModal from '../PhoneVerificationModal';
-import RecentTripsModal from '../RecentTripsModal';
 
 export default function DriverHomeScreenContent({
   styles,
@@ -65,18 +64,12 @@ export default function DriverHomeScreenContent({
   onIncomingRequestDecline,
   onIncomingRequestMinimize,
   onIncomingSnapChange,
-  dashboardExpanded,
-  onOpenRecentTrips,
   navigation,
   onDashboardExpandedChange,
   phoneVerifyVisible,
   onClosePhoneVerify,
   onPhoneVerified,
   phoneVerifyUserId,
-  showRecentTrips,
-  onCloseRecentTrips,
-  recentTrips,
-  recentTripsLoading,
   showDeclinedSupportBanner,
   onOpenDeclinedSupport,
   isDriverGeoRestricted,
@@ -194,16 +187,6 @@ export default function DriverHomeScreenContent({
         onSnapChange={onIncomingSnapChange}
       />
 
-      {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && !dashboardExpanded && (
-        <TouchableOpacity
-          style={styles.floatingRecentTripsBtn}
-          onPress={onOpenRecentTrips}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="time-outline" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
-      )}
-
       {!isOnline && !hasActiveTrip && !isRestoringActiveTrip && (
         <OfflineDashboard
           onGoOnline={onGoOnline}
@@ -220,13 +203,6 @@ export default function DriverHomeScreenContent({
         onVerified={onPhoneVerified}
         userId={phoneVerifyUserId}
         userTable="drivers"
-      />
-
-      <RecentTripsModal
-        visible={showRecentTrips}
-        onClose={onCloseRecentTrips}
-        trips={recentTrips}
-        loading={recentTripsLoading}
       />
     </View>
   );

@@ -58,7 +58,7 @@ export const fetchDriverMetadata = async (driverId: string) => {
 export const fetchCustomersByIds = async (customerIds: string[]) => {
   return supabase
     .from('customers')
-    .select('id, first_name, last_name, email')
+    .select('id, first_name, last_name, email, profile_image_url')
     .in('id', customerIds);
 };
 

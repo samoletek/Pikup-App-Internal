@@ -3,9 +3,15 @@ export const SUPPORTED_ORDER_STATE_CODES = Object.freeze(["GA"]);
 export const DEFAULT_MANPOWER_SALES_TAX_RATE = 0.08;
 
 export const COMING_SOON_UNSUPPORTED_STATE_MESSAGE =
-  "Pikup is currently expanding across the country. We are not operating in this area at this time, but we are working hard to bring affordable, community-driven moving to your neighborhood soon.";
+  "Pikup is currently available only in Georgia, USA. We are expanding to new areas soon.";
+
+export const SERVICE_AREA_UNRESOLVED_MESSAGE =
+  "Pikup is currently available only in Georgia, USA. We could not verify your current state yet. If you are in Georgia, enable Precise Location and try again.";
+
+export const CUSTOMER_LOCATION_REQUIRED_MESSAGE =
+  "Location access is required to check service availability in your area.";
 
 export const DRIVER_AVAILABILITY_COMING_SOON_TITLE = "Coming Soon";
 
 export const DRIVER_AVAILABILITY_COMING_SOON_MESSAGE =
-  "Driver mode is not available in your current area yet.";
+  "Driver mode is currently available only in Georgia, USA.";

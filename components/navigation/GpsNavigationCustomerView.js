@@ -1,11 +1,12 @@
 // Gps Navigation Customer View component: renders its UI and handles related interactions.
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Mapbox from '@rnmapbox/maps';
 import MapboxMap from '../mapbox/MapboxMap';
 import { colors, spacing } from '../../styles/theme';
+import { resolveDriverDisplayFromRequest } from '../../utils/profileDisplay';
 
 export default function GpsNavigationCustomerView({
   styles,
@@ -31,6 +32,19 @@ export default function GpsNavigationCustomerView({
     outputRange: [200, 0],
   });
   const isPickupStage = stage === 'pickup';
+  const driverDisplay = resolveDriverDisplayFromRequest(requestData, {
+    fallbackName: 'Your Driver',
+  });
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const driverAvatarUrl = avatarLoadError ? null : driverDisplay.avatarUrl;
+  const driverVehicleInfo =
+    requestData?.driver?.vehicleInfo ||
+    [requestData?.vehicleType, requestData?.vehiclePlate].filter(Boolean).join(' • ') ||
+    'Vehicle information not available';
+
+  useEffect(() => {
+    setAvatarLoadError(false);
+  }, [driverDisplay.avatarUrl]);
 
   return (
     <View style={styles.container}>
@@ -128,18 +142,25 @@ export default function GpsNavigationCustomerView({
 
           <View style={styles.driverInfoContainer}>
             <View style={styles.driverImageContainer}>
-              <Image
-                source={require('../../assets/profile.png')}
-                style={styles.driverImage}
-              />
+              {driverAvatarUrl ? (
+                <Image
+                  source={{ uri: driverAvatarUrl }}
+                  style={styles.driverImage}
+                  onError={() => setAvatarLoadError(true)}
+                />
+              ) : (
+                <View style={styles.driverImageFallback}>
+                  <Text style={styles.driverImageFallbackText}>{driverDisplay.initials}</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.driverDetails}>
               <Text style={styles.driverName}>
-                {requestData?.driver?.name || 'Your Driver'}
+                {driverDisplay.name}
               </Text>
               <Text style={styles.vehicleInfo}>
-                {requestData?.driver?.vehicleInfo || 'Vehicle information not available'}
+                {driverVehicleInfo}
               </Text>
             </View>
 

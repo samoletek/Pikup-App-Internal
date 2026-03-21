@@ -10,6 +10,10 @@ import {
     isSupportedOrderStateCode,
     isTripWithinSupportedStates,
 } from '../utils/locationState';
+import {
+    resolveDisplayFromProfile,
+    resolveCustomerDisplayFromRequest,
+} from '../utils/profileDisplay';
 
 export const filterTripsForAvailability = ({
     trips,
@@ -148,12 +152,19 @@ export const buildCustomerMapFromRows = (customers = []) => {
     const customerMap = {};
 
     customers.forEach((customer) => {
+        const display = resolveDisplayFromProfile(customer, {
+            fallbackName: 'Customer',
+            fallbackEmail: customer?.email || null,
+        });
+
         customerMap[customer.id] = {
-            name:
-                [customer.first_name, customer.last_name].filter(Boolean).join(' ') ||
-                customer.email?.split('@')[0] ||
-                'Customer',
-            email: customer.email,
+            id: customer.id,
+            name: display.name,
+            email: customer.email || null,
+            avatarUrl: display.avatarUrl,
+            initials: display.initials,
+            firstName: customer.first_name || customer.firstName || null,
+            lastName: customer.last_name || customer.lastName || null,
         };
     });
 
@@ -163,6 +174,17 @@ export const buildCustomerMapFromRows = (customers = []) => {
 export const mapAvailableRequestsForDriver = (sortedTrips, customerMap = {}) =>
     sortedTrips.map((trip) => {
         const customer = customerMap[trip.customerId] || {};
+        const customerDisplay = resolveCustomerDisplayFromRequest(
+            {
+                customerName: customer.name,
+                customerEmail: customer.email,
+                customerAvatarUrl: customer.avatarUrl,
+                customerFirstName: customer.firstName,
+                customerLastName: customer.lastName,
+            },
+            { fallbackName: 'Customer' }
+        );
+
         return {
             id: trip.id,
             price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
@@ -184,8 +206,25 @@ export const mapAvailableRequestsForDriver = (sortedTrips, customerMap = {}) =>
             photos: trip.pickupPhotos || [],
             scheduledTime: trip.scheduledTime || null,
             dispatchRequirements: trip.dispatchRequirements || null,
-            customerName: customer.name || 'Customer',
+            customerName: customerDisplay.name,
             customerEmail: customer.email || null,
+            customerFirstName: customer.firstName || null,
+            customerLastName: customer.lastName || null,
+            customerAvatarUrl: customerDisplay.avatarUrl,
+            customerProfileImageUrl: customerDisplay.avatarUrl,
+            customerPhoto: customerDisplay.avatarUrl,
+            customerInitials: customerDisplay.initials,
+            customer: {
+                id: customer.id || trip.customerId || null,
+                name: customerDisplay.name,
+                first_name: customer.firstName || null,
+                last_name: customer.lastName || null,
+                email: customer.email || null,
+                profileImageUrl: customerDisplay.avatarUrl,
+                profile_image_url: customerDisplay.avatarUrl,
+                photo: customerDisplay.avatarUrl,
+                initials: customerDisplay.initials,
+            },
             originalData: trip,
         };
     });

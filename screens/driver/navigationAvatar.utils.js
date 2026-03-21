@@ -1,11 +1,6 @@
-export const firstNonEmptyString = (...values) => {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return null;
-};
+import { firstAvatarUrl, firstNonEmptyString } from '../../utils/profileDisplay';
+
+export { firstNonEmptyString };
 
 export const resolveCustomerAvatarFromRequest = (requestLike) => {
   if (!requestLike || typeof requestLike !== 'object') {
@@ -27,7 +22,7 @@ export const resolveCustomerAvatarFromRequest = (requestLike) => {
     originalData.customer_profile ||
     {};
 
-  return firstNonEmptyString(
+  return firstAvatarUrl(
     requestLike.customerPhoto,
     customer.profileImageUrl,
     customer.profile_image_url,

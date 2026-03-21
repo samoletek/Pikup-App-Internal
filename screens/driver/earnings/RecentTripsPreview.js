@@ -3,7 +3,12 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../styles/theme';
 
-export default function RecentTripsPreview({ styles, recentTrips, onViewAll }) {
+export default function RecentTripsPreview({
+  styles,
+  recentTrips,
+  onViewAll,
+  onOpenTrip = null,
+}) {
   return (
     <View style={styles.historySection}>
       <View style={styles.historyHeader}>
@@ -15,38 +20,45 @@ export default function RecentTripsPreview({ styles, recentTrips, onViewAll }) {
 
       {recentTrips.length > 0 ? (
         recentTrips.map((trip) => (
-          <View key={trip.id} style={styles.tripCard}>
-            <View style={styles.tripHeader}>
-              <View style={styles.tripLeft}>
-                <Text style={styles.tripDate}>{trip.date}</Text>
-                <Text style={styles.tripTime}>{trip.time}</Text>
+          <TouchableOpacity
+            key={trip.id}
+            onPress={onOpenTrip ? () => onOpenTrip(trip) : undefined}
+            activeOpacity={onOpenTrip ? 0.85 : 1}
+            disabled={!onOpenTrip}
+          >
+            <View style={styles.tripCard}>
+              <View style={styles.tripHeader}>
+                <View style={styles.tripLeft}>
+                  <Text style={styles.tripDate}>{trip.date}</Text>
+                  <Text style={styles.tripTime}>{trip.time}</Text>
+                </View>
+                <Text style={styles.tripAmount}>${trip.amount.toFixed(2)}</Text>
               </View>
-              <Text style={styles.tripAmount}>${trip.amount.toFixed(2)}</Text>
-            </View>
 
-            <View style={styles.tripRoute}>
-              <View style={styles.routePoint}>
-                <Ionicons name="radio-button-on" size={10} color={colors.success} />
-                <Text style={styles.routeText}>{trip.pickup}</Text>
+              <View style={styles.tripRoute}>
+                <View style={styles.routePoint}>
+                  <Ionicons name="radio-button-on" size={10} color={colors.success} />
+                  <Text style={styles.routeText}>{trip.pickup}</Text>
+                </View>
+                <View style={styles.routeLine} />
+                <View style={styles.routePoint}>
+                  <Ionicons name="location" size={10} color={colors.primary} />
+                  <Text style={styles.routeText}>{trip.dropoff}</Text>
+                </View>
               </View>
-              <View style={styles.routeLine} />
-              <View style={styles.routePoint}>
-                <Ionicons name="location" size={10} color={colors.primary} />
-                <Text style={styles.routeText}>{trip.dropoff}</Text>
-              </View>
-            </View>
 
-            <View style={styles.tripStats}>
-              <View style={styles.tripStatItem}>
-                <Ionicons name="car" size={12} color={colors.text.subtle} />
-                <Text style={styles.tripStatText}>{trip.distance}</Text>
-              </View>
-              <View style={styles.tripStatItem}>
-                <Ionicons name="time" size={12} color={colors.text.subtle} />
-                <Text style={styles.tripStatText}>{trip.duration}</Text>
+              <View style={styles.tripStats}>
+                <View style={styles.tripStatItem}>
+                  <Ionicons name="car" size={12} color={colors.text.subtle} />
+                  <Text style={styles.tripStatText}>{trip.distance}</Text>
+                </View>
+                <View style={styles.tripStatItem}>
+                  <Ionicons name="time" size={12} color={colors.text.subtle} />
+                  <Text style={styles.tripStatText}>{trip.duration}</Text>
+                </View>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
         ))
       ) : (
         <View style={styles.emptyTripsState}>

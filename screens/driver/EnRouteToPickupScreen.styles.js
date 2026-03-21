@@ -136,6 +136,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  customerAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  customerAvatarInitials: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
   customerDetails: {
     marginLeft: spacing.md,

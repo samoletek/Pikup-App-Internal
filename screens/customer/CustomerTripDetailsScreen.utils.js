@@ -19,6 +19,7 @@ import {
   resolvePhotoUrisAsync,
   toArray,
 } from "../../utils/tripDetails/photoUtils";
+import { resolveDriverDisplayFromRequest } from "../../utils/profileDisplay";
 
 export const ICON_SIZE_SMALL = typography.fontSize.sm + 2;
 export const ICON_SIZE_BASE = typography.fontSize.md;
@@ -72,15 +73,10 @@ export const toDisplayTrip = (trip, fallback) => {
   const meta = statusMeta(status);
   const id = String(source.id || fallback?.id || "Unknown");
 
-  const driverNameRaw = firstText(
-    source.driver,
-    source.assignedDriverEmail,
-    source.driverEmail,
-    source.driver_email
-  );
-  const driverName = driverNameRaw
-    ? (driverNameRaw.includes("@") ? driverNameRaw.split("@")[0] : driverNameRaw)
-    : "Not assigned";
+  const driverDisplay = resolveDriverDisplayFromRequest(source, {
+    fallbackName: "Not assigned",
+  });
+  const driverName = driverDisplay.name;
   const driverId =
     source.assignedDriverId ||
     source.driverId ||

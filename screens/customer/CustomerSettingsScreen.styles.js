@@ -111,6 +111,11 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.medium,
   },
+  switchTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   switchDescription: {
     color: colors.text.tertiary,
     fontSize: typography.fontSize.base,

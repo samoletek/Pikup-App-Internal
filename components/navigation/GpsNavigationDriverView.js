@@ -7,6 +7,7 @@ import Mapbox from '@rnmapbox/maps';
 import MapboxMap from '../mapbox/MapboxMap';
 import NavigationInstructionsBanner from './NavigationInstructionsBanner';
 import { colors, spacing } from '../../styles/theme';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
 export default function GpsNavigationDriverView({
   styles,
@@ -38,6 +39,9 @@ export default function GpsNavigationDriverView({
   const cardTranslateY = cardAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [200, 0],
+  });
+  const customerDisplay = resolveCustomerDisplayFromRequest(requestData, {
+    fallbackName: 'Customer',
   });
 
   if (isNavigating) {
@@ -80,13 +84,13 @@ export default function GpsNavigationDriverView({
                 {customerAvatarUrl ? (
                   <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={onCustomerAvatarError} />
                 ) : (
-                  <Ionicons name="person" size={22} color={colors.text.muted} />
+                  <Text style={styles.customerAvatarInitials}>{customerDisplay.initials}</Text>
                 )}
               </View>
 
               <View style={styles.customerDetails}>
                 <Text style={styles.customerName}>
-                  {requestData?.customer?.name || 'Customer'}
+                  {customerDisplay.name}
                 </Text>
                 <Text style={styles.itemInfo} numberOfLines={1}>
                   {requestData?.item?.description || 'Item information not available'}
@@ -237,13 +241,13 @@ export default function GpsNavigationDriverView({
               {customerAvatarUrl ? (
                 <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={onCustomerAvatarError} />
               ) : (
-                <Ionicons name="person" size={22} color={colors.text.muted} />
+                <Text style={styles.customerAvatarInitials}>{customerDisplay.initials}</Text>
               )}
             </View>
 
             <View style={styles.customerDetails}>
               <Text style={styles.customerName}>
-                {requestData?.customer?.name || 'Customer'}
+                {customerDisplay.name}
               </Text>
               <Text style={styles.itemInfo}>
                 {requestData?.item?.description || 'Item information not available'}

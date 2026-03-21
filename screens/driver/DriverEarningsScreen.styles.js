@@ -24,6 +24,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xxxl,
     fontWeight: typography.fontWeight.bold,
   },
+  headerActionButton: {
+    width: spacing.xxl,
+    height: spacing.xxl,
+    borderRadius: borderRadius.circle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   periodSelector: {
     flexDirection: "row",
     backgroundColor: colors.background.secondary,

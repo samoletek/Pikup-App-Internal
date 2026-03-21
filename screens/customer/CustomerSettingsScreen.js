@@ -11,6 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthIdentity } from "../../contexts/AuthContext";
+import AppSwitch from "../../components/AppSwitch";
 import ScreenHeader from "../../components/ScreenHeader";
 import {
   colors,
@@ -20,6 +21,7 @@ import {
 import styles from "./CustomerSettingsScreen.styles";
 import { notificationItems } from "./customerSettings.constants";
 import useCustomerSettingsData from "./useCustomerSettingsData";
+import useLocationSettingsControls from "../../hooks/useLocationSettingsControls";
 
 export default function CustomerSettingsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -38,6 +40,16 @@ export default function CustomerSettingsScreen({ navigation, route }) {
     navigation,
     route,
     userType,
+  });
+  const {
+    locationStatus,
+    locationTrackingDescription,
+    preciseLocationDescription,
+    handleLocationTrackingToggle,
+    handlePreciseLocationToggle,
+    openLocationSettings,
+  } = useLocationSettingsControls({
+    loggerScope: "CustomerSettingsLocation",
   });
 
   const renderRow = ({
@@ -117,6 +129,69 @@ export default function CustomerSettingsScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          {!notificationsOnly && (
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionLabel}>LOCATION</Text>
+              <View style={styles.card}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchInfo}>
+                    <View style={styles.switchTitleRow}>
+                      <Ionicons
+                        name="location-outline"
+                        size={18}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.switchTitle}>Location Tracking</Text>
+                    </View>
+                    <Text style={styles.switchDescription}>
+                      {locationTrackingDescription}
+                    </Text>
+                  </View>
+                  <View style={styles.switchControl}>
+                    <AppSwitch
+                      value={locationStatus.locationTrackingEnabled}
+                      onValueChange={handleLocationTrackingToggle}
+                      disabled={locationStatus.loading}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.switchRow}>
+                  <View style={styles.switchInfo}>
+                    <View style={styles.switchTitleRow}>
+                      <Ionicons
+                        name="locate-outline"
+                        size={18}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.switchTitle}>Precise Location</Text>
+                    </View>
+                    <Text style={styles.switchDescription}>
+                      {preciseLocationDescription}
+                    </Text>
+                  </View>
+                  <View style={styles.switchControl}>
+                    <AppSwitch
+                      value={locationStatus.preciseLocationEnabled}
+                      onValueChange={handlePreciseLocationToggle}
+                      disabled={locationStatus.loading}
+                    />
+                  </View>
+                </View>
+
+                {renderRow({
+                  rowKey: "open-location-settings",
+                  icon: "settings-outline",
+                  label: "Open System Location Settings",
+                  subtitle: "Manage permission, precise location, and service mode.",
+                  onPress: openLocationSettings,
+                  isExternal: true,
+                  isLast: true,
+                })}
+              </View>
+            </View>
+          )}
+
           {accountRows.length > 0 && (
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionLabel}>ACCOUNT</Text>

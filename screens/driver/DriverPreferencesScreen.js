@@ -28,6 +28,7 @@ import {
   DRIVER_PREFERENCE_TIPS,
 } from "./driverPreferences.constants";
 import useDriverPreferencesData from "./useDriverPreferencesData";
+import useLocationSettingsControls from "../../hooks/useLocationSettingsControls";
 
 export default function DriverPreferencesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -47,6 +48,16 @@ export default function DriverPreferencesScreen({ navigation }) {
     updateDriverPaymentProfile,
     userId,
   });
+  const {
+    locationStatus,
+    locationTrackingDescription,
+    preciseLocationDescription,
+    handleLocationTrackingToggle,
+    handlePreciseLocationToggle,
+    openLocationSettings,
+  } = useLocationSettingsControls({
+    loggerScope: "DriverPreferencesLocation",
+  });
 
   return (
     <View style={styles.container}>
@@ -65,6 +76,87 @@ export default function DriverPreferencesScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.contentColumn, { maxWidth: contentMaxWidth }]}>
+          <View style={styles.sectionBlock}>
+            <View style={styles.sectionLabelRow}>
+              <Ionicons name="location-outline" size={14} color={colors.text.muted} />
+              <Text style={styles.sectionLabel}>LOCATION</Text>
+            </View>
+            <View style={styles.card}>
+              <View style={styles.toggleRow}>
+                <View
+                  style={[
+                    styles.toggleIconBox,
+                    locationStatus.locationTrackingEnabled && styles.toggleIconBoxActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={20}
+                    color={
+                      locationStatus.locationTrackingEnabled
+                        ? colors.primary
+                        : colors.text.muted
+                    }
+                  />
+                </View>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Location Tracking</Text>
+                  <Text style={styles.toggleDesc}>{locationTrackingDescription}</Text>
+                </View>
+                <AppSwitch
+                  value={locationStatus.locationTrackingEnabled}
+                  onValueChange={handleLocationTrackingToggle}
+                  disabled={locationStatus.loading}
+                />
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View
+                  style={[
+                    styles.toggleIconBox,
+                    locationStatus.preciseLocationEnabled && styles.toggleIconBoxActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="locate-outline"
+                    size={20}
+                    color={
+                      locationStatus.preciseLocationEnabled
+                        ? colors.primary
+                        : colors.text.muted
+                    }
+                  />
+                </View>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Precise Location</Text>
+                  <Text style={styles.toggleDesc}>{preciseLocationDescription}</Text>
+                </View>
+                <AppSwitch
+                  value={locationStatus.preciseLocationEnabled}
+                  onValueChange={handlePreciseLocationToggle}
+                  disabled={locationStatus.loading}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.toggleRow, styles.rowLast]}
+                onPress={openLocationSettings}
+                activeOpacity={0.8}
+              >
+                <View style={styles.toggleIconBox}>
+                  <Ionicons name="settings-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleLabel}>Open System Location Settings</Text>
+                  <Text style={styles.toggleDesc}>
+                    Manage permission, precise location, and device location mode.
+                  </Text>
+                </View>
+                <Ionicons name="open-outline" size={18} color={colors.text.tertiary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
           <View style={styles.tipsBlock}>
             <Text style={styles.tipsLabel}>TIPS</Text>
             <View style={styles.card}>

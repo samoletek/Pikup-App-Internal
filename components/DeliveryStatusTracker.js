@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTripActions } from '../contexts/AuthContext';
@@ -22,6 +23,7 @@ import {
 } from './deliveryTracker/deliveryTracker.utils';
 import useDeliveryTrackerRequestData from '../hooks/useDeliveryTrackerRequestData';
 import useDeliveryTrackerSheet from '../hooks/useDeliveryTrackerSheet';
+import { resolveDriverDisplayFromRequest } from '../utils/profileDisplay';
 
 export default function DeliveryStatusTracker({
   requestId,
@@ -195,20 +197,37 @@ export default function DeliveryStatusTracker({
   };
 
   const renderDriverInfo = () => {
-    if (!requestData || !requestData.assignedDriverEmail) {
+    if (!requestData) {
+      return null;
+    }
+    const hasDriverIdentity = Boolean(
+      requestData.assignedDriverId ||
+      requestData.driverId ||
+      requestData.assignedDriverEmail ||
+      requestData.driverEmail ||
+      requestData.driver?.name ||
+      requestData.driverName
+    );
+    if (!hasDriverIdentity) {
       return null;
     }
 
-    const driverName = requestData.assignedDriverEmail.split('@')[0];
+    const driverDisplay = resolveDriverDisplayFromRequest(requestData, {
+      fallbackName: 'Driver',
+    });
 
     return (
       <View style={styles.driverInfoContainer}>
         <View style={styles.driverInfo}>
           <View style={styles.driverAvatar}>
-            <Ionicons name="person" size={18} color={colors.white} />
+            {driverDisplay.avatarUrl ? (
+              <Image source={{ uri: driverDisplay.avatarUrl }} style={styles.driverAvatarImage} />
+            ) : (
+              <Text style={styles.driverAvatarInitials}>{driverDisplay.initials}</Text>
+            )}
           </View>
           <View style={styles.driverTextInfo}>
-            <Text style={styles.driverName}>{driverName}</Text>
+            <Text style={styles.driverName}>{driverDisplay.name}</Text>
             <Text style={styles.vehicleInfo}>
               {requestData.vehicleType || 'Vehicle'} • {requestData.vehiclePlate || 'Plate'}
             </Text>

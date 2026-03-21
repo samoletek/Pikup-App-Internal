@@ -240,7 +240,7 @@ export default function useDeliveryNavigationData({
   const fetchRequestData = useCallback(async () => {
     try {
       const latestData = await getRequestById(request.id);
-      setRequestData(latestData);
+      setRequestData((prev) => ({ ...(prev || {}), ...(latestData || {}) }));
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error fetching request data', error);
     }

@@ -4,6 +4,8 @@ import { borderRadius, colors, spacing, typography } from '../styles/theme';
 const { width, height } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.9;
 const CARD_HEIGHT = height * 0.35;
+const CUSTOMER_PHOTO_SIZE = spacing.xxl + spacing.xs;
+const CUSTOMER_PHOTO_RADIUS = CUSTOMER_PHOTO_SIZE / 2;
 
 const styles = StyleSheet.create({
   backdrop: {
@@ -253,13 +255,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   customerPhoto: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: CUSTOMER_PHOTO_SIZE,
+    height: CUSTOMER_PHOTO_SIZE,
+    borderRadius: CUSTOMER_PHOTO_RADIUS,
     marginRight: spacing.md,
     borderWidth: 1,
     borderColor: colors.overlayPrimarySoft,
     backgroundColor: colors.background.input,
+  },
+  customerPhotoFallback: {
+    width: CUSTOMER_PHOTO_SIZE,
+    height: CUSTOMER_PHOTO_SIZE,
+    borderRadius: CUSTOMER_PHOTO_RADIUS,
+    marginRight: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.overlayPrimarySoft,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerPhotoFallbackText: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
   customerName: {
     color: colors.white,

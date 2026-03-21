@@ -1,5 +1,5 @@
 // Incoming Request Modal component: renders its UI and handles related interactions.
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import {
   resolvePhotoSource,
   resolvePhotoUri,
 } from './incomingRequestModal/incomingRequestModal.utils';
+import { resolveCustomerDisplayFromRequest } from '../utils/profileDisplay';
 
 export default function IncomingRequestModal({
   visible,
@@ -91,6 +92,16 @@ export default function IncomingRequestModal({
     () => resolveIncomingRequestData(request, timeRemaining, timerTotal),
     [request, timeRemaining, timerTotal]
   );
+  const customerDisplay = useMemo(
+    () => resolveCustomerDisplayFromRequest(request, { fallbackName: 'Customer' }),
+    [request]
+  );
+  const [customerAvatarLoadError, setCustomerAvatarLoadError] = useState(false);
+  const customerAvatarUrl = customerAvatarLoadError ? null : customerDisplay.avatarUrl;
+
+  useEffect(() => {
+    setCustomerAvatarLoadError(false);
+  }, [customerDisplay.avatarUrl]);
 
   if (!request) return null;
 
@@ -260,17 +271,20 @@ export default function IncomingRequestModal({
           )}
 
           <View style={styles.customerCard}>
-            <Image
-              source={
-                request.customer?.photo
-                  ? { uri: request.customer.photo }
-                  : require('../assets/profile.png')
-              }
-              style={styles.customerPhoto}
-            />
+            {customerAvatarUrl ? (
+              <Image
+                source={{ uri: customerAvatarUrl }}
+                style={styles.customerPhoto}
+                onError={() => setCustomerAvatarLoadError(true)}
+              />
+            ) : (
+              <View style={styles.customerPhotoFallback}>
+                <Text style={styles.customerPhotoFallbackText}>{customerDisplay.initials}</Text>
+              </View>
+            )}
             <View style={styles.customerInfo}>
               <Text style={styles.customerName}>
-                {request.customerName || (request.customerEmail ? request.customerEmail.split('@')[0] : 'Customer')}
+                {customerDisplay.name}
               </Text>
               <View style={styles.ratingRow}>
                 {[...Array(5)].map((_, i) => (

@@ -210,6 +210,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  driverAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  driverAvatarInitials: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
   },
   driverTextInfo: {
     flex: 1,

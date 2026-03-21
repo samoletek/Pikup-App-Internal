@@ -28,6 +28,28 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     ...shadows.lg,
   },
+  geoNoticeContainer: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 30,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background.warningSubtle,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  geoNoticeText: {
+    flex: 1,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    lineHeight: 18,
+  },
   floatingTriggerContainer: {
     position: "absolute",
     bottom: 0,
@@ -54,6 +76,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.navigation.tabBarBorder,
   },
+  floatingTriggerDisabled: {
+    opacity: 0.78,
+  },
   triggerIconCircle: {
     width: 32,
     height: 32,
@@ -63,11 +88,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: spacing.md,
   },
+  triggerIconCircleDisabled: {
+    backgroundColor: colors.warning,
+  },
   floatingTriggerText: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.text.primary,
     flex: 1,
+  },
+  floatingTriggerTextDisabled: {
+    color: colors.text.secondary,
   },
   triggerTimeBadge: {
     flexDirection: "row",

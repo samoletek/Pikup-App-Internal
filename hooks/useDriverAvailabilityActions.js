@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
-import * as Location from 'expo-location';
 import { getDriverReadinessProfile } from '../services/DriverService';
 import MapboxLocationService from '../services/MapboxLocationService';
 import { logger } from '../services/logger';
@@ -11,9 +10,15 @@ import {
 import {
   DRIVER_AVAILABILITY_COMING_SOON_MESSAGE as DRIVER_GEO_RESTRICTED_MESSAGE,
   DRIVER_AVAILABILITY_COMING_SOON_TITLE as DRIVER_GEO_RESTRICTED_TITLE,
+  SERVICE_AREA_UNRESOLVED_MESSAGE,
   SUPPORTED_ORDER_STATE_CODES,
 } from '../constants/orderAvailability';
 import { isSupportedOrderStateCode } from '../utils/locationState';
+import {
+  ensureForegroundLocationAvailability,
+  getCurrentPositionWithFallback,
+  showOpenLocationSettingsAlert,
+} from '../utils/locationPermissions';
 
 export default function useDriverAvailabilityActions({
   currentUser,
@@ -108,25 +113,27 @@ export default function useDriverAvailabilityActions({
         return;
       }
 
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Location permission is required to go online.');
+      const availability = await ensureForegroundLocationAvailability({
+        loggerScope: 'DriverAvailability',
+        permissionDeniedMessage:
+          'Please allow location access to go online and receive trip requests.',
+        servicesDisabledMessage:
+          'Please enable Location Services to go online and receive trip requests.',
+      });
+      if (!availability.ok) {
         setLoading(false);
         return;
       }
 
-      let location;
-      try {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-          timeout: 10000,
-        });
-      } catch {
-        location = await Location.getLastKnownPositionAsync({});
-      }
+      const location = await getCurrentPositionWithFallback();
 
-      if (!location) {
-        alert('Unable to determine your location. Please make sure location services are enabled and try again.');
+      if (!location?.coords?.latitude || !location?.coords?.longitude) {
+        showOpenLocationSettingsAlert({
+          title: 'Location Required',
+          message:
+            'We could not determine your current location. Please check location settings and try again.',
+          loggerScope: 'DriverAvailability',
+        });
         setLoading(false);
         return;
       }
@@ -151,8 +158,8 @@ export default function useDriverAvailabilityActions({
 
       if (!driverStateCode) {
         Alert.alert(
-          'Location Required',
-          'We could not verify your current service area. Please try again with location enabled.'
+          'Service Availability',
+          SERVICE_AREA_UNRESOLVED_MESSAGE
         );
         return;
       }
@@ -178,7 +185,7 @@ export default function useDriverAvailabilityActions({
       });
     } catch (error) {
       logger.error('DriverAvailability', 'Error going online', error);
-      alert('Could not go online. Please try again.');
+      Alert.alert('Go Online Failed', 'Could not go online. Please try again.');
     } finally {
       setLoading(false);
     }

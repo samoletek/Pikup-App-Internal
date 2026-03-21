@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
+import { AppState } from 'react-native';
 import { movedEnough } from '../screens/driver/DriverHomeScreen.utils';
 import { logger } from '../services/logger';
 import MapboxLocationService from '../services/MapboxLocationService';
+import {
+  ensureForegroundLocationAvailability,
+  getCurrentPositionWithFallback,
+  showOpenLocationSettingsAlert,
+} from '../utils/locationPermissions';
 
 const HEARTBEAT_INTERVAL_MS = 20000;
 const STATE_RESOLUTION_MIN_MOVE_METERS = 1000;
@@ -94,8 +100,14 @@ export default function useDriverHomeLocationTracking({
   }, [shouldResolveDriverState]);
 
   const initializeLocation = useCallback(async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
+    const availability = await ensureForegroundLocationAvailability({
+      loggerScope: 'DriverHomeLocationTracking',
+      permissionDeniedMessage:
+        'Please allow location access so we can verify service availability and keep navigation accurate.',
+      servicesDisabledMessage:
+        'Please enable Location Services so we can verify service availability and keep navigation accurate.',
+    });
+    if (!availability.ok) {
       return;
     }
 
@@ -104,7 +116,18 @@ export default function useDriverHomeLocationTracking({
       logger.warn('DriverHomeLocationTracking', 'Background location permission not granted. Real-time tracking may be limited.');
     }
 
-    const loc = await Location.getCurrentPositionAsync({});
+    const loc = await getCurrentPositionWithFallback();
+
+    if (!loc?.coords?.latitude || !loc?.coords?.longitude) {
+      showOpenLocationSettingsAlert({
+        title: 'Location Required',
+        message:
+          'We could not determine your location. Please check Location settings and try again.',
+        loggerScope: 'DriverHomeLocationTracking',
+      });
+      return;
+    }
+
     const nextLocation = {
       latitude: loc.coords.latitude,
       longitude: loc.coords.longitude,
@@ -175,6 +198,21 @@ export default function useDriverHomeLocationTracking({
     initializeLocation();
     return stopLocationTracking;
   }, [initializeLocation, stopLocationTracking]);
+
+  useEffect(() => {
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') {
+        return;
+      }
+      if (!latestDriverLocationRef.current) {
+        void initializeLocation();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, [initializeLocation]);
 
   useEffect(() => {
     if (isOnline && !hasActiveTrip) {

@@ -25,10 +25,13 @@ export default function CollapsibleMessagesHeader({
   scrollY,
   searchCollapseDistance = 56,
   titleCollapseDistance = 56,
+  rightContent = null,
+  sideSlotWidth = 36,
 }) {
   const inlineTitleStart =
     searchCollapseDistance + titleCollapseDistance * 0.45;
   const inlineTitleEnd = searchCollapseDistance + titleCollapseDistance;
+  const titleSideOffset = sideSlotWidth + spacing.base + spacing.sm;
   const inlineTitleOpacity = scrollY.interpolate({
     inputRange: [inlineTitleStart, inlineTitleEnd],
     outputRange: [0, 1],
@@ -54,29 +57,36 @@ export default function CollapsibleMessagesHeader({
       ]}
     >
       <View style={styles.topRow}>
-        {showBack ? (
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.text.primary} />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.iconButton} />
-        )}
+        <View style={[styles.sideSlot, { width: sideSlotWidth }]}>
+          {showBack ? (
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Ionicons name="chevron-back" size={22} color={colors.text.primary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.iconButton} />
+          )}
+        </View>
 
         <Animated.View
           pointerEvents="none"
-          style={[styles.inlineTitleWrap, { opacity: inlineTitleOpacity }]}
+          style={[
+            styles.inlineTitleWrap,
+            { opacity: inlineTitleOpacity, left: titleSideOffset, right: titleSideOffset },
+          ]}
         >
           <Text numberOfLines={1} style={styles.inlineTitle}>
             {title}
           </Text>
         </Animated.View>
 
-        <View style={styles.iconButton} />
+        <View style={[styles.sideSlot, { width: sideSlotWidth, alignItems: "flex-end" }]}>
+          {rightContent || <View style={styles.iconButton} />}
+        </View>
       </View>
 
       <Animated.View
@@ -117,10 +127,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  sideSlot: {
+    justifyContent: "center",
+    alignItems: "flex-start",
+  },
   inlineTitleWrap: {
     position: "absolute",
-    left: 56,
-    right: 56,
     alignItems: "center",
     justifyContent: "center",
   },

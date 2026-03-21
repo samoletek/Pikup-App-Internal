@@ -1,6 +1,10 @@
 import * as Location from 'expo-location';
-import { Alert, Linking } from 'react-native';
 import { getDistanceFromLatLonInKm } from './navigationMath.utils';
+import {
+  ensureForegroundLocationAvailability,
+  getCurrentPositionWithFallback,
+  LOCATION_AVAILABILITY_REASON,
+} from '../../utils/locationPermissions';
 
 const CURRENT_POSITION_OPTIONS = Object.freeze({
   accuracy: Location.Accuracy.High,
@@ -24,27 +28,19 @@ const normalizeCoordinates = (coords) => ({
 });
 
 export async function ensureNavigationLocationAccess() {
-  const { status } = await Location.requestForegroundPermissionsAsync();
-  if (status !== 'granted') {
-    Alert.alert(
-      'Permission Required',
-      'This app needs location permission to provide navigation.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Open Settings', onPress: () => Linking.openSettings() },
-      ]
-    );
-    return { granted: false, errorMessage: 'Location permission denied' };
-  }
+  const availability = await ensureForegroundLocationAvailability({
+    loggerScope: 'NavigationLocation',
+    permissionDeniedTitle: 'Permission Required',
+    permissionDeniedMessage: 'This app needs location permission to provide navigation.',
+    servicesDisabledMessage: 'Please enable location services in your device settings.',
+  });
 
-  const isLocationEnabled = await Location.hasServicesEnabledAsync();
-  if (!isLocationEnabled) {
-    Alert.alert(
-      'Location Services Disabled',
-      'Please enable location services in your device settings.',
-      [{ text: 'OK' }]
-    );
-    return { granted: false, errorMessage: 'Location services are disabled' };
+  if (!availability.ok) {
+    const errorMessage =
+      availability.reason === LOCATION_AVAILABILITY_REASON.SERVICES_DISABLED
+        ? 'Location services are disabled'
+        : 'Location permission denied';
+    return { granted: false, errorMessage };
   }
 
   return { granted: true, errorMessage: null };
@@ -55,22 +51,19 @@ export async function resolveInitialDriverPosition({ initialLocation = null } = 
     return { coords: initialLocation, heading: 0 };
   }
 
-  try {
-    const currentPosition = await Location.getCurrentPositionAsync(CURRENT_POSITION_OPTIONS);
+  const position = await getCurrentPositionWithFallback({
+    currentPositionOptions: CURRENT_POSITION_OPTIONS,
+    lastKnownOptions: LAST_KNOWN_OPTIONS,
+  });
+
+  if (position?.coords) {
     return {
-      coords: normalizeCoordinates(currentPosition.coords),
-      heading: currentPosition.coords.heading ?? null,
+      coords: normalizeCoordinates(position.coords),
+      heading: position.coords.heading ?? null,
     };
-  } catch (_locationError) {
-    const lastKnownPosition = await Location.getLastKnownPositionAsync(LAST_KNOWN_OPTIONS);
-    if (lastKnownPosition?.coords) {
-      return {
-        coords: normalizeCoordinates(lastKnownPosition.coords),
-        heading: lastKnownPosition.coords.heading ?? null,
-      };
-    }
-    throw new Error('No location available');
   }
+
+  throw new Error('No location available');
 }
 
 export async function startNavigationLocationWatch(onLocationUpdate, options = {}) {

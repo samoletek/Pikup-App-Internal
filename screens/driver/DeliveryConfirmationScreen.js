@@ -14,6 +14,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import AppButton from '../../components/ui/AppButton';
 import useDeliveryConfirmationFlow from './useDeliveryConfirmationFlow';
 import styles from './DeliveryConfirmationScreen.styles';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 import {
   colors,
   layout,
@@ -72,7 +73,10 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     );
   };
 
-  const customerName = request?.customerEmail?.split('@')[0] || 'Customer';
+  const customerDisplay = resolveCustomerDisplayFromRequest(request, {
+    fallbackName: 'Customer',
+  });
+  const customerName = customerDisplay.name;
 
   return (
     <View style={styles.container}>

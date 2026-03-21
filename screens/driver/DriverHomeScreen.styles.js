@@ -1,6 +1,5 @@
 import { StyleSheet } from 'react-native';
-import { COLLAPSED_HEIGHT } from '../../components/OfflineDashboard';
-import { borderRadius, colors, shadows, sizing, spacing, typography, zIndex as zLayers } from '../../styles/theme';
+import { borderRadius, colors, shadows, spacing, typography, zIndex as zLayers } from '../../styles/theme';
 
 const styles = StyleSheet.create({
   container: {
@@ -174,18 +173,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.elevated,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  floatingRecentTripsBtn: {
-    position: 'absolute',
-    right: spacing.lg,
-    bottom: COLLAPSED_HEIGHT + spacing.xs,
-    width: sizing.touchTargetMin,
-    height: sizing.touchTargetMin,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: zLayers.toast + 1,
   },
   topNoticeStack: {
     position: 'absolute',

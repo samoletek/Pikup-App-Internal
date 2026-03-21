@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Animated, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +11,6 @@ import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from '../../components/messages/CollapsibleMessagesHeader';
 import AppButton from '../../components/ui/AppButton';
-import RecentTripsModal from '../../components/RecentTripsModal';
 import styles from './DriverEarningsScreen.styles';
 import { colors, spacing } from '../../styles/theme';
 import useDriverEarningsData from '../../hooks/useDriverEarningsData';
@@ -41,7 +40,6 @@ export default function DriverEarningsScreen({ navigation, route }) {
   });
 
   const [selectedPeriod, setSelectedPeriod] = useState('week');
-  const [showAllTrips, setShowAllTrips] = useState(false);
 
   const {
     weeklyData,
@@ -85,6 +83,27 @@ export default function DriverEarningsScreen({ navigation, route }) {
   const chartTitle = selectedPeriod === 'month' ? 'Monthly Trip Activity' : 'Weekly Trip Activity';
   const showBack = route?.name === 'DriverEarningsScreen' && navigation.canGoBack();
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
+  const handleOpenRecentTrips = useCallback(() => {
+    navigation.navigate('DriverRecentTripsScreen');
+  }, [navigation]);
+  const handleOpenRecentTrip = useCallback((trip) => {
+    const request = trip?.request || null;
+    if (!request) {
+      return;
+    }
+    navigation.navigate('DriverRequestDetailsScreen', { request });
+  }, [navigation]);
+
+  const rightContent = (
+    <TouchableOpacity
+      style={styles.headerActionButton}
+      onPress={handleOpenRecentTrips}
+      accessibilityRole="button"
+      accessibilityLabel="Open trip history"
+    >
+      <Ionicons name="time-outline" size={20} color={colors.text.primary} />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -93,6 +112,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
         onBack={() => navigation.goBack()}
         topInset={insets.top}
         showBack={showBack}
+        rightContent={rightContent}
         scrollY={scrollY}
         searchCollapseDistance={0}
         titleCollapseDistance={TITLE_COLLAPSE_DISTANCE}
@@ -220,16 +240,10 @@ export default function DriverEarningsScreen({ navigation, route }) {
         <RecentTripsPreview
           styles={styles}
           recentTrips={recentTrips}
-          onViewAll={() => setShowAllTrips(true)}
+          onViewAll={handleOpenRecentTrips}
+          onOpenTrip={handleOpenRecentTrip}
         />
       </Animated.ScrollView>
-
-      <RecentTripsModal
-        visible={showAllTrips}
-        onClose={() => setShowAllTrips(false)}
-        trips={driverTrips}
-        loading={loading}
-      />
     </View>
   );
 }

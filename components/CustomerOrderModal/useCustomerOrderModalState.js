@@ -12,6 +12,7 @@ import { getItemValidationErrors, validateLocationDetails } from './utils/valida
 import { SCREEN_WIDTH } from './styles';
 import {
     COMING_SOON_UNSUPPORTED_STATE_MESSAGE,
+    SERVICE_AREA_UNRESOLVED_MESSAGE,
     SUPPORTED_ORDER_STATE_CODES,
 } from '../../constants/orderAvailability';
 import {
@@ -19,6 +20,7 @@ import {
     isSupportedOrderStateCode,
     resolveLocationStateCode,
 } from '../../utils/locationState';
+import { ensureForegroundLocationAvailability } from '../../utils/locationPermissions';
 
 export default function useCustomerOrderModalState({
     visible,
@@ -155,58 +157,85 @@ export default function useCustomerOrderModalState({
         }, 0);
     }, [orderData.items]);
 
+    const ensureLocationAvailability = useCallback(async () => {
+        const availability = await ensureForegroundLocationAvailability({
+            loggerScope: 'CustomerOrderModal',
+            permissionDeniedMessage:
+                'Please allow location access so we can confirm service availability in your area.',
+            servicesDisabledMessage:
+                'Please enable Location Services so we can confirm service availability in your area.',
+            errorMessage:
+                'We could not verify your current location. Please check Location permissions and try again.',
+        });
+
+        if (!availability.ok) {
+            return false;
+        }
+
+        return true;
+    }, []);
+
     const validateStep = useCallback(() => {
         switch (currentStep) {
             case 1: {
-                const customerStateCode = resolveLocationStateCode(userLocation || null);
-                if (!customerStateCode) {
-                    Alert.alert(
-                        'Location Required',
-                        'Please enable location services so we can confirm service availability in your area.'
-                    );
-                    return false;
-                }
+                const validateStepOne = async () => {
+                    const hasLocationAccess = await ensureLocationAvailability();
+                    if (!hasLocationAccess) {
+                        return false;
+                    }
 
-                if (!isSupportedOrderStateCode(customerStateCode, SUPPORTED_ORDER_STATE_CODES)) {
-                    Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
-                    return false;
-                }
-
-                if (!orderData.pickup.address.trim()) {
-                    Alert.alert('Missing Info', 'Please enter a pickup address.');
-                    return false;
-                }
-                if (!orderData.dropoff.address.trim()) {
-                    Alert.alert('Missing Info', 'Please enter a dropoff address.');
-                    return false;
-                }
-                if (
-                    orderData.pickup.address.trim().toLowerCase() ===
-                    orderData.dropoff.address.trim().toLowerCase()
-                ) {
-                    Alert.alert('Same Address', 'Pickup and dropoff addresses cannot be the same.');
-                    return false;
-                }
-
-                const stateCoverage = evaluateOrderStateCoverage({
-                    pickup: orderData.pickup,
-                    dropoff: orderData.dropoff,
-                    supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
-                    requireResolvedState: true,
-                });
-                if (!stateCoverage.isSupported) {
-                    if (stateCoverage.reason === 'state_unresolved') {
+                    const customerStateCode = resolveLocationStateCode(userLocation || null);
+                    if (!customerStateCode) {
                         Alert.alert(
-                            'Address Required',
-                            'Please select pickup and dropoff addresses from suggestions.'
+                            'Service Availability',
+                            SERVICE_AREA_UNRESOLVED_MESSAGE
                         );
                         return false;
                     }
 
-                    Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
-                    return false;
-                }
-                return true;
+                    if (!isSupportedOrderStateCode(customerStateCode, SUPPORTED_ORDER_STATE_CODES)) {
+                        Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
+                        return false;
+                    }
+
+                    if (!orderData.pickup.address.trim()) {
+                        Alert.alert('Missing Info', 'Please enter a pickup address.');
+                        return false;
+                    }
+                    if (!orderData.dropoff.address.trim()) {
+                        Alert.alert('Missing Info', 'Please enter a dropoff address.');
+                        return false;
+                    }
+                    if (
+                        orderData.pickup.address.trim().toLowerCase() ===
+                        orderData.dropoff.address.trim().toLowerCase()
+                    ) {
+                        Alert.alert('Same Address', 'Pickup and dropoff addresses cannot be the same.');
+                        return false;
+                    }
+
+                    const stateCoverage = evaluateOrderStateCoverage({
+                        pickup: orderData.pickup,
+                        dropoff: orderData.dropoff,
+                        supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
+                        requireResolvedState: true,
+                    });
+                    if (!stateCoverage.isSupported) {
+                        if (stateCoverage.reason === 'state_unresolved') {
+                            Alert.alert(
+                                'Address Required',
+                                'Please select pickup and dropoff addresses from suggestions.'
+                            );
+                            return false;
+                        }
+
+                        Alert.alert('Coming Soon', COMING_SOON_UNSUPPORTED_STATE_MESSAGE);
+                        return false;
+                    }
+                    return true;
+                };
+
+                return validateStepOne();
             }
             case 2: {
                 if (orderData.items.length === 0) {
@@ -284,7 +313,7 @@ export default function useCustomerOrderModalState({
             default:
                 return true;
         }
-    }, [currentStep, orderData, userLocation]);
+    }, [currentStep, ensureLocationAvailability, orderData, userLocation]);
 
     const resetLocalState = useCallback(() => {
         setCurrentStep(1);

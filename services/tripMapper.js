@@ -1,4 +1,8 @@
 import { normalizeTripStatus } from '../constants/tripStatus';
+import {
+  resolveCustomerDisplayFromRequest,
+  resolveDriverDisplayFromRequest,
+} from '../utils/profileDisplay';
 
 const toNumber = (value) => {
   const number = Number(value);
@@ -7,6 +11,13 @@ const toNumber = (value) => {
 
 const toArray = (value) => {
   return Array.isArray(value) ? value : [];
+};
+
+const toPlainObject = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value;
 };
 
 const toLocation = (value) => {
@@ -48,6 +59,12 @@ export const mapTripFromDb = (trip) => {
     pickup?.dispatchRequirements ||
     pickup?.details?.dispatchRequirements ||
     null;
+  const customerDisplay = resolveCustomerDisplayFromRequest(trip, {
+    fallbackName: 'Customer',
+  });
+  const driverDisplay = resolveDriverDisplayFromRequest(trip, {
+    fallbackName: 'Driver',
+  });
 
   return {
     ...trip,
@@ -73,7 +90,30 @@ export const mapTripFromDb = (trip) => {
     photos: pickupPhotos,
     customerId: trip.customerId || trip.customer_id || null,
     driverId: trip.driverId || trip.driver_id || null,
+    customerName: customerDisplay.name,
+    customerEmail:
+      trip.customerEmail ||
+      trip.customer_email ||
+      trip.customer?.email ||
+      null,
+    customerAvatarUrl: customerDisplay.avatarUrl,
+    customerInitials: customerDisplay.initials,
+    customer: {
+      ...toPlainObject(trip.customer),
+      id: trip.customerId || trip.customer_id || trip.customer?.id || null,
+      name: customerDisplay.name,
+      email:
+        trip.customerEmail ||
+        trip.customer_email ||
+        trip.customer?.email ||
+        null,
+      profileImageUrl: customerDisplay.avatarUrl,
+      profile_image_url: customerDisplay.avatarUrl,
+      photo: customerDisplay.avatarUrl,
+      initials: customerDisplay.initials,
+    },
     assignedDriverId: trip.assignedDriverId || trip.driver_id || null,
+    assignedDriverName: driverDisplay.name,
     assignedDriverEmail:
       trip.assignedDriverEmail ||
       trip.assigned_driver_email ||
@@ -81,6 +121,26 @@ export const mapTripFromDb = (trip) => {
       trip.driver_email ||
       trip.driver?.email ||
       null,
+    assignedDriverAvatarUrl: driverDisplay.avatarUrl,
+    driverName: driverDisplay.name,
+    driverAvatarUrl: driverDisplay.avatarUrl,
+    driverInitials: driverDisplay.initials,
+    driver: {
+      ...toPlainObject(trip.driver),
+      id: trip.driverId || trip.driver_id || trip.driver?.id || null,
+      name: driverDisplay.name,
+      email:
+        trip.assignedDriverEmail ||
+        trip.assigned_driver_email ||
+        trip.driverEmail ||
+        trip.driver_email ||
+        trip.driver?.email ||
+        null,
+      profileImageUrl: driverDisplay.avatarUrl,
+      profile_image_url: driverDisplay.avatarUrl,
+      photo: driverDisplay.avatarUrl,
+      initials: driverDisplay.initials,
+    },
     driverLocation: trip.driverLocation || toLocation(trip.driver_location),
 
     // Insurance data (mapped for CustomerClaimsScreen compatibility)

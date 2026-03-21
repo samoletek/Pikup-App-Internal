@@ -156,6 +156,11 @@ const styles = StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
+  customerAvatarInitials: {
+    color: colors.white,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.bold,
+  },
   customerDetails: {
     flex: 1,
     marginLeft: spacing.base - 1,
