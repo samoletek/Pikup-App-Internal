@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -25,7 +25,15 @@ import {
   SEARCH_COLLAPSE_DISTANCE,
   TITLE_COLLAPSE_DISTANCE,
 } from "./activity.constants";
-import { statusColor, statusLabel } from "./activity.utils";
+import {
+  ACTIVITY_FILTER,
+  isActiveActivityTrip,
+  isArchivedActivityTrip,
+  isScheduledActivityTrip,
+  matchActivityTripByFilter,
+  statusColor,
+  statusLabel,
+} from "./activity.utils";
 import useCustomerActivityData from "./useCustomerActivityData";
 import styles from "./CustomerActivityScreen.styles";
 
@@ -48,12 +56,14 @@ export default function CustomerActivityScreen({ navigation }) {
     loading,
     searchText,
     setSearchText,
+    trips,
     filteredTrips,
     fetchTrips,
   } = useCustomerActivityData({
     currentUser,
     getUserPickupRequests,
   });
+  const [selectedFilter, setSelectedFilter] = useState(ACTIVITY_FILTER.ACTIVE);
 
   useEffect(() => {
     fetchTrips();
@@ -84,6 +94,55 @@ export default function CustomerActivityScreen({ navigation }) {
     });
   };
 
+  const activeCount = useMemo(
+    () => (Array.isArray(trips) ? trips : []).filter(isActiveActivityTrip).length,
+    [trips]
+  );
+  const scheduledCount = useMemo(
+    () => (Array.isArray(trips) ? trips : []).filter(isScheduledActivityTrip).length,
+    [trips]
+  );
+  const archiveCount = useMemo(
+    () => (Array.isArray(trips) ? trips : []).filter(isArchivedActivityTrip).length,
+    [trips]
+  );
+  const displayedTrips = useMemo(
+    () =>
+      (Array.isArray(filteredTrips) ? filteredTrips : []).filter((trip) =>
+        matchActivityTripByFilter(trip, selectedFilter)
+      ),
+    [filteredTrips, selectedFilter]
+  );
+  const filterTabs = useMemo(
+    () => [
+      { key: ACTIVITY_FILTER.ACTIVE, label: "Active", count: activeCount },
+      { key: ACTIVITY_FILTER.SCHEDULED, label: "Scheduled", count: scheduledCount },
+      { key: ACTIVITY_FILTER.ARCHIVE, label: "Archive", count: archiveCount },
+    ],
+    [activeCount, archiveCount, scheduledCount]
+  );
+
+  const renderFilter = ({ key, label, count }, index) => {
+    const isActive = selectedFilter === key;
+    const isLast = index === filterTabs.length - 1;
+    return (
+      <TouchableOpacity
+        key={key}
+        style={[
+          styles.filterTab,
+          !isLast && styles.filterTabSpaced,
+          isActive && styles.filterTabActive,
+        ]}
+        onPress={() => setSelectedFilter(key)}
+      >
+        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{label}</Text>
+        <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+          <Text style={styles.filterBadgeText}>{count}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   const renderTripCard = (trip) => (
     <TouchableOpacity
       key={trip.id}
@@ -96,10 +155,15 @@ export default function CustomerActivityScreen({ navigation }) {
           <Ionicons
             name="time-outline"
             size={14}
-            color={statusColor(trip.status)}
+            color={statusColor(trip.status, { scheduledTime: trip.scheduledTime })}
           />
-          <Text style={[styles.statusText, { color: statusColor(trip.status) }]}>
-            {statusLabel(trip.status)}
+          <Text
+            style={[
+              styles.statusText,
+              { color: statusColor(trip.status, { scheduledTime: trip.scheduledTime }) },
+            ]}
+          >
+            {statusLabel(trip.status, { scheduledTime: trip.scheduledTime })}
           </Text>
         </View>
         <Text style={styles.tripAmount}>{trip.amount}</Text>
@@ -136,8 +200,20 @@ export default function CustomerActivityScreen({ navigation }) {
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
   const emptyStateMinHeight = Math.max(
     280,
-    windowHeight - headerHeight - HEADER_ROW_HEIGHT * 2 - insets.bottom - 120
+    windowHeight - headerHeight - HEADER_ROW_HEIGHT * 3 - insets.bottom - 120
   );
+  const emptyStateTitle =
+    selectedFilter === ACTIVITY_FILTER.ACTIVE
+      ? "No active trips"
+      : selectedFilter === ACTIVITY_FILTER.SCHEDULED
+        ? "No scheduled trips"
+        : "No archived trips";
+  const emptyStateSubtitle =
+    selectedFilter === ACTIVITY_FILTER.ACTIVE
+      ? "Trips in progress will appear here"
+      : selectedFilter === ACTIVITY_FILTER.SCHEDULED
+        ? "Accepted scheduled trips will appear here"
+        : "Completed and cancelled trips will appear here";
 
   return (
     <View style={styles.container}>
@@ -199,20 +275,22 @@ export default function CustomerActivityScreen({ navigation }) {
           </View>
         </View>
 
+        <View style={styles.filterSection}>
+          <View style={styles.filterRow}>{filterTabs.map(renderFilter)}</View>
+        </View>
+
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading your trips...</Text>
           </View>
-        ) : filteredTrips.length > 0 ? (
-          filteredTrips.map(renderTripCard)
+        ) : displayedTrips.length > 0 ? (
+          displayedTrips.map(renderTripCard)
         ) : (
           <View style={[styles.emptyState, { minHeight: emptyStateMinHeight }]}>
             <Ionicons name="file-tray-outline" size={56} color={colors.border.strong} />
-            <Text style={styles.emptyTitle}>No past trips yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Completed and cancelled trips will appear here
-            </Text>
+            <Text style={styles.emptyTitle}>{emptyStateTitle}</Text>
+            <Text style={styles.emptySubtitle}>{emptyStateSubtitle}</Text>
           </View>
         )}
       </Animated.ScrollView>

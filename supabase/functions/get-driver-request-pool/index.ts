@@ -27,9 +27,22 @@ import {
   isSupportedOrderStateCode,
   isTripWithinSupportedStates,
   sortTripsForPool,
+  toArray,
   toObject,
   type AnyRecord,
 } from "./poolUtils.ts"
+import {
+  DRIVER_SCHEDULE_CONFLICT_DB_STATUSES,
+  findDriverScheduleConflictForTrip,
+} from "./scheduleConflicts.ts"
+import {
+  buildFeedbackRatingMap,
+  createTripPhotoSigner,
+  firstNonEmptyArray,
+  parseRatingFromCandidates,
+  resolveAvatarFromCustomerRow,
+  resolveItemPhotoSources,
+} from "./responseMediaUtils.ts"
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -82,6 +95,7 @@ serve(async (req) => {
     const driverLocation = normalizeCoordinates(body.driverLocation)
     const offerAction = normalizeOfferAction(body.action)
     const actionTripId = String(body.tripId || body.requestId || "").trim()
+    const signTripPhotoUri = createTripPhotoSigner(dbClient)
 
     const { data: driverProfile, error: driverProfileError } = await dbClient
       .from("drivers")
@@ -174,18 +188,42 @@ serve(async (req) => {
         })
       }
 
+      const nowIso = new Date().toISOString()
       if (!existingOffer) {
+        const { data: declinedOffer, error: declinedOfferError } = await dbClient
+          .from("driver_request_offers")
+          .upsert(
+            {
+              trip_id: actionTripId,
+              driver_id: user.id,
+              request_pool: requestPool,
+              status: OFFER_STATUSES.DECLINED,
+              offered_at: nowIso,
+              expires_at: null,
+              responded_at: nowIso,
+              response_source: "driver_decline_without_offer",
+              updated_at: nowIso,
+            },
+            { onConflict: "trip_id,driver_id" }
+          )
+          .select("status")
+          .maybeSingle()
+
+        if (declinedOfferError) {
+          throw declinedOfferError
+        }
+
+        const declineStatus =
+          normalizeOfferStatus(declinedOffer?.status) || OFFER_STATUSES.DECLINED
+
         return jsonResponse({
           success: true,
           action: OFFER_ACTIONS.DECLINE,
           tripId: actionTripId,
-          status: "ignored",
-          noOp: true,
-          reason: "offer_not_active",
+          status: declineStatus,
         })
       }
 
-      const nowIso = new Date().toISOString()
       const { data: updatedOffer, error: updateOfferError } = await dbClient
         .from("driver_request_offers")
         .update({
@@ -278,6 +316,18 @@ serve(async (req) => {
     }
 
     const trips = (tripRows || []).map((row) => mapTripFromDb(row as AnyRecord))
+    const { data: assignedTripRows, error: assignedTripsError } = await dbClient
+      .from("trips")
+      .select("*")
+      .eq("driver_id", user.id)
+      .in("status", DRIVER_SCHEDULE_CONFLICT_DB_STATUSES)
+
+    if (assignedTripsError) {
+      throw assignedTripsError
+    }
+
+    const assignedDriverTrips = (assignedTripRows || []).map((row) => mapTripFromDb(row as AnyRecord))
+    const nowDate = new Date()
     const hiddenReasonCounts: Record<string, number> = {}
     const filteredTrips: AnyRecord[] = []
     let filteredByPool = 0
@@ -285,6 +335,7 @@ serve(async (req) => {
     let filteredByTimeWindow = 0
     let filteredByPreference = 0
     let filteredByState = 0
+    let filteredByScheduleConflict = 0
 
     trips.forEach((trip) => {
       const normalizedRequirements = resolveDispatchRequirements(trip)
@@ -332,6 +383,17 @@ serve(async (req) => {
         })
       ) {
         filteredByDistance += 1
+        return
+      }
+
+      const conflictingAssignedTrip = findDriverScheduleConflictForTrip({
+        candidateTrip: normalizedTrip,
+        assignedTrips: assignedDriverTrips,
+        driverLocation,
+        nowDate,
+      })
+      if (conflictingAssignedTrip) {
+        filteredByScheduleConflict += 1
         return
       }
 
@@ -430,26 +492,7 @@ serve(async (req) => {
         return
       }
       if (offerStatus === OFFER_STATUSES.EXPIRED) {
-        newOfferRows.push({
-          trip_id: tripId,
-          driver_id: user.id,
-          request_pool: requestPool,
-          status: OFFER_STATUSES.OFFERED,
-          offered_at: nowIso,
-          expires_at: nextExpiresAt,
-          responded_at: null,
-          response_source: "offer_reissued_after_expired",
-          updated_at: nowIso,
-        })
-        lifecycleFilteredTrips.push({
-          ...trip,
-          dispatchOffer: {
-            status: OFFER_STATUSES.OFFERED,
-            offeredAt: nowIso,
-            expiresAt: nextExpiresAt,
-            ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
-          },
-        })
+        filteredByOfferExpired += 1
         return
       }
       if (offerStatus === OFFER_STATUSES.ACCEPTED) {
@@ -464,26 +507,7 @@ serve(async (req) => {
 
       if (hasExpired) {
         tripIdsToExpire.push(tripId)
-        newOfferRows.push({
-          trip_id: tripId,
-          driver_id: user.id,
-          request_pool: requestPool,
-          status: OFFER_STATUSES.OFFERED,
-          offered_at: nowIso,
-          expires_at: nextExpiresAt,
-          responded_at: null,
-          response_source: "offer_reissued_after_ttl",
-          updated_at: nowIso,
-        })
-        lifecycleFilteredTrips.push({
-          ...trip,
-          dispatchOffer: {
-            status: OFFER_STATUSES.OFFERED,
-            offeredAt: nowIso,
-            expiresAt: nextExpiresAt,
-            ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
-          },
-        })
+        filteredByOfferExpired += 1
         return
       }
 
@@ -539,11 +563,24 @@ serve(async (req) => {
       )
     )
 
-    const customerMap: Record<string, { name: string; email: string | null }> = {}
+    const customerFeedbackRatingMap = await buildFeedbackRatingMap({
+      dbClient,
+      customerIds,
+    })
+
+    const customerMap: Record<
+      string,
+      {
+        name: string
+        email: string | null
+        rating: number | null
+        avatarUrl: string | null
+      }
+    > = {}
     if (customerIds.length > 0) {
       const { data: customers, error: customersError } = await dbClient
         .from("customers")
-        .select("id, first_name, last_name, email")
+        .select("*")
         .in("id", customerIds)
 
       if (customersError) {
@@ -552,22 +589,87 @@ serve(async (req) => {
         ;(customers || []).forEach((customer: AnyRecord) => {
           const customerId = String(customer.id || "")
           if (!customerId) return
-          const firstName = String(customer.first_name || "").trim()
-          const lastName = String(customer.last_name || "").trim()
-          const email = String(customer.email || "").trim()
+          const metadata = toObject(customer.metadata)
+          const firstName = String(
+            customer.first_name || customer.firstName || metadata.first_name || metadata.firstName || ""
+          ).trim()
+          const lastName = String(
+            customer.last_name || customer.lastName || metadata.last_name || metadata.lastName || ""
+          ).trim()
+          const email = String(customer.email || metadata.email || "").trim()
+          const rating = parseRatingFromCandidates(
+            customer.rating,
+            customer.user_rating,
+            customer.customer_rating,
+            customer.average_rating,
+            customer.avg_rating,
+            customer.averageRating,
+            customer.avgRating,
+            metadata.rating,
+            metadata.userRating,
+            metadata.customerRating,
+            metadata.customer_rating,
+            metadata.averageRating,
+            metadata.average_rating,
+            metadata.avgRating,
+            metadata.avg_rating,
+            customerFeedbackRatingMap[customerId]
+          )
+          const avatarUrl = resolveAvatarFromCustomerRow(customer)
+
           customerMap[customerId] = {
             name: [firstName, lastName].filter(Boolean).join(" ") || email.split("@")[0] || "Customer",
             email: email || null,
+            rating,
+            avatarUrl,
           }
         })
       }
     }
 
-    const requests = sortedTrips.map((trip) => {
+    const requests = await Promise.all(sortedTrips.map(async (trip) => {
       const customer = customerMap[String(trip.customerId || trip.customer_id || "")] || {
         name: "Customer",
         email: null,
+        rating: null,
+        avatarUrl: null,
       }
+      const signedRequestPhotos = (
+        await Promise.all(
+          firstNonEmptyArray(trip.pickupPhotos, trip.photos, trip.pickup_photos).map((photo) =>
+            signTripPhotoUri(photo)
+          )
+        )
+      ).filter((uri): uri is string => typeof uri === "string" && uri.length > 0)
+
+      const rawItems = toArray(trip.items)
+      const signedItems = await Promise.all(rawItems.map(async (rawItem, itemIndex) => {
+        const item = toObject(rawItem)
+        if (Object.keys(item).length === 0) {
+          if (typeof rawItem === "string" && rawItem.trim()) {
+            return {
+              id: `item-${itemIndex}`,
+              description: rawItem,
+              photos: [],
+            }
+          }
+          return rawItem
+        }
+
+        const signedItemPhotos = (
+          await Promise.all(resolveItemPhotoSources(item).map((photo) => signTripPhotoUri(photo)))
+        ).filter((uri): uri is string => typeof uri === "string" && uri.length > 0)
+
+        return {
+          ...item,
+          id: item.id || `item-${itemIndex}`,
+          photos: signedItemPhotos,
+        }
+      }))
+
+      const resolvedPrimaryItem = signedItems.length > 0
+        ? signedItems[0]
+        : trip.item || null
 
       return {
         id: trip.id,
@@ -585,20 +687,33 @@ serve(async (req) => {
           coordinates: trip.dropoff?.coordinates || null,
           details: trip.dropoff?.details || {},
         },
-        items: trip.items || [],
-        item: trip.item || null,
-        photos: trip.pickupPhotos || [],
+        items: signedItems.length > 0 ? signedItems : trip.items || [],
+        item: resolvedPrimaryItem,
+        photos: signedRequestPhotos.length > 0 ? signedRequestPhotos : trip.pickupPhotos || [],
+        pickupPhotos: signedRequestPhotos.length > 0 ? signedRequestPhotos : trip.pickupPhotos || [],
         scheduledTime: trip.scheduledTime || null,
         expiresAt: trip.dispatchOffer?.expiresAt || null,
         dispatchOffer: trip.dispatchOffer || null,
         dispatchRequirements: trip.dispatchRequirements || null,
         customerName: customer.name,
         customerEmail: customer.email,
+        customerRating: customer.rating,
+        customerAvatarUrl: customer.avatarUrl,
+        customer: {
+          id: trip.customerId || trip.customer_id || null,
+          name: customer.name,
+          email: customer.email,
+          rating: customer.rating,
+          photo: customer.avatarUrl,
+          profile_image_url: customer.avatarUrl,
+          avatar_url: customer.avatarUrl,
+        },
         originalData: trip,
       }
-    })
+    }))
 
     return jsonResponse({
+      trips: requests,
       requests,
       meta: {
         requestPool,
@@ -607,6 +722,7 @@ serve(async (req) => {
         filteredByPool,
         filteredByDistance,
         filteredByTimeWindow,
+        filteredByScheduleConflict,
         filteredByPreference,
         filteredByOfferDeclined,
         filteredByOfferExpired,

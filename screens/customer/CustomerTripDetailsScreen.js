@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -14,21 +15,37 @@ import PhotoGallerySection from '../../components/trip/PhotoGallerySection';
 import TripHeroCard from '../../components/trip/TripHeroCard';
 import TripProgressSection from '../../components/trip/TripProgressSection';
 import TripDriverRatingSection from '../../components/trip/TripDriverRatingSection';
-import TripRouteSection from '../../components/trip/TripRouteSection';
 import TripInfoSection from '../../components/trip/TripInfoSection';
 import TripCancellationSection from '../../components/trip/TripCancellationSection';
 import styles from './CustomerTripDetailsScreen.styles';
-import { useAuthIdentity, useProfileActions, useTripActions } from '../../contexts/AuthContext';
+import {
+  useAuthIdentity,
+  useMessagingActions,
+  useProfileActions,
+  useTripActions,
+} from '../../contexts/AuthContext';
 import { TRIP_STATUS } from '../../constants/tripStatus';
 import { colors, spacing } from '../../styles/theme';
 import useCustomerTripDetailsData from '../../hooks/useCustomerTripDetailsData';
 import useCustomerTripRating from '../../hooks/useCustomerTripRating';
+import useTripConversationUnread from '../../hooks/useTripConversationUnread';
+import { logger } from '../../services/logger';
+import {
+  resolveDisplayNameFromUser,
+  resolveDriverNameFromRequest,
+} from '../../utils/participantIdentity';
 
 export default function CustomerTripDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { currentUser, refreshProfile } = useAuthIdentity();
   const { getRequestById } = useTripActions();
-  const { submitTripRating } = useProfileActions();
+  const {
+    createConversation,
+    getConversations,
+    subscribeToConversations,
+    markMessageAsRead,
+  } = useMessagingActions();
+  const { getUserProfile, submitTripRating } = useProfileActions();
 
   const tripSummary = route?.params?.tripSummary || null;
   const initialSnapshot = route?.params?.tripSnapshot || tripSummary || null;
@@ -44,7 +61,9 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     dropoffPhotoUris,
     loadTrip,
   } = useCustomerTripDetailsData({
+    currentUser,
     getRequestById,
+    getUserProfile,
     initialSnapshot,
     isMockTrip,
     tripId,
@@ -53,6 +72,10 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
 
   const currentUserId = currentUser?.uid || currentUser?.id || null;
   const isTripCompleted = displayTrip.status === TRIP_STATUS.COMPLETED;
+  const isChatAvailable =
+    Boolean(displayTrip.id) &&
+    Boolean(displayTrip.driverId) &&
+    displayTrip.status !== TRIP_STATUS.CANCELLED;
 
   const {
     rating,
@@ -71,22 +94,138 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     submitTripRating,
     tripId: displayTrip.id,
   });
+  const { hasUnreadChat, setHasUnreadChat } = useTripConversationUnread({
+    currentUserId,
+    getConversations,
+    subscribeToConversations,
+    conversationUserType: 'customer',
+    activeRequestId: displayTrip.id,
+    activeRequestCustomerId: currentUserId,
+    activeRequestDriverId: displayTrip.driverId,
+  });
 
   const [viewerVisible, setViewerVisible] = useState(false);
-  const [viewerUri, setViewerUri] = useState(null);
+  const [viewerPhotos, setViewerPhotos] = useState([]);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
+  const [isOpeningChat, setIsOpeningChat] = useState(false);
 
-  const handleOpenPhotoViewer = useCallback((uri) => {
-    if (!uri) {
+  const handleOpenPhotoViewer = useCallback((photos, index = 0) => {
+    if (!Array.isArray(photos) || photos.length === 0) {
       return;
     }
-    setViewerUri(uri);
+
+    const safeIndex = Math.min(Math.max(Number(index) || 0, 0), photos.length - 1);
+    setViewerPhotos(photos);
+    setViewerStartIndex(safeIndex);
     setViewerVisible(true);
   }, []);
 
   const handleClosePhotoViewer = useCallback(() => {
     setViewerVisible(false);
-    setViewerUri(null);
+    setViewerPhotos([]);
+    setViewerStartIndex(0);
   }, []);
+  const handleOpenDriverChat = useCallback(async () => {
+    if (isOpeningChat) {
+      return;
+    }
+
+    if (!currentUserId || !displayTrip.id) {
+      Alert.alert('Unable to open chat', 'Trip details are still syncing. Please try again.');
+      return;
+    }
+
+    setIsOpeningChat(true);
+
+    try {
+      setHasUnreadChat(false);
+
+      let latestTrip = null;
+      try {
+        latestTrip = await getRequestById(displayTrip.id);
+      } catch (loadError) {
+        logger.warn('CustomerTripDetailsScreen', 'Failed to refresh trip before opening chat', loadError);
+      }
+
+      const driverId =
+        latestTrip?.assignedDriverId ||
+        latestTrip?.assigned_driver_id ||
+        latestTrip?.driverId ||
+        latestTrip?.driver_id ||
+        displayTrip.driverId ||
+        null;
+      const driverEmail =
+        latestTrip?.assignedDriverEmail ||
+        latestTrip?.driverEmail ||
+        latestTrip?.driver_email ||
+        null;
+      const driverName = resolveDriverNameFromRequest(
+        {
+          ...(displayTrip || {}),
+          ...(latestTrip || {}),
+          assignedDriverEmail: latestTrip?.assignedDriverEmail || driverEmail,
+          driver: latestTrip?.driver,
+          originalData: latestTrip?.originalData,
+        },
+        displayTrip.driverName || 'Driver'
+      );
+      const shouldResolveDriverProfileName =
+        Boolean(driverId) &&
+        (!driverName || driverName === 'Driver' || driverName === 'Not assigned');
+      let resolvedDriverName = driverName;
+      if (shouldResolveDriverProfileName && typeof getUserProfile === 'function') {
+        try {
+          const driverProfile = await getUserProfile(driverId, {
+            requestId: displayTrip.id || undefined,
+          });
+          resolvedDriverName = resolveDisplayNameFromUser(driverProfile, driverName || 'Driver');
+        } catch (profileLoadError) {
+          logger.warn('CustomerTripDetailsScreen', 'Failed to resolve driver profile name for chat', profileLoadError);
+        }
+      }
+      const customerName = resolveDisplayNameFromUser(currentUser, 'Customer');
+
+      const conversationId = await createConversation(
+        displayTrip.id,
+        currentUserId,
+        driverId,
+        customerName,
+        resolvedDriverName
+      );
+
+      if (!conversationId) {
+        throw new Error('Could not create conversation');
+      }
+
+      await markMessageAsRead?.(conversationId, 'customer');
+
+      navigation.navigate('MessageScreen', {
+        conversationId,
+        customerId: currentUserId,
+        driverId,
+        peerId: driverId,
+        peerName: resolvedDriverName,
+        driverName: resolvedDriverName,
+        requestId: displayTrip.id,
+      });
+    } catch (error) {
+      logger.error('CustomerTripDetailsScreen', 'Error opening driver chat', error);
+      Alert.alert('Unable to open chat', 'Please try again in a moment.');
+    } finally {
+      setIsOpeningChat(false);
+    }
+  }, [
+    createConversation,
+    currentUser,
+    currentUserId,
+    displayTrip,
+    getUserProfile,
+    getRequestById,
+    isOpeningChat,
+    markMessageAsRead,
+    navigation,
+    setHasUnreadChat,
+  ]);
 
   if (loading && !tripData && !tripSummary) {
     return (
@@ -105,7 +244,10 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   }
 
   const infoRows = [
-    { label: 'Vehicle', value: displayTrip.vehicleType },
+    {
+      label: 'Vehicle',
+      value: `${displayTrip.driverVehicleLabel} • ${displayTrip.driverPlateLabel}`,
+    },
     {
       label: 'Items',
       value: `${displayTrip.itemsCount} item${displayTrip.itemsCount === 1 ? '' : 's'}`,
@@ -138,7 +280,13 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.contentColumn}>
-          <TripHeroCard displayTrip={displayTrip} ui={styles} />
+          <TripHeroCard
+            displayTrip={displayTrip}
+            ui={styles}
+            onOpenChat={isChatAvailable ? handleOpenDriverChat : null}
+            hasUnreadChat={isChatAvailable && hasUnreadChat}
+            isOpeningChat={isOpeningChat}
+          />
 
           {!isTripCompleted ? (
             <TripProgressSection displayTrip={displayTrip} ui={styles} />
@@ -156,8 +304,6 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
               ui={styles}
             />
           )}
-
-          <TripRouteSection displayTrip={displayTrip} ui={styles} />
 
           <TripInfoSection rows={infoRows} ui={styles} />
 
@@ -190,7 +336,8 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
 
       <MediaViewer
         visible={viewerVisible}
-        mediaUri={viewerUri}
+        mediaItems={viewerPhotos}
+        initialIndex={viewerStartIndex}
         mediaType="image"
         onClose={handleClosePhotoViewer}
       />

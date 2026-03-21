@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
-import { TRIP_STATUS } from '../../constants/tripStatus';
 import { ENABLE_DEV_MOCK_ACTIVITY, MOCK_TRIPS } from './activity.constants';
 import { mapTripToActivityItem, statusLabel } from './activity.utils';
 import { logger } from '../../services/logger';
@@ -26,10 +25,6 @@ export default function useCustomerActivityData({
       const tripsList = Array.isArray(userTrips) ? userTrips : [];
       const normalizedTrips = tripsList
         .map(mapTripToActivityItem)
-        .filter(
-          (trip) =>
-            trip.status === TRIP_STATUS.COMPLETED || trip.status === TRIP_STATUS.CANCELLED
-        )
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
       setTrips(
@@ -59,7 +54,7 @@ export default function useCustomerActivityData({
         trip.dropoff,
         trip.item,
         trip.driver,
-        statusLabel(trip.status),
+        statusLabel(trip.status, { scheduledTime: trip.scheduledTime }),
       ]
         .join(' ')
         .toLowerCase();
@@ -72,6 +67,7 @@ export default function useCustomerActivityData({
     loading,
     searchText,
     setSearchText,
+    trips,
     filteredTrips,
     fetchTrips,
   };

@@ -13,6 +13,28 @@ import {
   startNavigationLocationWatch,
 } from './navigationLocation.utils';
 
+const asObject = (value) => (value && typeof value === 'object' ? value : {});
+
+const mergeRequestSnapshots = (previousSnapshot, latestSnapshot) => {
+  const previous = asObject(previousSnapshot);
+  const latest = asObject(latestSnapshot);
+  const previousOriginalData = asObject(previous.originalData);
+  const latestOriginalData = asObject(latest.originalData);
+  const mergedOriginalData = {
+    ...previousOriginalData,
+    ...latestOriginalData,
+  };
+
+  return {
+    ...previous,
+    ...latest,
+    originalData:
+      Object.keys(mergedOriginalData).length > 0
+        ? mergedOriginalData
+        : latest.originalData || previous.originalData,
+  };
+};
+
 export default function useDeliveryNavigationData({
   applyRouteSteps,
   arriveAtDropoff,
@@ -240,7 +262,7 @@ export default function useDeliveryNavigationData({
   const fetchRequestData = useCallback(async () => {
     try {
       const latestData = await getRequestById(request.id);
-      setRequestData(latestData);
+      setRequestData((prevRequestData) => mergeRequestSnapshots(prevRequestData, latestData));
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error fetching request data', error);
     }

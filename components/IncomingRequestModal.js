@@ -15,14 +15,16 @@ import styles from './IncomingRequestModal.styles';
 import { colors, spacing } from '../styles/theme';
 import useIncomingRequestSheet from '../hooks/useIncomingRequestSheet';
 import IncomingRequestPhotoViewer from './incomingRequestModal/IncomingRequestPhotoViewer';
-import IncomingRequestLocationCard from './incomingRequestModal/IncomingRequestLocationCard';
 import IncomingRequestItemCard from './incomingRequestModal/IncomingRequestItemCard';
+import IncomingRequestRouteCard from './incomingRequestModal/IncomingRequestRouteCard';
+import IncomingRequestCustomerCard from './incomingRequestModal/IncomingRequestCustomerCard';
 import {
   FULL_HEIGHT,
   SCREEN_HEIGHT,
   formatOfferTimer,
   getItemPhotoOffset,
   resolveIncomingRequestData,
+  resolvePhotoUrisAsync,
   resolvePhotoSource,
   resolvePhotoUri,
 } from './incomingRequestModal/incomingRequestModal.utils';
@@ -60,6 +62,9 @@ export default function IncomingRequestModal({
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [photoViewerPhotos, setPhotoViewerPhotos] = useState([]);
   const [photoViewerIndex, setPhotoViewerIndex] = useState(0);
+  const [resolvedItems, setResolvedItems] = useState([]);
+  const [resolvedAllPhotos, setResolvedAllPhotos] = useState([]);
+  const [resolvedDisplayPhotos, setResolvedDisplayPhotos] = useState([]);
 
   const openPhotoViewer = useCallback((photos, index) => {
     const resolved = photos.map((photo) => resolvePhotoUri(photo)).filter(Boolean);
@@ -74,9 +79,6 @@ export default function IncomingRequestModal({
   }, []);
 
   const {
-    allItems,
-    allPhotos,
-    displayPhotos,
     earnings,
     pricing,
     vehicleType,
@@ -91,6 +93,70 @@ export default function IncomingRequestModal({
     () => resolveIncomingRequestData(request, timeRemaining, timerTotal),
     [request, timeRemaining, timerTotal]
   );
+
+  React.useEffect(() => {
+    let isCancelled = false;
+
+    if (!request) {
+      setResolvedItems([]);
+      setResolvedAllPhotos([]);
+      setResolvedDisplayPhotos([]);
+      return undefined;
+    }
+
+    const sourceData = resolveIncomingRequestData(request, 0, 1);
+    const sourceItems = sourceData.allItems;
+    const sourceDisplayPhotos = sourceData.displayPhotos;
+
+    const nextResolvedItems = sourceItems.map((item) => ({
+      ...item,
+      photos: (Array.isArray(item?.photos) ? item.photos : [])
+        .map((photo) => resolvePhotoUri(photo))
+        .filter(Boolean),
+    }));
+    const nextResolvedAllPhotos = nextResolvedItems.flatMap((item) => item.photos);
+    const nextResolvedDisplayPhotos = nextResolvedAllPhotos.length > 0
+      ? nextResolvedAllPhotos
+      : (Array.isArray(sourceDisplayPhotos) ? sourceDisplayPhotos : [])
+        .map((photo) => resolvePhotoUri(photo))
+        .filter(Boolean);
+
+    setResolvedItems(nextResolvedItems);
+    setResolvedAllPhotos(nextResolvedAllPhotos);
+    setResolvedDisplayPhotos(nextResolvedDisplayPhotos);
+
+    const resolveSignedPhotos = async () => {
+      const signedItems = await Promise.all(
+        sourceItems.map(async (item) => ({
+          ...item,
+          photos: await resolvePhotoUrisAsync(item?.photos),
+        }))
+      );
+
+      if (isCancelled) {
+        return;
+      }
+
+      const signedAllPhotos = signedItems.flatMap((item) => item.photos);
+      const signedDisplayPhotos = signedAllPhotos.length > 0
+        ? signedAllPhotos
+        : await resolvePhotoUrisAsync(sourceDisplayPhotos);
+
+      if (isCancelled) {
+        return;
+      }
+
+      setResolvedItems(signedItems);
+      setResolvedAllPhotos(signedAllPhotos);
+      setResolvedDisplayPhotos(signedDisplayPhotos);
+    };
+
+    void resolveSignedPhotos();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [request]);
 
   if (!request) return null;
 
@@ -210,33 +276,26 @@ export default function IncomingRequestModal({
             </View>
           )}
 
-          <IncomingRequestLocationCard
-            label="Pickup"
-            location={request.pickup}
-            details={pickupDetails}
-            dotColor={colors.primary}
-            styles={styles}
-          />
-          <IncomingRequestLocationCard
-            label="Drop-off"
-            location={request.dropoff}
-            details={dropoffDetails}
-            dotColor={colors.success}
+          <IncomingRequestRouteCard
+            pickup={request.pickup}
+            dropoff={request.dropoff}
+            pickupDetails={pickupDetails}
+            dropoffDetails={dropoffDetails}
             styles={styles}
           />
 
-          {allItems.length > 0 && (
+          {resolvedItems.length > 0 && (
             <View style={styles.detailSection}>
-              <Text style={styles.detailTitle}>Items ({allItems.length})</Text>
-              {allItems.map((item, idx) => {
-                const offset = getItemPhotoOffset(allItems, idx);
+              <Text style={styles.detailTitle}>Items ({resolvedItems.length})</Text>
+              {resolvedItems.map((item, idx) => {
+                const offset = getItemPhotoOffset(resolvedItems, idx);
                 return (
                   <IncomingRequestItemCard
                     key={item?.id || idx}
                     item={item}
                     index={idx}
                     photoOffset={offset}
-                    allPhotos={allPhotos}
+                    allPhotos={resolvedAllPhotos}
                     onOpenPhotoViewer={openPhotoViewer}
                     styles={styles}
                   />
@@ -245,13 +304,17 @@ export default function IncomingRequestModal({
             </View>
           )}
 
-          {allPhotos.length === 0 && displayPhotos.length > 0 && (
+          {resolvedAllPhotos.length === 0 && resolvedDisplayPhotos.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.base }}>
-              {displayPhotos.map((p, i) => {
+              {resolvedDisplayPhotos.map((p, i) => {
                 const src = resolvePhotoSource(p);
                 if (!src) return null;
                 return (
-                  <TouchableOpacity key={i} onPress={() => openPhotoViewer(displayPhotos, i)} activeOpacity={0.8}>
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => openPhotoViewer(resolvedDisplayPhotos, i)}
+                    activeOpacity={0.8}
+                  >
                     <Image source={src} style={styles.fallbackPhoto} />
                   </TouchableOpacity>
                 );
@@ -259,32 +322,7 @@ export default function IncomingRequestModal({
             </ScrollView>
           )}
 
-          <View style={styles.customerCard}>
-            <Image
-              source={
-                request.customer?.photo
-                  ? { uri: request.customer.photo }
-                  : require('../assets/profile.png')
-              }
-              style={styles.customerPhoto}
-            />
-            <View style={styles.customerInfo}>
-              <Text style={styles.customerName}>
-                {request.customerName || (request.customerEmail ? request.customerEmail.split('@')[0] : 'Customer')}
-              </Text>
-              <View style={styles.ratingRow}>
-                {[...Array(5)].map((_, i) => (
-                  <Ionicons
-                    key={i}
-                    name="star"
-                    size={12}
-                    color={i < Math.floor(request.customer?.rating || 5) ? colors.gold : colors.border.default}
-                  />
-                ))}
-                <Text style={styles.ratingText}>{request.customer?.rating || '5.0'}</Text>
-              </View>
-            </View>
-          </View>
+          <IncomingRequestCustomerCard request={request} styles={styles} />
 
           {(pricing.basePrice || pricing.serviceFee || pricing.tax) && (
             <View style={styles.priceCard}>

@@ -105,6 +105,26 @@ export const getTripId = (trip) => {
   return String(rawId);
 };
 
+const getScheduledTimeMs = (trip) => {
+  const scheduledTime = trip?.scheduledTime || trip?.scheduled_time || null;
+  if (!scheduledTime) {
+    return Number.NaN;
+  }
+
+  const parsedMs = new Date(scheduledTime).getTime();
+  return Number.isFinite(parsedMs) ? parsedMs : Number.NaN;
+};
+
+const isFutureAcceptedScheduledTrip = (trip, nowMs) => {
+  const normalizedStatus = normalizeTripStatus(trip?.status);
+  if (normalizedStatus !== TRIP_STATUS.ACCEPTED) {
+    return false;
+  }
+
+  const scheduledTimeMs = getScheduledTimeMs(trip);
+  return Number.isFinite(scheduledTimeMs) && scheduledTimeMs > nowMs;
+};
+
 export const pickCustomerTrips = ({ requests, currentUserId }) => {
   if (!Array.isArray(requests) || !currentUserId) {
     return {
@@ -118,9 +138,15 @@ export const pickCustomerTrips = ({ requests, currentUserId }) => {
     return requestCustomerId === currentUserId;
   });
 
-  const activeRequest = customerRequests.find((request) =>
-    ACTIVE_TRIP_STATUSES.includes(normalizeTripStatus(request.status))
-  );
+  const nowMs = Date.now();
+  const activeRequest = customerRequests.find((request) => {
+    const normalizedStatus = normalizeTripStatus(request.status);
+    if (!ACTIVE_TRIP_STATUSES.includes(normalizedStatus)) {
+      return false;
+    }
+
+    return !isFutureAcceptedScheduledTrip(request, nowMs);
+  });
   const pendingRequest = customerRequests.find(
     (request) => normalizeTripStatus(request.status) === TRIP_STATUS.PENDING
   );

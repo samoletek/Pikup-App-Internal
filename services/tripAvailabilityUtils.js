@@ -148,12 +148,35 @@ export const buildCustomerMapFromRows = (customers = []) => {
     const customerMap = {};
 
     customers.forEach((customer) => {
+        const parsedRating = Number(
+            customer.rating ??
+            customer.user_rating ??
+            customer.customer_rating ??
+            customer.average_rating ??
+            customer.avg_rating ??
+            customer.averageRating ??
+            customer.avgRating
+        );
+        const normalizedRating = Number.isFinite(parsedRating) && parsedRating > 0
+            ? Math.max(0, Math.min(parsedRating, 5))
+            : null;
+        const customerAvatarUrl =
+            customer.profileImageUrl ||
+            customer.profile_image_url ||
+            customer.avatarUrl ||
+            customer.avatar_url ||
+            customer.photo_url ||
+            customer.photo ||
+            null;
+
         customerMap[customer.id] = {
             name:
                 [customer.first_name, customer.last_name].filter(Boolean).join(' ') ||
                 customer.email?.split('@')[0] ||
                 'Customer',
             email: customer.email,
+            rating: normalizedRating,
+            avatarUrl: customerAvatarUrl,
         };
     });
 
@@ -186,6 +209,17 @@ export const mapAvailableRequestsForDriver = (sortedTrips, customerMap = {}) =>
             dispatchRequirements: trip.dispatchRequirements || null,
             customerName: customer.name || 'Customer',
             customerEmail: customer.email || null,
+            customerRating: customer.rating ?? null,
+            customerAvatarUrl: customer.avatarUrl || null,
+            customer: {
+                id: trip.customerId || null,
+                name: customer.name || 'Customer',
+                email: customer.email || null,
+                rating: customer.rating ?? null,
+                photo: customer.avatarUrl || null,
+                profile_image_url: customer.avatarUrl || null,
+                avatar_url: customer.avatarUrl || null,
+            },
             originalData: trip,
         };
     });

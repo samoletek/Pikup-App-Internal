@@ -2,6 +2,7 @@ import { TRIP_STATUS, toDbTripStatus } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
 import { extractDriverPreferencesFromDriverProfile } from './driverPreferencesColumns';
 import {
+  findDriverScheduleConflictForTrip,
   formatEdgeInvokeError,
   getAvailableRequestsFromEdge,
   hasValidCoordinatePair,
@@ -19,9 +20,20 @@ import { SUPPORTED_ORDER_STATE_CODES } from '../constants/orderAvailability';
 import { resolveLocationStateCode } from '../utils/locationState';
 import {
   fetchCustomersByIds,
+  fetchDriverRequestOffersByTripIds,
   fetchDriverMetadata,
   fetchPendingTrips,
+  fetchTripsByDriverIdAndStatuses,
 } from './repositories/tripRepository';
+
+const DRIVER_SCHEDULE_CONFLICT_STATUSES = Object.freeze([
+  toDbTripStatus(TRIP_STATUS.ACCEPTED),
+  toDbTripStatus(TRIP_STATUS.IN_PROGRESS),
+  toDbTripStatus(TRIP_STATUS.ARRIVED_AT_PICKUP),
+  toDbTripStatus(TRIP_STATUS.PICKED_UP),
+  toDbTripStatus(TRIP_STATUS.EN_ROUTE_TO_DROPOFF),
+  toDbTripStatus(TRIP_STATUS.ARRIVED_AT_DROPOFF),
+]);
 
 const resolveDriverLocation = (rawLocation) => {
   if (!hasValidCoordinatePair(rawLocation)) {
@@ -35,6 +47,17 @@ const resolveDriverLocation = (rawLocation) => {
     longitude: Number(rawLocation.longitude),
     stateCode: stateCode || null,
   };
+};
+
+const FINALIZED_OFFER_STATUSES = new Set(['declined', 'expired', 'accepted']);
+
+const parseOfferExpiryMs = (value) => {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
 const loadDriverProfileData = async (driverId) => {
@@ -103,6 +126,179 @@ const buildCustomerMapForTrips = async (sortedTrips) => {
   return customers ? buildCustomerMapFromRows(customers) : {};
 };
 
+const resolveCustomerIdFromRequest = (request) => {
+  return (
+    request?.customerId ||
+    request?.customer_id ||
+    request?.customer?.id ||
+    request?.customer?.uid ||
+    request?.originalData?.customerId ||
+    request?.originalData?.customer_id ||
+    null
+  );
+};
+
+const enrichRequestsWithCustomerProfiles = async (requests = []) => {
+  const normalizedRequests = Array.isArray(requests) ? requests : [];
+  if (normalizedRequests.length === 0) {
+    return [];
+  }
+
+  const customerIds = Array.from(
+    new Set(
+      normalizedRequests
+        .map((request) => String(resolveCustomerIdFromRequest(request) || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (customerIds.length === 0) {
+    return normalizedRequests;
+  }
+
+  const { data: customers, error } = await fetchCustomersByIds(customerIds);
+  if (error || !customers) {
+    return normalizedRequests;
+  }
+
+  const customerMap = buildCustomerMapFromRows(customers);
+
+  return normalizedRequests.map((request) => {
+    const customerId = String(resolveCustomerIdFromRequest(request) || '').trim();
+    const customer = customerMap[customerId];
+    if (!customer) {
+      return request;
+    }
+
+    const mergedRating =
+      customer.rating ??
+      request?.customerRating ??
+      request?.customer?.rating ??
+      null;
+    const mergedAvatarUrl =
+      customer.avatarUrl ||
+      request?.customerAvatarUrl ||
+      request?.customer?.photo ||
+      null;
+
+    return {
+      ...request,
+      customerName: customer.name || request?.customerName || 'Customer',
+      customerEmail: customer.email || request?.customerEmail || null,
+      customerRating: mergedRating,
+      customerAvatarUrl: mergedAvatarUrl,
+      customer: {
+        ...(request?.customer || {}),
+        id: request?.customer?.id || customerId || null,
+        name: customer.name || request?.customer?.name || request?.customerName || 'Customer',
+        email: customer.email || request?.customer?.email || request?.customerEmail || null,
+        rating: mergedRating,
+        photo: mergedAvatarUrl,
+        profile_image_url: mergedAvatarUrl,
+        avatar_url: mergedAvatarUrl,
+      },
+    };
+  });
+};
+
+const filterTripsByDriverOfferLifecycle = async ({ trips, driverId }) => {
+  const normalizedTrips = Array.isArray(trips) ? trips : [];
+  if (!driverId || normalizedTrips.length === 0) {
+    return normalizedTrips;
+  }
+
+  const tripIds = Array.from(
+    new Set(
+      normalizedTrips
+        .map((trip) => String(trip?.id || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (tripIds.length === 0) {
+    return normalizedTrips;
+  }
+
+  const { data: offerRows, error: offerRowsError } = await fetchDriverRequestOffersByTripIds({
+    driverId,
+    tripIds,
+  });
+
+  if (offerRowsError || !Array.isArray(offerRows)) {
+    if (offerRowsError) {
+      const normalized = normalizeError(offerRowsError, 'Failed to load request offer lifecycle');
+      logger.warn(
+        'TripDriverAvailability',
+        'Unable to apply offer lifecycle fallback filtering',
+        normalized
+      );
+    }
+    return normalizedTrips;
+  }
+
+  const offerByTripId = new Map();
+  offerRows.forEach((offerRow) => {
+    const tripId = String(offerRow?.trip_id || '').trim();
+    if (!tripId) {
+      return;
+    }
+    offerByTripId.set(tripId, offerRow);
+  });
+
+  const nowMs = Date.now();
+  return normalizedTrips.filter((trip) => {
+    const tripId = String(trip?.id || '').trim();
+    if (!tripId) {
+      return false;
+    }
+
+    const offerRow = offerByTripId.get(tripId);
+    if (!offerRow) {
+      return true;
+    }
+
+    const offerStatus = String(offerRow?.status || '').trim().toLowerCase();
+    if (FINALIZED_OFFER_STATUSES.has(offerStatus)) {
+      return false;
+    }
+
+    if (offerStatus === 'offered') {
+      const offerExpiresAtMs = parseOfferExpiryMs(offerRow?.expires_at);
+      if (Number.isFinite(offerExpiresAtMs) && offerExpiresAtMs <= nowMs) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+};
+
+const filterTripsByDriverSchedule = ({ trips, assignedTrips, driverLocation }) => {
+  const normalizedTrips = Array.isArray(trips) ? trips : [];
+  const normalizedAssignedTrips = Array.isArray(assignedTrips) ? assignedTrips : [];
+  if (normalizedTrips.length === 0 || normalizedAssignedTrips.length === 0) {
+    return {
+      trips: normalizedTrips,
+      filteredByScheduleConflictCount: 0,
+    };
+  }
+
+  const filteredTrips = normalizedTrips.filter((trip) => {
+    const conflict = findDriverScheduleConflictForTrip({
+      candidateTrip: trip,
+      assignedTrips: normalizedAssignedTrips,
+      driverLocation,
+      nowDate: new Date(),
+    });
+    return !conflict;
+  });
+
+  return {
+    trips: filteredTrips,
+    filteredByScheduleConflictCount: normalizedTrips.length - filteredTrips.length,
+  };
+};
+
 export const getAvailableRequestsForDriver = async ({ currentUser, options = {} }) => {
   if (!currentUser) {
     throw new Error('User not authenticated');
@@ -116,7 +312,7 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
       requestPool,
       driverLocation,
     });
-    return edgeRequests;
+    return await enrichRequestsWithCustomerProfiles(edgeRequests);
   } catch (edgeError) {
     const normalized = normalizeError(edgeError, 'Driver request pool edge function failed');
     logger.warn(
@@ -149,7 +345,52 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
   });
 
   logFilterStats({ mergedPreferences, hiddenReasonCounts, stats });
-  const customerMap = await buildCustomerMapForTrips(sortedTrips);
+  const { data: assignedTripRows, error: assignedTripsError } = await fetchTripsByDriverIdAndStatuses({
+    driverId,
+    statuses: DRIVER_SCHEDULE_CONFLICT_STATUSES,
+    columns: '*',
+    ascending: false,
+  });
+  const assignedTripsForConflict = assignedTripsError
+    ? []
+    : (Array.isArray(assignedTripRows) ? assignedTripRows : []).map(mapTripFromDb);
+  if (assignedTripsError) {
+    const normalizedAssignedTripsError = normalizeError(
+      assignedTripsError,
+      'Failed to load assigned trips for schedule conflict filtering'
+    );
+    logger.warn(
+      'TripDriverAvailability',
+      'Unable to apply schedule conflict filtering in fallback path',
+      normalizedAssignedTripsError
+    );
+  }
 
-  return mapAvailableRequestsForDriver(sortedTrips, customerMap);
+  const {
+    trips: scheduleFilteredTrips,
+    filteredByScheduleConflictCount,
+  } = filterTripsByDriverSchedule({
+    trips: sortedTrips,
+    assignedTrips: assignedTripsForConflict,
+    driverLocation,
+  });
+  if (filteredByScheduleConflictCount > 0) {
+    logger.info('TripDriverAvailability', 'Filtered requests by driver schedule conflicts', {
+      filteredByScheduleConflictCount,
+    });
+  }
+
+  const lifecycleFilteredTrips = await filterTripsByDriverOfferLifecycle({
+    trips: scheduleFilteredTrips,
+    driverId,
+  });
+  if (lifecycleFilteredTrips.length !== scheduleFilteredTrips.length) {
+    logger.info('TripDriverAvailability', 'Filtered requests by offer lifecycle in fallback path', {
+      filteredByOfferLifecycleCount: scheduleFilteredTrips.length - lifecycleFilteredTrips.length,
+    });
+  }
+
+  const customerMap = await buildCustomerMapForTrips(lifecycleFilteredTrips);
+
+  return mapAvailableRequestsForDriver(lifecycleFilteredTrips, customerMap);
 };

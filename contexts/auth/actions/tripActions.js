@@ -23,6 +23,10 @@ export const createTripDomainActions = ({ currentUser }) => {
     startDelivery: TripService.startDelivery,
     arriveAtDropoff: TripService.arriveAtDropoff,
     checkExpiredRequests: TripService.checkExpiredRequests,
+    confirmScheduledTripCheckin: (requestId) =>
+      TripService.confirmScheduledTripCheckin(requestId, currentUser),
+    declineScheduledTripCheckin: (requestId) =>
+      TripService.declineScheduledTripCheckin(requestId, currentUser),
     resetExpiredRequest: TripService.resetExpiredRequest,
     extendRequestTimer: TripService.extendRequestTimer,
     claimRequestForViewing: TripService.claimRequestForViewing,

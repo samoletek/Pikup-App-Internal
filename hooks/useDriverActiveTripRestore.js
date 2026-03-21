@@ -1,8 +1,44 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ACTIVE_TRIP_STATUSES, normalizeTripStatus } from '../constants/tripStatus';
+import { ACTIVE_TRIP_STATUSES, TRIP_STATUS, normalizeTripStatus } from '../constants/tripStatus';
 import { getPersistedDriverOnlineStatus } from '../services/driverStateService';
 import { logger } from '../services/logger';
+
+const resolveScheduledTimeMs = (trip) => {
+  const candidates = [
+    trip?.scheduledTime,
+    trip?.scheduled_time,
+    trip?.dispatchRequirements?.scheduledTime,
+    trip?.dispatch_requirements?.scheduledTime,
+    trip?.originalData?.scheduledTime,
+    trip?.originalData?.scheduled_time,
+    trip?.originalData?.dispatchRequirements?.scheduledTime,
+    trip?.originalData?.dispatch_requirements?.scheduledTime,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const parsed = new Date(candidate).getTime();
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return Number.NaN;
+};
+
+const isAcceptedScheduledTrip = (trip) => {
+  const normalizedStatus = normalizeTripStatus(trip?.status);
+  if (normalizedStatus !== TRIP_STATUS.ACCEPTED) {
+    return false;
+  }
+
+  const scheduledTimeMs = resolveScheduledTimeMs(trip);
+  return Number.isFinite(scheduledTimeMs);
+};
 
 export default function useDriverActiveTripRestore({
   currentUserId,
@@ -58,6 +94,10 @@ export default function useDriverActiveTripRestore({
 
           const normalizedStatus = normalizeTripStatus(trip.status);
           if (!ACTIVE_TRIP_STATUSES.includes(normalizedStatus)) {
+            return false;
+          }
+
+          if (isAcceptedScheduledTrip(trip)) {
             return false;
           }
 

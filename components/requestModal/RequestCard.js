@@ -4,6 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../styles/theme';
 import { getDisplayPhotos, getScheduledLabel } from './requestModalUtils';
+import {
+  firstNonEmptyString,
+  resolveCustomerAvatarFromRequest,
+  resolveCustomerNameFromRequest,
+  resolveCustomerRatingFromRequest,
+} from '../../utils/participantIdentity';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
 
 function RequestCard({
   item,
@@ -22,6 +29,18 @@ function RequestCard({
   const scheduledLabel = getScheduledLabel(item.scheduledTime);
   const timerValue = timers[item.id];
   const shouldShowTimer = Boolean(timerValue) && !hasScheduledTime;
+  const customerName = resolveCustomerNameFromRequest(item, 'Customer');
+  const customerAvatarUrl = firstNonEmptyString(
+    resolveCustomerAvatarFromRequest(item),
+    typeof item?.customer?.photo === 'string' ? item.customer.photo : item?.customer?.photo?.uri,
+    item?.customerAvatarUrl
+  );
+  const customerRating = resolveCustomerRatingFromRequest(item);
+  const customerRatingLabel = Number.isFinite(customerRating)
+    ? (Math.round(customerRating * 100) / 100).toString()
+    : 'No ratings yet';
+  const isAcceptedRequest = normalizeTripStatus(item?.status) === TRIP_STATUS.ACCEPTED;
+  const acceptButtonLabel = isAcceptedRequest ? 'Accepted' : 'Accept';
 
   const handleViewDetails = () => {
     if (typeof onViewDetails === 'function') {
@@ -149,24 +168,18 @@ function RequestCard({
 
         <View style={styles.customerSection}>
           <View style={styles.customerInfo}>
-            <Image
-              source={
-                item.customer?.photo
-                  ? {
-                      uri:
-                        typeof item.customer.photo === 'string'
-                          ? item.customer.photo
-                          : item.customer.photo.uri,
-                    }
-                  : require('../../assets/profile.png')
-              }
-              style={styles.customerPhoto}
-            />
+            {customerAvatarUrl ? (
+              <Image source={{ uri: customerAvatarUrl }} style={styles.customerPhoto} />
+            ) : (
+              <View style={styles.customerPhotoPlaceholder}>
+                <Ionicons name="person" size={20} color={colors.text.muted} />
+              </View>
+            )}
             <View>
-              <Text style={styles.customerName}>{item.customer?.name || item.customerName || 'Customer'}</Text>
+              <Text style={styles.customerName}>{customerName}</Text>
               <View style={styles.ratingContainer}>
                 <Ionicons name="star" size={12} color={colors.gold} />
-                <Text style={styles.rating}>{item.customer?.rating || '5.0'}</Text>
+                <Text style={styles.rating}>{customerRatingLabel}</Text>
               </View>
             </View>
           </View>
@@ -188,8 +201,15 @@ function RequestCard({
             <Text style={styles.detailsButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept && onAccept(item)} activeOpacity={0.85}>
-            <Text style={styles.acceptButtonText}>Accept</Text>
+          <TouchableOpacity
+            style={[styles.acceptButton, isAcceptedRequest && styles.acceptButtonDisabled]}
+            onPress={() => !isAcceptedRequest && onAccept && onAccept(item)}
+            activeOpacity={isAcceptedRequest ? 1 : 0.85}
+            disabled={isAcceptedRequest}
+          >
+            <Text style={[styles.acceptButtonText, isAcceptedRequest && styles.acceptButtonTextDisabled]}>
+              {acceptButtonLabel}
+            </Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>

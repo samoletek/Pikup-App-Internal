@@ -33,6 +33,11 @@ export {
 } from './tripLifecycleUtils';
 
 export {
+  confirmScheduledTripCheckin,
+  declineScheduledTripCheckin,
+} from './tripScheduledCheckinService';
+
+export {
   cancelOrder,
   getCancellationInfo,
 } from './tripOrderCancellationService';

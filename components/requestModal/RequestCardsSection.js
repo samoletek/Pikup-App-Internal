@@ -14,6 +14,7 @@ import { CARD_WIDTH } from './requestModalUtils';
 export default function RequestCardsSection({
   loading,
   error,
+  mode = 'available',
   requests,
   onRefresh,
   flatListRef,
@@ -21,12 +22,23 @@ export default function RequestCardsSection({
   onScroll,
   styles,
 }) {
+  const isAcceptedMode = mode === 'accepted';
+  const loadingLabel = isAcceptedMode
+    ? 'Loading accepted requests...'
+    : 'Finding available requests...';
+  const emptyStateTitle = isAcceptedMode
+    ? 'No accepted requests'
+    : 'No requests available';
+  const emptyStateSubtitle = isAcceptedMode
+    ? 'Accepted scheduled trips will appear here'
+    : 'New requests will appear here when customers need pickups';
+
   return (
     <View style={styles.cardsContainer}>
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Finding available requests...</Text>
+          <Text style={styles.loadingText}>{loadingLabel}</Text>
         </View>
       ) : error && requests.length === 0 ? (
         <View style={styles.errorContainer}>
@@ -60,10 +72,8 @@ export default function RequestCardsSection({
       ) : (
         <View style={styles.emptyState}>
           <Ionicons name="location-outline" size={64} color={colors.text.subtle} />
-          <Text style={styles.emptyStateTitle}>No requests available</Text>
-          <Text style={styles.emptyStateSubtitle}>
-            New requests will appear here when customers need pickups
-          </Text>
+          <Text style={styles.emptyStateTitle}>{emptyStateTitle}</Text>
+          <Text style={styles.emptyStateSubtitle}>{emptyStateSubtitle}</Text>
         </View>
       )}
     </View>

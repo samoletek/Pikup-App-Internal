@@ -27,15 +27,15 @@ const PhotoGallerySection = ({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.photoScrollContent}
         >
-          {photos.map((photoUri, index) => (
-            <View key={`${title}-${index}`} style={styles.photoTile}>
-              <TouchableOpacity
-                style={styles.photoTilePressable}
-                activeOpacity={0.9}
-                onPress={() => onOpenPhoto?.(photoUri)}
-              >
-                <Image source={{ uri: photoUri }} style={styles.photoTileImage} resizeMode="cover" />
-              </TouchableOpacity>
+	          {photos.map((photoUri, index) => (
+	            <View key={`${title}-${index}`} style={styles.photoTile}>
+	              <TouchableOpacity
+	                style={styles.photoTilePressable}
+	                activeOpacity={0.9}
+	                onPress={() => onOpenPhoto?.(photos, index)}
+	              >
+	                <Image source={{ uri: photoUri }} style={styles.photoTileImage} resizeMode="cover" />
+	              </TouchableOpacity>
               <View style={styles.photoTileBadge}>
                 <Text style={styles.photoTileBadgeText}>{index + 1}</Text>
               </View>

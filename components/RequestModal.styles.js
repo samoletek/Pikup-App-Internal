@@ -261,6 +261,17 @@ const styles = StyleSheet.create({
     borderColor: colors.overlayPrimarySoft,
     backgroundColor: colors.background.input,
   },
+  customerPhotoPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.overlayPrimarySoft,
+    backgroundColor: colors.background.input,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   customerName: {
     color: colors.white,
     fontSize: typography.fontSize.md,
@@ -315,10 +326,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  acceptButtonDisabled: {
+    backgroundColor: colors.background.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.light,
+  },
   acceptButtonText: {
     color: colors.white,
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.bold,
+  },
+  acceptButtonTextDisabled: {
+    color: colors.text.secondary,
   },
   emptyState: {
     flex: 1,

@@ -6,12 +6,14 @@ import {
   createRequestUnavailableError,
   invokeAcceptTripRequestRpc,
 } from './tripPersistenceUtils';
+import { findDriverScheduleConflictForTrip } from './tripDispatchUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { fetchProfileByTableAndUserId } from './repositories/authRepository';
 import {
   acceptPendingTripForDriver,
   fetchTripColumnsByIdMaybeSingle,
+  fetchTripsByDriverIdAndStatuses,
 } from './repositories/tripRepository';
 
 const fetchTripById = async (requestId) => {
@@ -23,6 +25,15 @@ const fetchTripById = async (requestId) => {
 
   return data || null;
 };
+
+const DRIVER_SCHEDULE_CONFLICT_STATUSES = Object.freeze([
+  toDbTripStatus(TRIP_STATUS.ACCEPTED),
+  toDbTripStatus(TRIP_STATUS.IN_PROGRESS),
+  toDbTripStatus(TRIP_STATUS.ARRIVED_AT_PICKUP),
+  toDbTripStatus(TRIP_STATUS.PICKED_UP),
+  toDbTripStatus(TRIP_STATUS.EN_ROUTE_TO_DROPOFF),
+  toDbTripStatus(TRIP_STATUS.ARRIVED_AT_DROPOFF),
+]);
 
 const validateRequestCanBeAccepted = ({ requestSnapshot, driverId }) => {
   const normalizedStatus = normalizeTripStatus(requestSnapshot.status);
@@ -175,6 +186,40 @@ const ensureAcceptedByDriver = ({ acceptedRequest, driverId }) => {
   }
 };
 
+const ensureNoDriverScheduleConflict = async ({ requestSnapshot, driverId }) => {
+  const candidateTrip = mapTripFromDb(requestSnapshot);
+  const { data: assignedTripRows, error: assignedTripsError } = await fetchTripsByDriverIdAndStatuses({
+    driverId,
+    statuses: DRIVER_SCHEDULE_CONFLICT_STATUSES,
+    columns: '*',
+    ascending: false,
+  });
+
+  if (assignedTripsError) {
+    throw assignedTripsError;
+  }
+
+  const assignedTrips = (Array.isArray(assignedTripRows) ? assignedTripRows : [])
+    .map((tripRow) => mapTripFromDb(tripRow))
+    .filter((trip) => Boolean(trip?.id) && trip.id !== candidateTrip?.id);
+
+  const conflictingTrip = findDriverScheduleConflictForTrip({
+    candidateTrip,
+    assignedTrips,
+    nowDate: new Date(),
+  });
+
+  if (!conflictingTrip) {
+    return;
+  }
+
+  logger.warn('TripDriverAcceptance', 'Blocked request acceptance due to schedule conflict', {
+    requestId: candidateTrip?.id || null,
+    conflictingTripId: conflictingTrip?.id || null,
+  });
+  throw createRequestUnavailableError('Request conflicts with your current schedule');
+};
+
 export const acceptRequestForDriver = async ({ requestId, currentUser }) => {
   if (!currentUser) {
     throw new Error('User not authenticated');
@@ -194,6 +239,8 @@ export const acceptRequestForDriver = async ({ requestId, currentUser }) => {
   if (alreadyAcceptedByDriver) {
     return mapTripFromDb(requestSnapshot);
   }
+
+  await ensureNoDriverScheduleConflict({ requestSnapshot, driverId });
 
   let acceptedRequest = null;
   let rpcAccepted = false;

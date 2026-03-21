@@ -32,6 +32,13 @@ export default function useDriverIncomingRequestHandlers({
 
   const handleIncomingRequestTimeout = useCallback(() => {
     const currentRequestId = incomingRequest?.id;
+    const declineOnTimeoutPromise = currentRequestId && typeof declineRequestOffer === 'function'
+      ? declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
+        .catch((declineError) => {
+          logger.warn('DriverIncomingRequestHandlers', 'Auto-decline on timeout failed', declineError);
+        })
+      : Promise.resolve();
+
     setShowIncomingModal(false);
     setIsMinimized(false);
     setIncomingRequest(null);
@@ -43,11 +50,16 @@ export default function useDriverIncomingRequestHandlers({
 
     if (!isScheduledPoolActive && isOnline && !hasActiveTrip) {
       setTimeout(() => {
-        void loadRequests(false);
+        void (async () => {
+          await declineOnTimeoutPromise;
+          await loadRequests(false);
+        })();
       }, 1000);
     }
   }, [
+    activeRequestPool,
     clearIncomingRoute,
+    declineRequestOffer,
     hasActiveTrip,
     incomingRequest?.id,
     isOnline,

@@ -3,9 +3,12 @@ import type { TripRequest } from '../contracts/domain';
 import type {
   DriverRequestPoolRequest,
   DriverRequestPoolResponse,
+  GetTripParticipantsPublicRequest,
+  GetTripParticipantsPublicResponse,
 } from '../../supabase/functions/_shared/contracts';
 
 const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
+const TRIP_PARTICIPANTS_PUBLIC_FUNCTION = 'get-trip-participants-public';
 const DRIVER_PREFERENCE_SELECT_COLUMNS = [
   'metadata',
   'pref_pickup_small_items',
@@ -47,6 +50,22 @@ export const invokeDriverRequestPool = async (payload: DriverRequestPoolRequest)
   });
 };
 
+export const invokeTripParticipantsPublic = async (
+  payload: GetTripParticipantsPublicRequest,
+  options: { accessToken?: string | null } = {},
+) => {
+  const accessToken = options.accessToken?.trim();
+  return supabase.functions.invoke<GetTripParticipantsPublicResponse>(
+    TRIP_PARTICIPANTS_PUBLIC_FUNCTION,
+    {
+      body: payload,
+      ...(accessToken
+        ? { headers: { Authorization: `Bearer ${accessToken}` } }
+        : {}),
+    },
+  );
+};
+
 export const fetchDriverMetadata = async (driverId: string) => {
   return supabase
     .from('drivers')
@@ -58,7 +77,7 @@ export const fetchDriverMetadata = async (driverId: string) => {
 export const fetchCustomersByIds = async (customerIds: string[]) => {
   return supabase
     .from('customers')
-    .select('id, first_name, last_name, email')
+    .select('*')
     .in('id', customerIds);
 };
 
@@ -67,6 +86,20 @@ export const fetchPendingTrips = async (pendingTripStatus: string) => {
     .from('trips')
     .select('*')
     .eq('status', pendingTripStatus);
+};
+
+export const fetchDriverRequestOffersByTripIds = async ({
+  driverId,
+  tripIds,
+}: {
+  driverId: string;
+  tripIds: string[];
+}) => {
+  return supabase
+    .from('driver_request_offers')
+    .select('trip_id,status,expires_at')
+    .eq('driver_id', driverId)
+    .in('trip_id', tripIds);
 };
 
 export const insertTripWithSelect = async (tripData: TripRequest) => {
@@ -189,6 +222,117 @@ export const fetchTripsByDriverId = async ({
   }
 
   return query.order('created_at', { ascending });
+};
+
+export const fetchTripsByDriverIdAndStatuses = async ({
+  driverId,
+  statuses,
+  columns = '*',
+  ascending = false,
+}: {
+  driverId: string;
+  statuses: string[];
+  columns?: string;
+  ascending?: boolean;
+}) => {
+  const normalizedStatuses = Array.isArray(statuses)
+    ? statuses
+      .map((statusValue) => String(statusValue || '').trim())
+      .filter(Boolean)
+    : [];
+
+  let query = supabase
+    .from('trips')
+    .select(columns)
+    .eq('driver_id', driverId);
+
+  if (normalizedStatuses.length > 0) {
+    query = query.in('status', normalizedStatuses);
+  }
+
+  return query.order('created_at', { ascending });
+};
+
+export const confirmScheduledCheckinForDriver = async ({
+  requestId,
+  driverId,
+  confirmedAt,
+  updatedAt,
+}: {
+  requestId: string;
+  driverId: string;
+  confirmedAt: string;
+  updatedAt: string;
+}) => {
+  return supabase
+    .from('trips')
+    .update({
+      driver_checkin_status: 'confirmed',
+      driver_checkin_confirmed_at: confirmedAt,
+      updated_at: updatedAt,
+    })
+    .eq('id', requestId)
+    .eq('driver_id', driverId)
+    .eq('status', 'accepted')
+    .select('*');
+};
+
+export const declineScheduledCheckinForDriver = async ({
+  requestId,
+  driverId,
+  declinedAt,
+  updatedAt,
+}: {
+  requestId: string;
+  driverId: string;
+  declinedAt: string;
+  updatedAt: string;
+}) => {
+  return supabase
+    .from('trips')
+    .update({
+      status: 'pending',
+      driver_id: null,
+      accepted_at: null,
+      viewing_driver_id: null,
+      driver_checkin_status: 'declined',
+      driver_checkin_declined_at: declinedAt,
+      driver_checkin_confirmed_at: null,
+      driver_checkin_required_at: null,
+      driver_checkin_deadline_at: null,
+      updated_at: updatedAt,
+    })
+    .eq('id', requestId)
+    .eq('driver_id', driverId)
+    .eq('status', 'accepted')
+    .select('*');
+};
+
+export const expireOverdueDriverScheduledCheckins = async ({
+  nowIso,
+}: {
+  nowIso: string;
+}) => {
+  return supabase
+    .from('trips')
+    .update({
+      status: 'pending',
+      driver_id: null,
+      accepted_at: null,
+      viewing_driver_id: null,
+      driver_checkin_status: 'expired',
+      driver_checkin_declined_at: nowIso,
+      driver_checkin_confirmed_at: null,
+      driver_checkin_required_at: null,
+      driver_checkin_deadline_at: null,
+      updated_at: nowIso,
+    })
+    .eq('status', 'accepted')
+    .eq('driver_checkin_status', 'pending')
+    .not('scheduled_time', 'is', null)
+    .not('driver_checkin_deadline_at', 'is', null)
+    .lte('driver_checkin_deadline_at', nowIso)
+    .select('id');
 };
 
 export const createRealtimeChannel = (channelName: string) => {

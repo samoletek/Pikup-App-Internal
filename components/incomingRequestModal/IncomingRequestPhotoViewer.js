@@ -4,6 +4,7 @@ import {
   View,
   Image,
   FlatList,
+  Text,
   TouchableOpacity,
   TouchableWithoutFeedback,
 } from 'react-native';
@@ -48,20 +49,18 @@ export default function IncomingRequestPhotoViewer({
             </TouchableWithoutFeedback>
           )}
         />
-        {photos.length > 1 && (
-          <View style={styles.photoViewerDots}>
-            {photos.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.photoViewerDot,
-                  index === currentIndex && styles.photoViewerDotActive,
-                ]}
-              />
-            ))}
+        {photos.length > 1 ? (
+          <View style={styles.photoViewerCounter}>
+            <Text style={styles.photoViewerCounterText}>
+              {currentIndex + 1}/{photos.length}
+            </Text>
           </View>
-        )}
-        <TouchableOpacity style={styles.photoViewerClose} onPress={onClose}>
+        ) : null}
+        <TouchableOpacity
+          style={styles.photoViewerClose}
+          onPress={onClose}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="close" size={28} color={colors.white} />
         </TouchableOpacity>
       </View>

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { isUnavailableAcceptError } from './DriverHomeScreen.utils';
+import { isScheduledRequestFuture, isUnavailableAcceptError } from './DriverHomeScreen.utils';
 import { logger } from '../../services/logger';
 
 export default function useDriverHomeRequestActions({
@@ -27,6 +27,7 @@ export default function useDriverHomeRequestActions({
   setShowRecentTrips,
   setShowRequestModal,
   showRequestModal,
+  onAcceptedScheduledRequest,
 }) {
   const handleOpenRecentTrips = useCallback(async () => {
     setShowRecentTrips(true);
@@ -63,12 +64,28 @@ export default function useDriverHomeRequestActions({
       logger.info('DriverHomeRequestActions', 'Accepting request', { requestId: request.id });
       await acceptRequest(request.id);
 
-      setAcceptedRequestId(request.id);
-      setActiveJob(request);
       setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
-
       setShowRequestModal(false);
       setShowAllRequests(false);
+
+      if (isScheduledRequestFuture(request)) {
+        const acceptedScheduledRequest = {
+          ...request,
+          status: 'accepted',
+          driverId: request?.driverId || currentUserId,
+          driver_id: request?.driver_id || currentUserId,
+        };
+
+        if (typeof onAcceptedScheduledRequest === 'function') {
+          onAcceptedScheduledRequest(acceptedScheduledRequest);
+        }
+
+        alert('Request accepted. Trip flow will open automatically at the scheduled time.');
+        return;
+      }
+
+      setAcceptedRequestId(request.id);
+      setActiveJob(request);
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       logger.error('DriverHomeRequestActions', 'Error accepting request', error);
@@ -92,9 +109,11 @@ export default function useDriverHomeRequestActions({
   }, [
     acceptRequest,
     clearIncomingRoute,
+    currentUserId,
     isAcceptingRequestRef,
     loadRequests,
     navigation,
+    onAcceptedScheduledRequest,
     setAcceptedRequestId,
     setActiveJob,
     setAvailableRequests,

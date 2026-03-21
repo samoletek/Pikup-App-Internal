@@ -99,6 +99,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
   const {
     customerAvatarUrl,
+    customerDisplayName,
     setCustomerAvatarUrl,
   } = useCustomerAvatarFromTripRequest({
     requestData,
@@ -167,7 +168,11 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     requestData,
     routeRequest: route.params?.request,
     getRequestById,
+    getUserProfile,
     currentUserId,
+    customerIdHint: activeRequestCustomerId,
+    driverIdHint: activeRequestDriverId,
+    customerNameHint: customerDisplayName,
     createConversation,
     navigation,
     clearUnread: () => setHasUnreadChat(false),
@@ -205,6 +210,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       cardGradientColors={cardGradientColors}
       estimatedTime={estimatedTime}
       requestData={requestData}
+      customerName={customerDisplayName}
       customerAvatarUrl={customerAvatarUrl}
       onCustomerAvatarError={() => setCustomerAvatarUrl(null)}
       openChat={openChat}

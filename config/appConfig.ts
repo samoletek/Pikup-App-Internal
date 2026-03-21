@@ -53,6 +53,10 @@ export const appConfig = {
     maxDistanceScheduledMiles: readEnv("EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES", "35"),
     scheduledLookaheadHours: readEnv("EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS", "72"),
     scheduledPastGraceMinutes: readEnv("EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES", "5"),
+    overlapMinDurationMinutes: readEnv("EXPO_PUBLIC_DISPATCH_OVERLAP_MIN_DURATION_MINUTES", "25"),
+    overlapBaseServiceMinutes: readEnv("EXPO_PUBLIC_DISPATCH_OVERLAP_BASE_SERVICE_MINUTES", "15"),
+    overlapAverageSpeedMph: readEnv("EXPO_PUBLIC_DISPATCH_OVERLAP_AVERAGE_SPEED_MPH", "22"),
+    overlapInterTripBufferMinutes: readEnv("EXPO_PUBLIC_DISPATCH_OVERLAP_INTER_TRIP_BUFFER_MINUTES", "10"),
   },
   driverReadinessBypass: {
     // TODO(remove before production): keep only temporary dev bypass.

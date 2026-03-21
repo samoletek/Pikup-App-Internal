@@ -30,6 +30,61 @@ const styles = StyleSheet.create({
     zIndex: 1,
     marginBottom: spacing.sm,
   },
+  filterSection: {
+    height: HEADER_ROW_HEIGHT,
+    justifyContent: 'center',
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  filterTabSpaced: {
+    marginRight: spacing.xs,
+  },
+  filterTabActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  filterTextActive: {
+    color: colors.text.primary,
+  },
+  filterBadge: {
+    marginLeft: spacing.xs,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    backgroundColor: colors.background.elevated,
+  },
+  filterBadgeActive: {
+    backgroundColor: colors.overlayPrimarySoft,
+  },
+  filterBadgeText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
   searchBar: {
     height: 40,
     flexDirection: 'row',

@@ -251,6 +251,66 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: spacing.xs,
   },
+  routeCard: {
+    backgroundColor: colors.background.input,
+    borderRadius: borderRadius.md,
+    padding: spacing.base,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  routeTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  routeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  routeIconWrap: {
+    width: spacing.base,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  routeContent: {
+    flex: 1,
+    marginLeft: spacing.sm,
+  },
+  routeLabel: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.xs + 1,
+    fontWeight: typography.fontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  routeAddress: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    lineHeight: 22,
+    marginTop: spacing.xs / 2,
+  },
+  routeMetaText: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.xs,
+  },
+  routeNotesText: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.sm,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
+  },
+  routeDivider: {
+    marginLeft: spacing.xs + 1,
+    marginVertical: spacing.sm,
+    width: 2,
+    height: spacing.lg,
+    backgroundColor: colors.border.strong,
+  },
   detailSection: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.base,
@@ -324,8 +384,17 @@ const styles = StyleSheet.create({
     borderRadius: (spacing.xxxl - spacing.sm) / 2,
     backgroundColor: colors.background.elevated,
   },
+  customerPhotoPlaceholder: {
+    width: spacing.xxxl - spacing.sm,
+    height: spacing.xxxl - spacing.sm,
+    borderRadius: (spacing.xxxl - spacing.sm) / 2,
+    backgroundColor: colors.background.elevated,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   customerInfo: {
     marginLeft: spacing.md,
+    flex: 1,
   },
   customerName: {
     color: colors.text.primary,
@@ -397,33 +466,24 @@ const styles = StyleSheet.create({
     height: SCREEN_HEIGHT * 0.65,
     borderRadius: borderRadius.md,
   },
-  photoViewerDots: {
+  photoViewerCounter: {
     position: 'absolute',
     bottom: spacing.xxxl + spacing.xxl,
     alignSelf: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
   },
-  photoViewerDot: {
-    width: spacing.sm,
-    height: spacing.sm,
-    borderRadius: borderRadius.xs,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  photoViewerDotActive: {
-    backgroundColor: colors.white,
-    width: spacing.xl,
+  photoViewerCounterText: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
   },
   photoViewerClose: {
     position: 'absolute',
     top: spacing.xxxl + spacing.md,
     right: spacing.lg,
-    width: spacing.xxxl + spacing.sm,
-    height: spacing.xxxl + spacing.sm,
-    borderRadius: borderRadius.xl,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
 

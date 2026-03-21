@@ -21,6 +21,7 @@ export default function DriverHomeBottomPanel({
   onGoOnlineScheduled,
   onViewScheduledRequests,
   isDriverGeoRestricted,
+  onViewAcceptedRequests,
 }) {
   return (
     <View style={styles.bottomPanel}>
@@ -73,13 +74,27 @@ export default function DriverHomeBottomPanel({
           </View>
 
           {isScheduledPoolActive && (
-            <TouchableOpacity
-              style={styles.secondaryOnlineAction}
-              onPress={onViewScheduledRequests}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryOnlineActionText}>View Scheduled Requests</Text>
-            </TouchableOpacity>
+            <View style={styles.secondaryOnlineActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryOnlineAction,
+                  styles.secondaryOnlineActionHalf,
+                  styles.secondaryOnlineActionFirst,
+                ]}
+                onPress={onViewScheduledRequests}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryOnlineActionText}>View Scheduled Requests</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.secondaryOnlineAction, styles.secondaryOnlineActionHalf]}
+                onPress={onViewAcceptedRequests}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryOnlineActionText}>View Accepted Requests</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           <View style={styles.progressContainer}>
@@ -261,18 +276,32 @@ const styles = StyleSheet.create({
   },
   secondaryOnlineAction: {
     alignSelf: 'flex-start',
+    alignItems: 'center',
     backgroundColor: colors.background.elevated,
     borderRadius: borderRadius.full,
     borderWidth: 1,
     borderColor: colors.navigation.tabBarBorder,
+    justifyContent: 'center',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
     marginBottom: spacing.md,
+  },
+  secondaryOnlineActionsRow: {
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+  },
+  secondaryOnlineActionHalf: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  secondaryOnlineActionFirst: {
+    marginRight: spacing.sm,
   },
   secondaryOnlineActionText: {
     color: colors.text.primary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
   },
   progressContainer: {
     backgroundColor: colors.background.panel,

@@ -5,6 +5,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   useAuthIdentity,
   useDriverActions,
+  useProfileActions,
   useTripActions,
 } from '../../contexts/AuthContext';
 import DriverHomeScreenContent from '../../components/driver/DriverHomeScreenContent';
@@ -19,6 +20,7 @@ import useDriverRequestsFeed from '../../hooks/useDriverRequestsFeed';
 import useDriverHomeLocationTracking from '../../hooks/useDriverHomeLocationTracking';
 import useDriverHomeRequestActions from './useDriverHomeRequestActions';
 import useDriverHomePresentation from './useDriverHomePresentation';
+import useAcceptedScheduledRequests from './useAcceptedScheduledRequests';
 import styles from './DriverHomeScreen.styles';
 import { appConfig } from '../../config/appConfig';
 import { buildDriverHomeContentProps } from './driverHomeContentProps';
@@ -46,6 +48,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     getAvailableRequests,
     declineRequestOffer,
     acceptRequest,
+    confirmScheduledTripCheckin, declineScheduledTripCheckin,
     checkExpiredRequests,
     updateDriverLocation,
   } = useTripActions();
@@ -55,6 +58,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverHeartbeat,
     getDriverTrips,
   } = useDriverActions();
+  const { getUserProfile } = useProfileActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const [showDeclinedBannerFromRoute, setShowDeclinedBannerFromRoute] = useState(
     Boolean(route?.params?.showOnboardingDeclinedBanner)
@@ -63,28 +67,18 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Request modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showAllRequests, setShowAllRequests] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
-
-  // New incoming request modal state
+  const [requestModalMode, setRequestModalMode] = useState('available');
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState(null);
-
-  // Phone verification modal
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
-
-  // Recent trips modal
   const [dashboardExpanded, setDashboardExpanded] = useState(false);
   const [showRecentTrips, setShowRecentTrips] = useState(false);
   const [recentTrips, setRecentTrips] = useState([]);
   const [recentTripsLoading, setRecentTripsLoading] = useState(false);
-
-  // Route for incoming request (Mapbox Directions)
   const cameraRef = useRef(null);
-
-  // Minimize + timer state for incoming request
   const [isMinimized, setIsMinimized] = useState(false);
   const handleOfferTimeoutRef = useRef(null);
   const isAcceptingRequestRef = useRef(false);
@@ -191,6 +185,25 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowIncomingModal,
   });
   const {
+    acceptedScheduledRequests,
+    acceptedScheduledLoading,
+    acceptedScheduledError,
+    appendAcceptedScheduledRequest,
+    refreshAcceptedScheduledRequests,
+  } = useAcceptedScheduledRequests({
+    currentUserId,
+    getUserPickupRequests,
+    getUserProfile, confirmScheduledTripCheckin, declineScheduledTripCheckin,
+    isOnline,
+    hasActiveTrip,
+    navigation,
+    setAcceptedRequestId,
+    setActiveJob,
+    setShowRequestModal,
+    setShowAllRequests,
+    setRequestModalMode,
+  });
+  const {
     activeJobDestinationAddress,
     activeJobSecondaryLabel,
     activeJobStatusLabel,
@@ -242,6 +255,7 @@ export default function DriverHomeScreen({ navigation, route }) {
       setActiveJob(null);
       // Reload requests to refresh the list
       loadRequests(false);
+      void refreshAcceptedScheduledRequests({ silent: true });
     }
   });
 
@@ -339,6 +353,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowRecentTrips,
     setShowRequestModal,
     showRequestModal,
+    onAcceptedScheduledRequest: appendAcceptedScheduledRequest,
   });
 
   const {
@@ -378,6 +393,13 @@ export default function DriverHomeScreen({ navigation, route }) {
     navigation.navigate('CustomerHelpScreen');
   }, [navigation]);
 
+  const requestModalRequests =
+    requestModalMode === 'accepted' ? acceptedScheduledRequests : availableRequests;
+  const requestModalLoading =
+    requestModalMode === 'accepted' ? acceptedScheduledLoading : loading;
+  const requestModalError =
+    requestModalMode === 'accepted' ? acceptedScheduledError : error;
+
   const contentProps = buildDriverHomeContentProps({
     styles, region, tabBarHeight, shouldShowOnlineDriverMarker, onlineDriverMarkerCoordinate,
     onlineDriverPulseOpacity, onlineDriverPulseSize, isOnline, hasActiveTrip, showIncomingModal,
@@ -385,22 +407,45 @@ export default function DriverHomeScreen({ navigation, route }) {
     cameraRef, isCompact, isRestoringActiveTrip, activeJob, activeJobStatusLabel,
     activeJobDestinationAddress, activeJobSecondaryLabel, isScheduledPoolActive, waitTime,
     progressValue, incomingRequest, requestTimeRemaining, miniBarPulse, formatRequestTime,
-    driverLocation, loading, error, requestTimerTotal, dashboardExpanded, navigation,
+    driverLocation, loading: requestModalLoading, error: requestModalError, requestTimerTotal,
+    dashboardExpanded, navigation,
     phoneVerifyVisible, showRecentTrips, recentTrips, recentTripsLoading,
     insetsTop: insets.top,
-    onRequestMarkerPress: handleRequestMarkerPress,
+    onRequestMarkerPress: (request) => {
+      setRequestModalMode('available');
+      handleRequestMarkerPress(request);
+    },
     onResumeTrip: () => openActiveTrip(activeJob),
     onGoOffline: handleGoOffline,
     onGoOnline: handleGoOnline,
     onGoOnlineScheduled: handleGoOnlineScheduled,
-    onViewScheduledRequests: () => setShowAllRequests(true),
+    onViewScheduledRequests: () => {
+      setRequestModalMode('available');
+      setShowAllRequests(true);
+    },
+    onViewAcceptedRequests: () => {
+      setRequestModalMode('accepted');
+      setShowAllRequests(true);
+      void refreshAcceptedScheduledRequests();
+    },
     onExpandMiniBar: handleExpandFromMiniBar,
     requestModalVisible: showRequestModal || showAllRequests,
-    onCloseRequestModal: handleCloseRequestModal,
+    requestModalMode,
+    requestModalRequests,
+    onCloseRequestModal: () => {
+      setRequestModalMode('available');
+      handleCloseRequestModal();
+    },
     onAcceptRequest: handleAcceptRequest,
     onViewRequestDetails: handleViewRequestDetails,
     onMessageCustomer: handleMessageCustomer,
-    onRefreshRequests: () => loadRequests(),
+    onRefreshRequests: () => {
+      if (requestModalMode === 'accepted') {
+        void refreshAcceptedScheduledRequests();
+        return;
+      }
+      void loadRequests();
+    },
     onIncomingRequestAccept: handleIncomingRequestAccept,
     onIncomingRequestDecline: handleIncomingRequestDecline,
     onIncomingRequestMinimize: handleIncomingRequestMinimize,

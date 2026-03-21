@@ -7,6 +7,7 @@ import Mapbox from '@rnmapbox/maps';
 import MapboxMap from '../mapbox/MapboxMap';
 import NavigationInstructionsBanner from './NavigationInstructionsBanner';
 import { colors, spacing } from '../../styles/theme';
+import { resolveCustomerNameFromRequest } from '../../utils/participantIdentity';
 
 export default function GpsNavigationDriverView({
   styles,
@@ -24,6 +25,7 @@ export default function GpsNavigationDriverView({
   cardGradientColors,
   estimatedTime,
   requestData,
+  customerName: customerNameOverride,
   customerAvatarUrl,
   onCustomerAvatarError,
   openChat,
@@ -39,6 +41,9 @@ export default function GpsNavigationDriverView({
     inputRange: [0, 1],
     outputRange: [200, 0],
   });
+  const customerName =
+    customerNameOverride ||
+    resolveCustomerNameFromRequest(requestData, 'Customer');
 
   if (isNavigating) {
     return (
@@ -85,9 +90,7 @@ export default function GpsNavigationDriverView({
               </View>
 
               <View style={styles.customerDetails}>
-                <Text style={styles.customerName}>
-                  {requestData?.customer?.name || 'Customer'}
-                </Text>
+                <Text style={styles.customerName}>{customerName}</Text>
                 <Text style={styles.itemInfo} numberOfLines={1}>
                   {requestData?.item?.description || 'Item information not available'}
                 </Text>
@@ -242,9 +245,7 @@ export default function GpsNavigationDriverView({
             </View>
 
             <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>
-                {requestData?.customer?.name || 'Customer'}
-              </Text>
+              <Text style={styles.customerName}>{customerName}</Text>
               <Text style={styles.itemInfo}>
                 {requestData?.item?.description || 'Item information not available'}
               </Text>

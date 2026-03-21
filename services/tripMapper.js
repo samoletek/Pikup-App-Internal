@@ -56,6 +56,7 @@ export const mapTripFromDb = (trip) => {
     statusRaw: trip.status,
     createdAt: trip.created_at || trip.createdAt || null,
     updatedAt: trip.updated_at || trip.updatedAt || null,
+    acceptedAt: trip.accepted_at || trip.acceptedAt || null,
     pickup,
     dropoff,
     pickupAddress: trip.pickupAddress || getAddress(pickup),
@@ -71,14 +72,62 @@ export const mapTripFromDb = (trip) => {
     vehiclePlate: trip.vehiclePlate || trip.vehicle_plate || null,
     vehicle: trip.vehicle || { type: trip.vehicleType || trip.vehicle_type || null },
     photos: pickupPhotos,
-    customerId: trip.customerId || trip.customer_id || null,
-    driverId: trip.driverId || trip.driver_id || null,
-    assignedDriverId: trip.assignedDriverId || trip.driver_id || null,
+    driverCheckinStatus:
+      trip.driverCheckinStatus ||
+      trip.driver_checkin_status ||
+      null,
+    driverCheckinRequiredAt:
+      trip.driverCheckinRequiredAt ||
+      trip.driver_checkin_required_at ||
+      null,
+    driverCheckinDeadlineAt:
+      trip.driverCheckinDeadlineAt ||
+      trip.driver_checkin_deadline_at ||
+      null,
+    driverCheckinConfirmedAt:
+      trip.driverCheckinConfirmedAt ||
+      trip.driver_checkin_confirmed_at ||
+      null,
+    driverCheckinDeclinedAt:
+      trip.driverCheckinDeclinedAt ||
+      trip.driver_checkin_declined_at ||
+      null,
+    customerId:
+      trip.customerId ||
+      trip.customer_id ||
+      trip.userId ||
+      trip.user_id ||
+      trip.requesterId ||
+      trip.requester_id ||
+      trip.customer?.id ||
+      trip.customer?.uid ||
+      null,
+    driverId:
+      trip.driverId ||
+      trip.driver_id ||
+      trip.assignedDriverId ||
+      trip.assigned_driver_id ||
+      trip.assignedDriver?.id ||
+      trip.assignedDriver?.uid ||
+      trip.driver?.id ||
+      trip.driver?.uid ||
+      null,
+    assignedDriverId:
+      trip.assignedDriverId ||
+      trip.assigned_driver_id ||
+      trip.driverId ||
+      trip.driver_id ||
+      trip.assignedDriver?.id ||
+      trip.assignedDriver?.uid ||
+      trip.driver?.id ||
+      trip.driver?.uid ||
+      null,
     assignedDriverEmail:
       trip.assignedDriverEmail ||
       trip.assigned_driver_email ||
       trip.driverEmail ||
       trip.driver_email ||
+      trip.assignedDriver?.email ||
       trip.driver?.email ||
       null,
     driverLocation: trip.driverLocation || toLocation(trip.driver_location),

@@ -26,6 +26,7 @@ import usePickupVerificationPhotos, {
 import useCustomerAvatarFromTripRequest from './useCustomerAvatarFromTripRequest';
 import usePickupConfirmationFlow from './usePickupConfirmationFlow';
 import { resolveRequestCustomerId } from './requestConversationContext.utils';
+import { resolveCustomerNameFromRequest } from '../../utils/participantIdentity';
 import {
   colors,
   layout,
@@ -87,17 +88,14 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     currentUserId,
     driverLocation,
     getRequestById,
+    getUserProfile,
     navigation,
     photos,
     request,
     startDelivery,
   });
 
-  const customerName =
-    request?.customerName ||
-    request?.customer?.name ||
-    request?.customer?.displayName ||
-    (request?.customerEmail ? request.customerEmail.split('@')[0] : 'Customer');
+  const customerName = resolveCustomerNameFromRequest(request, 'Customer');
 
   return (
     <View style={styles.container}>

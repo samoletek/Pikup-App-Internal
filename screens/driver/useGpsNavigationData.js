@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { logger } from '../../services/logger';
-import { TRIP_STATUS } from '../../constants/tripStatus';
+import { normalizeTripStatus, TRIP_STATUS } from '../../constants/tripStatus';
 import { buildNavigationCameraConfig } from './navigationCamera.utils';
 import {
   calculateDistanceToNextTurnMeters,
@@ -17,12 +17,34 @@ import {
   generateFallbackRoute,
 } from './navigationRoute.utils';
 
+const asObject = (value) => (value && typeof value === 'object' ? value : {});
+
+const mergeRequestSnapshots = (previousSnapshot, latestSnapshot) => {
+  const previous = asObject(previousSnapshot);
+  const latest = asObject(latestSnapshot);
+  const previousOriginalData = asObject(previous.originalData);
+  const latestOriginalData = asObject(latest.originalData);
+  const mergedOriginalData = {
+    ...previousOriginalData,
+    ...latestOriginalData,
+  };
+
+  return {
+    ...previous,
+    ...latest,
+    originalData:
+      Object.keys(mergedOriginalData).length > 0
+        ? mergedOriginalData
+        : latest.originalData || previous.originalData,
+  };
+};
+
 export default function useGpsNavigationData({
   isCustomerView,
   request,
   getRequestById,
   startDriving,
-  updateDriverStatus,
+  updateDriverLocation,
   applyRouteSteps,
   routeSteps,
   currentStepIndex,
@@ -124,15 +146,20 @@ export default function useGpsNavigationData({
     }
   }, [applyRouteSteps]);
 
+  const canStartDrivingTransition = useCallback(() => {
+    const normalizedStatus = normalizeTripStatus(requestData?.status || request?.status);
+    return normalizedStatus === TRIP_STATUS.ACCEPTED || normalizedStatus === TRIP_STATUS.PENDING;
+  }, [request?.status, requestData?.status]);
+
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
-      if (request?.id) {
-        await updateDriverStatus(request.id, TRIP_STATUS.IN_PROGRESS, location);
+      if (request?.id && typeof updateDriverLocation === 'function') {
+        await updateDriverLocation(request.id, location);
       }
     } catch (error) {
       logger.error('GpsNavigationData', 'Error updating driver location', error);
     }
-  }, [request?.id, updateDriverStatus]);
+  }, [request?.id, updateDriverLocation]);
 
   const startLocationTracking = useCallback(async () => {
     try {
@@ -184,7 +211,7 @@ export default function useGpsNavigationData({
       }
 
       const latestData = await getRequestById(request.id);
-      setRequestData(latestData);
+      setRequestData((prevRequestData) => mergeRequestSnapshots(prevRequestData, latestData));
 
       if (isCustomerView && latestData?.driverLocation) {
         setDriverLocation(latestData.driverLocation);
@@ -272,9 +299,18 @@ export default function useGpsNavigationData({
       }
 
       if (!navigationStartedRef.current && request?.id) {
-        await startDriving(request.id, driverCoords);
+        const shouldStartDriving = canStartDrivingTransition();
+        if (shouldStartDriving) {
+          await startDriving(request.id, driverCoords);
+        }
         navigationStartedRef.current = true;
-        logger.info('GpsNavigationData', 'Driver started navigation', { requestId: request.id });
+        logger.info(
+          'GpsNavigationData',
+          shouldStartDriving
+            ? 'Driver started navigation'
+            : 'Driver resumed navigation without status transition',
+          { requestId: request.id, status: normalizeTripStatus(requestData?.status || request?.status) }
+        );
       }
 
       setIsLoading(false);
@@ -287,6 +323,7 @@ export default function useGpsNavigationData({
     generateRealRoute,
     requestData,
     request,
+    canStartDrivingTransition,
     startDriving,
     startLocationTracking,
   ]);

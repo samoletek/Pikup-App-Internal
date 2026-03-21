@@ -8,6 +8,10 @@ import {
   startNavigationLocationWatch,
 } from "./navigationLocation.utils";
 import { calculateDistanceAndEta } from "./navigationRoute.utils";
+import {
+  resolveCustomerNameFromRequest,
+  resolveDriverNameFromRequest,
+} from "../../utils/participantIdentity";
 
 const { height } = Dimensions.get("window");
 const FALLBACK_PICKUP_COORDINATES = { latitude: 33.753746, longitude: -84.38633 };
@@ -117,8 +121,8 @@ export default function useEnRouteTripTracking({
   );
 
   const counterpartName = isCustomerView
-    ? request?.driverName || "Your Driver"
-    : request?.customerName || request?.customerEmail?.split("@")[0] || "Customer";
+    ? resolveDriverNameFromRequest(request, "Your Driver")
+    : resolveCustomerNameFromRequest(request, "Customer");
   const counterpartRating = formatRating(
     isCustomerView
       ? request?.driverRating || request?.driver?.rating
