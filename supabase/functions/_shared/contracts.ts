@@ -57,9 +57,12 @@ export type RedkikQuoteResponse = EdgePayload<{
   action?: RedkikQuoteAction
   offerId?: string
   premium?: number
+  redkikPremium?: number
+  serviceFee?: number
   canPurchase?: boolean
   amendments?: unknown[]
   details?: Record<string, unknown>
+  validationErrors?: string[]
   bookingId?: string
 }>
 

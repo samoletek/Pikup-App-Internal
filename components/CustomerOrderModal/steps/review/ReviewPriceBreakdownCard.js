@@ -77,7 +77,7 @@ const ReviewPriceBreakdownCard = ({
       <View>
         <View style={styles.priceRow}>
           <Text style={styles.priceLabel}>
-            Mandatory Insurance{insuranceLoading ? ' (loading...)' : ''}
+            Insurance{insuranceLoading ? ' (loading...)' : ''}
           </Text>
           <Text style={styles.priceValue}>
             {insuranceLoading
