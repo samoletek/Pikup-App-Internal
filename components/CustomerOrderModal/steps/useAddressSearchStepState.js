@@ -45,6 +45,8 @@ export default function useAddressSearchStepState({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [isLoadingCurrentLocation, setIsLoadingCurrentLocation] = useState(false);
   const [activePicker, setActivePicker] = useState(null);
+  const [scheduledDateDraft, setScheduledDateDraft] = useState(null);
+  const [scheduledTimeDraft, setScheduledTimeDraft] = useState(null);
   const searchTimeoutRef = useRef(null);
 
   const minScheduleDate = getMinScheduleDate();
@@ -86,19 +88,32 @@ export default function useAddressSearchStepState({
     return date;
   }, []);
 
-  const parseScheduledDateTime = useCallback(
-    () => safeParseDate(orderData.scheduledDateTime),
-    [orderData.scheduledDateTime]
-  );
-
   const normalizeScheduledDate = useCallback(
     (date) => clampScheduledDate(date, true),
     [clampScheduledDate]
   );
 
+  const getScheduleSeed = useCallback(
+    () => clampScheduledDate(safeParseDate(orderData.scheduledDateTime)),
+    [clampScheduledDate, orderData.scheduledDateTime]
+  );
+
+  const syncScheduledDraft = useCallback(() => {
+    const seed = getScheduleSeed();
+    const normalizedSeed = new Date(seed.getTime());
+    setScheduledDateDraft(new Date(normalizedSeed.getTime()));
+    setScheduledTimeDraft(new Date(normalizedSeed.getTime()));
+    return normalizedSeed;
+  }, [getScheduleSeed]);
+
   const getDatePickerValue = useCallback(
-    () => clampScheduledDate(parseScheduledDateTime()),
-    [clampScheduledDate, parseScheduledDateTime]
+    () => (scheduledDateDraft ? new Date(scheduledDateDraft.getTime()) : getScheduleSeed()),
+    [getScheduleSeed, scheduledDateDraft]
+  );
+
+  const getTimePickerValue = useCallback(
+    () => (scheduledTimeDraft ? new Date(scheduledTimeDraft.getTime()) : getScheduleSeed()),
+    [getScheduleSeed, scheduledTimeDraft]
   );
 
   const searchPlaces = useCallback(async (query, fieldType) => {
@@ -249,22 +264,32 @@ export default function useAddressSearchStepState({
     clearSuggestions(fieldType);
   }, [clearSuggestions, setOrderData]);
 
-  const applyScheduledChange = useCallback((selectedDate, mode) => {
+  const applyScheduleDateDraftChange = useCallback((selectedDate) => {
     if (!selectedDate) return;
+    setScheduledDateDraft(new Date(selectedDate.getTime()));
+  }, []);
 
-    const currentDate = parseScheduledDateTime();
-    if (mode === 'date') {
-      currentDate.setFullYear(selectedDate.getFullYear());
-      currentDate.setMonth(selectedDate.getMonth());
-      currentDate.setDate(selectedDate.getDate());
-    } else {
-      currentDate.setHours(selectedDate.getHours());
-      currentDate.setMinutes(selectedDate.getMinutes());
-    }
+  const applyScheduleTimeDraftChange = useCallback((selectedTime) => {
+    if (!selectedTime) return;
+    setScheduledTimeDraft(new Date(selectedTime.getTime()));
+  }, []);
 
-    const normalized = normalizeScheduledDate(currentDate);
+  const commitScheduledDraft = useCallback((overrides = {}) => {
+    const datePart = overrides.date
+      ? new Date(overrides.date.getTime())
+      : (scheduledDateDraft ? new Date(scheduledDateDraft.getTime()) : getScheduleSeed());
+    const timePart = overrides.time
+      ? new Date(overrides.time.getTime())
+      : (scheduledTimeDraft ? new Date(scheduledTimeDraft.getTime()) : getScheduleSeed());
+
+    datePart.setHours(timePart.getHours(), timePart.getMinutes(), 0, 0);
+    const normalized = normalizeScheduledDate(datePart);
+
     setOrderData((prev) => ({ ...prev, scheduledDateTime: normalized.toISOString() }));
-  }, [normalizeScheduledDate, parseScheduledDateTime, setOrderData]);
+    setScheduledDateDraft(new Date(normalized.getTime()));
+    setScheduledTimeDraft(new Date(normalized.getTime()));
+    return normalized;
+  }, [getScheduleSeed, normalizeScheduledDate, scheduledDateDraft, scheduledTimeDraft, setOrderData]);
 
   const setScheduledMode = useCallback(() => {
     const normalizedDateTime = orderData.scheduledDateTime
@@ -276,16 +301,26 @@ export default function useAddressSearchStepState({
       scheduleType: 'scheduled',
       scheduledDateTime: normalizedDateTime.toISOString(),
     }));
+    setScheduledDateDraft(new Date(normalizedDateTime.getTime()));
+    setScheduledTimeDraft(new Date(normalizedDateTime.getTime()));
   }, [clampScheduledDate, orderData.scheduledDateTime, setOrderData]);
 
   const openPicker = useCallback((pickerType) => {
     if (orderData.scheduleType !== 'scheduled') {
       return;
     }
+    syncScheduledDraft();
     setActivePicker(pickerType);
-  }, [orderData.scheduleType]);
+  }, [orderData.scheduleType, syncScheduledDraft]);
 
   const closePicker = useCallback(() => setActivePicker(null), []);
+
+  const closePickerWithCommit = useCallback(() => {
+    if (orderData.scheduleType === 'scheduled') {
+      commitScheduledDraft();
+    }
+    setActivePicker(null);
+  }, [commitScheduledDraft, orderData.scheduleType]);
 
   const handleOutsideTap = useCallback(() => {
     if (activeField) {
@@ -304,16 +339,19 @@ export default function useAddressSearchStepState({
     activePicker,
     minScheduleDate,
     maxScheduleDate,
-    parseScheduledDateTime,
     getDatePickerValue,
+    getTimePickerValue,
     handlePlaceSelection,
     handleUseCurrentLocation,
     updateAddressInput,
     clearAddressInput,
-    applyScheduledChange,
+    applyScheduleDateDraftChange,
+    applyScheduleTimeDraftChange,
+    commitScheduledDraft,
     setScheduledMode,
     openPicker,
     closePicker,
+    closePickerWithCommit,
     handleOutsideTap,
   };
 }
