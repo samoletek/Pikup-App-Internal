@@ -41,6 +41,35 @@ const DRIVER_ACTIVE_STATUSES_FOR_SCHEDULE_CONFLICT = [
   "arrived_at_dropoff",
 ]
 
+const toAmount = (value: unknown): number => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+const toMoneyLabel = (value: unknown): string => {
+  return `$${toAmount(value).toFixed(2)}`
+}
+
+const resolveDriverPayoutAmount = (trip: AnyRecord): number => {
+  const pricing = toObject(trip?.pricing)
+  const candidates = [
+    trip?.driverPayout,
+    trip?.driver_payout,
+    trip?.earnings,
+    pricing?.driverPayout,
+    pricing?.driver_payout,
+  ]
+
+  for (const candidate of candidates) {
+    const amount = toAmount(candidate)
+    if (Number.isFinite(amount) && amount > 0) {
+      return amount
+    }
+  }
+
+  return toAmount(pricing?.total ?? trip?.price)
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -607,11 +636,24 @@ serve(async (req: Request) => {
         name: "Customer",
         email: null,
       }
+      const pricing = toObject(trip.pricing)
+      const driverPayoutAmount = resolveDriverPayoutAmount(trip)
+      const driverPayoutLabel = toMoneyLabel(driverPayoutAmount)
+      const customerTotalAmount = toAmount(pricing.total)
+      const customerTotalLabel = toMoneyLabel(customerTotalAmount)
 
       return {
         id: trip.id,
-        price: `$${Number((trip.pricing as AnyRecord)?.total || 0).toFixed(2)}`,
-        pricing: trip.pricing || {},
+        // Driver-facing card amount must always be payout, not customer total.
+        price: driverPayoutLabel,
+        driverPayout: driverPayoutLabel,
+        earnings: driverPayoutLabel,
+        customerTotal: customerTotalLabel,
+        pricing: {
+          ...pricing,
+          total: customerTotalAmount,
+          driverPayout: driverPayoutAmount,
+        },
         type: "Moves",
         vehicle: { type: trip.vehicleType || "Standard" },
         pickup: {

@@ -6,6 +6,19 @@ import { colors } from '../../styles/theme';
 import { getDisplayPhotos, getScheduledLabel } from './requestModalUtils';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
+const toMoneyLabel = (value) => {
+  if (typeof value === 'string' && value.includes('$')) {
+    return value;
+  }
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return '$0.00';
+  }
+
+  return `$${amount.toFixed(2)}`;
+};
+
 function RequestCard({
   item,
   index,
@@ -18,7 +31,13 @@ function RequestCard({
 }) {
   const isSelected = index === selectedIndex;
   const displayPhotos = getDisplayPhotos(item);
-  const earnings = item.driverPayout || item.earnings || item.price || '$0.00';
+  const earnings = toMoneyLabel(
+    item.driverPayout ??
+    item.earnings ??
+    item.pricing?.driverPayout ??
+    item.price ??
+    0
+  );
   const hasScheduledTime = Boolean(item.scheduledTime);
   const scheduledLabel = getScheduledLabel(item.scheduledTime);
   const timerValue = timers[item.id];

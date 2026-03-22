@@ -303,6 +303,19 @@ const toItemObject = (rawItem) => {
   return {};
 };
 
+const toMoneyLabel = (value) => {
+  if (typeof value === 'string' && value.includes('$')) {
+    return value;
+  }
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return '$0.00';
+  }
+
+  return `$${amount.toFixed(2)}`;
+};
+
 export const resolveIncomingRequestData = (request, timeRemaining = 0, timerTotal = 180) => {
   const sourceItems = getFirstNonEmptyArray(request?.items);
   const rawItems = sourceItems.length > 0
@@ -347,7 +360,13 @@ export const resolveIncomingRequestData = (request, timeRemaining = 0, timerTota
   const pickupDetails = request?.pickup?.details || {};
   const dropoffDetails = request?.dropoff?.details || {};
   const pricing = request?.pricing || {};
-  const earnings = request?.driverPayout || request?.earnings || request?.price || '$0.00';
+  const earnings = toMoneyLabel(
+    request?.driverPayout ??
+    request?.earnings ??
+    pricing?.driverPayout ??
+    request?.price ??
+    0
+  );
   const vehicleType = request?.vehicle?.type || 'Standard';
   const scheduledTime = request?.scheduledTime;
 

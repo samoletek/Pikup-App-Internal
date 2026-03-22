@@ -79,7 +79,6 @@ export default function IncomingRequestModal({
     allPhotos,
     displayPhotos,
     earnings,
-    pricing,
     vehicleType,
     scheduledTime,
     pickupDetails,
@@ -147,11 +146,6 @@ export default function IncomingRequestModal({
           <View style={styles.earningsRow}>
             <View>
               <Text style={styles.earningsAmount}>{earnings}</Text>
-              {pricing.laborFee > 0 && (
-                <Text style={styles.earningsNote}>
-                  incl. ${Number(pricing.laborFee).toFixed(2)} labor
-                </Text>
-              )}
             </View>
             <View style={styles.vehicleBadge}>
               <Ionicons name="car-outline" size={16} color={colors.warning} />
@@ -300,35 +294,11 @@ export default function IncomingRequestModal({
             </View>
           </View>
 
-          {(pricing.basePrice || pricing.serviceFee || pricing.tax) && (
+          {Boolean(earnings) && (
             <View style={styles.priceCard}>
-              <Text style={styles.detailTitle}>Price Breakdown</Text>
-              {pricing.basePrice > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Base price</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.basePrice).toFixed(2)}</Text>
-                </View>
-              )}
-              {pricing.laborFee > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Labor fee</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.laborFee).toFixed(2)}</Text>
-                </View>
-              )}
-              {pricing.serviceFee > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Service fee</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.serviceFee).toFixed(2)}</Text>
-                </View>
-              )}
-              {pricing.tax > 0 && (
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Tax</Text>
-                  <Text style={styles.priceVal}>${Number(pricing.tax).toFixed(2)}</Text>
-                </View>
-              )}
+              <Text style={styles.detailTitle}>Payout Summary</Text>
               <View style={[styles.priceRow, styles.priceTotalRow]}>
-                <Text style={styles.priceTotalLabel}>Total</Text>
+                <Text style={styles.priceTotalLabel}>Your payout</Text>
                 <Text style={styles.priceTotalVal}>{earnings}</Text>
               </View>
             </View>

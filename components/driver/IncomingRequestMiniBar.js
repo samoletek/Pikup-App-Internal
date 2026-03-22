@@ -4,6 +4,19 @@ import { Animated, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing } from "../../styles/theme";
 
+const toMoneyLabel = (value) => {
+  if (typeof value === "string" && value.includes("$")) {
+    return value;
+  }
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) {
+    return "$0.00";
+  }
+
+  return `$${amount.toFixed(2)}`;
+};
+
 const IncomingRequestMiniBar = ({
   visible,
   incomingRequest,
@@ -58,7 +71,13 @@ const IncomingRequestMiniBar = ({
           </Text>
         </View>
         <Text style={styles.miniBarPrice} numberOfLines={1}>
-          {incomingRequest.driverPayout || incomingRequest.earnings || incomingRequest.price || "$0.00"}
+          {toMoneyLabel(
+            incomingRequest.driverPayout ??
+              incomingRequest.earnings ??
+              incomingRequest.pricing?.driverPayout ??
+              incomingRequest.price ??
+              0
+          )}
         </Text>
         <View style={styles.miniBarExpand}>
           <Ionicons name="chevron-up" size={20} color={colors.text.primary} />
