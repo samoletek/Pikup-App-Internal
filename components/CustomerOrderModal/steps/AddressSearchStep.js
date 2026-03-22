@@ -19,6 +19,19 @@ import useAddressSearchStepState, {
     MAX_SCHEDULE_DAYS_AHEAD,
 } from './useAddressSearchStepState';
 
+const resolvePickerDate = (event, selectedDate) => {
+    if (selectedDate) {
+        return selectedDate;
+    }
+
+    const timestamp = event?.nativeEvent?.timestamp;
+    if (typeof timestamp === 'number') {
+        return new Date(timestamp);
+    }
+
+    return null;
+};
+
 const AddressSearchStep = ({
     orderData,
     setOrderData,
@@ -36,16 +49,19 @@ const AddressSearchStep = ({
         activePicker,
         minScheduleDate,
         maxScheduleDate,
-        parseScheduledDateTime,
         getDatePickerValue,
+        getTimePickerValue,
         handlePlaceSelection,
         handleUseCurrentLocation,
         updateAddressInput,
         clearAddressInput,
-        applyScheduledChange,
+        applyScheduleDateDraftChange,
+        applyScheduleTimeDraftChange,
+        commitScheduledDraft,
         setScheduledMode,
         openPicker,
         closePicker,
+        closePickerWithCommit,
         handleOutsideTap,
     } = useAddressSearchStepState({
         orderData,
@@ -237,27 +253,34 @@ const AddressSearchStep = ({
                             {Platform.OS === 'ios' ? (
                                 <>
                                     {activePicker === 'date' && (
-                                        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+                                        <Modal visible transparent animationType="fade" onRequestClose={closePickerWithCommit}>
                                             <View style={styles.datePickerModal}>
                                                 <View style={styles.datePickerModalContent}>
                                                     <View style={styles.datePickerModalHeader}>
                                                         <Text style={styles.datePickerModalTitle}>Select Date</Text>
-                                                        <TouchableOpacity onPress={closePicker}>
+                                                        <TouchableOpacity onPress={closePickerWithCommit}>
                                                             <Text style={styles.datePickerDoneText}>Done</Text>
                                                         </TouchableOpacity>
                                                     </View>
                                                     <DateTimePicker
+                                                        key="scheduled-date-picker-ios"
                                                         value={getDatePickerValue()}
                                                         mode="date"
                                                         display="spinner"
                                                         minimumDate={minScheduleDate}
                                                         maximumDate={maxScheduleDate}
                                                         onChange={(event, selectedDate) => {
-                                                            if (event?.type === 'set' && selectedDate) {
-                                                                applyScheduledChange(selectedDate, 'date');
+                                                            if (event?.type === 'dismissed') {
+                                                                return;
+                                                            }
+
+                                                            const nextDate = resolvePickerDate(event, selectedDate);
+                                                            if (nextDate) {
+                                                                applyScheduleDateDraftChange(nextDate);
                                                             }
                                                         }}
                                                         themeVariant="dark"
+                                                        locale="en-US"
                                                         style={styles.datePickerControl}
                                                     />
                                                 </View>
@@ -265,25 +288,33 @@ const AddressSearchStep = ({
                                         </Modal>
                                     )}
                                     {activePicker === 'time' && (
-                                        <Modal visible transparent animationType="fade" onRequestClose={closePicker}>
+                                        <Modal visible transparent animationType="fade" onRequestClose={closePickerWithCommit}>
                                             <View style={styles.datePickerModal}>
                                                 <View style={styles.datePickerModalContent}>
                                                     <View style={styles.datePickerModalHeader}>
                                                         <Text style={styles.datePickerModalTitle}>Select Time</Text>
-                                                        <TouchableOpacity onPress={closePicker}>
+                                                        <TouchableOpacity onPress={closePickerWithCommit}>
                                                             <Text style={styles.datePickerDoneText}>Done</Text>
                                                         </TouchableOpacity>
                                                     </View>
                                                     <DateTimePicker
-                                                        value={parseScheduledDateTime()}
+                                                        key="scheduled-time-picker-ios"
+                                                        value={getTimePickerValue()}
                                                         mode="time"
                                                         display="spinner"
                                                         onChange={(event, selectedDate) => {
-                                                            if (event?.type === 'set' && selectedDate) {
-                                                                applyScheduledChange(selectedDate, 'time');
+                                                            if (event?.type === 'dismissed') {
+                                                                return;
+                                                            }
+
+                                                            const nextTime = resolvePickerDate(event, selectedDate);
+                                                            if (nextTime) {
+                                                                applyScheduleTimeDraftChange(nextTime);
                                                             }
                                                         }}
                                                         themeVariant="dark"
+                                                        locale="en-US"
+                                                        is24Hour={false}
                                                         style={styles.datePickerControl}
                                                     />
                                                 </View>
@@ -295,6 +326,7 @@ const AddressSearchStep = ({
                                 <>
                                     {activePicker === 'date' && (
                                         <DateTimePicker
+                                            key="scheduled-date-picker-android"
                                             value={getDatePickerValue()}
                                             mode="date"
                                             display="calendar"
@@ -302,8 +334,14 @@ const AddressSearchStep = ({
                                             maximumDate={maxScheduleDate}
                                             onChange={(event, selectedDate) => {
                                                 closePicker();
-                                                if (event?.type === 'set' && selectedDate) {
-                                                    applyScheduledChange(selectedDate, 'date');
+                                                if (event?.type !== 'set') {
+                                                    return;
+                                                }
+
+                                                const nextDate = resolvePickerDate(event, selectedDate);
+                                                if (nextDate) {
+                                                    applyScheduleDateDraftChange(nextDate);
+                                                    commitScheduledDraft({ date: nextDate });
                                                 }
                                             }}
                                             themeVariant="dark"
@@ -311,16 +349,25 @@ const AddressSearchStep = ({
                                     )}
                                     {activePicker === 'time' && (
                                         <DateTimePicker
-                                            value={parseScheduledDateTime()}
+                                            key="scheduled-time-picker-android"
+                                            value={getTimePickerValue()}
                                             mode="time"
                                             display="clock"
                                             onChange={(event, selectedDate) => {
                                                 closePicker();
-                                                if (event?.type === 'set' && selectedDate) {
-                                                    applyScheduledChange(selectedDate, 'time');
+                                                if (event?.type !== 'set') {
+                                                    return;
+                                                }
+
+                                                const nextTime = resolvePickerDate(event, selectedDate);
+                                                if (nextTime) {
+                                                    applyScheduleTimeDraftChange(nextTime);
+                                                    commitScheduledDraft({ time: nextTime });
                                                 }
                                             }}
                                             themeVariant="dark"
+                                            locale="en-US"
+                                            is24Hour={false}
                                         />
                                     )}
                                 </>
