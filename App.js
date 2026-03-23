@@ -5,8 +5,6 @@ import { Linking, LogBox, StyleSheet, TextInput, View, useColorScheme } from 're
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
-
-import { NotificationProvider } from './contexts/NotificationContext';
 import Navigation from './Navigation';
 import ErrorBoundary from './components/ErrorBoundary';
 import { appNavigationTheme } from './navigation/navigationTheme';
@@ -99,9 +97,7 @@ export default function App() {
             >
               <AuthProvider>
                 <PaymentProvider>
-                  <NotificationProvider>
-                    <Navigation />
-                  </NotificationProvider>
+                  <Navigation />
                 </PaymentProvider>
               </AuthProvider>
             </StripeProvider>
