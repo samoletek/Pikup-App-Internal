@@ -17,7 +17,9 @@ export default function useRequestModalTimers({ visible, requests = [] }) {
 
   useEffect(() => {
     if (!visible || requests.length === 0 || !hasTimedRequests) {
-      setTimers({});
+      setTimers((previousTimers) => (
+        Object.keys(previousTimers).length === 0 ? previousTimers : {}
+      ));
       return undefined;
     }
 
@@ -35,7 +37,21 @@ export default function useRequestModalTimers({ visible, requests = [] }) {
         nextTimers[request.id] = timeLeft > 0 ? formatTimer(timeLeft) : 'Expired';
       });
 
-      setTimers(nextTimers);
+      setTimers((previousTimers) => {
+        const previousKeys = Object.keys(previousTimers);
+        const nextKeys = Object.keys(nextTimers);
+        if (previousKeys.length !== nextKeys.length) {
+          return nextTimers;
+        }
+
+        for (const key of nextKeys) {
+          if (previousTimers[key] !== nextTimers[key]) {
+            return nextTimers;
+          }
+        }
+
+        return previousTimers;
+      });
     };
 
     updateTimers();

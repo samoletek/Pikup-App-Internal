@@ -23,10 +23,12 @@ import {
 import useRequestModalTimers from '../hooks/useRequestModalTimers';
 import useRequestModalRoute from '../hooks/useRequestModalRoute';
 
+const EMPTY_REQUESTS = Object.freeze([]);
+
 export default function RequestModal({
   visible,
   mode = 'available',
-  requests = [],
+  requests,
   selectedRequest,
   currentLocation,
   loading = false,
@@ -37,24 +39,25 @@ export default function RequestModal({
   onMessage,
   onRefresh,
 }) {
+  const requestList = Array.isArray(requests) ? requests : EMPTY_REQUESTS;
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showMap, setShowMap] = useState(true);
   const isAcceptedMode = mode === 'accepted';
   const modalTitle = isAcceptedMode ? 'Accepted Requests' : 'Available Requests';
   const countLabel = isAcceptedMode
-    ? `${requests.length} accepted request${requests.length !== 1 ? 's' : ''}`
-    : `${requests.length} request${requests.length !== 1 ? 's' : ''} nearby`;
+    ? `${requestList.length} accepted request${requestList.length !== 1 ? 's' : ''}`
+    : `${requestList.length} request${requestList.length !== 1 ? 's' : ''} nearby`;
 
   const flatListRef = useRef(null);
   const mapRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const dragTranslateY = useRef(new Animated.Value(0)).current;
 
-  const timers = useRequestModalTimers({ visible, requests });
+  const timers = useRequestModalTimers({ visible, requests: requestList });
   const { selectedRoute, selectedRouteMarkers, resetRoute } = useRequestModalRoute({
     visible,
     showMap,
-    requests,
+    requests: requestList,
     selectedIndex,
     mapRef,
   });
@@ -122,11 +125,11 @@ export default function RequestModal({
   }, [dragTranslateY, resetRoute, slideAnim, visible]);
 
   useEffect(() => {
-    if (!selectedRequest || requests.length === 0) {
+    if (!selectedRequest || requestList.length === 0) {
       return;
     }
 
-    const index = requests.findIndex((requestItem) => requestItem.id === selectedRequest.id);
+    const index = requestList.findIndex((requestItem) => requestItem.id === selectedRequest.id);
     if (index === -1) {
       return;
     }
@@ -143,13 +146,13 @@ export default function RequestModal({
         viewPosition: 0.5,
       });
     }, 100);
-  }, [requests, selectedRequest]);
+  }, [requestList, selectedRequest]);
 
   useEffect(() => {
-    if (selectedIndex >= requests.length) {
+    if (selectedIndex >= requestList.length) {
       setSelectedIndex(0);
     }
-  }, [requests.length, selectedIndex]);
+  }, [requestList.length, selectedIndex]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -158,7 +161,7 @@ export default function RequestModal({
   const handleScroll = (event) => {
     const scrollPosition = event.nativeEvent.contentOffset.x;
     const index = Math.round(scrollPosition / (CARD_WIDTH + spacing.lg));
-    const boundedIndex = Math.max(0, Math.min(requests.length - 1, index));
+    const boundedIndex = Math.max(0, Math.min(requestList.length - 1, index));
     setSelectedIndex(boundedIndex);
   };
 
@@ -198,7 +201,7 @@ export default function RequestModal({
         <RequestModalHeader
           title={modalTitle}
           countLabel={countLabel}
-          requestsCount={requests.length}
+          requestsCount={requestList.length}
           onClose={onClose}
           panHandlers={panResponder.panHandlers}
           styles={styles}
@@ -209,7 +212,7 @@ export default function RequestModal({
           onShowMap={() => setShowMap(true)}
           onHideMap={() => setShowMap(false)}
           currentLocation={currentLocation}
-          requests={requests}
+          requests={requestList}
           selectedIndex={selectedIndex}
           onSelectRequestIndex={setSelectedIndex}
           flatListRef={flatListRef}
@@ -223,7 +226,7 @@ export default function RequestModal({
           loading={loading}
           error={error}
           mode={mode}
-          requests={requests}
+          requests={requestList}
           onRefresh={onRefresh}
           flatListRef={flatListRef}
           renderRequestCard={renderRequestCard}
@@ -232,7 +235,7 @@ export default function RequestModal({
         />
 
         <RequestPageIndicators
-          requests={requests}
+          requests={requestList}
           selectedIndex={selectedIndex}
           styles={styles}
         />

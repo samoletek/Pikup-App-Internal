@@ -186,6 +186,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowAllRequests,
     setShowIncomingModal,
   });
+  const requestModalMode = 'available';
+  const requestModalRequests = availableRequests;
   const {
     activeJobDestinationAddress,
     activeJobSecondaryLabel,
@@ -374,6 +376,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     cameraRef, isCompact, isRestoringActiveTrip, activeJob, activeJobStatusLabel,
     activeJobDestinationAddress, activeJobSecondaryLabel, isScheduledPoolActive, waitTime,
     progressValue, incomingRequest, requestTimeRemaining, miniBarPulse, formatRequestTime,
+    requestModalMode, requestModalRequests,
     driverLocation, loading, error, requestTimerTotal, navigation,
     phoneVerifyVisible,
     insetsTop: insets.top,
@@ -383,6 +386,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     onGoOnline: handleGoOnline,
     onGoOnlineScheduled: handleGoOnlineScheduled,
     onViewScheduledRequests: () => setShowAllRequests(true),
+    onViewAcceptedRequests: () => setShowAllRequests(true),
     onExpandMiniBar: handleExpandFromMiniBar,
     requestModalVisible: showRequestModal || showAllRequests,
     onCloseRequestModal: handleCloseRequestModal,
