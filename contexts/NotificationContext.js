@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AnyFilmToastNotification from '../components/AnyFilmToastNotification';
 import NotificationService from '../services/NotificationService';
 
@@ -37,33 +37,44 @@ export function NotificationProvider({ children }) {
     };
   }, []);
 
-  const hideToast = () => {
-    setToast(prev => ({ ...prev, visible: false }));
-  };
+  const hideToast = useCallback(() => {
+    setToast((prev) => {
+      if (!prev.visible) {
+        return prev;
+      }
 
-  const showToast = (message, type = 'info', duration = 3000) => {
+      return {
+        ...prev,
+        visible: false,
+      };
+    });
+  }, []);
+
+  const showToast = useCallback((message, type = 'info', duration = 3000) => {
     setToast({
       visible: true,
       message,
       type,
       duration,
     });
-  };
+  }, []);
 
-  const notificationMethods = {
-    showToast,
-    notifyDriverAccepted: NotificationService.notifyDriverAccepted.bind(NotificationService),
-    notifyDriverArrived: NotificationService.notifyDriverArrived.bind(NotificationService),
-    notifyItemsPickedUp: NotificationService.notifyItemsPickedUp.bind(NotificationService),
-    notifyDeliveryCompleted: NotificationService.notifyDeliveryCompleted.bind(NotificationService),
-    notifyEtaUpdate: NotificationService.notifyEtaUpdate.bind(NotificationService),
-    notifyPhotosUploaded: NotificationService.notifyPhotosUploaded.bind(NotificationService),
-    notifyDriverMessage: NotificationService.notifyDriverMessage.bind(NotificationService),
-    notifyDeliveryIssue: NotificationService.notifyDeliveryIssue.bind(NotificationService),
-    getPushToken: NotificationService.getPushToken.bind(NotificationService),
-    getNotificationStatus: NotificationService.getNotificationStatus.bind(NotificationService),
-    clearAllNotifications: NotificationService.clearAllNotifications.bind(NotificationService),
-  };
+  const notificationMethods = useMemo(() => {
+    return {
+      showToast,
+      notifyDriverAccepted: NotificationService.notifyDriverAccepted.bind(NotificationService),
+      notifyDriverArrived: NotificationService.notifyDriverArrived.bind(NotificationService),
+      notifyItemsPickedUp: NotificationService.notifyItemsPickedUp.bind(NotificationService),
+      notifyDeliveryCompleted: NotificationService.notifyDeliveryCompleted.bind(NotificationService),
+      notifyEtaUpdate: NotificationService.notifyEtaUpdate.bind(NotificationService),
+      notifyPhotosUploaded: NotificationService.notifyPhotosUploaded.bind(NotificationService),
+      notifyDriverMessage: NotificationService.notifyDriverMessage.bind(NotificationService),
+      notifyDeliveryIssue: NotificationService.notifyDeliveryIssue.bind(NotificationService),
+      getPushToken: NotificationService.getPushToken.bind(NotificationService),
+      getNotificationStatus: NotificationService.getNotificationStatus.bind(NotificationService),
+      clearAllNotifications: NotificationService.clearAllNotifications.bind(NotificationService),
+    };
+  }, [showToast]);
 
   return (
     <NotificationContext.Provider value={notificationMethods}>

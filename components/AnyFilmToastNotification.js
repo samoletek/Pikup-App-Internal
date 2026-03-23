@@ -55,13 +55,12 @@ export default function AnyFilmToastNotification({
       timeoutRef.current = setTimeout(() => {
         hideToast();
       }, duration);
-    } else {
-      hideToast();
     }
 
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, [duration, hideToast, opacity, translateY, visible]);
