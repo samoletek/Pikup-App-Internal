@@ -240,9 +240,12 @@ export const buildRequestDetails = (request) => {
 
   const pricing = request.pricing || request.originalData?.pricing || {};
   const payoutLabel = formatAmount(
-    request.driverPayout ?? request.earnings ?? pricing.driverPayout ?? request.price
+    request.driverPayout ??
+    request.earnings ??
+    pricing.driverPayout ??
+    request.price ??
+    pricing.total
   );
-  const totalLabel = formatAmount(pricing.total ?? request.price);
   const scheduleLabel = formatDateTime(request.scheduledTime || request.scheduled_time);
   const itemRows = getItemRows(request);
   const photoRows = getPhotoRows(request);
@@ -252,7 +255,6 @@ export const buildRequestDetails = (request) => {
   return {
     id: String(request.id || 'unknown'),
     payoutLabel,
-    totalLabel,
     scheduleLabel,
     vehicleType: firstText(request.vehicle?.type, request.vehicleType) || 'Standard',
     pickupAddress: firstText(request.pickup?.address) || 'Not specified',

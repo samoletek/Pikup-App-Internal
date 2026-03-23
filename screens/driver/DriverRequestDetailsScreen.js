@@ -136,7 +136,7 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
           <View style={styles.heroMetaRow}>
             <Text style={styles.heroMetaText}>Trip #{details.id.slice(0, 8).toUpperCase()}</Text>
             <Text style={styles.heroMetaText}>{details.vehicleType}</Text>
-            <Text style={styles.heroMetaText}>Total {details.totalLabel}</Text>
+            <Text style={styles.heroMetaText}>Payout {details.payoutLabel}</Text>
           </View>
           {details.timeDistance ? <Text style={styles.heroSubText}>{details.timeDistance}</Text> : null}
         </LinearGradient>

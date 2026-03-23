@@ -16,6 +16,33 @@ import {
     resolveCustomerDisplayFromRequest,
 } from '../utils/profileDisplay';
 
+const toAmount = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toMoneyLabel = (value) => `$${toAmount(value).toFixed(2)}`;
+
+const resolveDriverPayoutAmount = (trip = {}) => {
+    const pricing = trip?.pricing || {};
+    const candidates = [
+        trip?.driverPayout,
+        trip?.driver_payout,
+        trip?.earnings,
+        pricing?.driverPayout,
+        pricing?.driver_payout,
+    ];
+
+    for (const candidate of candidates) {
+        const amount = toAmount(candidate);
+        if (Number.isFinite(amount) && amount > 0) {
+            return amount;
+        }
+    }
+
+    return toAmount(pricing?.total ?? trip?.price);
+};
+
 export const filterTripsForAvailability = ({
     trips,
     requestPool,
@@ -204,11 +231,23 @@ export const mapAvailableRequestsForDriver = (sortedTrips, customerMap = {}) =>
             },
             { fallbackName: 'Customer' }
         );
+        const driverPayoutAmount = resolveDriverPayoutAmount(trip);
+        const driverPayoutLabel = toMoneyLabel(driverPayoutAmount);
+        const customerTotalAmount = toAmount(trip.pricing?.total);
+        const customerTotalLabel = toMoneyLabel(customerTotalAmount);
 
         return {
             id: trip.id,
-            price: `$${Number(trip.pricing?.total || 0).toFixed(2)}`,
-            pricing: trip.pricing || {},
+            // Driver-facing card amount must always be payout, not customer total.
+            price: driverPayoutLabel,
+            driverPayout: driverPayoutLabel,
+            earnings: driverPayoutLabel,
+            customerTotal: customerTotalLabel,
+            pricing: {
+                ...(trip.pricing || {}),
+                total: customerTotalAmount,
+                driverPayout: driverPayoutAmount,
+            },
             type: 'Moves',
             vehicle: { type: trip.vehicleType || 'Standard' },
             pickup: {

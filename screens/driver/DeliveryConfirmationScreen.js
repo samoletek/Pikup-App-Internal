@@ -21,6 +21,30 @@ import {
   spacing,
 } from '../../styles/theme';
 
+const resolveDriverPayoutLabel = (tripRequest) => {
+  const pricing = tripRequest?.pricing || {};
+  const candidates = [
+    tripRequest?.driverPayout,
+    tripRequest?.earnings,
+    pricing?.driverPayout,
+    tripRequest?.price,
+    pricing?.total,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.includes('$')) {
+      return candidate;
+    }
+
+    const amount = Number(candidate);
+    if (Number.isFinite(amount) && amount >= 0) {
+      return `$${amount.toFixed(2)}`;
+    }
+  }
+
+  return '$0.00';
+};
+
 export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -77,6 +101,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     fallbackName: 'Customer',
   });
   const customerName = customerDisplay.name;
+  const driverPayoutLabel = resolveDriverPayoutLabel(request);
 
   return (
     <View style={styles.container}>
@@ -121,8 +146,8 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
               <Text style={styles.summaryValue}>{pickupPhotos?.length || 0} photos</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Amount:</Text>
-              <Text style={[styles.summaryValue, styles.priceValue]}>${request?.pricing?.total || '0.00'}</Text>
+              <Text style={styles.summaryLabel}>Payout Amount:</Text>
+              <Text style={[styles.summaryValue, styles.priceValue]}>{driverPayoutLabel}</Text>
             </View>
           </View>
 
