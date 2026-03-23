@@ -26,122 +26,131 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  title: {
+
+  // Rating section
+  ratingSection: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  ratingLabel: {
     color: colors.text.primary,
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize.xxl,
     fontWeight: typography.fontWeight.bold,
-    textAlign: 'center',
-    marginVertical: spacing.lg,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  toggleBtn: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 24,
-    backgroundColor: colors.background.tertiary,
-  },
-  toggleText: {
-    color: colors.text.secondary,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  activeBtn: {
-    backgroundColor: colors.primary,
-  },
-  activeText: {
-    color: colors.text.primary,
-  },
-  card: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius.md,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
-  },
-  driverRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  driverName: {
-    color: colors.text.primary,
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.md,
-  },
-  vehicle: {
-    color: colors.text.secondary,
-    fontSize: typography.fontSize.base,
-  },
-  stars: {
-    color: colors.primary,
-    marginTop: spacing.xs,
-  },
-  vehicleImg: {
-    width: 80,
-    height: 50,
-    resizeMode: 'contain',
-  },
-  viewPhotosButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.default,
-  },
-  viewPhotosText: {
-    color: colors.primary,
-    marginLeft: spacing.sm,
-    fontSize: typography.fontSize.base,
-  },
-  label: {
-    color: colors.text.primary,
-    fontSize: typography.fontSize.md,
-    fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
-  },
-  subLabel: {
-    color: colors.text.muted,
-    fontSize: typography.fontSize.base,
     marginBottom: spacing.md,
-  },
-  tipRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  tipBtn: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  tipSelected: {
-    backgroundColor: colors.primary,
-  },
-  tipText: {
-    color: colors.text.primary,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  tipInput: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.sm,
-    padding: spacing.sm + 2,
-    color: colors.text.primary,
-    borderWidth: 1,
-    borderColor: colors.border.strong,
   },
   starRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: spacing.md,
+    gap: spacing.sm,
   },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.base,
+  },
+
+  // Sections
+  section: {
+    paddingVertical: spacing.sm,
+  },
+  sectionTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.base,
+    lineHeight: typography.fontSize.base * 1.5,
+  },
+
+  // Tip grid (3x2)
+  tipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tipBtn: {
+    flexBasis: '30%',
+    flexGrow: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.secondary,
+  },
+  tipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  tipText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  tipTextSelected: {
+    color: colors.primary,
+  },
+  enterOtherAmount: {
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  customTipInput: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+  },
+
+  // Badge chips
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  badgeChip: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    backgroundColor: colors.background.secondary,
+  },
+  badgeChipSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  badgeChipText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  badgeChipTextSelected: {
+    color: colors.primary,
+  },
+
+  // Comment
+  commentSection: {
+    marginTop: spacing.lg,
+  },
+  commentInput: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.base,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+
+  // Bottom button
   buttonContainer: {
     position: 'absolute',
     bottom: 0,
@@ -152,32 +161,21 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 30,
+    borderRadius: borderRadius.md,
     paddingVertical: spacing.base,
     alignItems: 'center',
   },
   submitText: {
-    color: colors.text.primary,
-    fontWeight: typography.fontWeight.semibold,
+    color: colors.white,
+    fontWeight: typography.fontWeight.bold,
     fontSize: typography.fontSize.md,
   },
   disabledBtn: {
     backgroundColor: colors.text.placeholder,
     opacity: 0.6,
   },
-  claimBtn: {
-    backgroundColor: 'transparent',
-    borderRadius: 30,
-    paddingVertical: spacing.base,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  claimText: {
-    color: colors.primary,
-    fontWeight: typography.fontWeight.semibold,
-    fontSize: typography.fontSize.md,
-  },
+
+  // Claim button
   startClaimButton: {
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.md,
@@ -185,7 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.base,
+    marginTop: spacing.base,
     borderWidth: 1,
     borderColor: colors.border.default,
   },

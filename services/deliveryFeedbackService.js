@@ -6,12 +6,16 @@ export const submitDeliveryFeedback = async ({
   rating,
   tip,
   driverId,
+  badges = [],
+  comment = null,
 }) => {
   const { error } = await invokeSubmitFeedback({
     requestId,
     rating,
     tip,
     driverId,
+    badges,
+    comment,
   });
 
   if (error) {

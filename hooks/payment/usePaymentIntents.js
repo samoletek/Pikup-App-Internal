@@ -27,7 +27,8 @@ export const usePaymentIntents = ({ userId, userEmail, defaultPaymentMethodId })
     amount,
     currency = 'usd',
     rideDetails = {},
-    paymentMethodId = null
+    paymentMethodId = null,
+    { destinationAccountId = null, applicationFeeAmount = null } = {}
   ) => {
     const flowContext = startFlowContext('payment.createIntent', {
       userId,
@@ -48,6 +49,8 @@ export const usePaymentIntents = ({ userId, userEmail, defaultPaymentMethodId })
         paymentMethodId: paymentMethodId || defaultPaymentMethodId || null,
         userId,
         userEmail: userEmail || null,
+        destinationAccountId,
+        applicationFeeAmount,
       });
     } catch (error) {
       const normalized = logFlowError(

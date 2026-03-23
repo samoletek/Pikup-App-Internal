@@ -37,6 +37,8 @@ export const createCustomerPaymentIntent = async ({
   paymentMethodId = null,
   userId = null,
   userEmail = null,
+  destinationAccountId = null,
+  applicationFeeAmount = null,
 }) => {
   try {
     const normalizedAmount = Number(amount);
@@ -51,6 +53,8 @@ export const createCustomerPaymentIntent = async ({
       userId,
       paymentMethodId: paymentMethodId || null,
       rideDetails,
+      destinationAccountId: destinationAccountId || null,
+      applicationFeeAmount: applicationFeeAmount != null ? applicationFeeAmount : null,
     });
 
     if (error) {

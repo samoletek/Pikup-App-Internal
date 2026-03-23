@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import { TRIP_STATUS } from "../../constants/tripStatus";
 import { submitDeliveryFeedback } from "../../services/deliveryFeedbackService";
+import { creditDriverTip } from "../../services/driverEarningsService";
 import { logger } from "../../services/logger";
 
 const DEFAULT_DRIVER_NAME = "Your Driver";
@@ -91,6 +92,8 @@ export default function useDeliveryFeedbackData({
   const [driverRating, setDriverRating] = useState(DEFAULT_DRIVER_RATING);
   const [showPhotosModal, setShowPhotosModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedBadges, setSelectedBadges] = useState([]);
+  const [comment, setComment] = useState("");
 
   const tripTotal = useMemo(() => Number(requestData?.pricing?.total || 0), [requestData?.pricing?.total]);
   const requestDateLabel = useMemo(() => resolveRequestDateLabel(requestData), [requestData]);
@@ -122,6 +125,7 @@ export default function useDeliveryFeedbackData({
       logger.error("DeliveryFeedbackData", "Error loading driver rating", error);
       setDriverRating(DEFAULT_DRIVER_RATING);
     }
+
   }, [getDriverProfile]);
 
   const fetchRequestData = useCallback(async () => {
@@ -216,6 +220,8 @@ export default function useDeliveryFeedbackData({
           createTipIntentResult.paymentIntent.id ||
           null
         );
+
+        await creditDriverTip(driverId, chosenTip);
       }
 
       const feedbackResult = await submitDeliveryFeedback({
@@ -223,6 +229,8 @@ export default function useDeliveryFeedbackData({
         rating,
         tip: chosenTip,
         driverId,
+        badges: selectedBadges,
+        comment: comment.trim() || null,
       });
 
       if (!feedbackResult.success) {
@@ -254,6 +262,7 @@ export default function useDeliveryFeedbackData({
       setSubmitting(false);
     }
   }, [
+    comment,
     confirmPayment,
     createPaymentIntent,
     currentUser?.id,
@@ -265,10 +274,17 @@ export default function useDeliveryFeedbackData({
     rating,
     requestData,
     requestId,
+    selectedBadges,
     submitting,
     tip,
     updateRequestStatus,
   ]);
+
+  const toggleBadge = useCallback((badgeId) => {
+    setSelectedBadges((prev) =>
+      prev.includes(badgeId) ? prev.filter((b) => b !== badgeId) : [...prev, badgeId]
+    );
+  }, []);
 
   const handleStartClaim = useCallback(() => {
     navigation.navigate("CustomerClaimsScreen");
@@ -279,6 +295,7 @@ export default function useDeliveryFeedbackData({
   }, []);
 
   return {
+    comment,
     customTip,
     delivered,
     driverName,
@@ -289,6 +306,8 @@ export default function useDeliveryFeedbackData({
     loading,
     requestData,
     requestDateLabel,
+    selectedBadges,
+    setComment,
     setCustomTip,
     setDelivered,
     setRating,
@@ -297,6 +316,7 @@ export default function useDeliveryFeedbackData({
     showPhotosModal,
     submitting,
     tip,
+    toggleBadge,
     tripTotal,
     vehicleInfo,
     rating,

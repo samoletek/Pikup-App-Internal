@@ -193,6 +193,49 @@ export const updateDriverEarnings = async (driverId, tripData) => {
   }
 };
 
+export const creditDriverTip = async (driverId, tipAmount) => {
+  try {
+    if (!driverId || !Number.isFinite(tipAmount) || tipAmount <= 0) {
+      return;
+    }
+
+    logger.info('DriverEarningsService', 'Crediting tip to driver balance', { driverId, tipAmount });
+
+    const { data: profile } = await fetchDriverRowById(driverId, '*', false);
+    const currentMeta = profile?.metadata || {};
+    const currentEarnings = currentMeta.totalEarnings || 0;
+    const currentPayouts = currentMeta.totalPayouts || 0;
+    const currentTips = currentMeta.totalTips || 0;
+    const nextTotalEarnings = Number((currentEarnings + tipAmount).toFixed(2));
+    const nextTotalTips = Number((currentTips + tipAmount).toFixed(2));
+    const nextAvailableBalance = Number((Math.max(0, nextTotalEarnings - currentPayouts)).toFixed(2));
+
+    const { error } = await updateDriverRowById(
+      driverId,
+      {
+        metadata: {
+          ...currentMeta,
+          totalEarnings: nextTotalEarnings,
+          totalTips: nextTotalTips,
+          availableBalance: nextAvailableBalance,
+          lastTipAt: new Date().toISOString(),
+        },
+      },
+      true
+    );
+
+    if (error) throw error;
+    logger.info('DriverEarningsService', 'Tip credited to driver balance', {
+      driverId,
+      tipAmount,
+      nextAvailableBalance,
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to credit driver tip');
+    logger.error('DriverEarningsService', 'Error crediting driver tip', normalized, error);
+  }
+};
+
 export const subscribeToDriverEarningsUpdates = (driverId, onChange) => {
   if (!driverId) {
     return () => {};
