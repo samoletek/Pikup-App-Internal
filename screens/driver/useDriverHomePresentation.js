@@ -29,6 +29,7 @@ export default function useDriverHomePresentation({
   setShowRequestModal,
 }) {
   const onlineDriverPulse = useRef(new Animated.Value(0)).current;
+  const handledRouteSelectedRequestIdRef = useRef(null);
 
   const onlineDriverMarkerCoordinate = useMemo(() => {
     if (!driverLocation?.longitude || !driverLocation?.latitude) {
@@ -143,12 +144,28 @@ export default function useDriverHomePresentation({
     };
   }, [onlineDriverPulse, shouldShowOnlineDriverMarker]);
 
+  const routeSelectedRequest = route?.params?.selectedRequest || null;
+  const routeSelectedRequestId = routeSelectedRequest?.id || null;
+
   useEffect(() => {
-    if (route.params?.selectedRequest) {
-      setSelectedRequest(route.params.selectedRequest);
-      setShowRequestModal(true);
+    if (!routeSelectedRequestId) {
+      handledRouteSelectedRequestIdRef.current = null;
+      return;
     }
-  }, [route.params, setSelectedRequest, setShowRequestModal]);
+
+    if (handledRouteSelectedRequestIdRef.current === routeSelectedRequestId) {
+      return;
+    }
+
+    handledRouteSelectedRequestIdRef.current = routeSelectedRequestId;
+    setSelectedRequest(routeSelectedRequest);
+    setShowRequestModal(true);
+  }, [
+    routeSelectedRequest,
+    routeSelectedRequestId,
+    setSelectedRequest,
+    setShowRequestModal,
+  ]);
 
   useFocusEffect(
     useCallback(() => {

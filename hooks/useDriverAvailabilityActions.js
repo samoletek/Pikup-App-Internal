@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { getDriverReadinessProfile } from '../services/DriverService';
 import MapboxLocationService from '../services/MapboxLocationService';
@@ -45,24 +45,29 @@ export default function useDriverAvailabilityActions({
   setIncomingRequest,
   isDriverGeoRestricted = false,
 }) {
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
   const checkDriverReadiness = useCallback(async () => {
-    const driverId = currentUser?.uid || currentUser?.id;
+    const driverId = currentUserId;
     if (!driverId) return { ready: false, issues: ['Not authenticated'] };
 
-    if (shouldBypassDriverReadiness(currentUser)) {
+    if (shouldBypassDriverReadiness(currentUserRef.current)) {
       return {
         ready: true,
         issues: [],
         profile: {
           readinessBypass: true,
           bypassUserId: driverId,
-          bypassEmail: currentUser?.email || null,
+          bypassEmail: currentUserRef.current?.email || null,
         },
       };
     }
 
     return getDriverReadinessProfile(driverId);
-  }, [currentUser]);
+  }, [currentUserId]);
 
   const confirmGoOnline = useCallback(async (mode, requestPool = REQUEST_POOLS.ASAP) => {
     if (isOnline || !currentUserId) return;
@@ -262,12 +267,11 @@ export default function useDriverAvailabilityActions({
   }, [openGoOnlineModeSheet]);
 
   const confirmGoOffline = useCallback(async () => {
-    const userId = currentUser?.uid || currentUser?.id;
-    if (!userId) return;
+    if (!currentUserId) return;
 
     try {
       setLoading(true);
-      await setDriverOffline(userId);
+      await setDriverOffline(currentUserId);
 
       setIsOnline(false);
       setActiveRequestPool(REQUEST_POOLS.ASAP);
@@ -284,7 +288,7 @@ export default function useDriverAvailabilityActions({
       setLoading(false);
     }
   }, [
-    currentUser,
+    currentUserId,
     setActiveRequestPool,
     setDriverOffline,
     setIncomingRequest,

@@ -25,6 +25,7 @@ export default function useDriverActiveTripRestore({
 }) {
   const [isRestoringActiveTrip, setIsRestoringActiveTrip] = useState(true);
   const restoreInFlightRef = useRef(false);
+  const restoredForUserIdRef = useRef(null);
 
   const restoreActiveTrip = useCallback(async ({ initialLoad = false } = {}) => {
     if (!currentUserId || userType !== 'driver' || typeof getUserPickupRequests !== 'function') {
@@ -127,6 +128,7 @@ export default function useDriverActiveTripRestore({
 
   useEffect(() => {
     if (!currentUserId || userType !== 'driver') {
+      restoredForUserIdRef.current = null;
       setAcceptedRequestId(null);
       setActiveJob(null);
       setIsOnline(false);
@@ -134,6 +136,11 @@ export default function useDriverActiveTripRestore({
       return;
     }
 
+    if (restoredForUserIdRef.current === currentUserId) {
+      return;
+    }
+
+    restoredForUserIdRef.current = currentUserId;
     restoreActiveTrip({ initialLoad: true });
   }, [
     currentUserId,

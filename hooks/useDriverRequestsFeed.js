@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { REQUEST_POOLS } from '../screens/driver/DriverHomeScreen.utils';
 import { logger } from '../services/logger';
 
@@ -22,6 +23,11 @@ export default function useDriverRequestsFeed({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const backgroundRefreshInterval = useRef(null);
+  const driverLocationRef = useRef(driverLocation);
+
+  useEffect(() => {
+    driverLocationRef.current = driverLocation;
+  }, [driverLocation]);
 
   const clearAutoRefresh = useCallback(() => {
     if (backgroundRefreshInterval.current) {
@@ -50,7 +56,7 @@ export default function useDriverRequestsFeed({
 
         const requests = await getAvailableRequests({
           requestPool: effectiveRequestPool,
-          driverLocation,
+          driverLocation: driverLocationRef.current,
         });
         const normalizedRequests = Array.isArray(requests) ? requests : [];
 
@@ -94,7 +100,6 @@ export default function useDriverRequestsFeed({
     [
       activeRequestPool,
       clearIncomingRoute,
-      driverLocation,
       getAvailableRequests,
       hasActiveTrip,
       incomingRequestIdRef,

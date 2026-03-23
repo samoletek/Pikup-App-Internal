@@ -23,10 +23,12 @@ import {
 import useRequestModalTimers from '../hooks/useRequestModalTimers';
 import useRequestModalRoute from '../hooks/useRequestModalRoute';
 
+const EMPTY_REQUESTS = Object.freeze([]);
+
 export default function RequestModal({
   visible,
   mode = 'available',
-  requests = [],
+  requests = EMPTY_REQUESTS,
   selectedRequest,
   currentLocation,
   loading = false,

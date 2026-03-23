@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { appConfig } from '../config/appConfig';
 import { buildFallbackRouteFeature } from '../components/requestModal/requestModalUtils';
 
+const EMPTY_REQUESTS = Object.freeze([]);
+
 export default function useRequestModalRoute({
   visible,
   showMap,
-  requests = [],
+  requests = EMPTY_REQUESTS,
   selectedIndex,
   mapRef,
 }) {

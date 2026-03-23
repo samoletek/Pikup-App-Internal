@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Alert } from "react-native";
+import { useNavigationState } from "@react-navigation/native";
 import RoleTabNavigator from "./RoleTabNavigator";
 import { driverTabs } from "./tabRoutes";
 import { useAuthIdentity, useTripActions } from "../contexts/AuthContext";
@@ -7,6 +8,22 @@ import { logger } from "../services/logger";
 
 const CHECKIN_POLL_INTERVAL_MS = 60 * 1000;
 const CHECKIN_PROMPT_COOLDOWN_MS = 5 * 60 * 1000;
+const DRIVER_HOME_TAB_NAME = "Home";
+const DRIVER_TABS_ROUTE_NAME = "DriverTabs";
+
+const resolveFocusedLeafRouteName = (state) => {
+  const currentIndex = Number.isInteger(state?.index) ? state.index : 0;
+  const currentRoute = state?.routes?.[currentIndex];
+  if (!currentRoute) {
+    return null;
+  }
+
+  if (currentRoute.state) {
+    return resolveFocusedLeafRouteName(currentRoute.state);
+  }
+
+  return currentRoute.name || null;
+};
 
 const parseTimestamp = (value) => {
   if (typeof value !== "string" || !value.trim()) {
@@ -85,6 +102,17 @@ const isTripPromptable = (trip) => {
 
 export default function DriverTabNavigator() {
   const { currentUser, userType } = useAuthIdentity();
+  const focusedRouteName = useNavigationState((state) => resolveFocusedLeafRouteName(state));
+  const isHomeTabActive = useMemo(() => {
+    if (!focusedRouteName) {
+      return true;
+    }
+
+    return (
+      focusedRouteName === DRIVER_HOME_TAB_NAME ||
+      focusedRouteName === DRIVER_TABS_ROUTE_NAME
+    );
+  }, [focusedRouteName]);
   const {
     confirmScheduledTripCheckin,
     declineScheduledTripCheckin,
@@ -93,21 +121,34 @@ export default function DriverTabNavigator() {
   const activePromptTripIdRef = useRef(null);
   const pollingInProgressRef = useRef(false);
   const lastPromptByTripRef = useRef(new Map());
+  const tripActionsRef = useRef({
+    confirmScheduledTripCheckin,
+    declineScheduledTripCheckin,
+    getPendingDriverScheduledCheckins,
+  });
+
+  useEffect(() => {
+    tripActionsRef.current = {
+      confirmScheduledTripCheckin,
+      declineScheduledTripCheckin,
+      getPendingDriverScheduledCheckins,
+    };
+  }, [
+    confirmScheduledTripCheckin,
+    declineScheduledTripCheckin,
+    getPendingDriverScheduledCheckins,
+  ]);
 
   const canPollScheduledCheckins = useMemo(() => {
     return (
+      isHomeTabActive &&
       userType === "driver" &&
-      Boolean(currentUser?.id || currentUser?.uid) &&
-      typeof getPendingDriverScheduledCheckins === "function" &&
-      typeof confirmScheduledTripCheckin === "function" &&
-      typeof declineScheduledTripCheckin === "function"
+      Boolean(currentUser?.id || currentUser?.uid)
     );
   }, [
-    confirmScheduledTripCheckin,
     currentUser?.id,
     currentUser?.uid,
-    declineScheduledTripCheckin,
-    getPendingDriverScheduledCheckins,
+    isHomeTabActive,
     userType,
   ]);
 
@@ -118,8 +159,14 @@ export default function DriverTabNavigator() {
   }, []);
 
   const handleConfirmPrompt = useCallback(async (tripId) => {
+    const confirmCheckin = tripActionsRef.current.confirmScheduledTripCheckin;
+    if (typeof confirmCheckin !== "function") {
+      releaseActivePrompt(tripId);
+      return;
+    }
+
     try {
-      const result = await confirmScheduledTripCheckin(tripId);
+      const result = await confirmCheckin(tripId);
       if (!result?.success) {
         logger.warn("DriverTabNavigator", "Scheduled check-in confirm failed", {
           tripId,
@@ -136,11 +183,17 @@ export default function DriverTabNavigator() {
     } finally {
       releaseActivePrompt(tripId);
     }
-  }, [confirmScheduledTripCheckin, releaseActivePrompt]);
+  }, [releaseActivePrompt]);
 
   const handleDeclinePrompt = useCallback(async (tripId) => {
+    const declineCheckin = tripActionsRef.current.declineScheduledTripCheckin;
+    if (typeof declineCheckin !== "function") {
+      releaseActivePrompt(tripId);
+      return;
+    }
+
     try {
-      const result = await declineScheduledTripCheckin(tripId, {
+      const result = await declineCheckin(tripId, {
         reason: "scheduled_checkin_declined_by_driver",
       });
 
@@ -161,7 +214,7 @@ export default function DriverTabNavigator() {
     } finally {
       releaseActivePrompt(tripId);
     }
-  }, [declineScheduledTripCheckin, releaseActivePrompt]);
+  }, [releaseActivePrompt]);
 
   const showCheckinPrompt = useCallback((trip) => {
     const tripId = resolveTripId(trip);
@@ -209,9 +262,14 @@ export default function DriverTabNavigator() {
       return;
     }
 
+    const getPendingCheckins = tripActionsRef.current.getPendingDriverScheduledCheckins;
+    if (typeof getPendingCheckins !== "function") {
+      return;
+    }
+
     pollingInProgressRef.current = true;
     try {
-      const result = await getPendingDriverScheduledCheckins();
+      const result = await getPendingCheckins();
       if (!result?.success) {
         logger.warn("DriverTabNavigator", "Failed to load due scheduled check-ins", {
           error: result?.error || "unknown_error",
@@ -234,7 +292,7 @@ export default function DriverTabNavigator() {
     } finally {
       pollingInProgressRef.current = false;
     }
-  }, [canPollScheduledCheckins, getPendingDriverScheduledCheckins, showCheckinPrompt]);
+  }, [canPollScheduledCheckins, showCheckinPrompt]);
 
   useEffect(() => {
     if (!canPollScheduledCheckins) {

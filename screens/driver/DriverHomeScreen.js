@@ -62,25 +62,14 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
   const [activeJob, setActiveJob] = useState(null);
 
-  // Request modal state
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showAllRequests, setShowAllRequests] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
-
-  // New incoming request modal state
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState(null);
-
-  // Phone verification modal
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
-
-  // Offline dashboard expansion state
   const [, setDashboardExpanded] = useState(false);
-
-  // Route for incoming request (Mapbox Directions)
   const cameraRef = useRef(null);
-
-  // Minimize + timer state for incoming request
   const [isMinimized, setIsMinimized] = useState(false);
   const handleOfferTimeoutRef = useRef(null);
   const isAcceptingRequestRef = useRef(false);
@@ -228,15 +217,12 @@ export default function DriverHomeScreen({ navigation, route }) {
     setIsOnline,
   });
 
-  // Monitor order status for accepted requests
   useOrderStatusMonitor(acceptedRequestId, navigation, {
     currentScreen: 'DriverHomeScreen',
     enabled: !!acceptedRequestId,
     onCancel: () => {
-      // Reset state when order is cancelled
       setAcceptedRequestId(null);
       setActiveJob(null);
-      // Reload requests to refresh the list
       loadRequests(false);
     }
   });

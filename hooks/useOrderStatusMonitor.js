@@ -30,6 +30,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
   const lastStatusRef = useRef(null);
   const onCancelRef = useRef(onCancel);
   const onErrorRef = useRef(onError);
+  const getRequestByIdRef = useRef(getRequestById);
 
   useEffect(() => {
     onCancelRef.current = onCancel;
@@ -38,6 +39,10 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
   useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
+
+  useEffect(() => {
+    getRequestByIdRef.current = getRequestById;
+  }, [getRequestById]);
 
   // Maximum retry attempts for failed API calls
   const MAX_RETRIES = 3;
@@ -49,7 +54,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
   const checkRequestStatus = useCallback(async (requestId, retries = MAX_RETRIES) => {
     for (let attempt = 0; attempt < retries; attempt++) {
       try {
-        const request = await getRequestById(requestId);
+        const request = await getRequestByIdRef.current(requestId);
         retryCountRef.current = 0; // Reset retry count on success
         return request;
       } catch (error) {
@@ -68,7 +73,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
       }
     }
-  }, [getRequestById, currentScreen]);
+  }, [currentScreen]);
 
   /**
    * Handle order cancellation

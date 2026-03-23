@@ -21,6 +21,11 @@ export default function OfflineDashboard({
 }) {
     const { currentUser } = useAuthIdentity();
     const { getDriverSessionStats, getDriverStats } = useDriverActions();
+    const currentUserId = currentUser?.uid || currentUser?.id;
+    const driverActionsRef = useRef({
+        getDriverSessionStats,
+        getDriverStats,
+    });
     const [sessionStats, setSessionStats] = useState({
         totalEarnings: 0,
         tripsCompleted: 0,
@@ -38,6 +43,13 @@ export default function OfflineDashboard({
     const isExpandedRef = useRef(false); // For PanResponder
     const onExpandedChangeRef = useRef(onExpandedChange);
     onExpandedChangeRef.current = onExpandedChange;
+
+    useEffect(() => {
+        driverActionsRef.current = {
+            getDriverSessionStats,
+            getDriverStats,
+        };
+    }, [getDriverSessionStats, getDriverStats]);
 
     const expand = useCallback(() => {
         setIsExpanded(true);
@@ -163,7 +175,7 @@ export default function OfflineDashboard({
         }
     };
 
-    const generateRecommendations = useCallback((stats) => {
+    const buildRecommendations = useCallback((stats) => {
         const recs = [];
         const currentHour = new Date().getHours();
 
@@ -204,15 +216,25 @@ export default function OfflineDashboard({
             color: colors.success
         });
 
-        setRecommendations(recs);
+        return recs;
     }, []);
 
-    const loadSessionData = useCallback(async () => {
-        try {
-            const currentUserId = currentUser?.uid || currentUser?.id;
-            if (currentUserId) {
-                const stats = await getDriverSessionStats?.(currentUserId) || {};
-                const weeklyStats = await getDriverStats?.(currentUserId) || {};
+    useEffect(() => {
+        if (!currentUserId) {
+            return;
+        }
+
+        let cancelled = false;
+        const loadSessionData = async () => {
+            try {
+                const sessionLoader = driverActionsRef.current.getDriverSessionStats;
+                const statsLoader = driverActionsRef.current.getDriverStats;
+                const stats = await sessionLoader?.(currentUserId) || {};
+                const weeklyStats = await statsLoader?.(currentUserId) || {};
+
+                if (cancelled) {
+                    return;
+                }
 
                 setSessionStats({
                     ...stats,
@@ -224,16 +246,19 @@ export default function OfflineDashboard({
                     weeklyMilestone: 15
                 });
 
-                generateRecommendations(stats);
+                setRecommendations(buildRecommendations(stats));
+            } catch (error) {
+                if (!cancelled) {
+                    logger.error('OfflineDashboard', 'Error loading session data', error);
+                }
             }
-        } catch (error) {
-            logger.error('OfflineDashboard', 'Error loading session data', error);
-        }
-    }, [currentUser?.id, currentUser?.uid, generateRecommendations, getDriverSessionStats, getDriverStats]);
+        };
 
-    useEffect(() => {
-        loadSessionData();
-    }, [loadSessionData]);
+        void loadSessionData();
+        return () => {
+            cancelled = true;
+        };
+    }, [buildRecommendations, currentUserId]);
 
     const formatDuration = (minutes) => {
         const total = minutes || 0;
