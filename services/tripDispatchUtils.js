@@ -95,7 +95,10 @@ export const getAvailableRequestsFromEdge = async ({ requestPool, driverLocation
         throw new Error('get-driver-request-pool returned an invalid response shape');
     }
 
-    return requests;
+    return {
+        requests,
+        meta: data?.meta || null,
+    };
 };
 
 export const hasValidCoordinatePair = (value) => {

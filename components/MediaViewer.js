@@ -69,11 +69,15 @@ export default function MediaViewer({
         const verticalDistance = Math.abs(gestureState.dy);
         const horizontalDistance = Math.abs(gestureState.dx);
 
+        // In gallery mode FlatList can accumulate horizontal delta early, so keep
+        // a relaxed dominance threshold to preserve swipe-to-dismiss reliability.
+        const horizontalDominanceLimit = hasGallery ? 0.6 : 1;
+
         return (
             verticalDistance > PAN_ACTIVATION_THRESHOLD &&
-            verticalDistance > horizontalDistance
+            verticalDistance >= horizontalDistance * horizontalDominanceLimit
         );
-    }, []);
+    }, [hasGallery]);
 
     React.useEffect(() => {
         if (!visible) {
