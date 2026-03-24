@@ -39,6 +39,8 @@ export {
 export const toDisplayTrip = (trip, fallback) => {
   const source = trip || fallback || {};
   const pricingTotal = source.pricing?.total ?? source.price;
+  const insurancePremium = source.insurance?.premium ?? source.insurance_premium ?? 0;
+  const priceWithoutInsurance = Math.max(0, (pricingTotal || 0) - (insurancePremium || 0));
 
   const itemsFromArray = Array.isArray(source.items) ? source.items : [];
   const normalizedItem =
@@ -120,5 +122,6 @@ export const toDisplayTrip = (trip, fallback) => {
     progressStep,
     cancelledAt: source.cancelledAt || source.cancelled_at || null,
     cancellationReason: source.cancellationReason || source.cancellation_reason || null,
+    priceWithoutInsurance,
   };
 };

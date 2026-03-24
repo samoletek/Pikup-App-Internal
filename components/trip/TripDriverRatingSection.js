@@ -2,6 +2,7 @@
 import React from 'react';
 import {
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,6 +25,13 @@ export default function TripDriverRatingSection({
   toggleBadge,
   onSubmit,
   ui,
+  tip,
+  customTip,
+  showCustomTip,
+  selectTipPreset,
+  openCustomTip,
+  updateCustomTip,
+  tipPresets,
 }) {
   return (
     <View style={ui.sectionCard}>
@@ -89,6 +97,53 @@ export default function TripDriverRatingSection({
           );
         })}
       </View>
+
+      {!isRatingReadOnly && tipPresets && (
+        <>
+          <View style={ui.tipDivider} />
+          <Text style={ui.tipTitle}>Add a Tip</Text>
+          <Text style={ui.tipSubtitle}>
+            100% of the tip goes to your driver.
+          </Text>
+
+          <View style={ui.tipGrid}>
+            {tipPresets.map((preset) => {
+              const isSelected = tip === preset.percent && !showCustomTip;
+              return (
+                <TouchableOpacity
+                  key={preset.percent}
+                  style={[ui.tipBtn, isSelected && ui.tipBtnSelected]}
+                  onPress={() => selectTipPreset(preset.percent)}
+                  disabled={isSubmittingRating}
+                >
+                  <Text style={[ui.tipBtnText, isSelected && ui.tipBtnTextSelected]}>
+                    {preset.percent}%
+                  </Text>
+                  <Text style={[ui.tipBtnAmount, isSelected && ui.tipBtnAmountSelected]}>
+                    ${preset.amount.toFixed(2)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {showCustomTip ? (
+            <TextInput
+              style={ui.tipCustomInput}
+              placeholder="Enter amount"
+              placeholderTextColor={colors.text.muted}
+              value={customTip}
+              onChangeText={updateCustomTip}
+              keyboardType="numeric"
+              autoFocus
+            />
+          ) : (
+            <TouchableOpacity onPress={openCustomTip} disabled={isSubmittingRating}>
+              <Text style={ui.tipCustomLink}>Enter other amount</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
 
       <AppButton
         title={

@@ -14,7 +14,6 @@ import AboutScreen from "./screens/shared/AboutScreen";
 import ResetPasswordScreen from "./screens/shared/ResetPasswordScreen";
 // RoleSelectionScreen removed - role selection is now on WelcomeScreen
 import MessageScreen from "./screens/shared/MessageScreen";
-import DeliveryFeedbackScreen from "./screens/shared/DeliveryFeedbackScreen";
 // TermsAndPrivacyScreen removed - opens via Linking.openURL now
 
 // Import Tab Navigators
@@ -84,7 +83,6 @@ const CustomerStack = () => (
 
     {/* Shared / Interaction Screens */}
     <Stack.Screen name="MessageScreen" component={MessageScreen} />
-    <Stack.Screen name="DeliveryFeedbackScreen" component={DeliveryFeedbackScreen} />
     <Stack.Screen name="OrderSummaryScreen" component={OrderSummaryScreen} />
     <Stack.Screen name="CustomerTripDetailsScreen" component={CustomerTripDetailsScreen} />
   </Stack.Navigator>
