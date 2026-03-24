@@ -125,10 +125,17 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
   const driverLocation = resolveDriverLocation(options?.driverLocation);
 
   try {
-    const edgeRequests = await getAvailableRequestsFromEdge({
+    const edgeResponse = await getAvailableRequestsFromEdge({
       requestPool,
       driverLocation,
     });
+    const edgeRequests = Array.isArray(edgeResponse?.requests) ? edgeResponse.requests : [];
+    const edgeMeta = edgeResponse?.meta;
+
+    if (edgeMeta) {
+      logger.info('TripDriverAvailability', 'Driver request pool edge summary', edgeMeta);
+    }
+
     return edgeRequests;
   } catch (edgeError) {
     const normalized = normalizeError(edgeError, 'Driver request pool edge function failed');

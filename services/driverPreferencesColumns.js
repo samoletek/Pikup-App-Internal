@@ -223,6 +223,25 @@ const resolvePreferredModeFromColumns = (source) => {
   return 'solo';
 };
 
+const getMetadataDriverPreferences = (source) => {
+  const metadata = toObject(source.metadata);
+  return toObject(metadata.driverPreferences);
+};
+
+const hasMetadataPreferenceUpdateMarker = (metadataPreferences) => {
+  return (
+    typeof metadataPreferences.updatedAt === 'string' &&
+    metadataPreferences.updatedAt.trim().length > 0
+  );
+};
+
+const shouldTreatColumnPreferencesAsUninitialized = (source) => {
+  const metadataPreferences = getMetadataDriverPreferences(source);
+  // When migrated column values exist but have no explicit update marker yet,
+  // prefer metadata/defaults to avoid over-restrictive filtering.
+  return !hasMetadataPreferenceUpdateMarker(metadataPreferences);
+};
+
 const buildPreferencesFromColumns = (source) => mergeDriverPreferences({
   pickupPreferences: {
     smallItems: source.pref_pickup_small_items,
@@ -267,13 +286,19 @@ export const extractDriverPreferencesFromDriverProfile = (driverProfile) => {
   const hasPreferenceColumns = DRIVER_PREFERENCE_COLUMN_LIST.some((columnName) => (
     typeof source[columnName] === 'boolean'
   ));
+  const metadataPreferences = getMetadataDriverPreferences(source);
 
   if (hasPreferenceColumns) {
+    if (shouldTreatColumnPreferencesAsUninitialized(source)) {
+      if (Object.keys(metadataPreferences).length > 0) {
+        return mergeDriverPreferences(metadataPreferences);
+      }
+      return mergeDriverPreferences({});
+    }
+
     return buildPreferencesFromColumns(source);
   }
 
-  const metadata = toObject(source.metadata);
-  const metadataPreferences = toObject(metadata.driverPreferences);
   if (Object.keys(metadataPreferences).length > 0) {
     return mergeDriverPreferences(metadataPreferences);
   }

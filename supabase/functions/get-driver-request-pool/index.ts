@@ -70,6 +70,27 @@ const resolveDriverPayoutAmount = (trip: AnyRecord): number => {
   return toAmount(pricing?.total ?? trip?.price)
 }
 
+const normalizeDriverLocationPayload = (value: unknown) => {
+  const source = toObject(value)
+  const coordinates = normalizeCoordinates(source)
+  if (!coordinates) {
+    return null
+  }
+
+  const rawAddress =
+    source.address || source.formatted_address || source.formattedAddress || null
+
+  return {
+    ...coordinates,
+    stateCode:
+      source.stateCode || source.state || source.region || source.regionCode || null,
+    address: rawAddress,
+    formatted_address: source.formatted_address || source.formattedAddress || rawAddress,
+    formattedAddress: source.formattedAddress || source.formatted_address || rawAddress,
+    context: Array.isArray(source.context) ? source.context : [],
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -118,7 +139,7 @@ serve(async (req: Request) => {
     }
 
     const requestPool = normalizeRequestPool(body.requestPool)
-    const driverLocation = normalizeCoordinates(body.driverLocation)
+    const driverLocation = normalizeDriverLocationPayload(body.driverLocation)
     const offerAction = normalizeOfferAction(body.action)
     const actionTripId = String(body.tripId || body.requestId || "").trim()
 

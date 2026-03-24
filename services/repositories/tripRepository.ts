@@ -230,6 +230,9 @@ export const fetchTripsByDriverAndStatuses = async ({
     .in('status', statuses);
 };
 
+// Backward-compatible alias used by legacy acceptance flow imports.
+export const fetchTripsByDriverIdAndStatuses = fetchTripsByDriverAndStatuses;
+
 export const createRealtimeChannel = (channelName: string) => {
   return supabase.channel(channelName);
 };

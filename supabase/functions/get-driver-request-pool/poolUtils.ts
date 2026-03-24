@@ -802,8 +802,18 @@ export const extractDriverPreferencesFromDriverRow = (driverRow: AnyRecord = {})
   const hasColumnPreferences = DRIVER_PREFERENCE_FILTER_COLUMNS.some((columnName) => (
     typeof source[columnName] === "boolean"
   ))
+  const metadata = toObject(source.metadata)
+  const metadataPreferences = toObject(metadata.driverPreferences)
+  const hasMetadataPreferenceUpdateMarker = (
+    typeof metadataPreferences.updatedAt === "string" &&
+    metadataPreferences.updatedAt.trim().length > 0
+  )
+  const treatColumnsAsUninitialized = (
+    hasColumnPreferences &&
+    !hasMetadataPreferenceUpdateMarker
+  )
 
-  if (hasColumnPreferences) {
+  if (hasColumnPreferences && !treatColumnsAsUninitialized) {
     return mergeDriverPreferences({
       pickupPreferences: {
         smallItems: source.pref_pickup_small_items,
@@ -832,8 +842,6 @@ export const extractDriverPreferencesFromDriverRow = (driverRow: AnyRecord = {})
     })
   }
 
-  const metadata = toObject(source.metadata)
-  const metadataPreferences = toObject(metadata.driverPreferences)
   return mergeDriverPreferences(metadataPreferences)
 }
 
