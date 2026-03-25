@@ -2,7 +2,6 @@ import { logger } from './logger';
 import { normalizeError } from './errorService';
 import {
   FEEDBACK_ROLE_BY_TYPE,
-  hasMissingTableError,
   normalizeFeedbackRow,
   normalizeUserType,
   PROFILE_TABLE_BY_TYPE,
@@ -16,17 +15,16 @@ import {
 import {
   fetchFeedbackRowsByDriver,
   fetchLatestTripFeedbackRowsByUser,
-  fetchLegacyFeedbackRowsByDriver,
-  fetchProfileRatingSnapshot,
+  fetchProfileRatingSnapshotByTable,
   insertFeedbackRowWithSelect,
-  insertLegacyFeedbackRowWithSelect,
   invokeSubmitFeedback,
-  updateProfileRatingSnapshot,
+  updateProfileRatingSnapshotByTable,
 } from './repositories/feedbackRepository';
 
 export const updateUserRating = async (userId, newRating, profileType = 'driverProfile') => {
   try {
-    const { data: profile } = await fetchProfileRatingSnapshot(userId);
+    const tableName = profileType === 'customerProfile' ? 'customers' : 'drivers';
+    const { data: profile } = await fetchProfileRatingSnapshotByTable(tableName, userId);
 
     const currentRating = profile?.rating || 5.0;
     const currentCount = profile?.rating_count || 0;
@@ -41,11 +39,15 @@ export const updateUserRating = async (userId, newRating, profileType = 'driverP
       updated_at: new Date().toISOString(),
     };
 
-    if (profileType === 'customerProfile') {
+    if (
+      profileType === 'customerProfile' &&
+      profile &&
+      Object.prototype.hasOwnProperty.call(profile, 'completed_orders')
+    ) {
       updates.completed_orders = (profile?.completed_orders || 0) + 1;
     }
 
-    const { error } = await updateProfileRatingSnapshot(userId, updates);
+    const { error } = await updateProfileRatingSnapshotByTable(tableName, userId, updates);
 
     if (error) {
       throw error;
@@ -185,25 +187,7 @@ export const saveFeedback = async (feedbackData, currentUser) => {
     );
 
     if (feedbacksError) {
-      if (!hasMissingTableError(feedbacksError, 'feedbacks')) {
-        throw feedbacksError;
-      }
-
-      const { data: legacyData, error: legacyError } = await insertLegacyFeedbackRowWithSelect({
-        request_id: feedbackData.requestId,
-        driver_id: feedbackData.driverId || null,
-        customer_id: sourceUserId,
-        rating: normalizedRating,
-        comment: feedbackData.comment || null,
-        type: feedbackData.type || 'customer_to_driver',
-        created_at: timestamp,
-      });
-
-      if (legacyError) {
-        throw legacyError;
-      }
-
-      insertedFeedback = legacyData;
+      throw feedbacksError;
     } else {
       insertedFeedback = feedbacksData;
     }
@@ -231,32 +215,11 @@ export const getDriverFeedback = async (driverId, limit = 5) => {
       limit
     );
 
-    if (!feedbacksError && Array.isArray(feedbacksData) && feedbacksData.length > 0) {
-      return feedbacksData.map(normalizeFeedbackRow);
-    }
-
-    if (feedbacksError && !hasMissingTableError(feedbacksError, 'feedbacks')) {
-      logger.warn(
-        'ProfileFeedback',
-        'Error fetching feedback from feedbacks table, trying legacy feedback table',
-        feedbacksError
-      );
-    }
-
-    const { data: legacyData, error: legacyError } = await fetchLegacyFeedbackRowsByDriver(
-      driverId,
-      limit
-    );
-
-    if (legacyError && !hasMissingTableError(legacyError, 'feedback')) {
-      throw legacyError;
-    }
-
-    if (feedbacksError && !hasMissingTableError(feedbacksError, 'feedbacks')) {
+    if (feedbacksError) {
       throw feedbacksError;
     }
 
-    return Array.isArray(legacyData) ? legacyData.map(normalizeFeedbackRow) : [];
+    return Array.isArray(feedbacksData) ? feedbacksData.map(normalizeFeedbackRow) : [];
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to fetch driver feedback');
     logger.error('ProfileFeedback', 'Error fetching driver feedback', normalized, error);

@@ -8,6 +8,8 @@ const corsHeaders = {
 
 type Role = 'customer' | 'driver'
 const DRIVER_BADGE_IDS = ['fast_loader', 'fragile_handler', 'friendly_service'] as const
+const UUID_V4_LIKE_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const normalizeRole = (value: unknown, fallback: Role): Role => {
   if (value === 'customer' || value === 'driver') return value
@@ -28,6 +30,14 @@ const toSafeBadges = (value: unknown): string[] => {
 const hasMissingColumnError = (error: unknown, columnName: string) => {
   const message = `${(error as { message?: string })?.message || ''} ${(error as { details?: string })?.details || ''}`.toLowerCase()
   return message.includes('column') && message.includes('does not exist') && message.includes(columnName.toLowerCase())
+}
+
+const toTripIdIfUuid = (value: unknown): string | null => {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return null
+  }
+  return UUID_V4_LIKE_REGEX.test(normalized) ? normalized : null
 }
 
 const toSafeBadgeStats = (value: unknown, includeDriverDefaults = false): Record<string, number> => {
@@ -86,6 +96,7 @@ serve(async (req) => {
     if (!requestId) {
       throw new Error('requestId is required')
     }
+    const tripId = toTripIdIfUuid(requestId)
 
     const normalizedRating = toSafeRating(payload?.rating)
     const tipRaw = Number(payload?.tip ?? 0)
@@ -134,6 +145,7 @@ serve(async (req) => {
 
     const fullFeedbackPayload = {
       request_id: requestId,
+      trip_id: tripId,
       user_id: user.id,
       driver_id: targetRole === 'driver' ? targetUserId : null,
       rating: normalizedRating,
@@ -157,6 +169,7 @@ serve(async (req) => {
 
     if (feedbackInsertError) {
       const canFallbackToLegacyColumns =
+        hasMissingColumnError(feedbackInsertError, 'trip_id') ||
         hasMissingColumnError(feedbackInsertError, 'source_role') ||
         hasMissingColumnError(feedbackInsertError, 'target_role') ||
         hasMissingColumnError(feedbackInsertError, 'target_user_id') ||

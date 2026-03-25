@@ -11,6 +11,17 @@ import {
   updateProfileByTableAndId,
 } from './repositories/feedbackRepository';
 
+const UUID_V4_LIKE_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const toTripIdIfUuid = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return null;
+  }
+  return UUID_V4_LIKE_REGEX.test(normalized) ? normalized : null;
+};
+
 export const hasExistingTripFeedback = async ({ requestId, sourceUserId }) => {
   const { data, error } = await fetchFeedbackIdsByRequestAndUser(requestId, sourceUserId);
 
@@ -136,8 +147,10 @@ export const insertFeedbackWithFallback = async ({
   uniqueBadges,
   timestamp,
 }) => {
+  const tripId = toTripIdIfUuid(requestId);
   const feedbackPayload = {
     request_id: requestId,
+    trip_id: tripId,
     user_id: sourceUserId,
     driver_id: normalizedTargetType === 'driver' ? toUserId : null,
     rating: normalizedRating,
@@ -158,6 +171,7 @@ export const insertFeedbackWithFallback = async ({
   }
 
   const extendedColumnsMissing =
+    hasMissingColumnError(feedbackInsertError, 'trip_id') ||
     hasMissingColumnError(feedbackInsertError, 'source_role') ||
     hasMissingColumnError(feedbackInsertError, 'target_role') ||
     hasMissingColumnError(feedbackInsertError, 'target_user_id') ||

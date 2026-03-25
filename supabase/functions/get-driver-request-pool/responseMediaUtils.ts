@@ -309,7 +309,7 @@ export const buildFeedbackRatingMap = async ({
   }
 
   const { data: feedbackRows, error: feedbackError } = await dbClient
-    .from("feedback")
+    .from("feedbacks")
     .select("target_user_id,target_role,rating")
     .in("target_user_id", customerIds)
 

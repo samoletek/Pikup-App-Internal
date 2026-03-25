@@ -95,17 +95,25 @@ serve(async (req) => {
         .or(`customer_id.eq.${userId},driver_id.eq.${userId}`)
     )
 
-    await safeDelete("feedback.user_id", () =>
-      supabaseAdmin.from("feedback").delete().eq("user_id", userId)
+    await safeDelete("feedbacks.user_id", () =>
+      supabaseAdmin.from("feedbacks").delete().eq("user_id", userId)
     )
-    await safeDelete("feedback.customer_id", () =>
-      supabaseAdmin.from("feedback").delete().eq("customer_id", userId)
+    await safeDelete("feedbacks.target_user_id", () =>
+      supabaseAdmin.from("feedbacks").delete().eq("target_user_id", userId)
     )
-    await safeDelete("feedback.driver_id", () =>
-      supabaseAdmin.from("feedback").delete().eq("driver_id", userId)
+    await safeDelete("feedbacks.driver_id", () =>
+      supabaseAdmin.from("feedbacks").delete().eq("driver_id", userId)
     )
+
     await safeDelete("claims.user_id", () =>
       supabaseAdmin.from("claims").delete().eq("user_id", userId)
+    )
+
+    await safeDelete("driver_request_offers.driver_id", () =>
+      supabaseAdmin.from("driver_request_offers").delete().eq("driver_id", userId)
+    )
+    await safeDelete("driver_dispatch_idempotency.driver_id", () =>
+      supabaseAdmin.from("driver_dispatch_idempotency").delete().eq("driver_id", userId)
     )
 
     await safeDelete("trips.customer_id", () =>
@@ -124,10 +132,6 @@ serve(async (req) => {
     await safeDelete("drivers.id", () =>
       supabaseAdmin.from("drivers").delete().eq("id", userId)
     )
-    await safeDelete("profiles.id", () =>
-      supabaseAdmin.from("profiles").delete().eq("id", userId)
-    )
-
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
     if (deleteError) {
       throw deleteError
