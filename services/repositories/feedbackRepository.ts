@@ -5,6 +5,7 @@ import type {
 } from '../../supabase/functions/_shared/contracts';
 
 type RowPayload = Record<string, unknown>;
+type ProfileTableName = 'drivers' | 'customers';
 
 /**
  * Feedback repository centralizes transport-level access for feedback writes/reads and related profile updates.
@@ -57,25 +58,24 @@ export const insertFeedbackRowWithSelect = async (payload: RowPayload) => {
     .single();
 };
 
-export const insertLegacyFeedbackRowWithSelect = async (payload: RowPayload) => {
+export const fetchProfileRatingSnapshotByTable = async (
+  tableName: ProfileTableName,
+  userId: string,
+) => {
   return supabase
-    .from('feedback')
-    .insert(payload)
-    .select()
-    .single();
-};
-
-export const fetchProfileRatingSnapshot = async (userId: string) => {
-  return supabase
-    .from('profiles')
-    .select('rating, rating_count, completed_orders')
+    .from(tableName)
+    .select('*')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 };
 
-export const updateProfileRatingSnapshot = async (userId: string, updates: RowPayload) => {
+export const updateProfileRatingSnapshotByTable = async (
+  tableName: ProfileTableName,
+  userId: string,
+  updates: RowPayload,
+) => {
   return supabase
-    .from('profiles')
+    .from(tableName)
     .update(updates)
     .eq('id', userId);
 };
@@ -83,15 +83,6 @@ export const updateProfileRatingSnapshot = async (userId: string, updates: RowPa
 export const fetchFeedbackRowsByDriver = async (driverId: string, limit: number) => {
   return supabase
     .from('feedbacks')
-    .select('*')
-    .eq('driver_id', driverId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-};
-
-export const fetchLegacyFeedbackRowsByDriver = async (driverId: string, limit: number) => {
-  return supabase
-    .from('feedback')
     .select('*')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: false })

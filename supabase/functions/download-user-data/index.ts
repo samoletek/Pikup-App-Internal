@@ -170,7 +170,7 @@ serve(async (req) => {
       }
     }
 
-    // 5. Feedbacks — try both table names used in codebase
+    // 5. Feedbacks
     let feedbacks = await safeQuery("feedbacks", () =>
       supabaseAdmin
         .from("feedbacks")
@@ -178,15 +178,6 @@ serve(async (req) => {
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
     )
-    if (feedbacks === null) {
-      feedbacks = await safeQuery("feedback", () =>
-        supabaseAdmin
-          .from("feedback")
-          .select("*")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-      )
-    }
 
     // 6. Claims (customer-only, skip for drivers)
     let claims = null
