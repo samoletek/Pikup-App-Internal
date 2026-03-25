@@ -121,6 +121,8 @@ export type CreatePaymentIntentRequest = {
   userId?: string | null
   paymentMethodId?: string | null
   rideDetails?: Record<string, unknown>
+  destinationAccountId?: string | null
+  applicationFeeAmount?: number | null
 }
 
 export type CreatePaymentIntentResponse = EdgePayload<{

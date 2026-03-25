@@ -60,6 +60,8 @@ serve(async (req) => {
       userId,
       paymentMethodId,
       rideDetails,
+      destinationAccountId,
+      applicationFeeAmount,
     } = await req.json()
 
     if (userId && userId !== user.id) {
@@ -142,13 +144,25 @@ serve(async (req) => {
       }
     }
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntentParams: Record<string, unknown> = {
       amount: normalizedAmount,
       currency: String(currency || "usd").toLowerCase(),
       customer: stripeCustomerId,
       automatic_payment_methods: { enabled: true },
       metadata,
-    })
+    }
+
+    if (destinationAccountId && typeof destinationAccountId === "string") {
+      paymentIntentParams.transfer_data = {
+        destination: destinationAccountId,
+      }
+      const feeAmount = Number(applicationFeeAmount)
+      if (Number.isInteger(feeAmount) && feeAmount >= 0) {
+        paymentIntentParams.application_fee_amount = feeAmount
+      }
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams as any)
 
     return jsonResponse({
       success: true,

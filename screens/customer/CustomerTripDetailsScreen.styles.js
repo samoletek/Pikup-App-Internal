@@ -421,6 +421,74 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },
+  tipDivider: {
+    height: 1,
+    backgroundColor: colors.border.strong,
+    marginVertical: spacing.base,
+  },
+  tipTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: spacing.xs,
+    lineHeight: Math.round(typography.fontSize.base * typography.lineHeight.normal),
+  },
+  tipSubtitle: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.base,
+  },
+  tipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tipBtn: {
+    flexBasis: "30%",
+    flexGrow: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background.primary,
+  },
+  tipBtnSelected: {
+    borderColor: colors.primary,
+    backgroundColor: `${colors.primary}18`,
+  },
+  tipBtnText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  tipBtnTextSelected: {
+    color: colors.primary,
+  },
+  tipBtnAmount: {
+    color: colors.text.subtle,
+    fontSize: typography.fontSize.xs,
+    marginTop: 2,
+  },
+  tipBtnAmountSelected: {
+    color: colors.primary,
+  },
+  tipCustomLink: {
+    color: colors.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+  },
+  tipCustomInput: {
+    backgroundColor: colors.background.primary,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    padding: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+  },
 });
 
 export default styles;
