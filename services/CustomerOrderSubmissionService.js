@@ -57,18 +57,6 @@ const attemptInsurancePurchase = async ({ offerId, premium, purchaseInsurance })
   });
 };
 
-const buildRideDetails = (orderData = {}) => ({
-  scheduleType: orderData?.scheduleType,
-  scheduledDateTime: orderData?.scheduledDateTime,
-  pickup: orderData?.pickup,
-  dropoff: orderData?.dropoff,
-  distance: orderData?.distance,
-  duration: orderData?.duration,
-  vehicleType: orderData?.selectedVehicle?.type,
-  itemsCount: orderData?.items?.length || 0,
-  timestamp: new Date().toISOString(),
-});
-
 const resolveInsuranceForOrder = async ({
   orderData,
   totalAmount,
@@ -141,8 +129,6 @@ export const submitCustomerOrder = async ({
   orderData,
   currentUserId,
   uploadToSupabase,
-  createPaymentIntent,
-  confirmPayment,
   createPickupRequest,
   purchaseInsurance,
   insuranceRetryDelayMs = DEFAULT_INSURANCE_RETRY_DELAY_MS,
@@ -223,8 +209,7 @@ export const submitCustomerOrder = async ({
       insuranceRetryDelayMs,
     });
 
-    const finalAmountInCents = Math.round(finalAmount * 100);
-    if (!Number.isInteger(finalAmountInCents) || finalAmountInCents <= 0) {
+    if (finalAmount <= 0) {
       return failureResult('Invalid order total. Please review your order and try again.', null, {
         notices,
         correlationId: flowContext.correlationId,
@@ -244,30 +229,6 @@ export const submitCustomerOrder = async ({
       );
     }
 
-    const paymentIntentResult = await createPaymentIntent(
-      finalAmountInCents,
-      'usd',
-      buildRideDetails(orderData),
-      selectedPaymentMethod.stripePaymentMethodId
-    );
-    if (!paymentIntentResult.success || !paymentIntentResult.paymentIntent?.client_secret) {
-      return failureResult(paymentIntentResult.error || 'Failed to start payment.', null, {
-        notices,
-        correlationId: flowContext.correlationId,
-      });
-    }
-
-    const paymentResult = await confirmPayment(
-      paymentIntentResult.paymentIntent.client_secret,
-      selectedPaymentMethod.stripePaymentMethodId
-    );
-    if (!paymentResult.success) {
-      return failureResult(paymentResult.error || 'Unable to confirm payment.', null, {
-        notices,
-        correlationId: flowContext.correlationId,
-      });
-    }
-
     const createdRequest = await createPickupRequest({
       pickup: orderData?.pickup,
       dropoff: orderData?.dropoff,
@@ -285,6 +246,7 @@ export const submitCustomerOrder = async ({
           ? orderData?.scheduledDateTime
           : null,
       insurance: insuranceData,
+      selectedPaymentMethodId: selectedPaymentMethod.stripePaymentMethodId,
     });
 
     logFlowInfo('CustomerOrderSubmission', 'order submission succeeded', flowContext);

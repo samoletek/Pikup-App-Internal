@@ -115,3 +115,33 @@ entrypoint = "./functions/get-driver-onboarding-link/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/check-driver-onboarding-status/index.ts"
+
+[functions.authorize-trip-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/authorize-trip-payment/index.ts"
+
+[functions.capture-trip-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/capture-trip-payment/index.ts"
+
+[functions.release-trip-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/release-trip-payment/index.ts"
+
+[functions.create-tip-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/create-tip-payment/index.ts"
+
+[functions.stripe-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/stripe-webhook/index.ts"
+
+[functions.run-monthly-payouts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/run-monthly-payouts/index.ts"

@@ -104,13 +104,16 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
     }
 
     const transferGroup = `instant_payout:${driverId}:${Date.now()}`;
+    const payoutMode = 'instant';
+    const idempotencyKey = `instant_payout:${driverId}:${normalizedAmount.toFixed(2)}:${Date.now()}`;
 
     const { data, error } = await invokeProcessPayout({
       amount: Number(normalizedAmount.toFixed(2)),
       currency: 'usd',
-      connectAccountId,
       transferGroup,
       driverId,
+      mode: payoutMode,
+      idempotencyKey,
     });
 
     if (error) {
@@ -123,13 +126,22 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
     }
 
     const now = new Date().toISOString();
+    const feeAmount = Number(Number(data?.feeAmount || 0).toFixed(2));
+    const netAmount = Number(
+      Number.isFinite(Number(data?.netAmount))
+        ? Number(data.netAmount)
+        : Number((normalizedAmount - feeAmount).toFixed(2))
+    );
     const payoutRecord = {
       id: data.transferId,
       amount: Number(normalizedAmount.toFixed(2)),
+      grossAmount: Number(normalizedAmount.toFixed(2)),
+      feeAmount,
+      netAmount: Number(netAmount.toFixed(2)),
       createdAt: now,
       status: 'processed',
       transferGroup,
-      kind: 'instant',
+      kind: payoutMode,
     };
 
     const currentPayouts = Array.isArray(metadata.payouts) ? metadata.payouts : [];
@@ -151,6 +163,8 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
       transferId: data.transferId,
       payout: payoutRecord,
       availableBalance: nextAvailableBalance,
+      feeAmount: payoutRecord.feeAmount,
+      netAmount: payoutRecord.netAmount,
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to process instant payout');
@@ -167,9 +181,9 @@ export const processTripPayout = async (payoutData) => {
     const { data, error } = await invokeProcessPayout({
       amount: payoutData.amount,
       currency: 'usd',
-      connectAccountId: payoutData.connectAccountId,
       transferGroup: payoutData.tripId,
       driverId: payoutData.driverId,
+      mode: 'scheduled',
     });
 
     if (error) {

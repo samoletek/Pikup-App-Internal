@@ -12,6 +12,7 @@ import { getRequestById } from './tripLifecycleUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { failureResult, successResult } from './contracts/result';
+import { releaseTripPayment } from './tripPaymentLifecycleService';
 
 const PAYMENT_SERVICE_URL = appConfig.paymentService.baseUrl;
 
@@ -29,6 +30,19 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
         reason,
         driverLocation: orderData.driverLocation || orderData.driver_location || null,
       });
+    }
+
+    const releaseResult = await releaseTripPayment({
+      tripId: orderId,
+      reason,
+      idempotencyKey: `trip_release:${orderId}:${reason}`,
+    });
+
+    if (!releaseResult.success && releaseResult.errorCode !== 'missing_authorization') {
+      return failureResult(
+        releaseResult.error || 'Failed to release trip payment authorization',
+        releaseResult.errorCode || null,
+      );
     }
 
     await persistTripCancellation({

@@ -43,8 +43,6 @@ export default function useCustomerHomeFlow({
   setPendingBooking,
   cancelOrder,
   uploadToSupabase,
-  createPaymentIntent,
-  confirmPayment,
   createPickupRequest,
   onOrderCreated,
 }) {
@@ -246,8 +244,6 @@ export default function useCustomerHomeFlow({
         },
         currentUserId,
         uploadToSupabase,
-        createPaymentIntent,
-        confirmPayment,
         createPickupRequest,
       });
 
@@ -279,8 +275,6 @@ export default function useCustomerHomeFlow({
       userLocation,
       currentUserId,
       uploadToSupabase,
-      createPaymentIntent,
-      confirmPayment,
       createPickupRequest,
       setPendingBooking,
       onOrderCreated,

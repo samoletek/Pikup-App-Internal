@@ -17,7 +17,6 @@ import {
   useStorageActions,
   useTripActions,
 } from "../../contexts/AuthContext";
-import { usePayment } from "../../contexts/PaymentContext";
 import CustomerOrderModal from "../../components/CustomerOrderModal";
 import PhoneVerificationModal from "../../components/PhoneVerificationModal";
 import PendingBookingSearchSheet from "../../components/customer/PendingBookingSearchSheet";
@@ -39,7 +38,6 @@ export default function CustomerHomeScreen({ navigation }) {
   const { getUserPickupRequests, createPickupRequest, cancelOrder } = useTripActions();
   const { uploadToSupabase } = useStorageActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
-  const { createPaymentIntent, confirmPayment } = usePayment();
 
   const {
     activeDelivery,
@@ -75,8 +73,6 @@ export default function CustomerHomeScreen({ navigation }) {
     setPendingBooking,
     cancelOrder,
     uploadToSupabase,
-    createPaymentIntent,
-    confirmPayment,
     createPickupRequest,
   });
 

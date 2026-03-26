@@ -142,6 +142,18 @@ export const mapTripFromDb = (trip) => {
       initials: driverDisplay.initials,
     },
     driverLocation: trip.driverLocation || toLocation(trip.driver_location),
+    bookingPaymentMethodId:
+      trip.bookingPaymentMethodId ||
+      trip.booking_payment_method_id ||
+      null,
+    bookingPaymentIntentId:
+      trip.bookingPaymentIntentId ||
+      trip.booking_payment_intent_id ||
+      null,
+    bookingPaymentStatus:
+      trip.bookingPaymentStatus ||
+      trip.booking_payment_status ||
+      null,
 
     // Insurance data (mapped for CustomerClaimsScreen compatibility)
     insurance: {

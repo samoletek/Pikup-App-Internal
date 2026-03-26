@@ -210,7 +210,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
           <Text style={styles.payoutBalance}>
             Available Balance: ${loading ? '---' : driverStats.availableBalance.toFixed(2)}
           </Text>
-          <Text style={styles.payoutNote}>Auto-deposit every Monday</Text>
+          <Text style={styles.payoutNote}>Auto-deposit monthly on the 25th (11:00 AM ET)</Text>
 
           <AppButton
             title={

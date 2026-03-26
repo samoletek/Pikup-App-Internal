@@ -1,25 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import Stripe from "https://esm.sh/stripe@12.0.0?target=deno"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import {
+  HttpError,
+  buildStripeClient,
+  buildSupabaseClients,
+  corsHeaders,
+  getAuthenticatedUser,
+  jsonResponse,
+  mapUnexpectedError,
+  requireAuthHeader,
+} from "../_shared/paymentHelpers.ts"
+import { processDriverPayout } from "../_shared/payoutHelpers.ts"
 
-const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? ""
-const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? ""
-const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-
-const stripe = new Stripe(stripeKey, {
-  apiVersion: "2022-11-15",
-})
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-}
-
-const jsonResponse = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  })
+const resolveString = (value: unknown) => String(value || "").trim()
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,63 +19,64 @@ serve(async (req) => {
   }
 
   try {
-    if (!stripeKey || !supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Missing required server configuration.")
-    }
-
-    const authHeader = req.headers.get("Authorization")
-    if (!authHeader) {
-      return jsonResponse({ success: false, error: "Unauthorized" }, 401)
-    }
-
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseClient.auth.getUser()
-
-    if (userError || !user) {
-      return jsonResponse({ success: false, error: "Unauthorized" }, 401)
-    }
+    const authHeader = requireAuthHeader(req)
+    const { authClient, adminClient } = buildSupabaseClients(authHeader)
+    const user = await getAuthenticatedUser(authClient)
+    const stripe = buildStripeClient()
 
     const {
       amount,
       currency = "usd",
-      connectAccountId,
       transferGroup,
       driverId,
+      mode = "instant",
+      idempotencyKey,
     } = await req.json()
 
-    const normalizedDriverId = driverId || user.id
+    const normalizedDriverId = resolveString(driverId) || user.id
     if (normalizedDriverId !== user.id) {
-      return jsonResponse({ success: false, error: "Forbidden" }, 403)
+      throw new HttpError("Forbidden", 403)
     }
 
-    if (!connectAccountId) {
-      return jsonResponse({ success: false, error: "Missing 'connectAccountId'" }, 400)
-    }
+    const normalizedMode = resolveString(mode).toLowerCase() === "scheduled"
+      ? "scheduled"
+      : "instant"
 
-    const normalizedAmount = Number(amount)
-    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
-      return jsonResponse({ success: false, error: "Invalid payout amount" }, 400)
-    }
+    const resolvedIdempotencyKey = resolveString(idempotencyKey) ||
+      resolveString(transferGroup) ||
+      `payout:${normalizedDriverId}:${normalizedMode}:${Date.now()}`
 
-    const transfer = await stripe.transfers.create({
-      amount: Math.round(normalizedAmount * 100),
-      currency: String(currency || "usd").toLowerCase(),
-      destination: connectAccountId,
-      transfer_group: transferGroup || undefined,
-      metadata: {
-        driver_id: normalizedDriverId,
-      },
+    const payoutResult = await processDriverPayout({
+      adminClient,
+      stripe,
+      driverId: normalizedDriverId,
+      amount: Number(amount),
+      currency: resolveString(currency) || "usd",
+      transferGroup: resolveString(transferGroup) || null,
+      mode: normalizedMode,
+      idempotencyKey: resolvedIdempotencyKey,
+      requestedBy: normalizedDriverId,
     })
 
-    return jsonResponse({ success: true, transferId: transfer.id })
+    return jsonResponse({
+      success: true,
+      transferId: payoutResult.transferId,
+      payoutId: payoutResult.payoutId,
+      feeAmount: payoutResult.feeAmount,
+      netAmount: payoutResult.netAmount,
+      grossAmount: payoutResult.grossAmount,
+      destinationAccountId: payoutResult.destinationAccountId,
+      deduplicated: payoutResult.deduplicated,
+    })
   } catch (error) {
-    console.error("Error processing payout:", error)
-    return jsonResponse({ success: false, error: error.message }, 400)
+    const normalized = mapUnexpectedError(error)
+    return jsonResponse(
+      {
+        success: false,
+        error: normalized.message,
+        code: normalized.code,
+      },
+      normalized.status,
+    )
   }
 })

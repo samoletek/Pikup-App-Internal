@@ -183,6 +183,37 @@ export const acceptPendingTripForDriver = async ({
     .or(driverMatchOrNull);
 };
 
+export const revertAcceptedTripToPendingForDriver = async ({
+  requestId,
+  driverId,
+  acceptedStatus,
+  pendingStatus,
+  updatedAt,
+}: {
+  requestId: string;
+  driverId: string;
+  acceptedStatus: string;
+  pendingStatus: string;
+  updatedAt: string;
+}) => {
+  return supabase
+    .from('trips')
+    .update({
+      status: pendingStatus,
+      driver_id: null,
+      accepted_at: null,
+      driver_checkin_status: null,
+      driver_checkin_required_at: null,
+      driver_checkin_deadline_at: null,
+      driver_checkin_confirmed_at: null,
+      driver_checkin_declined_at: null,
+      updated_at: updatedAt,
+    })
+    .eq('id', requestId)
+    .eq('driver_id', driverId)
+    .eq('status', acceptedStatus);
+};
+
 export const invokeTripRpc = async (rpcName: string, payload: Record<string, unknown>) => {
   return supabase.rpc(rpcName, payload);
 };

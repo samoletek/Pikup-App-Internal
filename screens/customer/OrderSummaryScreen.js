@@ -45,12 +45,9 @@ export default function OrderSummaryScreen({ navigation, route }) {
   const [processing, setProcessing] = useState(false);
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [priceBreakdownAnim] = useState(new Animated.Value(0));
-
   const {
     defaultPaymentMethod,
     paymentMethods,
-    createPaymentIntent,
-    confirmPayment,
     loading: paymentLoading,
   } = usePayment();
 
@@ -88,44 +85,14 @@ export default function OrderSummaryScreen({ navigation, route }) {
     setProcessing(true);
 
     try {
-      const pricing = getPricingData(selectedVehicle);
-      const rideDetails = {
-        vehicleType: selectedVehicle?.type,
-        pickup: selectedLocations?.pickup,
-        dropoff: selectedLocations?.dropoff,
-        distance,
-        duration,
-        timestamp: new Date().toISOString(),
-      };
-
-      const paymentIntentResult = await createPaymentIntent(
-        Math.round(parseFloat(pricing.total) * 100),
-        'usd',
-        rideDetails
-      );
-
-      if (!paymentIntentResult.success) {
-        Alert.alert('Payment Error', paymentIntentResult.error || 'Failed to create payment.');
-        return;
-      }
-
-      const paymentResult = await confirmPayment(
-        paymentIntentResult.paymentIntent.client_secret,
-        defaultPaymentMethod?.stripePaymentMethodId
-      );
-
-      if (!paymentResult.success) {
-        throw new Error(paymentResult.error);
-      }
-
       navigation.replace('CustomerTabs', {
         screen: 'Home',
       });
     } catch (error) {
-      logger.error('OrderSummaryScreen', 'Payment failed', error);
+      logger.error('OrderSummaryScreen', 'Order confirmation failed', error);
       Alert.alert(
-        'Payment Issue',
-        error.message || "We couldn't process your payment. Please try again.",
+        'Order Issue',
+        error.message || "We couldn't confirm your order. Please try again.",
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Try Again', onPress: () => setTimeout(() => handleSchedule(), 500) },

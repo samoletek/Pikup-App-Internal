@@ -9,10 +9,12 @@ import {
 import { findDriverScheduleConflictForTrip } from './tripDispatchUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { authorizeTripPayment } from './tripPaymentLifecycleService';
 import { fetchProfileByTableAndUserId } from './repositories/authRepository';
 import {
   acceptPendingTripForDriver,
   fetchTripColumnsByIdMaybeSingle,
+  revertAcceptedTripToPendingForDriver,
   fetchTripsByDriverIdAndStatuses,
 } from './repositories/tripRepository';
 
@@ -220,6 +222,48 @@ const ensureNoDriverScheduleConflict = async ({ requestSnapshot, driverId }) => 
   throw createRequestUnavailableError('Request conflicts with your current schedule');
 };
 
+const ensureTripPaymentAuthorization = async ({ acceptedRequest, driverId }) => {
+  const requestId = String(acceptedRequest?.id || '').trim();
+  if (!requestId) {
+    throw createRequestUnavailableError('Request is no longer available');
+  }
+
+  const authorizationResult = await authorizeTripPayment({
+    trip: acceptedRequest,
+    driverId,
+    idempotencyKey: `trip_hold:${requestId}:${driverId}`,
+  });
+
+  if (authorizationResult?.success) {
+    return;
+  }
+
+  logger.warn('TripDriverAcceptance', 'Payment authorization failed after request acceptance', {
+    requestId,
+    driverId,
+    error: authorizationResult?.error || null,
+    errorCode: authorizationResult?.errorCode || null,
+  });
+
+  try {
+    await revertAcceptedTripToPendingForDriver({
+      requestId,
+      driverId,
+      acceptedStatus: toDbTripStatus(TRIP_STATUS.ACCEPTED),
+      pendingStatus: toDbTripStatus(TRIP_STATUS.PENDING),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (revertError) {
+    const normalized = normalizeError(revertError, 'Failed to revert request after payment authorization error');
+    logger.error('TripDriverAcceptance', 'Failed to revert request after payment authorization error', normalized, revertError);
+  }
+
+  throw createRequestUnavailableError(
+    authorizationResult?.error ||
+      'Customer payment authorization failed. Request was returned to pool.',
+  );
+};
+
 export const acceptRequestForDriver = async ({ requestId, currentUser }) => {
   if (!currentUser) {
     throw new Error('User not authenticated');
@@ -272,6 +316,7 @@ export const acceptRequestForDriver = async ({ requestId, currentUser }) => {
   }
 
   ensureAcceptedByDriver({ acceptedRequest, driverId });
+  await ensureTripPaymentAuthorization({ acceptedRequest, driverId });
   logger.info('TripDriverAcceptance', 'Request accepted successfully', { requestId });
 
   await ensureConversationForAcceptedRequest({

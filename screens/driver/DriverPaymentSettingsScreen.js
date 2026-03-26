@@ -2,6 +2,7 @@ import React from 'react';
 import {
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,7 +39,13 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     refreshingOnboarding,
     saveToggle,
     ensureStripeOnboarding,
-    handleInstantPayout,
+    handleInstantPayoutAll,
+    handleInstantPayoutAmount,
+    payoutAmountInput,
+    payoutAmountValue,
+    payoutFeeEstimate,
+    payoutNetEstimate,
+    updatePayoutAmountInput,
     toMoney,
   } = useDriverPaymentSettingsData({
     createDriverConnectAccount,
@@ -138,15 +145,56 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             <Text style={styles.metricValue}>{toMoney(paymentData?.availableBalance)}</Text>
 
             <AppButton
-              title={processingPayout ? 'Processing...' : 'Cash Out Now'}
-              onPress={handleInstantPayout}
+              title={processingPayout ? 'Processing...' : 'Withdraw All'}
+              onPress={handleInstantPayoutAll}
               loading={processingPayout}
               disabled={processingPayout || Number(paymentData?.availableBalance || 0) <= 0}
               style={styles.topButton}
             />
 
+            <Text style={styles.metricLabel}>Custom Amount</Text>
+            <View style={styles.payoutInputRow}>
+              <Text style={styles.payoutCurrencyPrefix}>$</Text>
+              <TextInput
+                style={styles.payoutInput}
+                placeholder="0.00"
+                placeholderTextColor={colors.text.muted}
+                keyboardType="decimal-pad"
+                value={payoutAmountInput}
+                onChangeText={updatePayoutAmountInput}
+              />
+            </View>
+
+            <View style={styles.payoutBreakdownCard}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.breakdownLabel}>Gross</Text>
+                <Text style={styles.breakdownValue}>{toMoney(payoutAmountValue)}</Text>
+              </View>
+              <View style={styles.rowBetween}>
+                <Text style={styles.breakdownLabel}>Fee</Text>
+                <Text style={styles.breakdownValue}>{toMoney(payoutFeeEstimate)}</Text>
+              </View>
+              <View style={styles.rowBetween}>
+                <Text style={styles.breakdownLabel}>Net</Text>
+                <Text style={styles.breakdownValueStrong}>{toMoney(payoutNetEstimate)}</Text>
+              </View>
+            </View>
+
+            <AppButton
+              title={processingPayout ? 'Processing...' : 'Withdraw Amount'}
+              onPress={handleInstantPayoutAmount}
+              loading={processingPayout}
+              disabled={
+                processingPayout ||
+                Number(paymentData?.availableBalance || 0) <= 0 ||
+                Number(payoutAmountValue || 0) <= 0 ||
+                Number(payoutAmountValue || 0) > Number(paymentData?.availableBalance || 0)
+              }
+              style={styles.topButton}
+            />
+
             <Text style={styles.noteText}>
-              Instant payout sends your available balance to Stripe Connect.
+              Instant payout sends funds to your Stripe payout destination.
             </Text>
           </View>
         </View>

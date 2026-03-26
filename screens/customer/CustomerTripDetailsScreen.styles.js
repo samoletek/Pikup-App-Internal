@@ -480,14 +480,32 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.medium,
   },
-  tipCustomInput: {
+  tipCustomInputRow: {
+    marginTop: spacing.xs,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.background.primary,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  tipCurrencyPrefix: {
     color: colors.text.primary,
     fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+    marginRight: spacing.xs,
+  },
+  tipCustomInput: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+  },
+  tipCapText: {
+    marginTop: spacing.sm,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.xs,
   },
 });
 

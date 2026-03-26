@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { normalizeBadgeIds, normalizeRating } from '../screens/customer/CustomerTripDetailsScreen.utils';
 import { getLatestTripFeedbackByUser } from '../services/profileFeedbackService';
-import { creditDriverTip } from '../services/driverEarningsService';
+import { createTripTipPayment } from '../services/tripPaymentLifecycleService';
 import { logger } from '../services/logger';
 
 const TIP_PERCENT_PRESETS = [10, 15, 20];
@@ -14,9 +14,6 @@ export default function useCustomerTripRating({
   refreshProfile,
   submitTripRating,
   tripId,
-  confirmPayment,
-  defaultPaymentMethod,
-  createPaymentIntent,
   orderTotal,
 }) {
   const [rating, setRating] = useState(0);
@@ -106,14 +103,23 @@ export default function useCustomerTripRating({
   }, []);
 
   const updateCustomTip = useCallback((value) => {
-    setCustomTip(value);
+    const normalizedInput = String(value || '').replace(/[^\d.]/g, '');
+    const [integerPart = '', ...decimalParts] = normalizedInput.split('.');
+    const normalizedDecimal = decimalParts.join('').slice(0, 2);
+    const nextValue = decimalParts.length > 0
+      ? `${integerPart}.${normalizedDecimal}`
+      : integerPart;
+
+    setCustomTip(nextValue);
     setTip(null);
   }, []);
 
   const safeOrderTotal = Number.isFinite(orderTotal) && orderTotal > 0 ? orderTotal : 0;
   const tipFromPercent = typeof tip === 'number' ? Math.round(safeOrderTotal * tip / 100 * 100) / 100 : 0;
-  const resolvedTipAmount = customTip ? Number(customTip) : tipFromPercent;
+  const customTipAmount = customTip ? Number(customTip) : 0;
+  const resolvedTipAmount = customTip ? customTipAmount : tipFromPercent;
   const chosenTip = Number.isFinite(resolvedTipAmount) && resolvedTipAmount >= 0 ? resolvedTipAmount : 0;
+  const maxTipAmount = Math.round(safeOrderTotal * 2 * 100) / 100;
 
   const tipPresets = TIP_PERCENT_PRESETS.map((pct) => ({
     percent: pct,
@@ -135,38 +141,32 @@ export default function useCustomerTripRating({
       setIsSubmittingRating(true);
 
       if (chosenTip > 0) {
-        if (!defaultPaymentMethod?.stripePaymentMethodId) {
-          Alert.alert('Payment method required', 'Please add a payment method before sending a tip.');
+        if (maxTipAmount <= 0) {
+          Alert.alert('Tip unavailable', 'Tip is unavailable for this trip amount.');
           setIsSubmittingRating(false);
           return;
         }
 
-        const tipAmountInCents = Math.round(chosenTip * 100);
-        const createTipIntentResult = await createPaymentIntent(tipAmountInCents, 'usd', {
-          type: 'tip',
-          requestId: tripId,
-          driverId,
-          customerId: currentUserId,
+        if (chosenTip > maxTipAmount) {
+          Alert.alert(
+            'Tip limit exceeded',
+            `Tip cannot exceed $${maxTipAmount.toFixed(2)} for this trip.`,
+          );
+          setIsSubmittingRating(false);
+          return;
+        }
+
+        const tipResult = await createTripTipPayment({
+          tripId,
+          tipAmount: chosenTip,
+          idempotencyKey: `trip_tip:${tripId}:${currentUserId}:${Math.round(chosenTip * 100)}`,
         });
 
-        if (!createTipIntentResult.success || !createTipIntentResult.paymentIntent?.client_secret) {
-          Alert.alert('Tip Payment Failed', createTipIntentResult.error || 'Unable to start tip payment');
+        if (!tipResult.success) {
+          Alert.alert('Tip Payment Failed', tipResult.error || 'Unable to process tip payment');
           setIsSubmittingRating(false);
           return;
         }
-
-        const paymentResult = await confirmPayment(
-          createTipIntentResult.paymentIntent.client_secret,
-          defaultPaymentMethod.stripePaymentMethodId
-        );
-
-        if (!paymentResult.success) {
-          Alert.alert('Tip Payment Failed', paymentResult.error || 'Unable to process tip payment');
-          setIsSubmittingRating(false);
-          return;
-        }
-
-        await creditDriverTip(driverId, chosenTip);
       }
 
       const result = await submitTripRating({
@@ -175,7 +175,6 @@ export default function useCustomerTripRating({
         toUserType: 'driver',
         rating,
         badges: selectedBadges,
-        tip: chosenTip,
       });
 
       await refreshProfile?.();
@@ -207,13 +206,11 @@ export default function useCustomerTripRating({
     }
   }, [
     chosenTip,
-    confirmPayment,
-    createPaymentIntent,
     currentUserId,
-    defaultPaymentMethod?.stripePaymentMethodId,
     driverId,
     isTripCompleted,
     loadExistingTripFeedback,
+    maxTipAmount,
     rating,
     refreshProfile,
     selectedBadges,
@@ -239,5 +236,6 @@ export default function useCustomerTripRating({
     openCustomTip,
     updateCustomTip,
     tipPresets,
+    maxTipAmount,
   };
 }

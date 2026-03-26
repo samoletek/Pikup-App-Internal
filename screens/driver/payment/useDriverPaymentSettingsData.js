@@ -6,6 +6,17 @@ const toMoney = (value) => {
   return `$${amount.toFixed(2)}`;
 };
 
+const normalizeMoneyInput = (value) => {
+  const cleaned = String(value || '').replace(/[^\d.]/g, '');
+  const [integerPart = '', ...decimalParts] = cleaned.split('.');
+  const decimalPart = decimalParts.join('').slice(0, 2);
+  return decimalParts.length > 0
+    ? `${integerPart}.${decimalPart}`
+    : integerPart;
+};
+
+const roundToCents = (value) => Number((Number(value || 0)).toFixed(2));
+
 export default function useDriverPaymentSettingsData({
   createDriverConnectAccount,
   currentUser,
@@ -21,6 +32,7 @@ export default function useDriverPaymentSettingsData({
   const [processingPayout, setProcessingPayout] = useState(false);
   const [refreshingOnboarding, setRefreshingOnboarding] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
+  const [payoutAmountInput, setPayoutAmountInput] = useState('');
 
   const loadPaymentData = useCallback(async () => {
     if (!currentUserId) {
@@ -60,6 +72,8 @@ export default function useDriverPaymentSettingsData({
         canReceivePayments,
         instantPay: metadata.instantPay !== false,
         notificationsEnabled: metadata.notificationsEnabled !== false,
+        instantPayoutFeeBps: Number(metadata.instantPayoutFeeBps || 0),
+        instantPayoutFeeFlat: Number(metadata.instantPayoutFeeFlat || 0),
         weeklyTotal: Number(stats?.weeklyEarnings || 0),
         availableBalance: Number(stats?.availableBalance || 0),
         pendingBalance: Math.max(
@@ -150,7 +164,31 @@ export default function useDriverPaymentSettingsData({
     paymentData?.connectAccountId,
   ]);
 
-  const handleInstantPayout = useCallback(async () => {
+  const payoutAmountValue = useMemo(() => {
+    const parsed = Number(payoutAmountInput);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+    return roundToCents(parsed);
+  }, [payoutAmountInput]);
+
+  const payoutFeeEstimate = useMemo(() => {
+    if (!paymentData || payoutAmountValue <= 0) {
+      return 0;
+    }
+
+    const feeBps = Number(paymentData.instantPayoutFeeBps || 0);
+    const feeFlat = Number(paymentData.instantPayoutFeeFlat || 0);
+    const byPercent = payoutAmountValue * (feeBps / 10000);
+    const estimatedFee = Math.max(0, byPercent + feeFlat);
+    return roundToCents(estimatedFee);
+  }, [paymentData, payoutAmountValue]);
+
+  const payoutNetEstimate = useMemo(() => {
+    return Math.max(0, roundToCents(payoutAmountValue - payoutFeeEstimate));
+  }, [payoutAmountValue, payoutFeeEstimate]);
+
+  const openPayoutConfirmation = useCallback(async (amount) => {
     if (!currentUserId || !paymentData) return;
 
     if (!paymentData.connectAccountId) {
@@ -163,6 +201,25 @@ export default function useDriverPaymentSettingsData({
       return;
     }
 
+    const grossAmount = roundToCents(amount);
+    if (!Number.isFinite(grossAmount) || grossAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Enter a payout amount greater than $0.00.');
+      return;
+    }
+
+    if (grossAmount > paymentData.availableBalance) {
+      Alert.alert(
+        'Insufficient Balance',
+        `You can withdraw up to ${toMoney(paymentData.availableBalance)}.`,
+      );
+      return;
+    }
+
+    const feeBps = Number(paymentData.instantPayoutFeeBps || 0);
+    const feeFlat = Number(paymentData.instantPayoutFeeFlat || 0);
+    const estimatedFee = roundToCents(Math.max(0, grossAmount * (feeBps / 10000) + feeFlat));
+    const estimatedNet = roundToCents(Math.max(0, grossAmount - estimatedFee));
+
     if (paymentData.availableBalance <= 0) {
       Alert.alert('No Balance', 'No available balance for payout.');
       return;
@@ -170,7 +227,7 @@ export default function useDriverPaymentSettingsData({
 
     Alert.alert(
       'Instant Payout',
-      `Transfer ${toMoney(paymentData.availableBalance)} now?`,
+      `Gross: ${toMoney(grossAmount)}\nFee: ${toMoney(estimatedFee)}\nNet: ${toMoney(estimatedNet)}`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -180,12 +237,18 @@ export default function useDriverPaymentSettingsData({
             try {
               const result = await requestInstantPayout?.(
                 currentUserId,
-                paymentData.availableBalance
+                grossAmount
               );
               if (!result?.success) {
                 throw new Error(result?.error || 'Payout failed');
               }
-              Alert.alert('Success', 'Payout submitted successfully.');
+              const settledFee = Number(result?.feeAmount || 0);
+              const settledNet = Number(result?.netAmount || 0);
+              Alert.alert(
+                'Success',
+                `Payout submitted.\nGross: ${toMoney(grossAmount)}\nFee: ${toMoney(settledFee)}\nNet: ${toMoney(settledNet || Math.max(0, grossAmount - settledFee))}`,
+              );
+              setPayoutAmountInput('');
               await loadPaymentData();
             } catch (error) {
               Alert.alert('Payout Error', error?.message || 'Unable to process payout.');
@@ -198,6 +261,21 @@ export default function useDriverPaymentSettingsData({
     );
   }, [currentUserId, loadPaymentData, paymentData, requestInstantPayout]);
 
+  const handleInstantPayoutAll = useCallback(async () => {
+    if (!paymentData) {
+      return;
+    }
+    await openPayoutConfirmation(paymentData.availableBalance);
+  }, [openPayoutConfirmation, paymentData]);
+
+  const handleInstantPayoutAmount = useCallback(async () => {
+    await openPayoutConfirmation(payoutAmountValue);
+  }, [openPayoutConfirmation, payoutAmountValue]);
+
+  const updatePayoutAmountInput = useCallback((value) => {
+    setPayoutAmountInput(normalizeMoneyInput(value));
+  }, []);
+
   return {
     loading,
     onboardingStatusText,
@@ -206,7 +284,13 @@ export default function useDriverPaymentSettingsData({
     refreshingOnboarding,
     saveToggle,
     ensureStripeOnboarding,
-    handleInstantPayout,
+    handleInstantPayoutAll,
+    handleInstantPayoutAmount,
+    payoutAmountInput,
+    payoutAmountValue,
+    payoutFeeEstimate,
+    payoutNetEstimate,
+    updatePayoutAmountInput,
     toMoney,
   };
 }

@@ -21,6 +21,7 @@ import { updateDriverRowById } from './repositories/paymentRepository';
 import {
   updateTripById,
 } from './repositories/tripRepository';
+import { captureTripPayment } from './tripPaymentLifecycleService';
 
 const STATUS_TIMESTAMP_FIELDS = Object.freeze({
   [TRIP_STATUS.IN_PROGRESS]: 'in_progress_at',
@@ -215,6 +216,15 @@ export const finishDelivery = async (
     await completeDelivery(requestId, {
       completed_by: currentUser?.id,
     });
+
+    const captureResult = await captureTripPayment({
+      tripId: requestId,
+      idempotencyKey: `trip_capture:${requestId}`,
+    });
+
+    if (!captureResult.success && captureResult.errorCode !== 'missing_authorization') {
+      throw new Error(captureResult.error || 'Failed to capture trip payment');
+    }
 
     try {
       const trip = await getRequestById(requestId);

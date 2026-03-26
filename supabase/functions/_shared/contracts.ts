@@ -130,6 +130,58 @@ export type CreatePaymentIntentResponse = EdgePayload<{
   paymentIntentId?: string | null
 }>
 
+export type AuthorizeTripPaymentRequest = {
+  tripId: string
+  customerId?: string | null
+  paymentMethodId: string
+  amountCents: number
+  currency?: "usd"
+  idempotencyKey?: string | null
+}
+
+export type AuthorizeTripPaymentResponse = EdgePayload<{
+  success: true
+  paymentIntentId: string
+  status: string
+}>
+
+export type CaptureTripPaymentRequest = {
+  tripId: string
+  idempotencyKey?: string | null
+}
+
+export type CaptureTripPaymentResponse = EdgePayload<{
+  success: true
+  paymentIntentId: string
+  chargeId?: string | null
+  status: string
+}>
+
+export type ReleaseTripPaymentRequest = {
+  tripId: string
+  reason?: string | null
+  idempotencyKey?: string | null
+}
+
+export type ReleaseTripPaymentResponse = EdgePayload<{
+  success: true
+  paymentIntentId?: string | null
+  status: string
+}>
+
+export type CreateTipPaymentRequest = {
+  tripId: string
+  tipAmountCents: number
+  idempotencyKey?: string | null
+}
+
+export type CreateTipPaymentResponse = EdgePayload<{
+  success: true
+  tipPaymentIntentId: string
+  amount: number
+  status: string
+}>
+
 export type GetPaymentMethodsResponse = EdgePayload<{
   paymentMethods: Array<Record<string, unknown>>
 }>
@@ -284,14 +336,22 @@ export type SubmitFeedbackResponse = EdgePayload<{
 export type ProcessPayoutRequest = {
   amount: number
   currency: string
-  connectAccountId: string
+  connectAccountId?: string | null
   transferGroup: string
   driverId: string
+  idempotencyKey?: string | null
+  mode?: "instant" | "scheduled"
 }
 
 export type ProcessPayoutResponse = EdgePayload<{
   success: true
   transferId: string
+  payoutId?: string | null
+  feeAmount?: number | null
+  netAmount?: number | null
+  grossAmount?: number | null
+  destinationAccountId?: string | null
+  deduplicated?: boolean
 }>
 
 export type PublicTripParticipantProfile = {

@@ -42,7 +42,7 @@ export default function useDriverEarningsPayoutActions({
 
     Alert.alert(
       "Instant Payout",
-      `Cash out $${driverStats.availableBalance.toFixed(2)}? This will be processed immediately.`,
+      `Gross: $${driverStats.availableBalance.toFixed(2)}\nFee: $0.00\nNet: $${driverStats.availableBalance.toFixed(2)}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -56,7 +56,16 @@ export default function useDriverEarningsPayoutActions({
               );
 
               if (result?.success) {
-                Alert.alert("Success", "Your payout has been processed successfully!");
+                const feeAmount = Number(result?.feeAmount || 0);
+                const netAmount = Number(
+                  Number.isFinite(Number(result?.netAmount))
+                    ? Number(result.netAmount)
+                    : driverStats.availableBalance - feeAmount
+                );
+                Alert.alert(
+                  "Success",
+                  `Payout processed.\nGross: $${driverStats.availableBalance.toFixed(2)}\nFee: $${feeAmount.toFixed(2)}\nNet: $${Math.max(0, netAmount).toFixed(2)}`
+                );
                 await loadDriverData();
               } else {
                 throw new Error(result?.error || "Payout failed");
@@ -96,7 +105,7 @@ export default function useDriverEarningsPayoutActions({
 
     Alert.alert(
       "Payout Account",
-      `Status: ${driverProfile?.canReceivePayments ? "Active" : "Under Review"}\nAvailable Balance: $${driverStats.availableBalance.toFixed(2)}\nAuto-deposit: Every Monday`,
+      `Status: ${driverProfile?.canReceivePayments ? "Active" : "Under Review"}\nAvailable Balance: $${driverStats.availableBalance.toFixed(2)}\nAuto-deposit: Monthly on the 25th (11:00 AM ET)`,
       [{ text: "OK", style: "default" }]
     );
   }, [

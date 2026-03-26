@@ -99,8 +99,6 @@ serve(async (req) => {
     const tripId = toTripIdIfUuid(requestId)
 
     const normalizedRating = toSafeRating(payload?.rating)
-    const tipRaw = Number(payload?.tip ?? 0)
-    const tipAmount = Number.isFinite(tipRaw) && tipRaw > 0 ? tipRaw : 0
     const badges = toSafeBadges(payload?.badges)
 
     const inferredTargetRole = payload?.driverId ? 'driver' : 'customer'
@@ -149,7 +147,7 @@ serve(async (req) => {
       user_id: user.id,
       driver_id: targetRole === 'driver' ? targetUserId : null,
       rating: normalizedRating,
-      tip_amount: tipAmount,
+      tip_amount: 0,
       comment: feedbackComment,
       source_role: sourceRole,
       target_role: targetRole,
@@ -184,7 +182,7 @@ serve(async (req) => {
         user_id: user.id,
         driver_id: targetRole === 'driver' ? targetUserId : null,
         rating: normalizedRating,
-        tip_amount: tipAmount,
+        tip_amount: 0,
         comment:
           feedbackComment ||
           (badges.length > 0 ? `Badges: ${badges.join(', ')}` : null),

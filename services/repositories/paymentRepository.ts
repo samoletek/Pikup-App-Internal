@@ -5,8 +5,14 @@ import type {
   CreateDriverConnectAccountRequest,
   CreateVerificationSessionRequest,
   CreateVerificationSessionResponse,
+  CreateTipPaymentRequest,
+  CreateTipPaymentResponse,
   CreatePaymentIntentRequest,
   CreatePaymentIntentResponse,
+  AuthorizeTripPaymentRequest,
+  AuthorizeTripPaymentResponse,
+  CaptureTripPaymentRequest,
+  CaptureTripPaymentResponse,
   DriverOnboardingLinkRequest,
   DriverOnboardingLinkResponse,
   DriverOnboardingStatusRequest,
@@ -16,6 +22,8 @@ import type {
   GetVerificationDataResponse,
   ProcessPayoutResponse,
   ProcessPayoutRequest,
+  ReleaseTripPaymentRequest,
+  ReleaseTripPaymentResponse,
   TripPriceEstimateRequest,
   TripPriceEstimateResponse,
   VerifyVehicleRequest,
@@ -88,6 +96,30 @@ export const invokeGetPaymentMethods = async () => {
 
 export const invokeCreatePaymentIntent = async (payload: CreatePaymentIntentRequest) => {
   return supabase.functions.invoke<CreatePaymentIntentResponse>('create-payment-intent', {
+    body: payload,
+  });
+};
+
+export const invokeAuthorizeTripPayment = async (payload: AuthorizeTripPaymentRequest) => {
+  return supabase.functions.invoke<AuthorizeTripPaymentResponse>('authorize-trip-payment', {
+    body: payload,
+  });
+};
+
+export const invokeCaptureTripPayment = async (payload: CaptureTripPaymentRequest) => {
+  return supabase.functions.invoke<CaptureTripPaymentResponse>('capture-trip-payment', {
+    body: payload,
+  });
+};
+
+export const invokeReleaseTripPayment = async (payload: ReleaseTripPaymentRequest) => {
+  return supabase.functions.invoke<ReleaseTripPaymentResponse>('release-trip-payment', {
+    body: payload,
+  });
+};
+
+export const invokeCreateTipPayment = async (payload: CreateTipPaymentRequest) => {
+  return supabase.functions.invoke<CreateTipPaymentResponse>('create-tip-payment', {
     body: payload,
   });
 };

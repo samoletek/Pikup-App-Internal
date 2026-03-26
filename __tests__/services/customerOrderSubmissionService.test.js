@@ -69,13 +69,8 @@ describe('CustomerOrderSubmissionService', () => {
     expect(result.success).toBe(true);
     expect(result.notices).toEqual([]);
     expect(dependencies.purchaseInsurance).toHaveBeenCalledWith('offer_test_1');
-    expect(dependencies.createPaymentIntent).toHaveBeenCalledWith(
-      1950,
-      'usd',
-      expect.any(Object),
-      'pm_test_123'
-    );
-    expect(dependencies.confirmPayment).toHaveBeenCalledWith('cs_test_123', 'pm_test_123');
+    expect(dependencies.createPaymentIntent).not.toHaveBeenCalled();
+    expect(dependencies.confirmPayment).not.toHaveBeenCalled();
     expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         pricing: expect.objectContaining({ total: 19.5 }),
@@ -84,6 +79,7 @@ describe('CustomerOrderSubmissionService', () => {
           bookingId: 'booking_1',
           quoteId: 'offer_test_1',
         }),
+        selectedPaymentMethodId: 'pm_test_123',
       })
     );
   });
@@ -111,12 +107,8 @@ describe('CustomerOrderSubmissionService', () => {
       }),
     ]);
     expect(dependencies.purchaseInsurance).not.toHaveBeenCalled();
-    expect(dependencies.createPaymentIntent).toHaveBeenCalledWith(
-      1700,
-      'usd',
-      expect.any(Object),
-      'pm_test_123'
-    );
+    expect(dependencies.createPaymentIntent).not.toHaveBeenCalled();
+    expect(dependencies.confirmPayment).not.toHaveBeenCalled();
     expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         pricing: expect.objectContaining({ total: 17 }),
@@ -124,6 +116,7 @@ describe('CustomerOrderSubmissionService', () => {
           status: 'amendments_blocked',
           quoteId: 'offer_blocked',
         }),
+        selectedPaymentMethodId: 'pm_test_123',
       })
     );
   });
@@ -153,18 +146,15 @@ describe('CustomerOrderSubmissionService', () => {
       }),
     ]);
     expect(dependencies.purchaseInsurance).toHaveBeenCalledTimes(2);
-    expect(dependencies.createPaymentIntent).toHaveBeenCalledWith(
-      1800,
-      'usd',
-      expect.any(Object),
-      'pm_test_123'
-    );
+    expect(dependencies.createPaymentIntent).not.toHaveBeenCalled();
+    expect(dependencies.confirmPayment).not.toHaveBeenCalled();
     expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         insurance: expect.objectContaining({
           status: 'purchase_failed',
           quoteId: 'offer_retry',
         }),
+        selectedPaymentMethodId: 'pm_test_123',
       })
     );
   });
@@ -188,13 +178,10 @@ describe('CustomerOrderSubmissionService', () => {
     expect(dependencies.createPickupRequest).not.toHaveBeenCalled();
   });
 
-  test('returns payment-intent error and stops flow', async () => {
+  test('returns request creation error when trip persistence fails', async () => {
     const orderData = createBaseOrderData();
     const dependencies = createDependencies({
-      createPaymentIntent: jest.fn().mockResolvedValue({
-        success: false,
-        error: 'payment intent failed',
-      }),
+      createPickupRequest: jest.fn().mockRejectedValue(new Error('request creation failed')),
     });
 
     const result = await submitCustomerOrder({
@@ -203,8 +190,9 @@ describe('CustomerOrderSubmissionService', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('payment intent failed');
+    expect(result.error).toBe('request creation failed');
+    expect(dependencies.createPaymentIntent).not.toHaveBeenCalled();
     expect(dependencies.confirmPayment).not.toHaveBeenCalled();
-    expect(dependencies.createPickupRequest).not.toHaveBeenCalled();
+    expect(dependencies.createPickupRequest).toHaveBeenCalledTimes(1);
   });
 });

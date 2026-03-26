@@ -24,7 +24,6 @@ import {
   useProfileActions,
   useTripActions,
 } from '../../contexts/AuthContext';
-import { usePayment } from '../../contexts/PaymentContext';
 import { TRIP_STATUS } from '../../constants/tripStatus';
 import { colors, spacing } from '../../styles/theme';
 import useCustomerTripDetailsData from '../../hooks/useCustomerTripDetailsData';
@@ -47,7 +46,6 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     markMessageAsRead,
   } = useMessagingActions();
   const { getUserProfile, submitTripRating } = useProfileActions();
-  const { confirmPayment, defaultPaymentMethod, createPaymentIntent } = usePayment();
 
   const tripSummary = route?.params?.tripSummary || null;
   const initialSnapshot = route?.params?.tripSnapshot || tripSummary || null;
@@ -95,6 +93,7 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     openCustomTip,
     updateCustomTip,
     tipPresets,
+    maxTipAmount,
   } = useCustomerTripRating({
     currentUserId,
     driverId: displayTrip.driverId,
@@ -102,9 +101,6 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     refreshProfile,
     submitTripRating,
     tripId: displayTrip.id,
-    confirmPayment,
-    defaultPaymentMethod,
-    createPaymentIntent,
     orderTotal: displayTrip.priceWithoutInsurance,
   });
   const { hasUnreadChat, setHasUnreadChat } = useTripConversationUnread({
@@ -322,6 +318,7 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
               openCustomTip={openCustomTip}
               updateCustomTip={updateCustomTip}
               tipPresets={tipPresets}
+              maxTipAmount={maxTipAmount}
             />
           )}
 

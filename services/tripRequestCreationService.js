@@ -8,6 +8,15 @@ import {
   insertTripWithSelect,
 } from './repositories/tripRepository';
 
+const hasMissingColumnError = (error, columnName) => {
+  const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+  return (
+    message.includes('column') &&
+    message.includes('does not exist') &&
+    message.includes(String(columnName || '').toLowerCase())
+  );
+};
+
 export const createPickupRequest = async (requestData, currentUser) => {
   if (!currentUser) throw new Error('User not authenticated');
 
@@ -49,6 +58,7 @@ export const createPickupRequest = async (requestData, currentUser) => {
         ? parseFloat(requestData.insurance.premium)
         : null,
       insurance_status: requestData.insurance?.status || null,
+      booking_payment_method_id: requestData.selectedPaymentMethodId || null,
     };
 
     if (requestData.insurance) {
@@ -60,9 +70,16 @@ export const createPickupRequest = async (requestData, currentUser) => {
       tripData.insurance_status = requestData.insurance.status || null;
     }
 
-    const { data, error } = await insertTripWithSelect(tripData);
+    let { data, error } = await insertTripWithSelect(tripData);
+    if (error && hasMissingColumnError(error, 'booking_payment_method_id')) {
+      const fallbackTripData = { ...tripData };
+      delete fallbackTripData.booking_payment_method_id;
+      ({ data, error } = await insertTripWithSelect(fallbackTripData));
+    }
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
     logger.info('TripRequestCreationService', 'Trip created successfully', { tripId: data.id });
 
     return mapTripFromDb(data);

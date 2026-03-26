@@ -32,6 +32,7 @@ export default function TripDriverRatingSection({
   openCustomTip,
   updateCustomTip,
   tipPresets,
+  maxTipAmount,
 }) {
   return (
     <View style={ui.sectionCard}>
@@ -128,20 +129,27 @@ export default function TripDriverRatingSection({
           </View>
 
           {showCustomTip ? (
-            <TextInput
-              style={ui.tipCustomInput}
-              placeholder="Enter amount"
-              placeholderTextColor={colors.text.muted}
-              value={customTip}
-              onChangeText={updateCustomTip}
-              keyboardType="numeric"
-              autoFocus
-            />
+            <View style={ui.tipCustomInputRow}>
+              <Text style={ui.tipCurrencyPrefix}>$</Text>
+              <TextInput
+                style={ui.tipCustomInput}
+                placeholder="0.00"
+                placeholderTextColor={colors.text.muted}
+                value={customTip}
+                onChangeText={updateCustomTip}
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+            </View>
           ) : (
             <TouchableOpacity onPress={openCustomTip} disabled={isSubmittingRating}>
               <Text style={ui.tipCustomLink}>Enter other amount</Text>
             </TouchableOpacity>
           )}
+
+          <Text style={ui.tipCapText}>
+            Max custom tip: ${Number(maxTipAmount || 0).toFixed(2)}
+          </Text>
         </>
       )}
 

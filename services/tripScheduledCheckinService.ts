@@ -3,6 +3,7 @@ import { failureResult, successResult } from './contracts/result';
 import { normalizeError } from './errorService';
 import { logger } from './logger';
 import { mapTripFromDb } from './tripMapper';
+import { authorizeTripPayment } from './tripPaymentLifecycleService';
 import { fetchTripsByDriverId, invokeTripRpc } from './repositories/tripRepository';
 
 const CHECKIN_PENDING_STATUS = 'pending';
@@ -174,8 +175,58 @@ export const confirmScheduledTripCheckin = async (
       return failureResult('Check-in is no longer available for this trip.', 'checkin_unavailable');
     }
 
+    const mappedTrip = mapTripFromDb(trip as Record<string, unknown>);
+    const authorizationResult = await authorizeTripPayment({
+      trip: trip as Record<string, unknown>,
+      driverId,
+      idempotencyKey: `scheduled_checkin_hold:${normalizedTripId}:${driverId}`,
+    });
+
+    if (!authorizationResult.success) {
+      const authorizationError = (
+        'error' in authorizationResult &&
+        typeof authorizationResult.error === 'string'
+      ) ? authorizationResult.error : null;
+      const authorizationErrorCode = (
+        'errorCode' in authorizationResult &&
+        typeof authorizationResult.errorCode === 'string'
+      ) ? authorizationResult.errorCode : null;
+
+      logger.warn('TripScheduledCheckinService', 'Payment authorization failed after scheduled check-in confirm', {
+        tripId: normalizedTripId,
+        driverId,
+        error: authorizationError,
+        errorCode: authorizationErrorCode,
+      });
+
+      try {
+        await invokeTripRpc(CHECKIN_DECLINE_RPC, {
+          p_trip_id: normalizedTripId,
+          p_driver_id: driverId,
+          p_reason: 'payment_authorization_failed',
+        });
+      } catch (declineError) {
+        const normalizedDeclineError = normalizeError(
+          declineError,
+          'Failed to roll back scheduled check-in after payment authorization failure',
+        );
+        logger.error(
+          'TripScheduledCheckinService',
+          'Failed to roll back scheduled check-in after payment authorization failure',
+          normalizedDeclineError,
+          declineError,
+        );
+      }
+
+      return failureResult(
+        authorizationError ||
+          'Payment authorization failed. The scheduled check-in was released back to dispatch.',
+        authorizationErrorCode || 'payment_authorization_failed',
+      );
+    }
+
     return successResult({
-      trip: mapTripFromDb(trip as Record<string, unknown>),
+      trip: mappedTrip,
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to confirm scheduled trip check-in');
