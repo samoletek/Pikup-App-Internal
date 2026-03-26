@@ -1,9 +1,50 @@
+import Constants from "expo-constants";
+
+const normalizeEnvValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : "";
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return "";
+};
+
+const readExtraConfig = (key: string): string => {
+  const expoConfigExtra =
+    (Constants?.expoConfig?.extra as Record<string, unknown> | undefined) || {};
+  const manifestExtra =
+    (Constants as unknown as { manifest?: { extra?: Record<string, unknown> } })?.manifest?.extra || {};
+  const manifest2Extra =
+    (
+      Constants as unknown as {
+        manifest2?: { extra?: Record<string, unknown> };
+      }
+    )?.manifest2?.extra || {};
+
+  return (
+    normalizeEnvValue(expoConfigExtra[key]) ||
+    normalizeEnvValue(manifestExtra[key]) ||
+    normalizeEnvValue(manifest2Extra[key])
+  );
+};
+
 const readEnv = (key: string, fallback = ""): string => {
   const envBag = (process?.env || {}) as Record<string, string | undefined>;
-  const value = envBag[key];
-  if (typeof value !== "string") return fallback;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : fallback;
+  const valueFromProcessEnv = normalizeEnvValue(envBag[key]);
+  if (valueFromProcessEnv) {
+    return valueFromProcessEnv;
+  }
+
+  const valueFromExtra = readExtraConfig(key);
+  if (valueFromExtra) {
+    return valueFromExtra;
+  }
+
+  return fallback;
 };
 
 const toCsvSet = (value: string) =>

@@ -54,6 +54,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         setLaborAdjustment,
         handleContinue,
         cancelCountdown,
+        skipCountdown,
         resetCheckoutState,
     } = useOrderCheckoutFlow({
         currentStep,
@@ -160,15 +161,23 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 {/* Continue / Countdown Button */}
                 <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : 12 }]}>
                     {confirmCountdown > 0 ? (
-                        <TouchableOpacity
-                            style={[styles.continueBtn, { backgroundColor: colors.warning }]}
-                            onPress={cancelCountdown}
-                        >
-                            <Ionicons name="close-circle" size={20} color={colors.white} />
-                            <Text style={[styles.continueBtnText, { color: colors.white, marginLeft: 8, marginRight: 0 }]}>
-                                Tap to Cancel ({confirmCountdown}s)
-                            </Text>
-                        </TouchableOpacity>
+                        <View style={styles.countdownActionRow}>
+                            <TouchableOpacity
+                                style={[styles.continueBtn, styles.countdownPrimaryBtn, { backgroundColor: colors.warning }]}
+                                onPress={cancelCountdown}
+                            >
+                                <Ionicons name="close-circle" size={20} color={colors.white} />
+                                <Text style={[styles.continueBtnText, { color: colors.white, marginLeft: 8, marginRight: 0 }]}>
+                                    Tap to Cancel ({confirmCountdown}s)
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.skipCountdownBtn}
+                                onPress={skipCountdown}
+                            >
+                                <Text style={styles.skipCountdownText}>Skip Timer</Text>
+                            </TouchableOpacity>
+                        </View>
                     ) : (
                         <TouchableOpacity
                             style={[

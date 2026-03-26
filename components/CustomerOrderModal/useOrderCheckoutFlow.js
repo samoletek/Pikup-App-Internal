@@ -43,6 +43,7 @@ export default function useOrderCheckoutFlow({
     confirmCountdown,
     startCountdown,
     cancelCountdown,
+    skipCountdown,
     resetCountdown,
   } = useConfirmCountdown();
   const quoteRequestIdRef = useRef(0);
@@ -338,6 +339,7 @@ export default function useOrderCheckoutFlow({
     setLaborAdjustment,
     handleContinue,
     cancelCountdown,
+    skipCountdown,
     resetCheckoutState,
   };
 }

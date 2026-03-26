@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CardField, useStripe } from "@stripe/stripe-react-native";
+import { CardForm, useStripe } from "@stripe/stripe-react-native";
 import { usePayment } from "../contexts/PaymentContext";
 import BaseModal from "./BaseModal";
 import AppButton from "./ui/AppButton";
@@ -51,10 +51,20 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
     Keyboard.dismiss();
 
     try {
-      // Create payment method with Stripe
+      // Create payment method with Stripe from CardForm input
+      const paymentMethodData = postalDigits
+        ? {
+            billingDetails: {
+              address: {
+                postalCode: postalDigits,
+              },
+            },
+          }
+        : undefined;
+
       const { error, paymentMethod } = await stripe.createPaymentMethod({
         paymentMethodType: 'Card',
-        card: cardDetails,
+        ...(paymentMethodData ? { paymentMethodData } : {}),
       });
 
       if (error) {
@@ -149,18 +159,16 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
               <Text style={styles.sectionLabel}>Card Details</Text>
 
               <View style={styles.cardFieldContainer}>
-                <CardField
-                  postalCodeEnabled={true}
-                  countryCode="US"
+                <CardForm
                   placeholders={{
                     number: '0000 0000 0000 0000',
                     expiration: 'MM/YY',
                     cvc: 'CVC',
                     postalCode: 'ZIP Code',
                   }}
-                  cardStyle={styles.cardField}
-                  style={styles.cardFieldWrapper}
-                  onCardChange={(cardDetails) => {
+                  cardStyle={styles.cardForm}
+                  style={styles.cardFormWrapper}
+                  onFormComplete={(cardDetails) => {
                     setCardDetails(cardDetails);
                   }}
                 />

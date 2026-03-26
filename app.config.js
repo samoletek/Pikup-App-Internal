@@ -8,7 +8,7 @@ module.exports = {
   expo: {
     name: "pikup",
     slug: "pikup-app",
-    version: "1.0.12",
+    version: "1.0.14",
     scheme: "pikup",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -22,7 +22,7 @@ module.exports = {
     assetBundlePatterns: ["**/*"],
 
     ios: {
-      buildNumber: "14",
+      buildNumber: "16",
       supportsTablet: true,
       usesAppleSignIn: true,
       appleTeamId: "99LU49ANLX",
@@ -64,7 +64,7 @@ module.exports = {
     },
 
     android: {
-      versionCode: 14,
+      versionCode: 16,
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff",
@@ -121,6 +121,40 @@ module.exports = {
       }
     },
     "extra": {
+      EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      EXPO_PUBLIC_STRIPE_MERCHANT_ID: process.env.EXPO_PUBLIC_STRIPE_MERCHANT_ID,
+      EXPO_PUBLIC_URL_SCHEME: process.env.EXPO_PUBLIC_URL_SCHEME,
+      EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL:
+        process.env.EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL,
+      EXPO_PUBLIC_STRIPE_ONBOARDING_RETURN_URL:
+        process.env.EXPO_PUBLIC_STRIPE_ONBOARDING_RETURN_URL,
+      EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN: process.env.EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN,
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
+      EXPO_PUBLIC_GEMINI_API_KEY: process.env.EXPO_PUBLIC_GEMINI_API_KEY,
+      EXPO_PUBLIC_PAYMENT_SERVICE_URL: process.env.EXPO_PUBLIC_PAYMENT_SERVICE_URL,
+      EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES:
+        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES,
+      EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES:
+        process.env.EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES,
+      EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS:
+        process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS,
+      EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES:
+        process.env.EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES,
+      EXPO_PUBLIC_DISPATCH_OVERLAP_MIN_DURATION_MINUTES:
+        process.env.EXPO_PUBLIC_DISPATCH_OVERLAP_MIN_DURATION_MINUTES,
+      EXPO_PUBLIC_DISPATCH_OVERLAP_BASE_SERVICE_MINUTES:
+        process.env.EXPO_PUBLIC_DISPATCH_OVERLAP_BASE_SERVICE_MINUTES,
+      EXPO_PUBLIC_DISPATCH_OVERLAP_AVERAGE_SPEED_MPH:
+        process.env.EXPO_PUBLIC_DISPATCH_OVERLAP_AVERAGE_SPEED_MPH,
+      EXPO_PUBLIC_DISPATCH_OVERLAP_INTER_TRIP_BUFFER_MINUTES:
+        process.env.EXPO_PUBLIC_DISPATCH_OVERLAP_INTER_TRIP_BUFFER_MINUTES,
+      EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS:
+        process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_EMAILS,
+      EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS:
+        process.env.EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS,
+      EXPO_PUBLIC_ENABLE_DEV_MOCK_DATA: process.env.EXPO_PUBLIC_ENABLE_DEV_MOCK_DATA,
       "eas": {
         "projectId": "b8028c4b-62e3-4bfd-a81a-526bf93b3190"
       },

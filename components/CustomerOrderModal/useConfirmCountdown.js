@@ -24,17 +24,23 @@ export default function useConfirmCountdown() {
     resolve(wasCancelled);
   }, []);
 
-  const cancelCountdown = useCallback(() => {
+  const finishCountdown = useCallback((wasCancelled) => {
     clearTimer();
     setConfirmCountdown(0);
-    resolvePending(true);
+    resolvePending(wasCancelled);
   }, [clearTimer, resolvePending]);
 
+  const cancelCountdown = useCallback(() => {
+    finishCountdown(true);
+  }, [finishCountdown]);
+
+  const skipCountdown = useCallback(() => {
+    finishCountdown(false);
+  }, [finishCountdown]);
+
   const resetCountdown = useCallback(() => {
-    clearTimer();
-    setConfirmCountdown(0);
-    resolvePending(true);
-  }, [clearTimer, resolvePending]);
+    finishCountdown(true);
+  }, [finishCountdown]);
 
   const startCountdown = useCallback((countdownSeconds) => {
     resetCountdown();
@@ -66,6 +72,7 @@ export default function useConfirmCountdown() {
     confirmCountdown,
     startCountdown,
     cancelCountdown,
+    skipCountdown,
     resetCountdown,
   };
 }

@@ -37,6 +37,30 @@ export const styles = StyleSheet.create({
     continueBtnText: { color: colors.white, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, marginRight: spacing.sm },
     continueBtnDisabled: { opacity: 0.7 },
     continueBtnTextDisabled: { color: colors.white },
+    countdownActionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+    },
+    countdownPrimaryBtn: {
+        flex: 1,
+    },
+    skipCountdownBtn: {
+        height: 44,
+        minWidth: 96,
+        paddingHorizontal: spacing.md,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        borderColor: colors.border.light,
+        backgroundColor: colors.background.tertiary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    skipCountdownText: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.sm,
+        fontWeight: typography.fontWeight.semibold,
+    },
 
     // Step 1 Styles - Address Search
     inputWrapper: {

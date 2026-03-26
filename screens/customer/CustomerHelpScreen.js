@@ -29,7 +29,8 @@ const FAQS = [
   {
     id: "2",
     question: "Can I cancel my request?",
-    answer: "Yes, you can cancel a request from the Activity screen before a driver has picked up your items.",
+    answer:
+      "For now, you can cancel from Activity until loading starts at pickup. Drivers can also cancel at pickup if the address is wrong or if no one is available to help load when self-help was selected.",
   },
   {
     id: "3",

@@ -4,7 +4,9 @@ import {
   getCancellationInfoFromOrder,
   notifyPaymentBackendCancellation,
   persistTripCancellation,
+  resolveCancellationActorRole,
   resolveCancellationActorId,
+  resolveOrderCustomerId,
   shouldNotifyPaymentBackendForStatus,
 } from './tripCancellationUtils';
 import { cancelInsuranceBookingForTrip } from './tripInsuranceUtils';
@@ -19,14 +21,16 @@ const PAYMENT_SERVICE_URL = appConfig.paymentService.baseUrl;
 export const cancelOrder = async (orderId, reason = 'customer_request', currentUser) => {
   try {
     const orderData = await getRequestById(orderId);
-    const normalizedOrderStatus = ensureOrderCanBeCancelled(orderData);
-    const customerId = resolveCancellationActorId({ currentUser, orderData });
+    const actorRole = resolveCancellationActorRole({ currentUser, orderData });
+    const normalizedOrderStatus = ensureOrderCanBeCancelled(orderData, { actorRole });
+    const actorId = resolveCancellationActorId({ currentUser, orderData });
+    const orderCustomerId = resolveOrderCustomerId(orderData);
 
     if (shouldNotifyPaymentBackendForStatus(normalizedOrderStatus)) {
       await notifyPaymentBackendCancellation({
         paymentServiceUrl: PAYMENT_SERVICE_URL,
         orderId,
-        customerId,
+        customerId: orderCustomerId,
         reason,
         driverLocation: orderData.driverLocation || orderData.driver_location || null,
       });
@@ -47,7 +51,7 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
 
     await persistTripCancellation({
       orderId,
-      actorId: customerId,
+      actorId,
       reason,
     });
 

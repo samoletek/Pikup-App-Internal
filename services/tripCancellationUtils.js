@@ -3,14 +3,80 @@ import { logger } from './logger';
 import { updateTripById } from './repositories/tripRepository';
 import { normalizeError } from './errorService';
 
-export const ensureOrderCanBeCancelled = (orderData) => {
+const CUSTOMER_CANCELLABLE_TRIP_STATUSES = new Set([
+    TRIP_STATUS.PENDING,
+    TRIP_STATUS.ACCEPTED,
+    TRIP_STATUS.IN_PROGRESS,
+    TRIP_STATUS.ARRIVED_AT_PICKUP,
+]);
+
+const DRIVER_CANCELLABLE_TRIP_STATUSES = new Set([
+    TRIP_STATUS.ARRIVED_AT_PICKUP,
+]);
+
+const CANCELLABLE_STATUSES_BY_ROLE = {
+    customer: CUSTOMER_CANCELLABLE_TRIP_STATUSES,
+    driver: DRIVER_CANCELLABLE_TRIP_STATUSES,
+};
+
+const resolveTripCustomerId = (orderData) => orderData?.customerId || orderData?.customer_id || null;
+
+const resolveTripDriverId = (orderData) => orderData?.driverId || orderData?.driver_id || null;
+
+const resolveCurrentUserId = (currentUser) => currentUser?.uid || currentUser?.id || null;
+
+const getRoleSpecificCancellationError = ({ actorRole, orderData }) => {
+    if (actorRole !== 'driver') {
+        const cancellationInfo = getCancellationInfoFromOrder(orderData);
+        return cancellationInfo.reason || 'Order cannot be cancelled at this stage';
+    }
+
+    const normalizedStatus = normalizeTripStatus(orderData?.status);
+    if (normalizedStatus === TRIP_STATUS.PICKED_UP) {
+        return 'Cannot cancel - loading has started';
+    }
+
+    if (normalizedStatus === TRIP_STATUS.ARRIVED_AT_DROPOFF) {
+        return 'Cannot cancel - driver has arrived at dropoff';
+    }
+
+    if (normalizedStatus === TRIP_STATUS.EN_ROUTE_TO_DROPOFF) {
+        return 'Cannot cancel - delivery is in progress';
+    }
+
+    return 'Driver can cancel only at pickup if address/details are wrong or loading help is unavailable';
+};
+
+export const resolveCancellationActorRole = ({ currentUser, orderData }) => {
+    const currentUserId = resolveCurrentUserId(currentUser);
+    if (!currentUserId) {
+        return 'customer';
+    }
+
+    if (currentUserId === resolveTripDriverId(orderData)) {
+        return 'driver';
+    }
+
+    if (currentUserId === resolveTripCustomerId(orderData)) {
+        return 'customer';
+    }
+
+    return 'customer';
+};
+
+export const resolveOrderCustomerId = (orderData) => resolveTripCustomerId(orderData);
+
+export const ensureOrderCanBeCancelled = (orderData, { actorRole = 'customer' } = {}) => {
     if (!orderData) {
         throw new Error('Order not found');
     }
 
     const normalizedOrderStatus = normalizeTripStatus(orderData.status);
-    if (normalizedOrderStatus === TRIP_STATUS.COMPLETED || normalizedOrderStatus === TRIP_STATUS.CANCELLED) {
-        throw new Error('Order already finalized');
+    const role = actorRole === 'driver' ? 'driver' : 'customer';
+    const cancellableStatuses = CANCELLABLE_STATUSES_BY_ROLE[role] || CUSTOMER_CANCELLABLE_TRIP_STATUSES;
+
+    if (!cancellableStatuses.has(normalizedOrderStatus)) {
+        throw new Error(getRoleSpecificCancellationError({ actorRole: role, orderData }));
     }
 
     return normalizedOrderStatus;
@@ -19,7 +85,7 @@ export const ensureOrderCanBeCancelled = (orderData) => {
 export const shouldNotifyPaymentBackendForStatus = (status) => status !== TRIP_STATUS.PENDING;
 
 export const resolveCancellationActorId = ({ currentUser, orderData }) =>
-    currentUser?.uid || currentUser?.id || orderData?.customerId || orderData?.customer_id || null;
+    resolveCurrentUserId(currentUser) || resolveTripCustomerId(orderData);
 
 export const notifyPaymentBackendCancellation = async ({
     paymentServiceUrl,
@@ -104,10 +170,10 @@ export const getCancellationInfoFromOrder = (orderData) => {
 
         case TRIP_STATUS.ARRIVED_AT_PICKUP:
             return {
-                canCancel: false,
+                canCancel: true,
                 fee: 0,
-                reason: 'Cannot cancel - driver has arrived at pickup location',
-                refundAmount: 0,
+                reason: 'Free cancellation - driver has arrived, loading has not started',
+                refundAmount: orderTotal,
                 driverCompensation: 0,
             };
 
@@ -115,7 +181,7 @@ export const getCancellationInfoFromOrder = (orderData) => {
             return {
                 canCancel: false,
                 fee: 0,
-                reason: 'Cannot cancel - items have been picked up',
+                reason: 'Cannot cancel - loading has started',
                 refundAmount: 0,
                 driverCompensation: 0,
             };
@@ -125,6 +191,15 @@ export const getCancellationInfoFromOrder = (orderData) => {
                 canCancel: false,
                 fee: 0,
                 reason: 'Cannot cancel - delivery is in progress',
+                refundAmount: 0,
+                driverCompensation: 0,
+            };
+
+        case TRIP_STATUS.ARRIVED_AT_DROPOFF:
+            return {
+                canCancel: false,
+                fee: 0,
+                reason: 'Cannot cancel - driver has arrived at dropoff',
                 refundAmount: 0,
                 driverCompensation: 0,
             };

@@ -1,5 +1,14 @@
 const originalEnv = process.env;
 
+jest.mock("expo-constants", () => ({
+  __esModule: true,
+  default: {
+    expoConfig: { extra: {} },
+    manifest: { extra: {} },
+    manifest2: { extra: {} },
+  },
+}));
+
 describe("appConfig", () => {
   beforeEach(() => {
     jest.resetModules();

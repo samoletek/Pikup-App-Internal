@@ -59,20 +59,20 @@ const styles = StyleSheet.create({
   },
   cardFieldContainer: {
     backgroundColor: colors.background.input,
-    borderRadius: 30,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border.light,
-    paddingVertical: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
-  cardFieldWrapper: {
-    height: 50,
-    marginVertical: 5,
+  cardFormWrapper: {
+    height: 210,
   },
-  cardField: {
+  cardForm: {
     backgroundColor: colors.background.input,
     textColor: colors.text.primary,
     placeholderColor: colors.text.placeholder,
-    borderRadius: 30,
+    borderRadius: 12,
     fontSize: 16,
     cursorColor: colors.success,
     textErrorColor: colors.error,

@@ -24,7 +24,10 @@ It must be enough to implement tasks without chat history.
   - Scheduled: after driver confirms scheduled check-in.
   (Goal: avoid stale authorizations for never-accepted trips)
 - Insurance is included in main hold/capture amount. (Goal: one primary payment for trip)
-- Cancellation policy is fully free now: cancel before completion -> release full hold. (Goal: simple and predictable cancellation)
+- Temporary cancellation policy:
+  - Customer can cancel until loading starts at pickup.
+  - Driver can cancel at pickup if address details are wrong or required customer loading help is unavailable.
+  (Goal: align cancellation behavior with current operations)
 - Tip presets are `10%`, `15%`, `20%` from `total excluding insurance`. (Goal: agreed tip base)
 - Custom tip is USD amount only, max `200%` of tip base. (Goal: prevent accidental over-tip)
 - Tip is separate transaction, charged from the same payment method used for trip hold. (Goal: deterministic funding source)

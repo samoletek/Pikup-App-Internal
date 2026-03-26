@@ -5,7 +5,7 @@ module.exports = {
     "^.+\\.[jt]sx?$": "babel-jest",
   },
   transformIgnorePatterns: [
-    "node_modules/(?!(expo|@expo|react-native|@react-native|@react-navigation|@rnmapbox|@stripe|@supabase|react-native-url-polyfill)/)",
+    "node_modules/(?!(expo(?:-[^/]+)?|@expo|react-native|@react-native|@react-navigation|@rnmapbox|@stripe|@supabase|react-native-url-polyfill)/)",
   ],
   moduleFileExtensions: ["js", "jsx", "ts", "tsx", "json"],
   testMatch: ["**/__tests__/**/*.test.[jt]s?(x)"],

@@ -37,6 +37,9 @@ const OrderItemCard = ({
     const remainingSlots = MAX_PHOTOS - item.photos.length;
     const hasPhotoError = !!errors?.photos;
     const isInsuranceActive = normalizedCondition === 'new' && item.hasInsurance;
+    const hasEnteredValue = Number.parseFloat(String(item.value || '').trim()) > 0;
+    const hasInvoicePhoto = Boolean(item.invoicePhoto);
+    const showCoverageInfo = isInsuranceActive && hasEnteredValue && hasInvoicePhoto;
 
     const updateItemDraft = (patch) => {
         onUpdate({ ...item, ...patch });
@@ -270,18 +273,6 @@ const OrderItemCard = ({
                         </View>
                     </View>
 
-                    {isInsuranceActive && (
-                        <View style={styles.coverageInfoBox}>
-                            <View style={styles.coverageInfoHeader}>
-                                <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
-                                <Text style={styles.coverageInfoTitle}>Full Coverage Applied</Text>
-                            </View>
-                            <Text style={styles.coverageInfoBody}>
-                                This item is fully protected during transit. Coverage is valid for new, store-bought products with a physical or digital receipt.
-                            </Text>
-                        </View>
-                    )}
-
                     {/* Invoice Upload (if insurance is enabled) */}
                     {isInsuranceActive && (
                         <View style={styles.invoiceSection}>
@@ -305,6 +296,18 @@ const OrderItemCard = ({
                                     <Text style={styles.uploadInvoiceText}>Upload Invoice</Text>
                                 </TouchableOpacity>
                             )}
+                        </View>
+                    )}
+
+                    {showCoverageInfo && (
+                        <View style={styles.coverageInfoBox}>
+                            <View style={styles.coverageInfoHeader}>
+                                <Ionicons name="shield-checkmark" size={16} color={colors.primary} />
+                                <Text style={styles.coverageInfoTitle}>Full Coverage Applied</Text>
+                            </View>
+                            <Text style={styles.coverageInfoBody}>
+                                This item is fully protected during transit. Coverage is valid for new, store-bought products with a physical or digital receipt.
+                            </Text>
                         </View>
                     )}
 
