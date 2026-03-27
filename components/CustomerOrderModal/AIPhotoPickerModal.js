@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { colors } from '../../styles/theme';
+import { borderRadius, colors, spacing, typography } from '../../styles/theme';
 import { aiPhotoStyles as s, SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
 import CameraScreen from './CameraScreen';
@@ -196,61 +196,63 @@ const AIPhotoPickerModal = ({
                 </View>
             )}
         >
-            {/* Photo Grid Area */}
-            <ScrollView
-                style={s.photoArea}
-                contentContainerStyle={[
-                    s.photoAreaContent,
-                    photos.length === 0 && s.photoAreaEmpty,
-                ]}
-                showsVerticalScrollIndicator={false}
-            >
-                {photos.length === 0 ? (
-                    <View style={s.placeholder}>
-                        <Ionicons name="images-outline" size={56} color={colors.border.light} />
-                        <Text style={s.placeholderTitle}>No photos yet</Text>
-                        <Text style={s.placeholderSubtitle}>
-                            {isAnalyzeMode
-                                ? `Add up to ${photoLimit} photos and AI will identify all items`
-                                : `Add up to ${photoLimit} photos for this item`}
-                        </Text>
-                    </View>
-                ) : (
-                    <View style={s.grid}>
-                        {photos.map((photo) => (
-                            <View key={photo.id} style={s.thumbWrapper}>
-                                <Image
-                                    source={{ uri: photo.uri }}
-                                    style={s.thumb}
-                                    onLoadStart={() => updatePhotoLoadingState(photo.id, true)}
-                                    onLoadEnd={() => updatePhotoLoadingState(photo.id, false)}
-                                    onError={() => updatePhotoLoadingState(photo.id, false)}
-                                />
-                                {photo.isLoading && (
-                                    <View style={overlayStyle.thumbLoadingOverlay} pointerEvents="none">
-                                        <ActivityIndicator size="small" color={colors.white} />
-                                    </View>
-                                )}
-                                <TouchableOpacity
-                                    style={s.thumbDelete}
-                                    onPress={() => handleRemovePhoto(photo.id)}
-                                    hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
-                                >
-                                    <Ionicons name="close-circle" size={30} color={colors.error} />
-                                </TouchableOpacity>
-                            </View>
-                        ))}
+            <View style={s.contentArea}>
+                {/* Photo Grid Area */}
+                <ScrollView
+                    style={s.photoArea}
+                    contentContainerStyle={[
+                        s.photoAreaContent,
+                        photos.length === 0 && s.photoAreaEmpty,
+                    ]}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {photos.length === 0 ? (
+                        <View style={s.placeholder}>
+                            <Ionicons name="images-outline" size={56} color={colors.border.light} />
+                            <Text style={s.placeholderTitle}>No photos yet</Text>
+                            <Text style={s.placeholderSubtitle}>
+                                {isAnalyzeMode
+                                    ? `Add up to ${photoLimit} photos and AI will identify all items`
+                                    : `Add up to ${photoLimit} photos for this item`}
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={s.grid}>
+                            {photos.map((photo) => (
+                                <View key={photo.id} style={s.thumbWrapper}>
+                                    <Image
+                                        source={{ uri: photo.uri }}
+                                        style={s.thumb}
+                                        onLoadStart={() => updatePhotoLoadingState(photo.id, true)}
+                                        onLoadEnd={() => updatePhotoLoadingState(photo.id, false)}
+                                        onError={() => updatePhotoLoadingState(photo.id, false)}
+                                    />
+                                    {photo.isLoading && (
+                                        <View style={overlayStyle.thumbLoadingOverlay} pointerEvents="none">
+                                            <ActivityIndicator size="small" color={colors.white} />
+                                        </View>
+                                    )}
+                                    <TouchableOpacity
+                                        style={s.thumbDelete}
+                                        onPress={() => handleRemovePhoto(photo.id)}
+                                        hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+                                    >
+                                        <Ionicons name="close-circle" size={30} color={colors.error} />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </ScrollView>
+
+                {/* Blocking overlay during analysis */}
+                {isBusy && (
+                    <View style={overlayStyle.overlay} pointerEvents="box-only">
+                        <ActivityIndicator size="large" color={colors.primary} />
+                        <Text style={overlayStyle.overlayText}>Analyzing photos...</Text>
                     </View>
                 )}
-            </ScrollView>
-
-            {/* Blocking overlay during analysis */}
-            {isBusy && (
-                <View style={overlayStyle.overlay} pointerEvents="box-only">
-                    <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={overlayStyle.overlayText}>Analyzing photos...</Text>
-                </View>
-            )}
+            </View>
 
             {/* Custom Camera with boundary box */}
             <CameraScreen
@@ -306,22 +308,23 @@ const AIPhotoPickerModal = ({
 const overlayStyle = StyleSheet.create({
     overlay: {
         ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(10, 10, 31, 0.75)',
+        backgroundColor: colors.overlayDark,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 16,
+        gap: spacing.base,
+        zIndex: 2,
     },
     overlayText: {
         color: colors.text.primary,
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.semibold,
     },
     thumbLoadingOverlay: {
         ...StyleSheet.absoluteFillObject,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(10, 10, 31, 0.55)',
-        borderRadius: 12,
+        backgroundColor: colors.overlayDark,
+        borderRadius: borderRadius.md,
     },
 });
 

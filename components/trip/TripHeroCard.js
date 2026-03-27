@@ -7,6 +7,7 @@ import { colors, typography } from '../../styles/theme';
 
 const STATUS_ICON_SIZE = typography.fontSize.sm + 2;
 const ROUTE_ICON_SIZE = typography.fontSize.md;
+const RATING_STAR_SIZE = typography.fontSize.xs + 2;
 
 export default function TripHeroCard({
   displayTrip,
@@ -16,6 +17,13 @@ export default function TripHeroCard({
   isOpeningChat = false,
 }) {
   const hasDriver = Boolean(displayTrip.driverId);
+  const hasDriverPlate = typeof displayTrip.driverPlateLabel === "string"
+    && displayTrip.driverPlateLabel.trim().length > 0;
+  const hasDriverRating =
+    Number.isFinite(displayTrip.driverRatingValue) && displayTrip.driverRatingValue > 0;
+  const driverRatingStars = Number.isFinite(displayTrip.driverRatingStars)
+    ? displayTrip.driverRatingStars
+    : 0;
 
   return (
     <LinearGradient
@@ -86,6 +94,21 @@ export default function TripHeroCard({
           <Text style={ui.heroDriverName} numberOfLines={1}>
             {displayTrip.driverName}
           </Text>
+          {hasDriverRating ? (
+            <View style={ui.heroDriverRatingRow}>
+              {[...Array(5)].map((_, index) => (
+                <Ionicons
+                  key={`driver-rating-star-${index}`}
+                  name="star"
+                  size={RATING_STAR_SIZE}
+                  color={index < driverRatingStars ? colors.gold : colors.border.default}
+                />
+              ))}
+              <Text style={ui.heroDriverRatingText}>
+                {displayTrip.driverRatingLabel}
+              </Text>
+            </View>
+          ) : null}
           <View style={ui.heroVehicleRow}>
             <Ionicons name="car-sport-outline" size={ROUTE_ICON_SIZE - 2} color={colors.text.tertiary} />
             <Text style={ui.heroVehicleText} numberOfLines={1}>
@@ -97,11 +120,13 @@ export default function TripHeroCard({
           </Text>
         </View>
 
-        <View style={ui.heroPlatePill}>
-          <Text style={ui.heroPlateText} numberOfLines={1}>
-            {displayTrip.driverPlateLabel}
-          </Text>
-        </View>
+        {hasDriverPlate ? (
+          <View style={ui.heroPlatePill}>
+            <Text style={ui.heroPlateText} numberOfLines={1}>
+              {displayTrip.driverPlateLabel}
+            </Text>
+          </View>
+        ) : null}
 
         {typeof onOpenChat === 'function' && hasDriver ? (
           <View style={ui.heroChatButtonWrap}>

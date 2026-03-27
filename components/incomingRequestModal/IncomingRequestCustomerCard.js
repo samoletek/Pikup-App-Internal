@@ -158,13 +158,15 @@ export default function IncomingRequestCustomerCard({ request, styles }) {
   );
   const ratingStars = customerRating ? Math.round(customerRating) : 0;
   const ratingLabel = customerRating ? customerRating.toFixed(1) : 'No ratings yet';
+  const customerPhotoPlaceholderStyle =
+    styles.customerPhotoPlaceholder || styles.customerPhotoFallback || styles.customerPhoto;
 
   return (
     <View style={styles.customerCard}>
       {customerAvatarUrl ? (
         <Image source={{ uri: customerAvatarUrl }} style={styles.customerPhoto} />
       ) : (
-        <View style={styles.customerPhotoPlaceholder}>
+        <View style={customerPhotoPlaceholderStyle}>
           <Ionicons name="person" size={22} color={colors.text.muted} />
         </View>
       )}

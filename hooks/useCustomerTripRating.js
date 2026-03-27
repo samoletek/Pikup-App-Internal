@@ -92,7 +92,7 @@ export default function useCustomerTripRating({
   );
 
   const selectTipPreset = useCallback((value) => {
-    setTip(value);
+    setTip((prevTip) => (prevTip === value ? null : value));
     setCustomTip('');
     setShowCustomTip(false);
   }, []);

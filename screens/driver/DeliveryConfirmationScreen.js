@@ -205,8 +205,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
 
           {/* Customer Rating */}
           <View style={styles.ratingCard}>
-            <Text style={styles.cardTitle}>Rate Your Experience</Text>
-            <Text style={styles.ratingSubtitle}>How was your interaction with {customerName}?</Text>
+            <Text style={styles.cardTitle}>How was your experience?</Text>
             {renderStars()}
             {customerRating > 0 ? (
               <Text style={styles.ratingText}>{getRatingLabel(customerRating)}</Text>

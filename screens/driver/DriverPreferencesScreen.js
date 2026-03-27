@@ -54,7 +54,6 @@ export default function DriverPreferencesScreen({ navigation }) {
     preciseLocationDescription,
     handleLocationTrackingToggle,
     handlePreciseLocationToggle,
-    openLocationSettings,
   } = useLocationSettingsControls({
     loggerScope: "DriverPreferencesLocation",
   });
@@ -82,7 +81,7 @@ export default function DriverPreferencesScreen({ navigation }) {
               <Text style={styles.sectionLabel}>LOCATION</Text>
             </View>
             <View style={styles.card}>
-              <View style={styles.toggleRow}>
+              <View style={[styles.toggleRow, styles.rowLast]}>
                 <View
                   style={[
                     styles.toggleIconBox,
@@ -138,22 +137,6 @@ export default function DriverPreferencesScreen({ navigation }) {
                 />
               </View>
 
-              <TouchableOpacity
-                style={[styles.toggleRow, styles.rowLast]}
-                onPress={openLocationSettings}
-                activeOpacity={0.8}
-              >
-                <View style={styles.toggleIconBox}>
-                  <Ionicons name="settings-outline" size={20} color={colors.primary} />
-                </View>
-                <View style={styles.toggleTextCol}>
-                  <Text style={styles.toggleLabel}>Open System Location Settings</Text>
-                  <Text style={styles.toggleDesc}>
-                    Manage permission, precise location, and device location mode.
-                  </Text>
-                </View>
-                <Ionicons name="open-outline" size={18} color={colors.text.tertiary} />
-              </TouchableOpacity>
             </View>
           </View>
 

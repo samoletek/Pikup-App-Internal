@@ -1,10 +1,19 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { colors, borderRadius, spacing, typography, layout } from '../../styles/theme';
+import {
+    colors,
+    borderRadius,
+    spacing,
+    typography,
+    layout,
+    components as componentTokens,
+} from '../../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DATE_PICKER_MODAL_WIDTH = Math.min(SCREEN_WIDTH - (spacing.xl * 2), layout.authMaxWidth);
 const AI_ACTION_ICON_SIZE = spacing.xxxl - spacing.xs;
 const SUBTLE_GAP = spacing.xs / 2;
+const FOOTER_ACTION_BUTTON_HEIGHT = componentTokens.buttonPrimary.height;
+const SKIP_TIMER_MIN_WIDTH = spacing.xxxl * 2;
 
 export { SCREEN_WIDTH, SCREEN_HEIGHT };
 
@@ -31,10 +40,12 @@ export const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 56,
+        height: FOOTER_ACTION_BUTTON_HEIGHT,
         borderRadius: borderRadius.full
     },
     continueBtnText: { color: colors.white, fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, marginRight: spacing.sm },
+    continueBtnTextNoIcon: { marginRight: 0 },
+    continueBtnSuccess: { backgroundColor: colors.success },
     continueBtnDisabled: { opacity: 0.7 },
     continueBtnTextDisabled: { color: colors.white },
     countdownActionRow: {
@@ -44,22 +55,28 @@ export const styles = StyleSheet.create({
     },
     countdownPrimaryBtn: {
         flex: 1,
+        backgroundColor: colors.warning,
+    },
+    countdownPrimaryText: {
+        color: colors.white,
+        marginLeft: spacing.sm,
+        marginRight: 0,
     },
     skipCountdownBtn: {
-        height: 44,
-        minWidth: 96,
+        height: FOOTER_ACTION_BUTTON_HEIGHT,
+        minWidth: SKIP_TIMER_MIN_WIDTH,
         paddingHorizontal: spacing.md,
         borderRadius: borderRadius.full,
-        borderWidth: 1,
+        borderWidth: componentTokens.buttonSecondary.borderWidth,
         borderColor: colors.border.light,
         backgroundColor: colors.background.tertiary,
         alignItems: 'center',
         justifyContent: 'center',
     },
     skipCountdownText: {
-        color: colors.text.primary,
-        fontSize: typography.fontSize.sm,
-        fontWeight: typography.fontWeight.semibold,
+        color: colors.white,
+        fontSize: typography.fontSize.lg,
+        fontWeight: typography.fontWeight.bold,
     },
 
     // Step 1 Styles - Address Search
@@ -499,6 +516,7 @@ export const aiPhotoStyles = StyleSheet.create({
     },
     headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: typography.fontSize.lg, fontWeight: typography.fontWeight.bold, color: colors.text.primary },
+    contentArea: { flex: 1, position: 'relative' },
     photoArea: { flex: 1, backgroundColor: colors.background.primary },
     photoAreaContent: { padding: spacing.lg },
     photoAreaEmpty: { flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 300 },

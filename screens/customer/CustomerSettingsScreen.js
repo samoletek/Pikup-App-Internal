@@ -47,7 +47,6 @@ export default function CustomerSettingsScreen({ navigation, route }) {
     preciseLocationDescription,
     handleLocationTrackingToggle,
     handlePreciseLocationToggle,
-    openLocationSettings,
   } = useLocationSettingsControls({
     loggerScope: "CustomerSettingsLocation",
   });
@@ -133,7 +132,7 @@ export default function CustomerSettingsScreen({ navigation, route }) {
             <View style={styles.sectionBlock}>
               <Text style={styles.sectionLabel}>LOCATION</Text>
               <View style={styles.card}>
-                <View style={styles.switchRow}>
+                <View style={[styles.switchRow, styles.rowLast]}>
                   <View style={styles.switchInfo}>
                     <View style={styles.switchTitleRow}>
                       <Ionicons
@@ -179,15 +178,6 @@ export default function CustomerSettingsScreen({ navigation, route }) {
                   </View>
                 </View>
 
-                {renderRow({
-                  rowKey: "open-location-settings",
-                  icon: "settings-outline",
-                  label: "Open System Location Settings",
-                  subtitle: "Manage permission, precise location, and service mode.",
-                  onPress: openLocationSettings,
-                  isExternal: true,
-                  isLast: true,
-                })}
               </View>
             </View>
           )}
