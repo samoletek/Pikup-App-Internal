@@ -4,6 +4,28 @@ import * as ImagePicker from "expo-image-picker";
 import { compressImage, uploadToSupabase } from "../services/StorageService";
 import { logger } from "../services/logger";
 
+const dedupeMessagesById = (list = []) => {
+  const seen = new Set();
+  const deduped = [];
+
+  (Array.isArray(list) ? list : []).forEach((message) => {
+    const messageId = String(message?.id || "").trim();
+    if (!messageId) {
+      deduped.push(message);
+      return;
+    }
+
+    if (seen.has(messageId)) {
+      return;
+    }
+
+    seen.add(messageId);
+    deduped.push(message);
+  });
+
+  return deduped;
+};
+
 export default function useMessageComposer({
   conversationId,
   currentUserId,
@@ -70,11 +92,12 @@ export default function useMessageComposer({
           "image"
         );
 
-        setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
+        setMessages((prevMessages) => {
+          const updated = prevMessages.map((msg) =>
             msg.id === tempId ? { ...sentMessage, status: "sent" } : msg
-          )
-        );
+          );
+          return dedupeMessagesById(updated);
+        });
       } catch (error) {
         logger.error("MessageComposer", "Error uploading image", error);
         setMessages((prevMessages) =>
@@ -184,11 +207,12 @@ export default function useMessageComposer({
         content
       );
 
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
+      setMessages((prevMessages) => {
+        const updated = prevMessages.map((msg) =>
           msg.id === tempId ? { ...sentMessage, status: "sent" } : msg
-        )
-      );
+        );
+        return dedupeMessagesById(updated);
+      });
     } catch (error) {
       logger.error("MessageComposer", "Error sending message", error);
       setMessages((prevMessages) =>

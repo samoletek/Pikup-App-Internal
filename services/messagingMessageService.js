@@ -14,6 +14,9 @@ import {
   updateConversationById,
 } from './repositories/messagingRepository';
 
+const MESSAGES_BACKGROUND_SYNC_INTERVAL_MS = 2000;
+const REALTIME_DEGRADED_STATUSES = new Set(['TIMED_OUT', 'CHANNEL_ERROR', 'CLOSED']);
+
 export const sendMessage = async (conversationId, senderId, senderType, content, messageType = 'text') => {
   try {
     const { data: message, error } = await insertMessageWithSelect({
@@ -132,40 +135,116 @@ export const loadOlderMessages = async (conversationId, beforeTimestamp, limit =
 };
 
 export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage) => {
+  const channelSuffix = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const channelTopic = `public:messages:${conversationId}:${channelSuffix}`;
+
+  let isDisposed = false;
+  let syncInFlight = false;
+  let backgroundSyncTimer = null;
+
+  const clearBackgroundSync = () => {
+    if (backgroundSyncTimer) {
+      clearInterval(backgroundSyncTimer);
+      backgroundSyncTimer = null;
+    }
+  };
+
+  const startBackgroundSync = (syncFn) => {
+    if (backgroundSyncTimer || isDisposed) {
+      return;
+    }
+
+    backgroundSyncTimer = setInterval(() => {
+      void syncFn();
+    }, MESSAGES_BACKGROUND_SYNC_INTERVAL_MS);
+  };
+
+  const runRecentSync = async (onSyncMessage) => {
+    if (isDisposed || syncInFlight) {
+      return;
+    }
+
+    syncInFlight = true;
+    try {
+      const recentMessages = await getRecentMessages(conversationId);
+      if (isDisposed) {
+        return;
+      }
+
+      (Array.isArray(recentMessages) ? recentMessages : []).forEach((message) => {
+        onSyncMessage(message);
+      });
+    } finally {
+      syncInFlight = false;
+    }
+  };
+
   if (typeof onNewMessage !== 'function') {
     const legacyCallback = onInitialLoad;
-    getRecentMessages(conversationId).then(legacyCallback);
+    const runLegacyRefresh = async () => {
+      const recentMessages = await getRecentMessages(conversationId);
+      if (isDisposed) {
+        return;
+      }
+      legacyCallback(recentMessages);
+    };
 
-    const channel = createRealtimeChannel(`public:messages:${conversationId}`)
+    void runLegacyRefresh();
+    startBackgroundSync(runLegacyRefresh);
+
+    const channel = createRealtimeChannel(channelTopic)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
       }, () => {
-        getRecentMessages(conversationId).then(legacyCallback);
+        void runLegacyRefresh();
       })
-      .subscribe();
+      .subscribe((status) => {
+        logger.info('MessagingMessageService', 'Messages realtime status changed (legacy)', {
+          conversationId,
+          status,
+        });
 
-    return () => { removeRealtimeChannel(channel); };
+        if (REALTIME_DEGRADED_STATUSES.has(status)) {
+          void runLegacyRefresh();
+        }
+      });
+
+    return () => {
+      isDisposed = true;
+      clearBackgroundSync();
+      removeRealtimeChannel(channel);
+    };
   }
 
   getRecentMessages(conversationId).then(onInitialLoad);
+  startBackgroundSync(() => runRecentSync(onNewMessage));
 
-  const channel = createRealtimeChannel(`public:messages:${conversationId}`)
+  const channel = createRealtimeChannel(channelTopic)
     .on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
       table: 'messages',
       filter: `conversation_id=eq.${conversationId}`,
-    }, (payload) => {
-      if (payload?.new) {
-        onNewMessage(mapMessageRow(payload.new));
-      }
+    }, () => {
+      void runRecentSync(onNewMessage);
     })
-    .subscribe();
+    .subscribe((status) => {
+      logger.info('MessagingMessageService', 'Messages realtime status changed', {
+        conversationId,
+        status,
+      });
+
+      if (REALTIME_DEGRADED_STATUSES.has(status)) {
+        void runRecentSync(onNewMessage);
+      }
+    });
 
   return () => {
+    isDisposed = true;
+    clearBackgroundSync();
     removeRealtimeChannel(channel);
   };
 };

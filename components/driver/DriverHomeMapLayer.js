@@ -6,6 +6,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../styles/theme";
 import { logger } from "../../services/logger";
 
+const dedupeRequestsById = (list = []) => {
+  const seen = new Set();
+  const deduped = [];
+
+  (Array.isArray(list) ? list : []).forEach((request) => {
+    const requestId = String(request?.id || "").trim();
+    if (!requestId) {
+      deduped.push(request);
+      return;
+    }
+
+    if (seen.has(requestId)) {
+      return;
+    }
+
+    seen.add(requestId);
+    deduped.push(request);
+  });
+
+  return deduped;
+};
+
 const DriverHomeMapLayer = ({
   region,
   tabBarHeight,
@@ -30,6 +52,7 @@ const DriverHomeMapLayer = ({
   if (!region) {
     return null;
   }
+  const visibleRequests = dedupeRequestsById(availableRequests);
 
   return (
     <>
@@ -83,7 +106,7 @@ const DriverHomeMapLayer = ({
           </Mapbox.MarkerView>
         )}
 
-        {isOnline && !hasActiveTrip && !showIncomingModal && !isMinimized && availableRequests.map((request) => {
+        {isOnline && !hasActiveTrip && !showIncomingModal && !isMinimized && visibleRequests.map((request) => {
           if (!request?.pickup?.coordinates?.longitude || !request?.pickup?.coordinates?.latitude) {
             return null;
           }
