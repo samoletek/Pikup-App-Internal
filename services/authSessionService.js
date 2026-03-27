@@ -4,6 +4,7 @@ import {
 } from './repositories/authRepository';
 
 const getProfileTableByRole = (userType) => (userType === 'driver' ? 'drivers' : 'customers');
+const isNoRowsError = (error) => error?.code === 'PGRST116';
 
 export const subscribeToAuthStateChanges = (handler) => {
   const {
@@ -34,10 +35,13 @@ export const fetchUserProfileByRole = async ({ userId, userType }) => {
   const table = getProfileTableByRole(userType);
   const { data, error } = await fetchProfileByTableAndUserId(table, userId, {
     columns: '*',
-    maybeSingle: false,
+    maybeSingle: true,
   });
 
   if (error) {
+    if (isNoRowsError(error)) {
+      return null;
+    }
     throw error;
   }
 

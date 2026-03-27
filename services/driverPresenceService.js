@@ -152,9 +152,11 @@ export const getDriverSessionStats = async (driverId, date = null, authFetch) =>
   try {
     const targetDate = date || new Date().toISOString().split('T')[0];
 
-    const response = await authFetch(
+    const response = await authFetchWithTimeout(
+      authFetch,
       `${PAYMENT_SERVICE_URL}/drivers/${driverId}/session-stats?date=${targetDate}`,
-      { method: 'GET' }
+      { method: 'GET' },
+      NETWORK_TIMEOUT_MS
     );
 
     if (!response.ok) {
@@ -169,7 +171,12 @@ export const getDriverSessionStats = async (driverId, date = null, authFetch) =>
     };
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to get driver session stats');
-    logger.error('DriverPresenceService', 'Error getting driver session stats', normalized, error);
+    logger.warn(
+      'DriverPresenceService',
+      'Session stats unavailable, using zero fallback',
+      normalized,
+      error
+    );
     return { totalOnlineMinutes: 0, tripsCompleted: 0, totalEarnings: 0 };
   }
 };
