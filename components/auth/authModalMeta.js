@@ -36,5 +36,5 @@ export const getAuthModalHeight = (step, screenHeight) => {
         return Platform.OS === 'ios' ? screenHeight * 0.45 : screenHeight * 0.50;
     }
 
-    return Platform.OS === 'ios' ? screenHeight * 0.35 : screenHeight * 0.40;
+    return Platform.OS === 'ios' ? screenHeight * 0.35 : screenHeight * 0.33;
 };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, Image } from 'react-native';
+import { Alert, Image, Platform } from 'react-native';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
+import { appConfig } from '../config/appConfig';
 import { logger } from '../services/logger';
 import {
   createVerificationSession,
@@ -13,6 +14,22 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
   const [verificationStatus, setVerificationStatus] = useState('pending');
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
+
+  const resolveIdentityBrandLogo = () => {
+    // Android identity SDK in this version is unstable with bundled asset URIs.
+    // Provide a stable HTTPS logo source to avoid native crashes when opening the sheet.
+    if (Platform.OS === 'android') {
+      const remoteLogoUrl = String(
+        appConfig?.stripe?.identityBrandLogoUrl || 'https://pikup-app.com/favicon.png'
+      ).trim();
+
+      if (remoteLogoUrl) {
+        return { uri: remoteLogoUrl };
+      }
+    }
+
+    return Image.resolveAssetSource(require('../assets/pikup-logo.png'));
+  };
 
   const fetchVerificationSessionParams = async () => {
     try {
@@ -32,10 +49,11 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       setVerificationSessionId(data.id);
 
       if (!data.ephemeral_key_secret) {
-        logger.error('DriverIdentityVerification', 'MISSING ephemeral_key_secret in response');
+        logger.error('DriverIdentityVerification', 'MISSING ephemeral_key_secret in response', data);
+        throw new Error('Missing ephemeral key secret for Stripe Identity');
       }
 
-      const logo = Image.resolveAssetSource(require('../assets/pikup-logo.png'));
+      const logo = resolveIdentityBrandLogo();
 
       return {
         sessionId: data.id,
@@ -135,7 +153,24 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     }
   };
 
-  const { status, present, loading: identityLoading } = useStripeIdentity(fetchVerificationSessionParams);
+  const {
+    status,
+    error: identityError,
+    present,
+    loading: identityLoading,
+  } = useStripeIdentity(fetchVerificationSessionParams);
+
+  const startIdentityVerification = async () => {
+    try {
+      await present();
+    } catch (error) {
+      logger.error('DriverIdentityVerification', 'Failed to present Stripe identity sheet', error);
+      Alert.alert(
+        'Verification Error',
+        'Could not open identity verification right now. Please try again.'
+      );
+    }
+  };
 
   useEffect(() => {
     logger.info('DriverIdentityVerification', 'Stripe Identity status changed', { status });
@@ -198,6 +233,18 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, verificationSessionId, currentUser]);
 
+  useEffect(() => {
+    if (!identityError) {
+      return;
+    }
+
+    logger.error('DriverIdentityVerification', 'Stripe Identity native error', identityError);
+    Alert.alert(
+      'Verification Error',
+      identityError?.message || 'Unable to open Stripe verification flow.'
+    );
+  }, [identityError]);
+
   return {
     verificationSessionId,
     verificationStatus,
@@ -205,7 +252,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     isLoadingVerificationData,
     verificationDataPopulated,
     setVerificationDataPopulated,
-    present,
+    present: startIdentityVerification,
     identityLoading,
   };
 }

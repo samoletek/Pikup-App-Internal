@@ -102,6 +102,7 @@ export default function AuthModal({ visible, onClose, selectedRole, navigation }
             height={getAuthModalHeight(step, SCREEN_HEIGHT)}
             backgroundColor={colors.background.secondary}
             avoidKeyboard={true}
+            bottomInsetEnabled={Platform.OS === 'ios'}
             renderHeader={(animateClose) => (
                 <View style={styles.header}>
                     <View style={styles.headerLeft}>

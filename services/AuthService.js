@@ -37,6 +37,7 @@ export {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let suppressNextAuthBootstrapFromRecovery = false;
+const normalizeAuthEmail = (value) => String(value || '').trim().toLowerCase();
 
 export const consumeRecoveryBootstrapSuppression = () => {
   if (!suppressNextAuthBootstrapFromRecovery) {
@@ -84,14 +85,19 @@ const extractParamsFromUrl = (url) => {
  */
 export const signup = async (email, password, type, additionalData = {}) => {
   try {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!normalizedEmail) {
+      throw new Error('Email is required.');
+    }
+
     logger.info('AuthService', 'Starting signup', {
-      email,
+      email: normalizedEmail,
       role: type,
     });
 
     const tableName = getProfileTableByRole(type);
     const { data: authData, error: authError } = await signUpWithPassword({
-      email,
+      email: normalizedEmail,
       password,
       metadata: {
         user_type: type,
@@ -143,6 +149,11 @@ export const signup = async (email, password, type, additionalData = {}) => {
  */
 export const login = async (email, password, expectedRole) => {
   try {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!normalizedEmail) {
+      throw new Error('Email is required.');
+    }
+
     if (!expectedRole) {
       logger.warn('AuthService', 'Login called without expectedRole, defaulting to loose check');
     }
@@ -151,7 +162,7 @@ export const login = async (email, password, expectedRole) => {
     const targetTable = getProfileTableByRole(expectedRole);
 
     const { data: authData, error } = await signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
 
@@ -229,7 +240,7 @@ export const logout = async () => {
 };
 
 export const verifyAccountPassword = async (currentUser, password) => {
-    const userEmail = currentUser?.email;
+    const userEmail = normalizeAuthEmail(currentUser?.email);
 
     if (!currentUser?.id && !currentUser?.uid) {
         throw new Error('User not authenticated');
@@ -286,12 +297,13 @@ export const changePassword = async (currentUser, currentPassword, newPassword) 
  * @returns {Promise<boolean>} Success status
  */
 export const resetPassword = async (email) => {
-    if (!email) {
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!normalizedEmail) {
         throw new Error('Email is required.');
     }
 
     const redirectTo = 'https://pikup-app.com/reset-password';
-    const { error } = await resetPasswordForEmail(email, { redirectTo });
+    const { error } = await resetPasswordForEmail(normalizedEmail, { redirectTo });
 
     if (error) {
         throw error;
@@ -362,11 +374,12 @@ export const completePasswordRecovery = async (newPassword) => {
 };
 
 export const checkUserExists = async (email) => {
-  if (!email) {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!normalizedEmail) {
     throw new Error('Email is required.');
   }
 
-  const { data, error } = await invokeCheckUserExists(email);
+  const { data, error } = await invokeCheckUserExists(normalizedEmail);
 
   if (error) {
     throw error;

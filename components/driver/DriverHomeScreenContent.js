@@ -73,8 +73,9 @@ export default function DriverHomeScreenContent({
   onClosePhoneVerify,
   onPhoneVerified,
   phoneVerifyUserId,
-  showDeclinedSupportBanner,
-  onOpenDeclinedSupport,
+  showOnboardingRequiredBanner,
+  onOpenOnboarding,
+  isAvailabilityLocked,
   isDriverGeoRestricted,
   driverAvailabilityComingSoonTitle,
   driverAvailabilityComingSoonMessage,
@@ -123,22 +124,23 @@ export default function DriverHomeScreenContent({
           onGoOnline={onGoOnline}
           onGoOnlineScheduled={onGoOnlineScheduled}
           onViewScheduledRequests={onViewScheduledRequests}
+          isAvailabilityLocked={isAvailabilityLocked}
           isDriverGeoRestricted={isDriverGeoRestricted}
           onViewAcceptedRequests={onViewAcceptedRequests}
         />
       )}
 
-      {showDeclinedSupportBanner || showGeoRestrictedBanner ? (
+      {showOnboardingRequiredBanner || showGeoRestrictedBanner ? (
         <View style={[styles.topNoticeStack, { top: insetsTop + 40 }]}>
-          {showDeclinedSupportBanner ? (
+          {showOnboardingRequiredBanner ? (
             <TouchableOpacity
               style={styles.identityDeclinedBanner}
-              onPress={onOpenDeclinedSupport}
+              onPress={onOpenOnboarding}
               activeOpacity={0.9}
             >
-              <Ionicons name="alert-circle" size={18} color={colors.white} />
+              <Ionicons name="shield-checkmark-outline" size={18} color={colors.white} />
               <Text style={styles.identityDeclinedBannerText}>
-                Onboarding was not approved. Tap to contact support.
+                You have not completed driver verification yet. Tap to continue onboarding.
               </Text>
               <Ionicons name="chevron-forward" size={18} color={colors.white} />
             </TouchableOpacity>
@@ -198,6 +200,7 @@ export default function DriverHomeScreenContent({
           onGoOnlineScheduled={onGoOnlineScheduled}
           navigation={navigation}
           onExpandedChange={onDashboardExpandedChange}
+          isAvailabilityLocked={isAvailabilityLocked}
           isDriverGeoRestricted={isDriverGeoRestricted}
         />
       )}

@@ -67,6 +67,10 @@ export const appConfig = {
     publishableKey: readEnv("EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"),
     merchantId: readEnv("EXPO_PUBLIC_STRIPE_MERCHANT_ID", "merchant.com.pikup"),
     urlScheme: readEnv("EXPO_PUBLIC_URL_SCHEME", "pikup"),
+    identityBrandLogoUrl: readEnv(
+      "EXPO_PUBLIC_STRIPE_IDENTITY_BRAND_LOGO_URL",
+      "https://pikup-app.com/favicon.png"
+    ),
     onboardingRefreshUrl: readEnv(
       "EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL",
       "https://pikup-app.com/driver-onboarding"

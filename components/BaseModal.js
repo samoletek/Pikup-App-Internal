@@ -32,6 +32,7 @@ const BaseModal = forwardRef(({
     onBackdropPress,
     avoidKeyboard = false,
     disableDrag = false,
+    bottomInsetEnabled = true,
 }, ref) => {
     const insets = useSafeAreaInsets();
 
@@ -247,7 +248,7 @@ const BaseModal = forwardRef(({
                 </View>
 
                 {/* Safe area spacer for bottom devices */}
-                <View style={{ height: insets.bottom }} />
+                <View style={{ height: bottomInsetEnabled ? insets.bottom : 0 }} />
             </Animated.View>
         </Modal>
     );

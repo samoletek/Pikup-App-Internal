@@ -1,0 +1,169 @@
+diff --git a/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityReactNativeModule.kt b/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityReactNativeModule.kt
+index a3369b0..d24a92e 100644
+--- a/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityReactNativeModule.kt
++++ b/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityReactNativeModule.kt
+@@ -29,30 +29,59 @@ class StripeIdentityReactNativeModule(reactContext: ReactApplicationContext) : R
+ 
+   @ReactMethod
+   fun initIdentityVerificationSheet(options: ReadableMap, promise: Promise) {
+-    initialized = true
+-    val activity = reactApplicationContext.currentActivity as AppCompatActivity? ?: return
++    UiThreadUtil.runOnUiThread {
++      initialized = true
++      val activity = reactApplicationContext.currentActivity as? AppCompatActivity
++      if (activity == null) {
++        initialized = false
++        promise.reject(
++          "Failed",
++          "Identity verification requires an active AppCompatActivity"
++        )
++        return@runOnUiThread
++      }
+ 
+-    // If a fragment was already initialized, we want to remove it first
+-    stripeIdentityVerificationSheetFragment?.let {
+       runCatching {
+-        activity.supportFragmentManager.beginTransaction().remove(it).commitAllowingStateLoss()
+-      }
+-    }
+-    stripeIdentityVerificationSheetFragment = StripeIdentityVerificationSheetFragment().also {
+-      val bundle = toBundleObject(options)
+-      it.arguments = bundle
+-    }
++        // If a fragment was already initialized, remove it first.
++        stripeIdentityVerificationSheetFragment?.let {
++          activity.supportFragmentManager.beginTransaction()
++            .remove(it)
++            .commitAllowingStateLoss()
++        }
++
++        stripeIdentityVerificationSheetFragment = StripeIdentityVerificationSheetFragment().also {
++          val bundle = toBundleObject(options)
++          it.arguments = bundle
++        }
+ 
+-    activity.supportFragmentManager.beginTransaction()
+-      .add(requireNotNull(stripeIdentityVerificationSheetFragment), "identity_sheet_launch_fragment")
+-      .commit()
++        activity.supportFragmentManager.beginTransaction()
++          .add(
++            requireNotNull(stripeIdentityVerificationSheetFragment),
++            "identity_sheet_launch_fragment"
++          )
++          .commitAllowingStateLoss()
+ 
+-    promise.resolve(null)
++        promise.resolve(null)
++      }.onFailure {
++        initialized = false
++        promise.reject("Failed", it.message, it)
++      }
++    }
+   }
+ 
+   @ReactMethod
+   fun presentIdentityVerificationSheet(promise: Promise) {
+-    stripeIdentityVerificationSheetFragment?.present(promise)
++    UiThreadUtil.runOnUiThread {
++      val fragment = stripeIdentityVerificationSheetFragment
++      if (fragment == null) {
++        promise.reject(
++          "Failed",
++          "Identity verification sheet is not initialized"
++        )
++        return@runOnUiThread
++      }
++      fragment.present(promise)
++    }
+   }
+ 
+ }
+diff --git a/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityVerificationSheetFragment.kt b/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityVerificationSheetFragment.kt
+index e72a6a3..629b04f 100644
+--- a/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityVerificationSheetFragment.kt
++++ b/node_modules/@stripe/stripe-identity-react-native/android/src/main/java/com/stripeidentityreactnative/StripeIdentityVerificationSheetFragment.kt
+@@ -21,6 +21,7 @@ class StripeIdentityVerificationSheetFragment : Fragment() {
+   private lateinit var ephemeralKeySecret: String
+ 
+   private var promise: Promise? = null
++  private var pendingResult: WritableNativeMap? = null
+ 
+   override fun onCreateView(
+     inflater: LayoutInflater,
+@@ -39,16 +40,21 @@ class StripeIdentityVerificationSheetFragment : Fragment() {
+     val imageUriString = arguments?.getBundle("brandLogo")?.getString("uri").orEmpty()
+     return IdentityVerificationSheet.create(this, IdentityVerificationSheet.Configuration
+       (brandLogo = getUrlOrResourceId(imageUriString))) {
+-      promise?.let { currentPromise ->
+-        val result = WritableNativeMap()
+-        when (it) {
+-          VerificationFlowResult.Completed -> result.putString("status", "FlowCompleted")
+-          VerificationFlowResult.Canceled -> result.putString("status", "FlowCanceled")
+-          else -> result.putString("status", "FlowFailed")
+-        }
++      val result = WritableNativeMap()
++      when (it) {
++        VerificationFlowResult.Completed -> result.putString("status", "FlowCompleted")
++        VerificationFlowResult.Canceled -> result.putString("status", "FlowCanceled")
++        else -> result.putString("status", "FlowFailed")
++      }
++
++      // Native callback can race ahead of JS `presentIdentityVerificationSheet`.
++      // Store result temporarily instead of crashing the host app.
++      val currentPromise = promise
++      if (currentPromise != null) {
+         currentPromise.resolve(result)
+-      } ?: run {
+-        throw Exception("No promise is set to handle results")
++        promise = null
++      } else {
++        pendingResult = result
+       }
+ 
+     }
+@@ -62,6 +68,9 @@ class StripeIdentityVerificationSheetFragment : Fragment() {
+       } else {
+         // Release mode, Image.resolveAssetSource resolves to a drawable resource
+         val brandLogoId = resources.getIdentifier(it, "drawable", context?.packageName) // int
++        if (brandLogoId == 0) {
++          return@let Uri.parse("")
++        }
+         Uri.Builder()
+           .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
+           .authority(resources.getResourcePackageName(brandLogoId))
+@@ -75,14 +84,31 @@ class StripeIdentityVerificationSheetFragment : Fragment() {
+ 
+   override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+     super.onViewCreated(view, savedInstanceState)
++    runCatching {
++      identityVerificationSheet.present(
++        verificationSessionId = verificationSessionId,
++        ephemeralKeySecret = ephemeralKeySecret
++      )
++    }.onFailure {
++      val result = WritableNativeMap()
++      result.putString("status", "FlowFailed")
++      result.putString("error", it.message ?: "Failed to open Stripe identity flow")
+ 
+-    identityVerificationSheet.present(
+-      verificationSessionId = verificationSessionId,
+-      ephemeralKeySecret = ephemeralKeySecret
+-    )
++      promise?.let { currentPromise ->
++        currentPromise.resolve(result)
++        promise = null
++      } ?: run {
++        pendingResult = result
++      }
++    }
+   }
+ 
+   fun present(promise: Promise) {
+     this.promise = promise
++    pendingResult?.let {
++      promise.resolve(it)
++      pendingResult = null
++      this.promise = null
++    }
+   }
+ }

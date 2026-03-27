@@ -60,9 +60,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverHeartbeat,
   } = useDriverActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
-  const [showDeclinedBannerFromRoute, setShowDeclinedBannerFromRoute] = useState(
-    Boolean(route?.params?.showOnboardingDeclinedBanner)
-  );
   const [isOnline, setIsOnline] = useState(false);
   const [activeRequestPool, setActiveRequestPool] = useState(REQUEST_POOLS.ASAP);
   const [activeJob, setActiveJob] = useState(null);
@@ -128,9 +125,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     ) ||
     metadataOnboardingStatus === 'verified'
   );
-  const showDeclinedSupportBanner = (
-    !isOnboardingApproved &&
-    (showDeclinedBannerFromRoute || isOnboardingDeclined)
+  const showOnboardingRequiredBanner = (
+    !isOnboardingApproved || isOnboardingDeclined
   );
   const {
     driverLocation,
@@ -281,18 +277,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     incomingRequestIdRef.current = incomingRequest?.id || null;
   }, [incomingRequest?.id]);
 
-  useEffect(() => {
-    if (route?.params?.showOnboardingDeclinedBanner) {
-      setShowDeclinedBannerFromRoute(true);
-    }
-  }, [route?.params?.showOnboardingDeclinedBanner]);
-
-  useEffect(() => {
-    if (isOnboardingApproved && showDeclinedBannerFromRoute) {
-      setShowDeclinedBannerFromRoute(false);
-    }
-  }, [isOnboardingApproved, showDeclinedBannerFromRoute]);
-
   useDriverRequestPoolRealtime({
     currentUserId,
     isOnline,
@@ -400,8 +384,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     showIncomingModal,
   });
 
-  const handleOpenDeclinedSupport = React.useCallback(() => {
-    navigation.navigate('CustomerHelpScreen');
+  const handleOpenOnboarding = React.useCallback(() => {
+    navigation.navigate('DriverOnboardingScreen');
   }, [navigation]);
 
   const contentProps = buildDriverHomeContentProps({
@@ -447,8 +431,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     onClosePhoneVerify: handleClosePhoneVerify,
     onPhoneVerified: handlePhoneVerified,
     phoneVerifyUserId: currentUser?.uid || currentUser?.id,
-    showDeclinedSupportBanner,
-    onOpenDeclinedSupport: handleOpenDeclinedSupport,
+    showOnboardingRequiredBanner,
+    onOpenOnboarding: handleOpenOnboarding,
+    isAvailabilityLocked: showOnboardingRequiredBanner,
     isDriverGeoRestricted,
     driverAvailabilityComingSoonTitle: DRIVER_AVAILABILITY_COMING_SOON_TITLE,
     driverAvailabilityComingSoonMessage: DRIVER_AVAILABILITY_COMING_SOON_MESSAGE,

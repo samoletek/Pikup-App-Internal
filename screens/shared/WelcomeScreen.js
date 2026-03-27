@@ -139,7 +139,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: -1,
+    zIndex: 0,
+    pointerEvents: 'none',
     paddingBottom: '20%',
   },
   logoContainer: {
@@ -176,6 +177,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing.xxl + spacing.sm,
     gap: spacing.sm,
+    zIndex: 1,
   },
   buttonContainerCompact: {
     flexDirection: "column",

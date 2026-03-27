@@ -354,6 +354,11 @@ export const styles = StyleSheet.create({
         shadowOpacity: 0,
         elevation: 0,
     },
+    goOnlineBtnMuted: {
+        backgroundColor: colors.background.elevated,
+        borderWidth: 1,
+        borderColor: colors.navigation.tabBarBorder,
+    },
     goOnlineText: {
         fontSize: 16,
         fontWeight: '600',
@@ -362,16 +367,9 @@ export const styles = StyleSheet.create({
     goOnlineTextDisabled: {
         fontSize: 14,
         fontWeight: '600',
-        color: colors.text.primary,
+        color: colors.text.muted,
         textAlign: 'center',
         flexShrink: 1,
-    },
-    lockedButtonContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: spacing.xs,
-        paddingHorizontal: spacing.sm,
     },
     goOnlineScheduledText: {
         fontSize: 16,

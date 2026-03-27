@@ -20,6 +20,7 @@ export default function DriverHomeBottomPanel({
   onGoOnline,
   onGoOnlineScheduled,
   onViewScheduledRequests,
+  isAvailabilityLocked,
   isDriverGeoRestricted,
   onViewAcceptedRequests,
 }) {
@@ -114,39 +115,34 @@ export default function DriverHomeBottomPanel({
             <Text style={styles.goOfflineText}>Go Offline</Text>
           </TouchableOpacity>
         </>
-      ) : isDriverGeoRestricted ? (
+      ) : (isDriverGeoRestricted || isAvailabilityLocked) ? (
         <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
           <TouchableOpacity
             style={[
               styles.offlineRoleButton,
+              styles.offlineRoleButtonMuted,
               styles.offlineRoleButtonDisabled,
               isCompact && styles.offlineRoleButtonCompact,
             ]}
             disabled
             activeOpacity={1}
           >
-            <View style={styles.lockedButtonContent}>
-              <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
-              <Text style={styles.offlineRoleButtonTextDisabled}>Go Online</Text>
-            </View>
+            <Text style={styles.offlineRoleButtonTextDisabled}>Go Online</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.offlineRoleButton,
-              styles.offlineRoleButtonDark,
+              styles.offlineRoleButtonMuted,
               styles.offlineRoleButtonDisabled,
               isCompact && styles.offlineRoleButtonCompact,
             ]}
             disabled
             activeOpacity={1}
           >
-            <View style={styles.lockedButtonContent}>
-              <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
-              <Text style={styles.offlineRoleButtonTextDisabled}>
-                Go Online Scheduled
-              </Text>
-            </View>
+            <Text style={styles.offlineRoleButtonTextDisabled}>
+              Go Online Scheduled
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -359,6 +355,11 @@ const styles = StyleSheet.create({
   offlineRoleButtonDark: {
     backgroundColor: colors.primaryDark,
   },
+  offlineRoleButtonMuted: {
+    backgroundColor: colors.background.elevated,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
+  },
   offlineRoleButtonCompact: {
     width: '100%',
     flex: 0,
@@ -374,7 +375,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   offlineRoleButtonTextDisabled: {
-    color: colors.text.primary,
+    color: colors.text.muted,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',

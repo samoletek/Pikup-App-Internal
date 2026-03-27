@@ -13,8 +13,9 @@ serve(async (req) => {
 
   try {
     const { email } = await req.json()
+    const normalizedEmail = String(email || '').trim().toLowerCase()
 
-    if (!email) {
+    if (!normalizedEmail) {
       throw new Error('Email is required')
     }
 
@@ -25,13 +26,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    console.log(`Checking existence for email: ${email}`)
+    console.log(`Checking existence for email: ${normalizedEmail}`)
 
     // 1. Check if user exists in 'drivers' table
     const { data: driver, error: driverError } = await supabaseAdmin
       .from('drivers')
       .select('id, email')
-      .eq('email', email)
+      .ilike('email', normalizedEmail)
       .maybeSingle()
 
     if (driverError) {
@@ -50,7 +51,7 @@ serve(async (req) => {
     const { data: customer, error: customerError } = await supabaseAdmin
       .from('customers')
       .select('id, email')
-      .eq('email', email)
+      .ilike('email', normalizedEmail)
       .maybeSingle()
 
     if (customerError) {

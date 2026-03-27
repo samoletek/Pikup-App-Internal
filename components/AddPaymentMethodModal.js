@@ -18,16 +18,18 @@ import { logger } from "../services/logger";
 import styles from "./AddPaymentMethodModal.styles";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Stripe Android CardField parses these values via native Color.parseColor.
+// Use full 6-char hex strings to avoid runtime crashes from shorthand values.
 const STRIPE_CARD_INPUT_STYLE = {
-  backgroundColor: colors.background.input,
-  textColor: colors.white,
-  placeholderColor: colors.text.placeholder,
-  borderColor: colors.border.light,
+  backgroundColor: '#222233',
+  textColor: '#FFFFFF',
+  placeholderColor: '#666666',
+  borderColor: '#444444',
   borderWidth: 1,
   borderRadius: 12,
   fontSize: 16,
-  cursorColor: colors.success,
-  textErrorColor: colors.error,
+  cursorColor: '#00D4AA',
+  textErrorColor: '#FF4444',
 };
 
 export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {

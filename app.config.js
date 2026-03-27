@@ -126,6 +126,8 @@ module.exports = {
       EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
       EXPO_PUBLIC_STRIPE_MERCHANT_ID: process.env.EXPO_PUBLIC_STRIPE_MERCHANT_ID,
       EXPO_PUBLIC_URL_SCHEME: process.env.EXPO_PUBLIC_URL_SCHEME,
+      EXPO_PUBLIC_STRIPE_IDENTITY_BRAND_LOGO_URL:
+        process.env.EXPO_PUBLIC_STRIPE_IDENTITY_BRAND_LOGO_URL,
       EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL:
         process.env.EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL,
       EXPO_PUBLIC_STRIPE_ONBOARDING_RETURN_URL:
@@ -177,6 +179,7 @@ module.exports = {
         "./plugins/withMapboxNavigation",
         { ios: false, android: false },
       ],
+      "./plugins/withStripeIdentityMaterialTheme",
       ["expo-build-properties", { ios: { useFrameworks: "static" } }],
       [
         "expo-camera",

@@ -2,7 +2,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuthIdentity, useDriverActions } from '../../contexts/AuthContext';
 import { logger } from '../../services/logger';
 import OfflineDashboardBody from './OfflineDashboardBody';
@@ -17,6 +16,7 @@ export default function OfflineDashboard({
     onGoOnlineScheduled,
     navigation,
     onExpandedChange,
+    isAvailabilityLocked,
     isDriverGeoRestricted,
 }) {
     const { currentUser } = useAuthIdentity();
@@ -255,6 +255,7 @@ export default function OfflineDashboard({
         outputRange: [1, 0],
         extrapolate: 'clamp',
     });
+    const disableGoOnlineActions = Boolean(isDriverGeoRestricted || isAvailabilityLocked);
 
     return (
         <>
@@ -290,33 +291,27 @@ export default function OfflineDashboard({
                         style={[styles.buttonContainer, { opacity: goOnlineButtonOpacity }]}
                         pointerEvents={isExpanded ? 'none' : 'auto'}
                     >
-                        {isDriverGeoRestricted ? (
+                        {disableGoOnlineActions ? (
                             <View style={styles.buttonStack}>
                                 <TouchableOpacity
-                                    style={[styles.goOnlineBtn, styles.goOnlineBtnDisabled]}
+                                    style={[styles.goOnlineBtn, styles.goOnlineBtnDisabled, styles.goOnlineBtnMuted]}
                                     disabled
                                     activeOpacity={1}
                                 >
-                                    <View style={styles.lockedButtonContent}>
-                                        <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
-                                        <Text style={styles.goOnlineTextDisabled}>Go Online</Text>
-                                    </View>
+                                    <Text style={styles.goOnlineTextDisabled}>Go Online</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[
                                         styles.goOnlineBtn,
-                                        styles.goOnlineScheduledBtn,
                                         styles.goOnlineBtnDisabled,
+                                        styles.goOnlineBtnMuted,
                                     ]}
                                     disabled
                                     activeOpacity={1}
                                 >
-                                    <View style={styles.lockedButtonContent}>
-                                        <Ionicons name="lock-closed" size={14} color={colors.text.primary} />
-                                        <Text style={styles.goOnlineTextDisabled}>
-                                            Go Online Scheduled
-                                        </Text>
-                                    </View>
+                                    <Text style={styles.goOnlineTextDisabled}>
+                                        Go Online Scheduled
+                                    </Text>
                                 </TouchableOpacity>
                             </View>
                         ) : (

@@ -213,7 +213,6 @@ export default function CustomerProfileScreen({ navigation }) {
                 size={24}
                 color={colors.primary}
               />
-              <View style={styles.notificationDot} />
             </View>
             <Text style={styles.quickActionLabel}>Activity</Text>
           </TouchableOpacity>
