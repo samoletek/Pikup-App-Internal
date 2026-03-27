@@ -104,6 +104,31 @@ const styles = StyleSheet.create({
     marginVertical: spacing.base,
     marginLeft: spacing.xl,
   },
+  routePreviewContainer: {
+    height: 184,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.strong,
+    marginTop: spacing.base,
+  },
+  routePreviewMap: {
+    width: '100%',
+    height: '100%',
+  },
+  routePreviewMarker: {
+    width: spacing.base,
+    height: spacing.base,
+    borderRadius: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  routePreviewMarkerPickup: {
+    backgroundColor: colors.primaryDark,
+  },
+  routePreviewMarkerDropoff: {
+    backgroundColor: colors.success,
+  },
   noteLabel: {
     color: colors.text.muted,
     fontSize: typography.fontSize.sm,

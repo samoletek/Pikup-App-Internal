@@ -84,12 +84,23 @@ const styles = StyleSheet.create({
   cardsList: {
     paddingHorizontal: spacing.lg,
   },
+  cardsListVertical: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.base,
+  },
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     marginRight: spacing.lg,
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
+  },
+  cardVertical: {
+    width: '100%',
+    minHeight: CARD_HEIGHT,
+    height: undefined,
+    marginRight: 0,
+    marginBottom: spacing.base,
   },
   selectedCard: {
     transform: [{ scale: 1.02 }],
@@ -204,6 +215,9 @@ const styles = StyleSheet.create({
     flex: 1,
     marginBottom: spacing.base,
   },
+  routeContainerStatic: {
+    flex: 0,
+  },
   routePoints: {
     flex: 1,
     justifyContent: 'space-between',
@@ -246,6 +260,31 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 1,
     backgroundColor: colors.border.light,
+  },
+  routePreviewContainer: {
+    height: 148,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border.strong,
+    marginBottom: spacing.base,
+  },
+  routePreviewMap: {
+    width: '100%',
+    height: '100%',
+  },
+  routePreviewMarker: {
+    width: spacing.base,
+    height: spacing.base,
+    borderRadius: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
+  routePreviewMarkerPickup: {
+    backgroundColor: colors.primaryDark,
+  },
+  routePreviewMarkerDropoff: {
+    backgroundColor: colors.success,
   },
   customerSection: {
     marginBottom: spacing.lg,

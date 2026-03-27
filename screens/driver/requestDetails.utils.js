@@ -91,6 +91,16 @@ export const formatWeight = (item = {}) => {
   return `${raw} lb`;
 };
 
+const toCoordinatePair = (value) => {
+  const latitude = Number(value?.latitude ?? value?.lat);
+  const longitude = Number(value?.longitude ?? value?.lng ?? value?.lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return [longitude, latitude];
+};
+
 export const getItemRows = (request = {}) => {
   const list = toArray(request.items);
   if (list.length > 0) {
@@ -251,6 +261,16 @@ export const buildRequestDetails = (request) => {
   const photoRows = getPhotoRows(request);
   const pickupDetails = request.pickup?.details || {};
   const dropoffDetails = request.dropoff?.details || {};
+  const pickupCoordinates = toCoordinatePair(
+    request?.pickup?.coordinates ||
+    request?.pickupCoordinates ||
+    request?.pickup_location
+  );
+  const dropoffCoordinates = toCoordinatePair(
+    request?.dropoff?.coordinates ||
+    request?.dropoffCoordinates ||
+    request?.dropoff_location
+  );
 
   return {
     id: String(request.id || 'unknown'),
@@ -261,6 +281,8 @@ export const buildRequestDetails = (request) => {
     dropoffAddress: firstText(request.dropoff?.address) || 'Not specified',
     pickupNotes: firstText(pickupDetails.notes, pickupDetails.note),
     dropoffNotes: firstText(dropoffDetails.notes, dropoffDetails.note),
+    pickupCoordinates,
+    dropoffCoordinates,
     itemRows,
     photoRows,
     timeDistance: [request.time, request.distance].filter(Boolean).join(' · '),

@@ -5,6 +5,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../styles/theme';
 import { getDisplayPhotos, getScheduledLabel } from './requestModalUtils';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
+import { resolveCustomerRatingFromRequest } from '../../utils/participantIdentity';
+import RequestRoutePreviewMap from './RequestRoutePreviewMap';
 
 const toMoneyLabel = (value) => {
   if (typeof value === 'string' && value.includes('$')) {
@@ -23,12 +25,16 @@ function RequestCard({
   item,
   index,
   selectedIndex,
+  mode = 'available',
+  showRoutePreview = false,
   styles,
   timers,
   onMessage,
   onAccept,
   onViewDetails,
 }) {
+  const isAcceptedMode = mode === 'accepted';
+  const isVerticalLayout = mode === 'scheduled' || mode === 'accepted';
   const isSelected = index === selectedIndex;
   const displayPhotos = getDisplayPhotos(item);
   const earnings = toMoneyLabel(
@@ -45,6 +51,9 @@ function RequestCard({
   const customerDisplay = resolveCustomerDisplayFromRequest(item, {
     fallbackName: 'Customer',
   });
+  const customerRating = resolveCustomerRatingFromRequest(item);
+  const hasCustomerRating = Number.isFinite(customerRating) && customerRating > 0;
+  const customerRatingLabel = hasCustomerRating ? customerRating.toFixed(1) : '';
   const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   const customerAvatarUrl = avatarLoadFailed ? null : customerDisplay.avatarUrl;
 
@@ -68,7 +77,13 @@ function RequestCard({
   };
 
   return (
-    <Animated.View style={[styles.card, isSelected && styles.selectedCard]}>
+    <Animated.View
+      style={[
+        styles.card,
+        isVerticalLayout && styles.cardVertical,
+        isSelected && !isVerticalLayout && styles.selectedCard,
+      ]}
+    >
       <LinearGradient
         colors={[colors.background.elevated, colors.background.panel]}
         style={styles.cardGradient}
@@ -117,7 +132,7 @@ function RequestCard({
           </View>
         )}
 
-        <View style={styles.routeContainer}>
+        <View style={[styles.routeContainer, isVerticalLayout && styles.routeContainerStatic]}>
           <View style={styles.routePoints}>
             <View style={styles.routePoint}>
               <View style={styles.pickupDot} />
@@ -142,6 +157,8 @@ function RequestCard({
             </View>
           </View>
         </View>
+
+        {showRoutePreview ? <RequestRoutePreviewMap request={item} styles={styles} /> : null}
 
         {displayPhotos.length > 0 && (
           <View style={styles.photosContainer}>
@@ -191,10 +208,12 @@ function RequestCard({
             )}
             <View>
               <Text style={styles.customerName}>{customerDisplay.name}</Text>
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={12} color={colors.gold} />
-                <Text style={styles.rating}>{item.customer?.rating || '5.0'}</Text>
-              </View>
+              {hasCustomerRating ? (
+                <View style={styles.ratingContainer}>
+                  <Ionicons name="star" size={12} color={colors.gold} />
+                  <Text style={styles.rating}>{customerRatingLabel}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -215,9 +234,11 @@ function RequestCard({
             <Text style={styles.detailsButtonText}>View Details</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept && onAccept(item)} activeOpacity={0.85}>
-            <Text style={styles.acceptButtonText}>Accept</Text>
-          </TouchableOpacity>
+          {!isAcceptedMode ? (
+            <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept && onAccept(item)} activeOpacity={0.85}>
+              <Text style={styles.acceptButtonText}>Accept</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </LinearGradient>
     </Animated.View>

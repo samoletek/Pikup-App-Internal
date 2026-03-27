@@ -156,8 +156,9 @@ export default function IncomingRequestCustomerCard({ request, styles }) {
       ),
     [customerProfile, request]
   );
-  const ratingStars = customerRating ? Math.round(customerRating) : 0;
-  const ratingLabel = customerRating ? customerRating.toFixed(1) : 'No ratings yet';
+  const hasCustomerRating = Number.isFinite(customerRating) && customerRating > 0;
+  const ratingStars = hasCustomerRating ? Math.round(customerRating) : 0;
+  const ratingLabel = hasCustomerRating ? customerRating.toFixed(1) : '';
   const customerPhotoPlaceholderStyle =
     styles.customerPhotoPlaceholder || styles.customerPhotoFallback || styles.customerPhoto;
 
@@ -174,17 +175,19 @@ export default function IncomingRequestCustomerCard({ request, styles }) {
         <Text style={styles.customerName}>
           {customerName}
         </Text>
-        <View style={styles.ratingRow}>
-          {[...Array(5)].map((_, index) => (
-            <Ionicons
-              key={index}
-              name="star"
-              size={12}
-              color={index < ratingStars ? colors.gold : colors.border.default}
-            />
-          ))}
-          <Text style={styles.ratingText}>{ratingLabel}</Text>
-        </View>
+        {hasCustomerRating ? (
+          <View style={styles.ratingRow}>
+            {[...Array(5)].map((_, index) => (
+              <Ionicons
+                key={index}
+                name="star"
+                size={12}
+                color={index < ratingStars ? colors.gold : colors.border.default}
+              />
+            ))}
+            <Text style={styles.ratingText}>{ratingLabel}</Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );

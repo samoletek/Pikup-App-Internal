@@ -23,15 +23,23 @@ export default function RequestCardsSection({
   styles,
 }) {
   const isAcceptedMode = mode === 'accepted';
+  const isScheduledMode = mode === 'scheduled';
+  const isVerticalList = isAcceptedMode || isScheduledMode;
   const loadingLabel = isAcceptedMode
     ? 'Loading accepted requests...'
-    : 'Finding available requests...';
+    : isScheduledMode
+      ? 'Loading scheduled requests...'
+      : 'Finding available requests...';
   const emptyStateTitle = isAcceptedMode
     ? 'No accepted requests'
-    : 'No requests available';
+    : isScheduledMode
+      ? 'No scheduled requests'
+      : 'No requests available';
   const emptyStateSubtitle = isAcceptedMode
     ? 'Accepted scheduled trips will appear here'
-    : 'New requests will appear here when customers need pickups';
+    : isScheduledMode
+      ? 'Scheduled pickup requests will appear here'
+      : 'New requests will appear here when customers need pickups';
 
   return (
     <View style={styles.cardsContainer}>
@@ -50,23 +58,25 @@ export default function RequestCardsSection({
         </View>
       ) : requests.length > 0 ? (
         <FlatList
+          key={`request-list-${mode}`}
           ref={flatListRef}
           data={requests}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={CARD_WIDTH + spacing.lg}
-          snapToAlignment="center"
-          decelerationRate="fast"
-          directionalLockEnabled
+          horizontal={!isVerticalList}
+          pagingEnabled={!isVerticalList}
+          showsHorizontalScrollIndicator={!isVerticalList}
+          showsVerticalScrollIndicator={isVerticalList}
+          snapToInterval={isVerticalList ? undefined : CARD_WIDTH + spacing.lg}
+          snapToAlignment={isVerticalList ? undefined : "center"}
+          decelerationRate={isVerticalList ? "normal" : "fast"}
+          directionalLockEnabled={!isVerticalList}
           scrollEnabled={requests.length > 1}
           bounces={false}
-          alwaysBounceHorizontal={false}
+          alwaysBounceHorizontal={!isVerticalList}
           alwaysBounceVertical={false}
-          contentContainerStyle={styles.cardsList}
+          contentContainerStyle={isVerticalList ? styles.cardsListVertical : styles.cardsList}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderRequestCard}
-          onScroll={onScroll}
+          onScroll={isVerticalList ? undefined : onScroll}
           scrollEventThrottle={16}
         />
       ) : (

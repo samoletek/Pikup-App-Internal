@@ -5,6 +5,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   useAuthIdentity,
   useDriverActions,
+  useProfileActions,
   useTripActions,
 } from '../../contexts/AuthContext';
 import DriverHomeScreenContent from '../../components/driver/DriverHomeScreenContent';
@@ -18,6 +19,7 @@ import useDriverActiveTripRestore from '../../hooks/useDriverActiveTripRestore';
 import useDriverRequestsFeed from '../../hooks/useDriverRequestsFeed';
 import useDriverHomeLocationTracking from '../../hooks/useDriverHomeLocationTracking';
 import useDriverHomeRequestActions from './useDriverHomeRequestActions';
+import useAcceptedScheduledRequests from './useAcceptedScheduledRequests';
 import useDriverHomePresentation from './useDriverHomePresentation';
 import styles from './DriverHomeScreen.styles';
 import { appConfig } from '../../config/appConfig';
@@ -41,12 +43,15 @@ export default function DriverHomeScreen({ navigation, route }) {
   const isCompact = width < 370;
   const tabBarHeight = useBottomTabBarHeight();
   const { userType, currentUser, refreshProfile } = useAuthIdentity();
+  const { getUserProfile } = useProfileActions();
   const {
     getUserPickupRequests,
     getAvailableRequests,
     declineRequestOffer,
     acceptRequest,
     checkExpiredRequests,
+    confirmScheduledTripCheckin,
+    declineScheduledTripCheckin,
     updateDriverLocation,
   } = useTripActions();
   const {
@@ -66,6 +71,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showAllRequests, setShowAllRequests] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [requestModalMode, setRequestModalMode] = useState('available');
 
   // New incoming request modal state
   const [showIncomingModal, setShowIncomingModal] = useState(false);
@@ -186,8 +192,36 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowAllRequests,
     setShowIncomingModal,
   });
-  const requestModalMode = 'available';
-  const requestModalRequests = availableRequests;
+  const {
+    acceptedScheduledRequests,
+    acceptedScheduledLoading,
+    acceptedScheduledError,
+    refreshAcceptedScheduledRequests,
+  } = useAcceptedScheduledRequests({
+    currentUserId,
+    getUserPickupRequests,
+    getUserProfile,
+    confirmScheduledTripCheckin,
+    declineScheduledTripCheckin,
+    isOnline,
+    hasActiveTrip,
+    navigation,
+    setAcceptedRequestId,
+    setActiveJob,
+    setShowRequestModal,
+    setShowAllRequests,
+    setRequestModalMode,
+  });
+
+  const requestModalRequests = requestModalMode === 'accepted'
+    ? acceptedScheduledRequests
+    : availableRequests;
+  const requestModalLoading = requestModalMode === 'accepted'
+    ? acceptedScheduledLoading
+    : loading;
+  const requestModalError = requestModalMode === 'accepted'
+    ? acceptedScheduledError
+    : error;
   const {
     activeJobDestinationAddress,
     activeJobSecondaryLabel,
@@ -329,6 +363,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowAllRequests,
     setShowIncomingModal,
     setShowRequestModal,
+    setRequestModalMode,
     showRequestModal,
   });
 
@@ -377,7 +412,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     activeJobDestinationAddress, activeJobSecondaryLabel, isScheduledPoolActive, waitTime,
     progressValue, incomingRequest, requestTimeRemaining, miniBarPulse, formatRequestTime,
     requestModalMode, requestModalRequests,
-    driverLocation, loading, error, requestTimerTotal, navigation,
+    driverLocation, loading: requestModalLoading, error: requestModalError, requestTimerTotal, navigation,
     phoneVerifyVisible,
     insetsTop: insets.top,
     onRequestMarkerPress: handleRequestMarkerPress,
@@ -385,15 +420,25 @@ export default function DriverHomeScreen({ navigation, route }) {
     onGoOffline: handleGoOffline,
     onGoOnline: handleGoOnline,
     onGoOnlineScheduled: handleGoOnlineScheduled,
-    onViewScheduledRequests: () => setShowAllRequests(true),
-    onViewAcceptedRequests: () => setShowAllRequests(true),
+    onViewScheduledRequests: () => {
+      setRequestModalMode('scheduled');
+      setShowAllRequests(true);
+    },
+    onViewAcceptedRequests: () => {
+      setRequestModalMode('accepted');
+      setShowAllRequests(true);
+    },
     onExpandMiniBar: handleExpandFromMiniBar,
     requestModalVisible: showRequestModal || showAllRequests,
     onCloseRequestModal: handleCloseRequestModal,
     onAcceptRequest: handleAcceptRequest,
     onViewRequestDetails: handleViewRequestDetails,
     onMessageCustomer: handleMessageCustomer,
-    onRefreshRequests: () => loadRequests(),
+    onRefreshRequests: () => (
+      requestModalMode === 'accepted'
+        ? refreshAcceptedScheduledRequests({ silent: false })
+        : loadRequests()
+    ),
     onIncomingRequestAccept: handleIncomingRequestAccept,
     onIncomingRequestDecline: handleIncomingRequestDecline,
     onIncomingRequestMinimize: handleIncomingRequestMinimize,
