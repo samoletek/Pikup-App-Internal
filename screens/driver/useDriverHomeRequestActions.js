@@ -22,13 +22,15 @@ export default function useDriverHomeRequestActions({
   setShowAllRequests,
   setShowIncomingModal,
   setShowRequestModal,
+  setRequestModalMode,
   showRequestModal,
 }) {
   const handleRequestMarkerPress = useCallback((request) => {
     logger.info('DriverHomeRequestActions', 'Request marker pressed', { requestId: request.id });
+    setRequestModalMode?.('available');
     setSelectedRequest(request);
     setShowRequestModal(true);
-  }, [setSelectedRequest, setShowRequestModal]);
+  }, [setRequestModalMode, setSelectedRequest, setShowRequestModal]);
 
   const handleAcceptRequest = useCallback(async (request) => {
     if (isAcceptingRequestRef.current || !request?.id) {
@@ -129,7 +131,8 @@ export default function useDriverHomeRequestActions({
     setShowRequestModal(false);
     setShowAllRequests(false);
     setSelectedRequest(null);
-  }, [setSelectedRequest, setShowAllRequests, setShowRequestModal]);
+    setRequestModalMode?.('available');
+  }, [setRequestModalMode, setSelectedRequest, setShowAllRequests, setShowRequestModal]);
 
   const handleClosePhoneVerify = useCallback(() => {
     setPhoneVerifyVisible(false);

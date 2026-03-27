@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ScreenHeader from '../../components/ScreenHeader';
 import MediaViewer from '../../components/MediaViewer';
+import RequestRoutePreviewMap from '../../components/requestModal/RequestRoutePreviewMap';
 import AppButton from '../../components/ui/AppButton';
 import { colors, spacing } from '../../styles/theme';
 import styles from './DriverRequestDetailsScreen.styles';
@@ -33,6 +34,34 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
 
   const details = useMemo(() => buildRequestDetails(request), [request]);
+  const routePreviewRequest = useMemo(() => {
+    if (!details?.pickupCoordinates || !details?.dropoffCoordinates) {
+      return null;
+    }
+
+    const [pickupLongitude, pickupLatitude] = details.pickupCoordinates;
+    const [dropoffLongitude, dropoffLatitude] = details.dropoffCoordinates;
+
+    return {
+      id: details.id,
+      pickup: {
+        coordinates: request?.pickup?.coordinates || {
+          longitude: pickupLongitude,
+          latitude: pickupLatitude,
+        },
+      },
+      dropoff: {
+        coordinates: request?.dropoff?.coordinates || {
+          longitude: dropoffLongitude,
+          latitude: dropoffLatitude,
+        },
+      },
+      pickupCoordinates: request?.pickupCoordinates || details.pickupCoordinates,
+      dropoffCoordinates: request?.dropoffCoordinates || details.dropoffCoordinates,
+      pickup_location: request?.pickup_location || details.pickupCoordinates,
+      dropoff_location: request?.dropoff_location || details.dropoffCoordinates,
+    };
+  }, [details, request]);
 
   useEffect(() => {
     if (!details || details.photoRows.length === 0) {
@@ -161,6 +190,10 @@ export default function DriverRequestDetailsScreen({ navigation, route }) {
               <Text style={styles.routeText}>{details.dropoffAddress}</Text>
             </View>
           </View>
+
+          {routePreviewRequest ? (
+            <RequestRoutePreviewMap request={routePreviewRequest} styles={styles} />
+          ) : null}
         </View>
 
         {details.pickupNotes || details.dropoffNotes ? (

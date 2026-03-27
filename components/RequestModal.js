@@ -66,11 +66,19 @@ export default function RequestModal({
   );
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showMap, setShowMap] = useState(true);
+  const isScheduledMode = mode === 'scheduled';
   const isAcceptedMode = mode === 'accepted';
-  const modalTitle = isAcceptedMode ? 'Accepted Requests' : 'Available Requests';
+  const isAvailableMode = !isScheduledMode && !isAcceptedMode;
+  const modalTitle = isAcceptedMode
+    ? 'Accepted Requests'
+    : isScheduledMode
+      ? 'Scheduled Requests'
+      : 'Available Requests';
   const countLabel = isAcceptedMode
     ? `${requestList.length} accepted request${requestList.length !== 1 ? 's' : ''}`
-    : `${requestList.length} request${requestList.length !== 1 ? 's' : ''} nearby`;
+    : isScheduledMode
+      ? `${requestList.length} scheduled request${requestList.length !== 1 ? 's' : ''}`
+      : `${requestList.length} request${requestList.length !== 1 ? 's' : ''} nearby`;
 
   const flatListRef = useRef(null);
   const mapRef = useRef(null);
@@ -80,7 +88,7 @@ export default function RequestModal({
   const timers = useRequestModalTimers({ visible, requests: requestList });
   const { selectedRoute, selectedRouteMarkers, resetRoute } = useRequestModalRoute({
     visible,
-    showMap,
+    showMap: isAvailableMode && showMap,
     requests: requestList,
     selectedIndex,
     mapRef,
@@ -183,6 +191,10 @@ export default function RequestModal({
   }, [mode]);
 
   const handleScroll = (event) => {
+    if (!isAvailableMode) {
+      return;
+    }
+
     const scrollPosition = event.nativeEvent.contentOffset.x;
     const index = Math.round(scrollPosition / (CARD_WIDTH + spacing.lg));
     const boundedIndex = Math.max(0, Math.min(requestList.length - 1, index));
@@ -194,6 +206,8 @@ export default function RequestModal({
       item={item}
       index={index}
       selectedIndex={selectedIndex}
+      mode={mode}
+      showRoutePreview={!isAvailableMode}
       styles={styles}
       timers={timers}
       onMessage={onMessage}
@@ -231,20 +245,22 @@ export default function RequestModal({
           styles={styles}
         />
 
-        <RequestMapSection
-          showMap={showMap}
-          onShowMap={() => setShowMap(true)}
-          onHideMap={() => setShowMap(false)}
-          currentLocation={currentLocation}
-          requests={requestList}
-          selectedIndex={selectedIndex}
-          onSelectRequestIndex={setSelectedIndex}
-          flatListRef={flatListRef}
-          mapRef={mapRef}
-          selectedRoute={selectedRoute}
-          selectedRouteMarkers={selectedRouteMarkers}
-          styles={styles}
-        />
+        {isAvailableMode ? (
+          <RequestMapSection
+            showMap={showMap}
+            onShowMap={() => setShowMap(true)}
+            onHideMap={() => setShowMap(false)}
+            currentLocation={currentLocation}
+            requests={requestList}
+            selectedIndex={selectedIndex}
+            onSelectRequestIndex={setSelectedIndex}
+            flatListRef={flatListRef}
+            mapRef={mapRef}
+            selectedRoute={selectedRoute}
+            selectedRouteMarkers={selectedRouteMarkers}
+            styles={styles}
+          />
+        ) : null}
 
         <RequestCardsSection
           loading={loading}
@@ -258,11 +274,13 @@ export default function RequestModal({
           styles={styles}
         />
 
-        <RequestPageIndicators
-          requests={requestList}
-          selectedIndex={selectedIndex}
-          styles={styles}
-        />
+        {isAvailableMode ? (
+          <RequestPageIndicators
+            requests={requestList}
+            selectedIndex={selectedIndex}
+            styles={styles}
+          />
+        ) : null}
       </Animated.View>
     </Modal>
   );
