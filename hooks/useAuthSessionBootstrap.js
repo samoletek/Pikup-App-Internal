@@ -7,6 +7,8 @@ import {
   subscribeToAuthStateChanges,
 } from '../services/authSessionService';
 
+const isNoRowsError = (error) => error?.code === 'PGRST116';
+
 /**
  * Handles auth hydration and Supabase auth state subscription bootstrap.
  */
@@ -85,6 +87,13 @@ export default function useAuthSessionBootstrap({
               }
             })
             .catch((error) => {
+              if (isNoRowsError(error)) {
+                logger.info('AuthContext', 'Profile row is not created yet during auth state change', {
+                  userId: session.user.id,
+                  userType: detectedUserType,
+                });
+                return;
+              }
               logger.warn('AuthContext', 'Failed to fetch profile during auth state change', error);
             });
         } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {

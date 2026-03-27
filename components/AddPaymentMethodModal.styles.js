@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionLabel: {
-    color: colors.text.secondary,
+    color: colors.white,
     fontSize: 14,
     marginBottom: 10,
     marginLeft: 4,
@@ -66,16 +66,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   cardFormWrapper: {
-    height: 210,
-  },
-  cardForm: {
-    backgroundColor: colors.background.input,
-    textColor: colors.text.primary,
-    placeholderColor: colors.text.placeholder,
-    borderRadius: 12,
-    fontSize: 16,
-    cursorColor: colors.success,
-    textErrorColor: colors.error,
+    height: 56,
   },
   brandsContainer: {
     flexDirection: "row",

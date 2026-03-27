@@ -5,7 +5,6 @@ import {
   isFutureScheduledTrip,
   normalizeTripStatus,
 } from '../constants/tripStatus';
-import { getPersistedDriverOnlineStatus } from '../services/driverStateService';
 import { logger } from '../services/logger';
 
 const ACTIVE_TRIP_RESTORE_INTERVAL_MS = 60 * 1000;
@@ -46,13 +45,12 @@ export default function useDriverActiveTripRestore({
 
     try {
       const requests = await getUserPickupRequests();
-      const persistedOnlineStatus = await getPersistedDriverOnlineStatus(currentUserId);
 
       if (!Array.isArray(requests)) {
         setAcceptedRequestId(null);
         setActiveJob(null);
-        if (typeof persistedOnlineStatus === 'boolean') {
-          setIsOnline(persistedOnlineStatus);
+        if (initialLoad) {
+          setIsOnline(false);
         }
         return null;
       }
@@ -85,8 +83,10 @@ export default function useDriverActiveTripRestore({
       if (!activeTrip) {
         setAcceptedRequestId(null);
         setActiveJob(null);
-        if (typeof persistedOnlineStatus === 'boolean') {
-          setIsOnline(persistedOnlineStatus);
+        // Product rule: after a fresh login, driver always starts offline unless
+        // there is an actual active trip to restore.
+        if (initialLoad) {
+          setIsOnline(false);
         }
         return null;
       }

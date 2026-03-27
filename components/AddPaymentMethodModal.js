@@ -1,16 +1,15 @@
 // Add Payment Method Modal component: renders its UI and handles related interactions.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Alert,
   Keyboard,
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CardForm, useStripe } from "@stripe/stripe-react-native";
+import { CardField, useStripe } from "@stripe/stripe-react-native";
 import { usePayment } from "../contexts/PaymentContext";
 import BaseModal from "./BaseModal";
 import AppButton from "./ui/AppButton";
@@ -19,20 +18,76 @@ import { logger } from "../services/logger";
 import styles from "./AddPaymentMethodModal.styles";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const STRIPE_CARD_INPUT_STYLE = {
+  backgroundColor: colors.background.input,
+  textColor: colors.white,
+  placeholderColor: colors.text.placeholder,
+  borderColor: colors.border.light,
+  borderWidth: 1,
+  borderRadius: 12,
+  fontSize: 16,
+  cursorColor: colors.success,
+  textErrorColor: colors.error,
+};
 
 export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
   const [cardDetails, setCardDetails] = useState(null);
   const [loading, setLoading] = useState(false);
+  const cardFieldContainerRef = useRef(null);
+  const cardFieldBoundsRef = useRef(null);
   const stripe = useStripe();
   const { savePaymentMethod } = usePayment();
+
+  const updateCardFieldBounds = useCallback(() => {
+    const cardFieldContainer = cardFieldContainerRef.current;
+    if (!cardFieldContainer || typeof cardFieldContainer.measureInWindow !== 'function') {
+      return;
+    }
+
+    cardFieldContainer.measureInWindow((x, y, width, height) => {
+      cardFieldBoundsRef.current = { x, y, width, height };
+    });
+  }, []);
+
+  const dismissKeyboardOutsideCardField = useCallback((event) => {
+    const bounds = cardFieldBoundsRef.current;
+    if (!bounds) {
+      return false;
+    }
+
+    const { pageX, pageY } = event.nativeEvent;
+    const isInsideCardField = (
+      pageX >= bounds.x &&
+      pageX <= bounds.x + bounds.width &&
+      pageY >= bounds.y &&
+      pageY <= bounds.y + bounds.height
+    );
+
+    if (!isInsideCardField) {
+      Keyboard.dismiss();
+    }
+
+    return false;
+  }, []);
 
   // Reset state when modal opens
   useEffect(() => {
     if (visible) {
       setCardDetails(null);
       setLoading(false);
+      cardFieldBoundsRef.current = null;
+
+      const measureTimeout = setTimeout(() => {
+        updateCardFieldBounds();
+      }, 80);
+
+      return () => {
+        clearTimeout(measureTimeout);
+      };
     }
-  }, [visible]);
+    cardFieldBoundsRef.current = null;
+    return undefined;
+  }, [updateCardFieldBounds, visible]);
 
   const handleAddCard = async () => {
     if (!cardDetails?.complete) {
@@ -52,19 +107,18 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
 
     try {
       // Create payment method with Stripe from CardForm input
-      const paymentMethodData = postalDigits
-        ? {
-            billingDetails: {
-              address: {
-                postalCode: postalDigits,
-              },
-            },
-          }
-        : undefined;
+      const paymentMethodData = {
+        billingDetails: {
+          address: {
+            country: 'US',
+            ...(postalDigits ? { postalCode: postalDigits } : {}),
+          },
+        },
+      };
 
       const { error, paymentMethod } = await stripe.createPaymentMethod({
         paymentMethodType: 'Card',
-        ...(paymentMethodData ? { paymentMethodData } : {}),
+        paymentMethodData,
       });
 
       if (error) {
@@ -144,79 +198,86 @@ export default function AddPaymentMethodModal({ visible, onClose, onSuccess }) {
       showHandle={true}
     >
       {() => (
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.content}>
-            {/* Security Notice */}
-            <View style={styles.securityNotice}>
-              <Ionicons name="shield-checkmark" size={20} color={colors.success} />
-              <Text style={styles.securityText}>
-                Powered by Stripe
-              </Text>
-            </View>
+        <View
+          style={styles.content}
+          onStartShouldSetResponderCapture={dismissKeyboardOutsideCardField}
+        >
+          {/* Security Notice */}
+          <View style={styles.securityNotice}>
+            <Ionicons name="shield-checkmark" size={20} color={colors.success} />
+            <Text style={styles.securityText}>
+              Powered by Stripe
+            </Text>
+          </View>
 
-            {/* Card Input Section */}
-            <View style={styles.cardSection}>
-              <Text style={styles.sectionLabel}>Card Details</Text>
+          {/* Card Input Section */}
+          <View style={styles.cardSection}>
+            <Text style={styles.sectionLabel}>Card Details</Text>
 
-              <View style={styles.cardFieldContainer}>
-                <CardForm
-                  placeholders={{
-                    number: '0000 0000 0000 0000',
-                    expiration: 'MM/YY',
-                    cvc: 'CVC',
-                    postalCode: 'ZIP Code',
-                  }}
-                  cardStyle={styles.cardForm}
-                  style={styles.cardFormWrapper}
-                  onFormComplete={(cardDetails) => {
-                    setCardDetails(cardDetails);
-                  }}
-                />
-              </View>
-
-              {/* Supported Brands */}
-              <View style={styles.brandsContainer}>
-                <View style={styles.brandBadge}>
-                  <Text style={styles.brandText}>VISA</Text>
-                </View>
-                <View style={styles.brandBadge}>
-                  <Text style={styles.brandText}>Mastercard</Text>
-                </View>
-                <View style={styles.brandBadge}>
-                  <Text style={styles.brandText}>Amex</Text>
-                </View>
-                <View style={styles.brandBadge}>
-                  <Text style={styles.brandText}>Discover</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Features */}
-            <View style={styles.featuresList}>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
-                <Text style={styles.featureText}>Instant verification</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
-                <Text style={styles.featureText}>Secure storage</Text>
-              </View>
-            </View>
-
-            {/* Action Button */}
-            <View style={styles.footer}>
-              <AppButton
-                title="Add Payment Method"
-                onPress={handleAddCard}
-                loading={loading}
-                disabled={!cardDetails?.complete}
-                style={[styles.btn, styles.btnPrimary]}
-                labelStyle={styles.btnText}
-                leftIcon={<Ionicons name="add-circle-outline" size={20} color={colors.text.primary} />}
+            <View
+              ref={cardFieldContainerRef}
+              style={styles.cardFieldContainer}
+              onLayout={updateCardFieldBounds}
+            >
+              <CardField
+                placeholders={{
+                  number: '0000 0000 0000 0000',
+                  expiration: 'MM/YY',
+                  cvc: 'CVC',
+                  postalCode: 'ZIP Code',
+                }}
+                postalCodeEnabled={true}
+                countryCode="US"
+                cardStyle={STRIPE_CARD_INPUT_STYLE}
+                style={styles.cardFormWrapper}
+                onCardChange={(cardDetails) => {
+                  setCardDetails(cardDetails);
+                }}
               />
             </View>
+
+            {/* Supported Brands */}
+            <View style={styles.brandsContainer}>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>VISA</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Mastercard</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Amex</Text>
+              </View>
+              <View style={styles.brandBadge}>
+                <Text style={styles.brandText}>Discover</Text>
+              </View>
+            </View>
           </View>
-        </TouchableWithoutFeedback>
+
+          {/* Features */}
+          <View style={styles.featuresList}>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
+              <Text style={styles.featureText}>Instant verification</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.border.light} />
+              <Text style={styles.featureText}>Secure storage</Text>
+            </View>
+          </View>
+
+          {/* Action Button */}
+          <View style={styles.footer}>
+            <AppButton
+              title="Add Payment Method"
+              onPress={handleAddCard}
+              loading={loading}
+              disabled={!cardDetails?.complete}
+              style={[styles.btn, styles.btnPrimary]}
+              labelStyle={styles.btnText}
+              leftIcon={<Ionicons name="add-circle-outline" size={20} color={colors.text.primary} />}
+            />
+          </View>
+        </View>
       )}
     </BaseModal>
   );
