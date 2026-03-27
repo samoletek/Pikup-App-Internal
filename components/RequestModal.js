@@ -1,5 +1,5 @@
 // Request Modal component: renders its UI and handles related interactions.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Modal,
@@ -24,6 +24,27 @@ import useRequestModalTimers from '../hooks/useRequestModalTimers';
 import useRequestModalRoute from '../hooks/useRequestModalRoute';
 
 const EMPTY_REQUESTS = Object.freeze([]);
+const dedupeRequestsById = (list = []) => {
+  const seen = new Set();
+  const deduped = [];
+
+  (Array.isArray(list) ? list : []).forEach((request) => {
+    const requestId = String(request?.id || '').trim();
+    if (!requestId) {
+      deduped.push(request);
+      return;
+    }
+
+    if (seen.has(requestId)) {
+      return;
+    }
+
+    seen.add(requestId);
+    deduped.push(request);
+  });
+
+  return deduped;
+};
 
 export default function RequestModal({
   visible,
@@ -39,7 +60,10 @@ export default function RequestModal({
   onMessage,
   onRefresh,
 }) {
-  const requestList = Array.isArray(requests) ? requests : EMPTY_REQUESTS;
+  const requestList = useMemo(
+    () => dedupeRequestsById(Array.isArray(requests) ? requests : EMPTY_REQUESTS),
+    [requests]
+  );
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showMap, setShowMap] = useState(true);
   const isAcceptedMode = mode === 'accepted';

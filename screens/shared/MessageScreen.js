@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -37,6 +37,28 @@ const isGenericChatTitle = (value) => {
     normalized === "driver" ||
     normalized === "not assigned"
   );
+};
+
+const dedupeMessagesById = (list = []) => {
+  const seen = new Set();
+  const deduped = [];
+
+  (Array.isArray(list) ? list : []).forEach((message) => {
+    const messageId = String(message?.id || "").trim();
+    if (!messageId) {
+      deduped.push(message);
+      return;
+    }
+
+    if (seen.has(messageId)) {
+      return;
+    }
+
+    seen.add(messageId);
+    deduped.push(message);
+  });
+
+  return deduped;
 };
 
 export default function MessageScreen({ navigation, route }) {
@@ -119,6 +141,10 @@ export default function MessageScreen({ navigation, route }) {
     setMessages,
     saveMediaNaturalSize,
   });
+  const messageListData = useMemo(
+    () => [...dedupeMessagesById(messages)].reverse(),
+    [messages]
+  );
 
   useEffect(() => {
     if (hasConversationId || missingConversationAlertShownRef.current) {
@@ -243,7 +269,7 @@ export default function MessageScreen({ navigation, route }) {
         ) : (
           <FlatList
             ref={messageListRef}
-            data={[...messages].reverse()}
+            data={messageListData}
             keyExtractor={(item) => String(item.id)}
             renderItem={renderMessage}
             inverted

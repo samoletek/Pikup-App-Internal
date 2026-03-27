@@ -4,6 +4,29 @@ import { logger } from '../services/logger';
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
 
+const dedupeRequestsById = (requests = []) => {
+  const seenIds = new Set();
+  const deduped = [];
+
+  (Array.isArray(requests) ? requests : []).forEach((request) => {
+    const requestId = String(request?.id || '').trim();
+
+    if (!requestId) {
+      deduped.push(request);
+      return;
+    }
+
+    if (seenIds.has(requestId)) {
+      return;
+    }
+
+    seenIds.add(requestId);
+    deduped.push(request);
+  });
+
+  return deduped;
+};
+
 export default function useDriverRequestsFeed({
   activeRequestPool,
   checkExpiredRequests,
@@ -58,11 +81,20 @@ export default function useDriverRequestsFeed({
           driverLocation: driverLocationRef.current,
         });
         const normalizedRequests = Array.isArray(requests) ? requests : [];
+        const dedupedRequests = dedupeRequestsById(normalizedRequests);
 
-        setAvailableRequests(normalizedRequests);
+        setAvailableRequests(dedupedRequests);
+
+        if (dedupedRequests.length !== normalizedRequests.length) {
+          logger.warn('DriverRequestsFeed', 'Removed duplicate requests from feed payload', {
+            originalCount: normalizedRequests.length,
+            dedupedCount: dedupedRequests.length,
+            duplicateCount: normalizedRequests.length - dedupedRequests.length,
+          });
+        }
 
         const visibleRequestIds = new Set(
-          normalizedRequests.map((item) => String(item?.id || '')).filter(Boolean)
+          dedupedRequests.map((item) => String(item?.id || '')).filter(Boolean)
         );
         const currentIncomingId = String(incomingRequestIdRef.current || '').trim();
 
@@ -81,7 +113,7 @@ export default function useDriverRequestsFeed({
           setShowAllRequests(false);
         }
         logger.info('DriverRequestsFeed', 'Loaded requests from backend', {
-          count: normalizedRequests.length,
+          count: dedupedRequests.length,
         });
       } catch (loadError) {
         logger.error('DriverRequestsFeed', 'Error loading requests', loadError);
