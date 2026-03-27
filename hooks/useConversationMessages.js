@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { logger } from "../services/logger";
 
 const MESSAGE_PAGE_SIZE = 20;
@@ -90,16 +90,19 @@ export default function useConversationMessages({
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const knownMessageIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (!conversationId || !currentUserId) {
       setMessages([]);
       setLoading(false);
+      knownMessageIdsRef.current = new Set();
       return undefined;
     }
 
     setLoading(true);
     setHasMore(true);
+    knownMessageIdsRef.current = new Set();
 
     const unsubscribe = subscribeToMessages(
       conversationId,
@@ -115,7 +118,17 @@ export default function useConversationMessages({
               )
           );
 
-          return dedupeMessagesById([...initialMessages, ...unresolvedPending]);
+          const mergedMessages = dedupeMessagesById([
+            ...initialMessages,
+            ...unresolvedPending,
+          ]);
+          knownMessageIdsRef.current = new Set(
+            mergedMessages
+              .map((message) => String(message?.id || "").trim())
+              .filter(Boolean)
+          );
+
+          return mergedMessages;
         });
 
         if (initialMessages.length < MESSAGE_PAGE_SIZE) {
@@ -125,6 +138,14 @@ export default function useConversationMessages({
         setLoading(false);
       },
       (newMessage) => {
+        const messageId = String(newMessage?.id || "").trim();
+        const isKnownMessage = messageId
+          ? knownMessageIdsRef.current.has(messageId)
+          : false;
+        if (messageId && !isKnownMessage) {
+          knownMessageIdsRef.current.add(messageId);
+        }
+
         setMessages((prevMessages) => {
           if (prevMessages.some((msg) => msg.id === newMessage.id)) {
             return prevMessages;
@@ -141,11 +162,24 @@ export default function useConversationMessages({
 
           return [...prevMessages, newMessage];
         });
+
+        const senderId = String(newMessage?.senderId || "").trim();
+        const viewerId = String(currentUserId || "").trim();
+        const isIncomingFromPeer = Boolean(
+          senderId && viewerId && senderId !== viewerId
+        );
+
+        if (!isKnownMessage && isIncomingFromPeer) {
+          void markMessageAsRead(conversationId, userType);
+        }
       }
     );
 
     markMessageAsRead(conversationId, userType);
-    return unsubscribe;
+    return () => {
+      void markMessageAsRead(conversationId, userType);
+      unsubscribe?.();
+    };
   }, [
     conversationId,
     currentUserId,
