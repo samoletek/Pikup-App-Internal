@@ -36,11 +36,7 @@ export default function TripDriverRatingSection({
 }) {
   return (
     <View style={ui.sectionCard}>
-      <Text style={ui.sectionTitle}>Rate Your Driver</Text>
-
-      <Text style={ui.ratingSubtitle}>
-        How was your trip with {displayTrip.driverName}?
-      </Text>
+      <Text style={[ui.sectionTitle, ui.sectionTitleCentered]}>How was your experience?</Text>
 
       <View style={ui.starsContainer}>
         {[1, 2, 3, 4, 5].map((star) => {

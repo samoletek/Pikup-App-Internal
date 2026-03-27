@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BaseModal from '../BaseModal';
 import { styles, SCREEN_HEIGHT } from './styles';
-import { colors } from '../../styles/theme';
+import { colors, spacing, typography } from '../../styles/theme';
 import { usePayment } from '../../contexts/PaymentContext';
 import {
     STEPS,
@@ -19,6 +19,8 @@ import useCustomerOrderModalState from './useCustomerOrderModalState';
 // ============================================
 const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderPhoneVerification, customerEmail, customerName }) => {
     const insets = useSafeAreaInsets();
+    const headerIconSize = typography.fontSize.xxl;
+    const actionIconSize = typography.fontSize.xl;
     const { paymentMethods, defaultPaymentMethod } = usePayment();
     const {
         currentStep,
@@ -110,7 +112,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 <View style={styles.header}>
                     {currentStep > 1 ? (
                         <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
-                            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                            <Ionicons name="arrow-back" size={headerIconSize} color={colors.text.primary} />
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.headerBtn} />
@@ -122,7 +124,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                     </View>
 
                     <TouchableOpacity onPress={handleClose} style={styles.headerBtn}>
-                        <Ionicons name="close" size={24} color={colors.text.primary} />
+                        <Ionicons name="close" size={headerIconSize} color={colors.text.primary} />
                     </TouchableOpacity>
                 </View>
             )}
@@ -159,39 +161,45 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 </Animated.View>
 
                 {/* Continue / Countdown Button */}
-                <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : 12 }]}>
+                <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? 0 : spacing.md }]}>
                     {confirmCountdown > 0 ? (
                         <View style={styles.countdownActionRow}>
                             <TouchableOpacity
-                                style={[styles.continueBtn, styles.countdownPrimaryBtn, { backgroundColor: colors.warning }]}
+                                style={[styles.continueBtn, styles.countdownPrimaryBtn]}
                                 onPress={cancelCountdown}
                             >
-                                <Ionicons name="close-circle" size={20} color={colors.white} />
-                                <Text style={[styles.continueBtnText, { color: colors.white, marginLeft: 8, marginRight: 0 }]}>
-                                    Tap to Cancel ({confirmCountdown}s)
+                                <Ionicons name="close-circle" size={actionIconSize} color={colors.white} />
+                                <Text style={[styles.continueBtnText, styles.countdownPrimaryText]}>
+                                    Cancel ({confirmCountdown}s)
                                 </Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={styles.skipCountdownBtn}
                                 onPress={skipCountdown}
                             >
-                                <Text style={styles.skipCountdownText}>Skip Timer</Text>
+                                <Text style={styles.skipCountdownText}>Skip</Text>
                             </TouchableOpacity>
                         </View>
                     ) : (
                         <TouchableOpacity
                             style={[
                                 styles.continueBtn,
-                                currentStep === 6 && { backgroundColor: colors.success },
+                                currentStep === 6 && styles.continueBtnSuccess,
                                 isSubmitting && styles.continueBtnDisabled,
                             ]}
                             onPress={handleContinue}
                             disabled={isSubmitting}
                         >
-                            <Text style={[styles.continueBtnText, currentStep === 6 && { marginRight: 0 }, isSubmitting && styles.continueBtnTextDisabled]}>
+                            <Text
+                                style={[
+                                    styles.continueBtnText,
+                                    currentStep === 6 && styles.continueBtnTextNoIcon,
+                                    isSubmitting && styles.continueBtnTextDisabled,
+                                ]}
+                            >
                                 {isSubmitting ? 'Processing...' : currentStep === 6 ? 'Confirm & Pay' : 'Continue'}
                             </Text>
-                            {currentStep !== 6 && <Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                            {currentStep !== 6 && <Ionicons name="arrow-forward" size={actionIconSize} color={colors.text.primary} />}
                         </TouchableOpacity>
                     )}
                 </View>

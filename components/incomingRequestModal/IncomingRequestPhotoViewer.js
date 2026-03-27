@@ -9,8 +9,9 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import styles from '../IncomingRequestModal.styles';
-import { colors } from '../../styles/theme';
+import { colors, spacing } from '../../styles/theme';
 import { SCREEN_WIDTH } from './incomingRequestModal.utils';
 
 export default function IncomingRequestPhotoViewer({
@@ -20,6 +21,8 @@ export default function IncomingRequestPhotoViewer({
   onIndexChange,
   onClose,
 }) {
+  const insets = useSafeAreaInsets();
+
   if (!visible) {
     return null;
   }
@@ -57,11 +60,13 @@ export default function IncomingRequestPhotoViewer({
           </View>
         ) : null}
         <TouchableOpacity
-          style={styles.photoViewerClose}
+          style={[styles.photoViewerClose, { top: insets.top + spacing.base }]}
           onPress={onClose}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="close" size={28} color={colors.white} />
+          <View style={styles.photoViewerCloseBg}>
+            <Ionicons name="close" size={24} color={colors.white} />
+          </View>
         </TouchableOpacity>
       </View>
     </TouchableWithoutFeedback>

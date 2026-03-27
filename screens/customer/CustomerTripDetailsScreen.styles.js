@@ -140,6 +140,18 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
   },
+  heroDriverRatingRow: {
+    marginTop: spacing.xxs,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xxs,
+  },
+  heroDriverRatingText: {
+    marginLeft: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
   heroVehicleRow: {
     marginTop: 3,
     flexDirection: "row",
@@ -211,6 +223,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
     marginBottom: spacing.sm,
+  },
+  sectionTitleCentered: {
+    textAlign: "center",
   },
   sectionHint: {
     color: colors.text.secondary,
