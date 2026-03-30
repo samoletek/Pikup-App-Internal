@@ -68,12 +68,49 @@ export default function DriverProfileScreen({ navigation }) {
     refreshProfileImage: getProfileImage,
   });
 
-  const handleStartOnboarding = () => {
+  const resolveConnectAccountId = React.useCallback(() => {
+    const candidate =
+      driverProfile?.connectAccountId ||
+      driverProfile?.stripe_account_id ||
+      driverProfile?.metadata?.connectAccountId ||
+      currentUser?.connectAccountId ||
+      currentUser?.stripe_account_id ||
+      currentUser?.metadata?.connectAccountId ||
+      null;
+    return String(candidate || "").trim() || null;
+  }, [currentUser?.connectAccountId, currentUser?.metadata?.connectAccountId, currentUser?.stripe_account_id, driverProfile?.connectAccountId, driverProfile?.metadata?.connectAccountId, driverProfile?.stripe_account_id]);
+
+  const openDriverOnboardingEntry = React.useCallback(async () => {
+    let connectAccountId = resolveConnectAccountId();
+
+    if (!connectAccountId && currentUserId) {
+      try {
+        const freshProfile = await getDriverProfile?.(currentUserId);
+        const freshCandidate =
+          freshProfile?.connectAccountId ||
+          freshProfile?.stripe_account_id ||
+          freshProfile?.metadata?.connectAccountId ||
+          null;
+        connectAccountId = String(freshCandidate || "").trim() || null;
+      } catch (_error) {
+        // Keep fallback navigation path if profile refresh fails.
+      }
+    }
+
+    if (connectAccountId) {
+      navigation.navigate("DriverOnboardingCompleteScreen", { connectAccountId });
+      return;
+    }
+
     navigation.navigate("DriverOnboardingScreen");
+  }, [currentUserId, getDriverProfile, navigation, resolveConnectAccountId]);
+
+  const handleStartOnboarding = () => {
+    void openDriverOnboardingEntry();
   };
 
   const handleResumeOnboarding = () => {
-    navigation.navigate("DriverOnboardingScreen");
+    void openDriverOnboardingEntry();
   };
 
   const handleLogout = () => {

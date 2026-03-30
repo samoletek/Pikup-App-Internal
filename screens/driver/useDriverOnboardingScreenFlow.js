@@ -15,15 +15,19 @@ import { logger } from "../../services/logger";
 
 export default function useDriverOnboardingScreenFlow({
   navigation,
+  route,
   currentUser,
   updateDriverPaymentProfile,
   createDriverConnectAccount,
   getDriverOnboardingLink,
 }) {
   const userId = currentUser?.uid || currentUser?.id;
+  const forceIdentityStep = Boolean(route?.params?.forceIdentityStep);
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
+  const [hasForcedIdentityStepApplied, setHasForcedIdentityStepApplied] = useState(!forceIdentityStep);
+  const forceIdentityAppliedRef = useRef(false);
 
   const {
     verificationStatus,
@@ -104,7 +108,7 @@ export default function useDriverOnboardingScreenFlow({
     updateFormData,
   });
 
-  useOnboardingDraftPersistence({
+  const { isDraftHydrated } = useOnboardingDraftPersistence({
     userId,
     currentStep,
     verificationStatus,
@@ -124,6 +128,23 @@ export default function useDriverOnboardingScreenFlow({
     setVinPhotoUri,
     setCarPhotoUris,
   });
+
+  useEffect(() => {
+    if (!forceIdentityStep) {
+      setHasForcedIdentityStepApplied(true);
+      return;
+    }
+
+    if (!isDraftHydrated || forceIdentityAppliedRef.current) {
+      return;
+    }
+
+    forceIdentityAppliedRef.current = true;
+    setCurrentStep(1);
+    progressAnim.setValue(1 / (steps.length - 1));
+    setVerificationStatus('pending');
+    setHasForcedIdentityStepApplied(true);
+  }, [forceIdentityStep, isDraftHydrated, progressAnim, setCurrentStep, setVerificationStatus]);
 
   const openWebsite = useCallback(async () => {
     try {
@@ -235,6 +256,8 @@ export default function useDriverOnboardingScreenFlow({
     vehicleVerificationError,
     vehicleVerificationResult,
     vehicleVerificationStatus,
+    hasForcedIdentityStepApplied,
+    isDraftHydrated,
     verificationDataPopulated,
     verificationStatus,
     videoRef,

@@ -405,6 +405,29 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     marginTop: spacing.sm,
   },
+  hydrationContainer: {
+    width: '100%',
+    flex: 1,
+    minHeight: 260,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  hydrationTitle: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginTop: spacing.lg,
+    textAlign: 'center',
+  },
+  hydrationSubtitle: {
+    color: colors.text.tertiary,
+    fontSize: typography.fontSize.base,
+    lineHeight: typography.fontSize.base * typography.lineHeight.normal,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
 
   // Bottom actions
   bottomActions: {

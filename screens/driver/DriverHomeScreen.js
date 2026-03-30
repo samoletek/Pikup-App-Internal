@@ -55,6 +55,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverLocation,
   } = useTripActions();
   const {
+    getDriverProfile,
     setDriverOnline,
     setDriverOffline,
     updateDriverHeartbeat,
@@ -384,9 +385,39 @@ export default function DriverHomeScreen({ navigation, route }) {
     showIncomingModal,
   });
 
-  const handleOpenOnboarding = React.useCallback(() => {
+  const resolveConnectAccountId = React.useCallback(() => {
+    const candidate =
+      currentUser?.connectAccountId ||
+      currentUser?.stripe_account_id ||
+      currentUser?.metadata?.connectAccountId ||
+      null;
+    return String(candidate || '').trim() || null;
+  }, [currentUser?.connectAccountId, currentUser?.metadata?.connectAccountId, currentUser?.stripe_account_id]);
+
+  const handleOpenOnboarding = React.useCallback(async () => {
+    let connectAccountId = resolveConnectAccountId();
+
+    if (!connectAccountId && currentUserId) {
+      try {
+        const freshProfile = await getDriverProfile?.(currentUserId);
+        const freshCandidate =
+          freshProfile?.connectAccountId ||
+          freshProfile?.stripe_account_id ||
+          freshProfile?.metadata?.connectAccountId ||
+          null;
+        connectAccountId = String(freshCandidate || '').trim() || null;
+      } catch (_error) {
+        // If refresh fails, fallback to onboarding screen.
+      }
+    }
+
+    if (connectAccountId) {
+      navigation.navigate('DriverOnboardingCompleteScreen', { connectAccountId });
+      return;
+    }
+
     navigation.navigate('DriverOnboardingScreen');
-  }, [navigation]);
+  }, [currentUserId, getDriverProfile, navigation, resolveConnectAccountId]);
 
   const contentProps = buildDriverHomeContentProps({
     styles, region, tabBarHeight, shouldShowOnlineDriverMarker, onlineDriverMarkerCoordinate,
