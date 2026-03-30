@@ -61,7 +61,9 @@ export default function CustomerHomeScreen({ navigation }) {
     setPhoneVerifyVisible,
     setSearchModalVisible,
     locationGateNotice,
+    phoneGateNotice,
     locationGateStatus,
+    isPhoneVerificationRequiredForOrders,
     userLocation,
   } = useCustomerHomeFlow({
     activeDelivery,
@@ -126,15 +128,37 @@ export default function CustomerHomeScreen({ navigation }) {
     showCreateOrderTrigger &&
     locationGateStatus !== CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
   );
+  const isCreateOrderLockedByPhone = (
+    showCreateOrderTrigger &&
+    !isCreateOrderLockedByLocation &&
+    isPhoneVerificationRequiredForOrders
+  );
+  const isCreateOrderLocked = isCreateOrderLockedByLocation || isCreateOrderLockedByPhone;
   const createOrderTriggerTitle = isCreateOrderLockedByLocation
     ? (isCheckingLocationGate ? "Checking location..." : "Service not available")
+    : isCreateOrderLockedByPhone
+      ? "Verify phone number"
     : "Where to?";
   const createOrderTriggerBadgeLabel = isCreateOrderLockedByLocation
     ? (isCheckingLocationGate ? "Please wait" : "Blocked")
+    : isCreateOrderLockedByPhone
+      ? "Required"
     : "Now";
   const createOrderTriggerIcon = isCreateOrderLockedByLocation
     ? (isCheckingLocationGate ? "time" : "lock-closed")
+    : isCreateOrderLockedByPhone
+      ? "call"
     : "search";
+  const createOrderTriggerBadgeIcon = isCreateOrderLockedByPhone
+    ? "alert-circle"
+    : "time";
+  const showGeoNotice = showCreateOrderTrigger && Boolean(locationGateNotice);
+  const showPhoneNotice = (
+    showCreateOrderTrigger &&
+    !showGeoNotice &&
+    isCreateOrderLockedByPhone &&
+    Boolean(phoneGateNotice)
+  );
 
   return (
     <View style={styles.container}>
@@ -181,13 +205,29 @@ export default function CustomerHomeScreen({ navigation }) {
         />
       </View>
 
-      {showCreateOrderTrigger && Boolean(locationGateNotice) ? (
+      {showGeoNotice ? (
         <View style={[styles.geoNoticeContainer, { top: insets.top + 40 }]}>
           <Ionicons name="information-circle" size={16} color={colors.warning} />
           <Text style={styles.geoNoticeText}>
             {locationGateNotice}
           </Text>
         </View>
+      ) : null}
+
+      {showPhoneNotice ? (
+        <TouchableOpacity
+          style={[styles.geoNoticeContainer, styles.phoneNoticeContainer, { top: insets.top + 40 }]}
+          activeOpacity={0.9}
+          onPress={() => setPhoneVerifyVisible(true)}
+        >
+          <Ionicons name="call" size={16} color={colors.primary} />
+          <Text style={styles.geoNoticeText}>
+            {phoneGateNotice}
+          </Text>
+          <View style={styles.phoneNoticeActionChip}>
+            <Text style={styles.phoneNoticeActionText}>Verify</Text>
+          </View>
+        </TouchableOpacity>
       ) : null}
 
       {activeDelivery && activeDeliveryStep ? (
@@ -241,16 +281,16 @@ export default function CustomerHomeScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.floatingTrigger,
-              isCreateOrderLockedByLocation ? styles.floatingTriggerDisabled : null,
+              isCreateOrderLocked ? styles.floatingTriggerDisabled : null,
             ]}
-            onPress={isCreateOrderLockedByLocation ? undefined : () => setSearchModalVisible(true)}
-            activeOpacity={isCreateOrderLockedByLocation ? 1 : 0.9}
-            disabled={isCreateOrderLockedByLocation}
+            onPress={isCreateOrderLocked ? undefined : () => setSearchModalVisible(true)}
+            activeOpacity={isCreateOrderLocked ? 1 : 0.9}
+            disabled={isCreateOrderLocked}
           >
             <View
               style={[
                 styles.triggerIconCircle,
-                isCreateOrderLockedByLocation ? styles.triggerIconCircleDisabled : null,
+                isCreateOrderLocked ? styles.triggerIconCircleDisabled : null,
               ]}
             >
               <Ionicons
@@ -263,7 +303,7 @@ export default function CustomerHomeScreen({ navigation }) {
             <Text
               style={[
                 styles.floatingTriggerText,
-                isCreateOrderLockedByLocation ? styles.floatingTriggerTextDisabled : null,
+                isCreateOrderLocked ? styles.floatingTriggerTextDisabled : null,
               ]}
             >
               {createOrderTriggerTitle}
@@ -271,7 +311,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
             <View style={styles.triggerTimeBadge}>
               <Ionicons
-                name="time"
+                name={createOrderTriggerBadgeIcon}
                 size={12}
                 color={colors.text.secondary}
                 style={styles.timeIconLeft}
@@ -305,7 +345,7 @@ export default function CustomerHomeScreen({ navigation }) {
 
       <CustomerOrderModal
         key={orderModalKey}
-        visible={searchModalVisible && !isCreateOrderLockedByLocation}
+        visible={searchModalVisible && !isCreateOrderLocked}
         onClose={() => setSearchModalVisible(false)}
         onConfirm={async (orderData) => {
           const result = await handleOrderConfirm(orderData);
@@ -326,6 +366,13 @@ export default function CustomerHomeScreen({ navigation }) {
             onVerified={async () => {
               setPhoneVerifyVisible(false);
               await refreshProfile();
+              if (
+                !activeDelivery &&
+                !pendingBooking &&
+                locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
+              ) {
+                setSearchModalVisible(true);
+              }
             }}
             userId={currentUser?.uid || currentUser?.id}
             userTable="customers"

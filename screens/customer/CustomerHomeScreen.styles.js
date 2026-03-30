@@ -50,6 +50,22 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
     lineHeight: 18,
   },
+  phoneNoticeContainer: {
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
+    alignItems: "center",
+  },
+  phoneNoticeActionChip: {
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+  },
+  phoneNoticeActionText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.bold,
+  },
   floatingTriggerContainer: {
     position: "absolute",
     bottom: 0,

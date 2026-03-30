@@ -33,6 +33,9 @@ export const CUSTOMER_LOCATION_GATE_STATUS = Object.freeze({
   UNSUPPORTED_STATE: "unsupported_state",
 });
 
+const isTruthyProfileFlag = (value) =>
+  value === true || value === "true" || value === 1 || value === "1";
+
 export default function useCustomerHomeFlow({
   activeDelivery,
   pendingBooking,
@@ -52,11 +55,19 @@ export default function useCustomerHomeFlow({
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
+  const isPhoneVerifiedForOrders = isTruthyProfileFlag(
+    currentUser?.phone_verified ?? currentUser?.phoneVerified
+  );
+  const isGeorgiaOrderGateOpen =
+    locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
+  const isPhoneVerificationRequiredForOrders =
+    isGeorgiaOrderGateOpen && !isPhoneVerifiedForOrders;
 
   const canCreateOrder = (
     !activeDelivery &&
     !pendingBooking &&
-    locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
+    isGeorgiaOrderGateOpen &&
+    isPhoneVerifiedForOrders
   );
   const activeDeliveryStep = useMemo(() => {
     if (!activeDelivery) {
@@ -225,9 +236,11 @@ export default function useCustomerHomeFlow({
 
   const handleOrderConfirm = useCallback(
     async (orderData) => {
-      if (!currentUser?.phone_verified) {
-        setPhoneVerifyVisible(true);
-        return { pending: true };
+      if (isPhoneVerificationRequiredForOrders) {
+        return {
+          success: false,
+          error: "Please verify your phone number before creating an order in Georgia.",
+        };
       }
 
       if (activeDelivery || pendingBooking) {
@@ -269,7 +282,7 @@ export default function useCustomerHomeFlow({
       return { success: true };
     },
     [
-      currentUser?.phone_verified,
+      isPhoneVerificationRequiredForOrders,
       activeDelivery,
       pendingBooking,
       userLocation,
@@ -334,6 +347,14 @@ export default function useCustomerHomeFlow({
     }
   }, [locationGateStatus]);
 
+  const phoneGateNotice = useMemo(() => {
+    if (!isPhoneVerificationRequiredForOrders) {
+      return null;
+    }
+
+    return "Please verify your phone number before creating a new order in Georgia.";
+  }, [isPhoneVerificationRequiredForOrders]);
+
   return {
     activeDeliveryStep,
     canCreateOrder,
@@ -347,7 +368,9 @@ export default function useCustomerHomeFlow({
     setPhoneVerifyVisible,
     setSearchModalVisible,
     locationGateNotice,
+    phoneGateNotice,
     locationGateStatus,
+    isPhoneVerificationRequiredForOrders,
     userLocation,
   };
 }
