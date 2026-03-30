@@ -19,6 +19,19 @@ export default function useAuthSessionBootstrap({
 }) {
   useEffect(() => {
     let mounted = true;
+    let authTimeout = null;
+
+    const clearAuthTimeout = () => {
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+        authTimeout = null;
+      }
+    };
+
+    const markInitialized = () => {
+      clearAuthTimeout();
+      setIsInitializing(false);
+    };
 
     const hydrateFromStorage = async () => {
       try {
@@ -26,7 +39,7 @@ export default function useAuthSessionBootstrap({
         if (stored && mounted) {
           setCurrentUser(stored.user);
           setUserType(stored.userType);
-          setIsInitializing(false);
+          markInitialized();
           return true;
         }
 
@@ -39,7 +52,7 @@ export default function useAuthSessionBootstrap({
 
     hydrateFromStorage();
 
-    const timeout = setTimeout(() => {
+    authTimeout = setTimeout(() => {
       if (mounted) {
         logger.warn('AuthContext', 'Auth timeout - unblocking UI');
         setIsInitializing(false);
@@ -52,7 +65,7 @@ export default function useAuthSessionBootstrap({
       try {
         const shouldSuppressBootstrap = AuthService.consumeRecoveryBootstrapSuppression?.();
         if (shouldSuppressBootstrap && (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session))) {
-          setIsInitializing(false);
+          markInitialized();
           return;
         }
 
@@ -78,7 +91,7 @@ export default function useAuthSessionBootstrap({
 
           setCurrentUser(fullUser);
           setUserType(detectedUserType);
-          setIsInitializing(false);
+          markInitialized();
 
           fetchUserProfileByRole({ userId: session.user.id, userType: detectedUserType })
             .then((data) => {
@@ -99,18 +112,18 @@ export default function useAuthSessionBootstrap({
         } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
           setCurrentUser(null);
           setUserType(null);
-          setIsInitializing(false);
+          markInitialized();
         }
       } catch (error) {
         logger.error('AuthContext', 'Error in auth state change', error);
-        setIsInitializing(false);
+        markInitialized();
       }
     });
 
     return () => {
       mounted = false;
       unsubscribeAuth();
-      clearTimeout(timeout);
+      clearAuthTimeout();
     };
   }, [setCurrentUser, setIsInitializing, setUserType]);
 }

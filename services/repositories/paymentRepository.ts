@@ -17,7 +17,13 @@ import type {
   DriverOnboardingLinkResponse,
   DriverOnboardingStatusRequest,
   DriverOnboardingStatusResponse,
+  AttachPaymentMethodRequest,
+  AttachPaymentMethodResponse,
+  DetachPaymentMethodRequest,
+  DetachPaymentMethodResponse,
   GetPaymentMethodsResponse,
+  SetDefaultPaymentMethodRequest,
+  SetDefaultPaymentMethodResponse,
   GetVerificationDataRequest,
   GetVerificationDataResponse,
   ProcessPayoutResponse,
@@ -87,11 +93,78 @@ const resolveEdgeAccessToken = async (accessTokenHint?: string | null) => {
   throw new Error('Session expired. Please sign in again.');
 };
 
+const isInvalidJwtEdgeError = async (error: unknown) => {
+  const maybeError = error as { context?: { status?: number; clone?: () => { json: () => Promise<unknown> } } } | null;
+  const statusCode = Number(maybeError?.context?.status || 0);
+  if (statusCode === 401) {
+    return true;
+  }
+
+  try {
+    const payload = await maybeError?.context?.clone?.().json?.();
+    const message = String((payload as { error?: unknown; message?: unknown } | null)?.error || (payload as { message?: unknown } | null)?.message || '')
+      .trim()
+      .toLowerCase();
+    const code = String((payload as { code?: unknown; errorCode?: unknown } | null)?.code || (payload as { errorCode?: unknown } | null)?.errorCode || '')
+      .trim()
+      .toLowerCase();
+    return message.includes('invalid jwt') || code === '401' || code === 'invalid_jwt';
+  } catch {
+    return false;
+  }
+};
+
+const invokeWithAuthRetry = async <T>(
+  functionName: string,
+  payload?: Record<string, unknown>,
+) => {
+  const invoke = async (accessToken: string) =>
+    supabase.functions.invoke<T>(functionName, {
+      ...(payload ? { body: payload } : {}),
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+  const accessToken = await resolveEdgeAccessToken();
+  let result = await invoke(accessToken);
+
+  if (!result.error) {
+    return result;
+  }
+
+  const shouldRetryForInvalidJwt = await isInvalidJwtEdgeError(result.error);
+  if (!shouldRetryForInvalidJwt) {
+    return result;
+  }
+
+  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+  const refreshedToken = String(refreshedData?.session?.access_token || '').trim();
+  if (refreshError || !refreshedToken) {
+    return result;
+  }
+
+  result = await invoke(refreshedToken);
+  return result;
+};
+
 /**
  * Payment repository centralizes payment-related Supabase queries and edge-function calls.
  */
 export const invokeGetPaymentMethods = async () => {
-  return supabase.functions.invoke<PaymentMethodsResponse>('get-payment-methods');
+  return invokeWithAuthRetry<PaymentMethodsResponse>('get-payment-methods');
+};
+
+export const invokeAttachPaymentMethod = async (payload: AttachPaymentMethodRequest) => {
+  return invokeWithAuthRetry<AttachPaymentMethodResponse>('attach-payment-method', payload);
+};
+
+export const invokeDetachPaymentMethod = async (payload: DetachPaymentMethodRequest) => {
+  return invokeWithAuthRetry<DetachPaymentMethodResponse>('detach-payment-method', payload);
+};
+
+export const invokeSetDefaultPaymentMethod = async (payload: SetDefaultPaymentMethodRequest) => {
+  return invokeWithAuthRetry<SetDefaultPaymentMethodResponse>('set-default-payment-method', payload);
 };
 
 export const invokeCreatePaymentIntent = async (payload: CreatePaymentIntentRequest) => {

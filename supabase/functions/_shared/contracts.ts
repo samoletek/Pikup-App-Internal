@@ -186,6 +186,36 @@ export type GetPaymentMethodsResponse = EdgePayload<{
   paymentMethods: Array<Record<string, unknown>>
 }>
 
+export type AttachPaymentMethodRequest = {
+  paymentMethodId: string
+  setAsDefault?: boolean
+}
+
+export type AttachPaymentMethodResponse = EdgePayload<{
+  success: true
+  paymentMethodId: string
+  defaultPaymentMethodId?: string | null
+}>
+
+export type DetachPaymentMethodRequest = {
+  paymentMethodId: string
+}
+
+export type DetachPaymentMethodResponse = EdgePayload<{
+  success: true
+  detachedPaymentMethodId: string
+  defaultPaymentMethodId?: string | null
+}>
+
+export type SetDefaultPaymentMethodRequest = {
+  paymentMethodId: string
+}
+
+export type SetDefaultPaymentMethodResponse = EdgePayload<{
+  success: true
+  defaultPaymentMethodId: string
+}>
+
 export type TripPriceEstimateRequest = {
   rideDetails?: Record<string, unknown>
 }

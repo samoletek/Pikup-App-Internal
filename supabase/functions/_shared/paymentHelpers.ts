@@ -40,10 +40,11 @@ export const buildStripeClient = () => {
 }
 
 export const getSupabaseConfig = () => {
+  const supabaseServiceRoleKey = String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "").trim()
   return {
     supabaseUrl: getRequiredEnv("SUPABASE_URL"),
     supabaseAnonKey: getRequiredEnv("SUPABASE_ANON_KEY"),
-    supabaseServiceRoleKey: getRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    supabaseServiceRoleKey,
   }
 }
 
@@ -56,7 +57,10 @@ export const buildSupabaseClients = (authHeader: string) => {
     },
   })
 
-  const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey)
+  const adminClient = createClient(
+    supabaseUrl,
+    supabaseServiceRoleKey || supabaseAnonKey,
+  )
 
   return {
     authClient,

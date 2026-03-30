@@ -43,6 +43,24 @@ entrypoint = "./functions/get-payment-methods/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/get-payment-methods/*.html" ]
 
+[functions.attach-payment-method]
+enabled = true
+verify_jwt = false
+import_map = "./functions/attach-payment-method/deno.json"
+entrypoint = "./functions/attach-payment-method/index.ts"
+
+[functions.detach-payment-method]
+enabled = true
+verify_jwt = false
+import_map = "./functions/detach-payment-method/deno.json"
+entrypoint = "./functions/detach-payment-method/index.ts"
+
+[functions.set-default-payment-method]
+enabled = true
+verify_jwt = false
+import_map = "./functions/set-default-payment-method/deno.json"
+entrypoint = "./functions/set-default-payment-method/index.ts"
+
 [functions.calculate-trip-price]
 enabled = true
 verify_jwt = false
