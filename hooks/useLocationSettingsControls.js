@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { logger } from '../services/logger';
 import {
   ensureForegroundLocationAvailability,
+  inferIosPreciseLocationStatusFromFix,
   openLocationSettings as openDeviceLocationSettings,
   resolvePreciseLocationStatus,
   showOpenLocationSettingsAlert,
@@ -22,6 +24,7 @@ const createInitialStatus = () => ({
 
 export default function useLocationSettingsControls({ loggerScope = 'LocationSettings' } = {}) {
   const [status, setStatus] = useState(createInitialStatus);
+  const refreshInFlightRef = useRef(false);
 
   const openLocationSettings = useCallback(() => {
     void openDeviceLocationSettings(loggerScope);
@@ -37,23 +40,50 @@ export default function useLocationSettingsControls({ loggerScope = 'LocationSet
   }, [loggerScope]);
 
   const refreshLocationStatus = useCallback(async () => {
+    if (refreshInFlightRef.current) {
+      return;
+    }
+
+    refreshInFlightRef.current = true;
     try {
       const permission = await Location.getForegroundPermissionsAsync();
       const locationServicesEnabled = await Location.hasServicesEnabledAsync();
 
       const permissionGranted = permission.status === 'granted';
       const locationTrackingEnabled = permissionGranted && locationServicesEnabled;
-      const preciseLocation = resolvePreciseLocationStatus(permission);
-      const preciseLocationEnabled = locationTrackingEnabled && preciseLocation.enabled;
-      const preciseLocationKnown = locationTrackingEnabled && preciseLocation.known;
+      let preciseLocation = resolvePreciseLocationStatus(permission);
+
+      if (
+        Platform.OS === 'ios' &&
+        locationTrackingEnabled &&
+        !preciseLocation.known
+      ) {
+        try {
+          const lastKnown = await Location.getLastKnownPositionAsync({
+            maxAge: 30_000,
+            requiredAccuracy: 1_000,
+          });
+          const sampledLocation = lastKnown || await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            maximumAge: 15_000,
+            timeout: 8_000,
+          });
+          const inferred = inferIosPreciseLocationStatusFromFix(sampledLocation);
+          if (inferred.known) {
+            preciseLocation = inferred;
+          }
+        } catch (error) {
+          logger.warn(loggerScope, 'Could not infer precise location status from location accuracy', error);
+        }
+      }
 
       setStatus({
         loading: false,
         permissionStatus: permission.status,
         locationServicesEnabled,
         locationTrackingEnabled,
-        preciseLocationEnabled,
-        preciseLocationKnown,
+        preciseLocationEnabled: locationTrackingEnabled && preciseLocation.enabled,
+        preciseLocationKnown: locationTrackingEnabled && preciseLocation.known,
         iosAccuracy: preciseLocation.iosAccuracy,
         androidAccuracy: preciseLocation.androidAccuracy,
       });
@@ -63,6 +93,8 @@ export default function useLocationSettingsControls({ loggerScope = 'LocationSet
         ...prev,
         loading: false,
       }));
+    } finally {
+      refreshInFlightRef.current = false;
     }
   }, [loggerScope]);
 
@@ -79,6 +111,23 @@ export default function useLocationSettingsControls({ loggerScope = 'LocationSet
 
     return () => {
       appStateSubscription.remove();
+    };
+  }, [refreshLocationStatus]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshLocationStatus();
+      return undefined;
+    }, [refreshLocationStatus])
+  );
+
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      void refreshLocationStatus();
+    }, 4000);
+
+    return () => {
+      clearInterval(syncInterval);
     };
   }, [refreshLocationStatus]);
 
