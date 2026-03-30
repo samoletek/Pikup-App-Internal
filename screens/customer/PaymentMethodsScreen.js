@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -30,7 +31,6 @@ export default function PaymentMethodsScreen({ navigation }) {
     defaultPaymentMethod,
     setDefault,
     removePaymentMethod,
-    loading,
   } = usePayment();
   const methods = paymentMethods || [];
 
@@ -38,6 +38,7 @@ export default function PaymentMethodsScreen({ navigation }) {
     addModalVisible,
     handleRemoveMethod,
     handleSetDefault,
+    removingMethodId,
     setAddModalVisible,
   } = usePaymentMethodsActions({
     defaultPaymentMethod,
@@ -114,9 +115,14 @@ export default function PaymentMethodsScreen({ navigation }) {
                       )}
                       <TouchableOpacity
                         style={styles.iconButton}
+                        disabled={removingMethodId === method.id}
                         onPress={() => handleRemoveMethod(method)}
                       >
-                        <Ionicons name="trash-outline" size={18} color={colors.error} />
+                        {removingMethodId === method.id ? (
+                          <ActivityIndicator size="small" color={colors.error} />
+                        ) : (
+                          <Ionicons name="trash-outline" size={18} color={colors.error} />
+                        )}
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -126,10 +132,9 @@ export default function PaymentMethodsScreen({ navigation }) {
           </View>
 
           <AppButton
-            title={loading ? "Loading..." : "Add Payment Method"}
-            style={[styles.addButton, loading && styles.addButtonDisabled]}
+            title="Add Payment Method"
+            style={styles.addButton}
             onPress={() => setAddModalVisible(true)}
-            disabled={loading}
             leftIcon={<Ionicons name="add-circle-outline" size={20} color={colors.white} />}
           />
 

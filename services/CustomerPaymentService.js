@@ -2,13 +2,67 @@ import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { failureResult, successResult } from './contracts/result';
 import {
+  invokeAttachPaymentMethod,
   invokeCreatePaymentIntent,
+  invokeDetachPaymentMethod,
   invokeGetPaymentMethods,
+  invokeSetDefaultPaymentMethod,
   invokeTripPriceEstimate,
 } from './repositories/paymentRepository';
+import { supabase } from '../config/supabase';
+
+const parseEdgeFunctionErrorPayload = async (error) => {
+  const response = error?.context;
+  if (!response || typeof response.clone !== 'function') {
+    return null;
+  }
+
+  try {
+    const cloned = response.clone();
+    const payload = await cloned.json();
+    if (payload && typeof payload === 'object') {
+      const normalizedMessage = String(payload.error || payload.message || '').trim();
+      const normalizedCode = String(payload.code || payload.errorCode || '').trim();
+      return {
+        message: normalizedMessage || null,
+        code: normalizedCode || null,
+      };
+    }
+  } catch (_error) {
+    // Ignore parse errors and keep original error message.
+  }
+
+  return null;
+};
+
+const ensureAuthSessionReady = async () => {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionData?.session?.access_token) {
+    return null;
+  }
+
+  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshedData?.session?.access_token) {
+    return null;
+  }
+
+  const normalized = normalizeError(
+    refreshError || sessionError || new Error('Auth session is not ready yet'),
+    'Auth session is not ready yet',
+  );
+  return failureResult(normalized.message, 'auth_session_not_ready');
+};
 
 export const fetchCustomerPaymentMethods = async () => {
   try {
+    const authSessionError = await ensureAuthSessionReady();
+    if (authSessionError) {
+      return {
+        ...authSessionError,
+        paymentMethods: [],
+      };
+    }
+
     const { data, error } = await invokeGetPaymentMethods();
     if (error) {
       const normalized = normalizeError(error, 'Failed to load payment methods');
@@ -27,6 +81,132 @@ export const fetchCustomerPaymentMethods = async () => {
     return failureResult(normalized.message, normalized.code || null, {
       paymentMethods: [],
     });
+  }
+};
+
+export const attachCustomerPaymentMethod = async (paymentMethodId, { setAsDefault = false } = {}) => {
+  try {
+    const authSessionError = await ensureAuthSessionReady();
+    if (authSessionError) {
+      return authSessionError;
+    }
+
+    const resolvedPaymentMethodId = String(paymentMethodId || '').trim();
+    if (!resolvedPaymentMethodId) {
+      return failureResult('paymentMethodId is required', 'payment_method_required');
+    }
+
+    const { data, error } = await invokeAttachPaymentMethod({
+      paymentMethodId: resolvedPaymentMethodId,
+      setAsDefault: Boolean(setAsDefault),
+    });
+
+    if (error || data?.error) {
+      const edgePayload = await parseEdgeFunctionErrorPayload(error);
+      const normalized = normalizeError(
+        edgePayload?.message
+          ? { ...(error || data || {}), message: edgePayload.message, code: edgePayload.code || undefined }
+          : (error || data),
+        'Failed to attach payment method'
+      );
+      logger.error('CustomerPaymentService', 'attachCustomerPaymentMethod failed', normalized, {
+        rawError: error || data,
+        edgePayload,
+      });
+      return failureResult(normalized.message, normalized.code || null);
+    }
+
+    return successResult({
+      paymentMethodId: resolvedPaymentMethodId,
+      defaultPaymentMethodId: data?.defaultPaymentMethodId || null,
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to attach payment method');
+    logger.error('CustomerPaymentService', 'attachCustomerPaymentMethod failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null);
+  }
+};
+
+export const detachCustomerPaymentMethod = async (paymentMethodId) => {
+  try {
+    const authSessionError = await ensureAuthSessionReady();
+    if (authSessionError) {
+      return authSessionError;
+    }
+
+    const resolvedPaymentMethodId = String(paymentMethodId || '').trim();
+    if (!resolvedPaymentMethodId) {
+      return failureResult('paymentMethodId is required', 'payment_method_required');
+    }
+
+    const { data, error } = await invokeDetachPaymentMethod({
+      paymentMethodId: resolvedPaymentMethodId,
+    });
+
+    if (error || data?.error) {
+      const edgePayload = await parseEdgeFunctionErrorPayload(error);
+      const normalized = normalizeError(
+        edgePayload?.message
+          ? { ...(error || data || {}), message: edgePayload.message, code: edgePayload.code || undefined }
+          : (error || data),
+        'Failed to remove payment method'
+      );
+      logger.error('CustomerPaymentService', 'detachCustomerPaymentMethod failed', normalized, {
+        rawError: error || data,
+        edgePayload,
+      });
+      return failureResult(normalized.message, normalized.code || null);
+    }
+
+    return successResult({
+      detachedPaymentMethodId: data?.detachedPaymentMethodId || resolvedPaymentMethodId,
+      defaultPaymentMethodId: data?.defaultPaymentMethodId || null,
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to remove payment method');
+    logger.error('CustomerPaymentService', 'detachCustomerPaymentMethod failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null);
+  }
+};
+
+export const setCustomerDefaultPaymentMethod = async (paymentMethodId) => {
+  try {
+    const authSessionError = await ensureAuthSessionReady();
+    if (authSessionError) {
+      return authSessionError;
+    }
+
+    const resolvedPaymentMethodId = String(paymentMethodId || '').trim();
+    if (!resolvedPaymentMethodId) {
+      return failureResult('paymentMethodId is required', 'payment_method_required');
+    }
+
+    const { data, error } = await invokeSetDefaultPaymentMethod({
+      paymentMethodId: resolvedPaymentMethodId,
+    });
+
+    if (error || data?.error) {
+      const edgePayload = await parseEdgeFunctionErrorPayload(error);
+      const normalized = normalizeError(
+        edgePayload?.message
+          ? { ...(error || data || {}), message: edgePayload.message, code: edgePayload.code || undefined }
+          : (error || data),
+        'Failed to set default payment method'
+      );
+      logger.error('CustomerPaymentService', 'setCustomerDefaultPaymentMethod failed', normalized, {
+        rawError: error || data,
+        edgePayload,
+      });
+      return failureResult(normalized.message, normalized.code || null);
+    }
+
+    return successResult({
+      defaultPaymentMethodId: data?.defaultPaymentMethodId || resolvedPaymentMethodId,
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to set default payment method');
+    logger.error('CustomerPaymentService', 'setCustomerDefaultPaymentMethod failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null);
   }
 };
 

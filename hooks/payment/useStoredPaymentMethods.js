@@ -5,7 +5,12 @@ import {
   saveStoredDefaultPaymentMethod,
   saveStoredPaymentMethods,
 } from '../../services/PaymentLocalStorageService';
-import { fetchCustomerPaymentMethods } from '../../services/CustomerPaymentService';
+import {
+  attachCustomerPaymentMethod,
+  detachCustomerPaymentMethod,
+  fetchCustomerPaymentMethods,
+  setCustomerDefaultPaymentMethod,
+} from '../../services/CustomerPaymentService';
 import { logger } from '../../services/logger';
 
 /**
@@ -47,6 +52,7 @@ export const useStoredPaymentMethods = ({ userId }) => {
       }
 
       const remoteMethods = Array.isArray(result.paymentMethods) ? result.paymentMethods : [];
+
       const nextDefault = remoteMethods.find((method) => method?.isDefault) || null;
 
       setPaymentMethods(remoteMethods);
@@ -84,15 +90,26 @@ export const useStoredPaymentMethods = ({ userId }) => {
     }
 
     try {
-      const nextMethods = [...paymentMethods, paymentMethod];
-      const nextDefault = nextMethods.length === 1 ? paymentMethod : defaultPaymentMethod;
+      const resolvedPaymentMethodId = String(
+        paymentMethod?.stripePaymentMethodId ||
+        paymentMethod?.id ||
+        ''
+      ).trim();
+      if (!resolvedPaymentMethodId) {
+        return { success: false, error: 'Missing Stripe payment method id' };
+      }
 
-      setPaymentMethods(nextMethods);
-      setDefaultPaymentMethod(nextDefault);
+      const shouldSetAsDefault = paymentMethods.length === 0 || !defaultPaymentMethod?.id;
+      const attachResult = await attachCustomerPaymentMethod(resolvedPaymentMethodId, {
+        setAsDefault: shouldSetAsDefault,
+      });
+      if (!attachResult.success) {
+        return { success: false, error: attachResult.error || 'Failed to save payment method' };
+      }
 
-      await saveStoredPaymentMethods(userId, nextMethods);
-      if (nextDefault) {
-        await saveStoredDefaultPaymentMethod(userId, nextDefault);
+      const refreshResult = await fetchStripePaymentMethods(userId);
+      if (!refreshResult.success) {
+        logger.warn('PaymentMethods', 'savePaymentMethod remote refresh failed', refreshResult.error);
       }
 
       return { success: true };
@@ -100,7 +117,7 @@ export const useStoredPaymentMethods = ({ userId }) => {
       logger.error('PaymentMethods', 'savePaymentMethod failed', error);
       return { success: false, error: error?.message || 'Failed to save payment method' };
     }
-  }, [defaultPaymentMethod, paymentMethods, userId]);
+  }, [defaultPaymentMethod?.id, fetchStripePaymentMethods, paymentMethods.length, userId]);
 
   const removePaymentMethod = useCallback(async (methodId) => {
     if (!userId) {
@@ -108,6 +125,11 @@ export const useStoredPaymentMethods = ({ userId }) => {
     }
 
     try {
+      const detachResult = await detachCustomerPaymentMethod(methodId);
+      if (!detachResult.success) {
+        return { success: false, error: detachResult.error || 'Failed to remove payment method' };
+      }
+
       const nextMethods = paymentMethods.filter((method) => method.id !== methodId);
       const nextDefault =
         defaultPaymentMethod?.id === methodId
@@ -124,12 +146,17 @@ export const useStoredPaymentMethods = ({ userId }) => {
         await clearStoredDefaultPaymentMethod(userId);
       }
 
+      const refreshResult = await fetchStripePaymentMethods(userId);
+      if (!refreshResult.success) {
+        logger.warn('PaymentMethods', 'removePaymentMethod remote refresh failed', refreshResult.error);
+      }
+
       return { success: true };
     } catch (error) {
       logger.error('PaymentMethods', 'removePaymentMethod failed', error);
       return { success: false, error: error?.message || 'Failed to remove payment method' };
     }
-  }, [defaultPaymentMethod, paymentMethods, userId]);
+  }, [defaultPaymentMethod, fetchStripePaymentMethods, paymentMethods, userId]);
 
   const setDefault = useCallback(async (paymentMethod) => {
     if (!userId) {
@@ -137,14 +164,37 @@ export const useStoredPaymentMethods = ({ userId }) => {
     }
 
     try {
+      const resolvedPaymentMethodId = String(
+        paymentMethod?.stripePaymentMethodId ||
+        paymentMethod?.id ||
+        ''
+      ).trim();
+      if (!resolvedPaymentMethodId) {
+        return { success: false, error: 'Missing Stripe payment method id' };
+      }
+
+      const setDefaultResult = await setCustomerDefaultPaymentMethod(resolvedPaymentMethodId);
+      if (!setDefaultResult.success) {
+        return {
+          success: false,
+          error: setDefaultResult.error || 'Failed to set default payment method',
+        };
+      }
+
       setDefaultPaymentMethod(paymentMethod);
       await saveStoredDefaultPaymentMethod(userId, paymentMethod);
+
+      const refreshResult = await fetchStripePaymentMethods(userId);
+      if (!refreshResult.success) {
+        logger.warn('PaymentMethods', 'setDefault remote refresh failed', refreshResult.error);
+      }
+
       return { success: true };
     } catch (error) {
       logger.error('PaymentMethods', 'setDefault failed', error);
       return { success: false, error: error?.message || 'Failed to set default payment method' };
     }
-  }, [userId]);
+  }, [fetchStripePaymentMethods, userId]);
 
   return {
     paymentMethods,
