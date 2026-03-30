@@ -224,8 +224,6 @@ const BaseModal = forwardRef(({
                     {
                         backgroundColor: backgroundColor,
                         height: height,
-                        // Use top positioning - modal slides from bottom (SCREEN_HEIGHT) to its final position
-                        top: SCREEN_HEIGHT - height,
                         transform: [{ translateY: Animated.add(translateY, keyboardTranslateY) }],
                     },
                     containerStyle,
@@ -266,7 +264,8 @@ const styles = StyleSheet.create({
         position: 'absolute',
         left: 0,
         right: 0,
-        // Using top positioning instead of bottom to prevent keyboard from pushing modal up
+        // Anchor to bottom to avoid window/screen height mismatch gaps on some Android devices.
+        bottom: 0,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         zIndex: 999,
