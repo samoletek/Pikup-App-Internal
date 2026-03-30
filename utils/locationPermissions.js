@@ -21,6 +21,48 @@ const normalizeAccuracy = (value, fallback = 'unknown') => {
   return normalized || fallback;
 };
 
+const normalizeIosAccuracy = (value) => {
+  const normalized = normalizeAccuracy(value, 'unknown');
+  if (['full', 'precise', 'fine', 'exact'].includes(normalized)) {
+    return 'full';
+  }
+  if (['reduced', 'approximate', 'coarse'].includes(normalized)) {
+    return 'reduced';
+  }
+  return 'unknown';
+};
+
+const resolveIosAccuracyFromPermission = (permission) => {
+  const iosDetails = permission?.ios || null;
+  const accuracyCandidates = [
+    iosDetails?.accuracy,
+    iosDetails?.locationAccuracy,
+    permission?.accuracy,
+    permission?.locationAccuracy,
+  ];
+
+  for (const candidate of accuracyCandidates) {
+    const normalized = normalizeIosAccuracy(candidate);
+    if (normalized !== 'unknown') {
+      return normalized;
+    }
+  }
+
+  const preciseCandidates = [
+    iosDetails?.precise,
+    iosDetails?.isPrecise,
+    permission?.precise,
+    permission?.isPrecise,
+  ];
+  for (const preciseCandidate of preciseCandidates) {
+    if (typeof preciseCandidate === 'boolean') {
+      return preciseCandidate ? 'full' : 'reduced';
+    }
+  }
+
+  return 'unknown';
+};
+
 export const resolvePreciseLocationStatus = (permission) => {
   if (permission?.status !== 'granted') {
     return {
@@ -41,7 +83,7 @@ export const resolvePreciseLocationStatus = (permission) => {
     };
   }
 
-  const iosAccuracy = normalizeAccuracy(permission?.ios?.accuracy, 'unknown');
+  const iosAccuracy = resolveIosAccuracyFromPermission(permission);
   if (iosAccuracy === 'full') {
     return {
       enabled: true,
@@ -64,6 +106,46 @@ export const resolvePreciseLocationStatus = (permission) => {
     enabled: false,
     known: false,
     iosAccuracy,
+    androidAccuracy: 'none',
+  };
+};
+
+const IOS_PRECISE_ACCURACY_METERS = 120;
+const IOS_REDUCED_ACCURACY_METERS = 600;
+
+export const inferIosPreciseLocationStatusFromFix = (locationFix) => {
+  const accuracyMeters = Number(locationFix?.coords?.accuracy ?? locationFix?.accuracy);
+  if (!Number.isFinite(accuracyMeters) || accuracyMeters <= 0) {
+    return {
+      enabled: false,
+      known: false,
+      iosAccuracy: 'unknown',
+      androidAccuracy: 'none',
+    };
+  }
+
+  if (accuracyMeters <= IOS_PRECISE_ACCURACY_METERS) {
+    return {
+      enabled: true,
+      known: true,
+      iosAccuracy: 'full',
+      androidAccuracy: 'none',
+    };
+  }
+
+  if (accuracyMeters >= IOS_REDUCED_ACCURACY_METERS) {
+    return {
+      enabled: false,
+      known: true,
+      iosAccuracy: 'reduced',
+      androidAccuracy: 'none',
+    };
+  }
+
+  return {
+    enabled: false,
+    known: false,
+    iosAccuracy: 'unknown',
     androidAccuracy: 'none',
   };
 };
