@@ -212,7 +212,7 @@ export default function useOnboardingActions({
     const nextButtonLabel = loading
       ? 'Setting up...'
       : isIdentityStep && isIdentityVerificationRejected
-        ? 'Onboarding Declined'
+        ? 'Try Again'
         : isBlockedByIdentity
           ? 'Complete Verification'
           : currentStep === steps.length - 1

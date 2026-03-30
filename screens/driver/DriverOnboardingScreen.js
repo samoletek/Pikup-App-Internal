@@ -93,20 +93,12 @@ export default function DriverOnboardingScreen({ navigation }) {
     getDriverOnboardingLink,
   });
   const isIdentityStepDeclined = currentStep === 1 && isIdentityVerificationRejected;
-  const handleDeclinedExitToHome = React.useCallback(() => {
-    navigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: "DriverTabs",
-          params: {
-            screen: "Home",
-            params: { showOnboardingDeclinedBanner: true },
-          },
-        },
-      ],
-    });
-  }, [navigation]);
+  const handleVerifyAgain = React.useCallback(() => {
+    if (identityLoading) {
+      return;
+    }
+    void present();
+  }, [identityLoading, present]);
 
   return (
     <KeyboardAvoidingView
@@ -245,9 +237,9 @@ export default function DriverOnboardingScreen({ navigation }) {
             isIdentityStepDeclined && styles.nextButtonDeclined,
             !isIdentityStepDeclined && isNextDisabled && styles.nextButtonDisabled,
           ]}
-          onPress={isIdentityStepDeclined ? handleDeclinedExitToHome : handleNext}
-          disabled={!isIdentityStepDeclined && isNextDisabled}
-          loading={!isIdentityStepDeclined && loading}
+          onPress={isIdentityStepDeclined ? handleVerifyAgain : handleNext}
+          disabled={isIdentityStepDeclined ? identityLoading : isNextDisabled}
+          loading={isIdentityStepDeclined ? identityLoading : loading}
           labelStyle={styles.nextButtonText}
         />
       </View>

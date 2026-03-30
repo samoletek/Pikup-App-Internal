@@ -432,6 +432,8 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
+    width: '100%',
   },
   nextButton: {
     flex: 2,
@@ -456,8 +458,10 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: colors.text.primary,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    textAlign: 'center',
+    width: '100%',
   },
   loadingContainer: {
     flexDirection: 'row',
