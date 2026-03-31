@@ -1,7 +1,7 @@
 import {
     invokeSendPhoneOtp,
     invokeVerifyPhoneOtp,
-    updateProfileByTableAndUserId,
+    updateProfileByTableAndUserIdWithSelect,
 } from './repositories/authRepository';
 import { normalizeError } from './errorService';
 import { failureResult, successResult } from './contracts/result';
@@ -93,13 +93,17 @@ export const saveVerifiedPhoneNumber = async ({ userTable, userId, phone }) => {
     }
 
     try {
-        const { error: updateError } = await updateProfileByTableAndUserId(userTable, userId, {
+        const { data: updatedRow, error: updateError } = await updateProfileByTableAndUserIdWithSelect(userTable, userId, {
             phone_number: phone,
             phone_verified: true,
         });
 
         if (updateError) {
             return failureResult(updateError.message || 'Failed to save verified phone number');
+        }
+
+        if (!updatedRow) {
+            return failureResult('Profile update did not match any record. Please sign in again.');
         }
 
         return successResult();

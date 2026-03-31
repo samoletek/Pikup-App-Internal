@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import {
   layout,
   spacing,
 } from '../../styles/theme';
+import { isPhoneVerified } from '../../utils/profileFlags';
 
 export default function OrderSummaryScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -51,8 +52,10 @@ export default function OrderSummaryScreen({ navigation, route }) {
     loading: paymentLoading,
   } = usePayment();
 
-  const handleSchedule = async () => {
-    if (!currentUser?.phone_verified) {
+  const handleScheduleRef = useRef(null);
+
+  const handleSchedule = useCallback(async () => {
+    if (!isPhoneVerified(currentUser)) {
       Alert.alert(
         'Phone Verification Required',
         'Please verify your phone number before requesting a pickup.',
@@ -95,13 +98,15 @@ export default function OrderSummaryScreen({ navigation, route }) {
         error.message || "We couldn't confirm your order. Please try again.",
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Try Again', onPress: () => setTimeout(() => handleSchedule(), 500) },
+          { text: 'Try Again', onPress: () => setTimeout(() => handleScheduleRef.current?.(), 500) },
         ]
       );
     } finally {
       setProcessing(false);
     }
-  };
+  }, [currentUser, defaultPaymentMethod, paymentMethods, navigation]);
+
+  handleScheduleRef.current = handleSchedule;
 
   const handlePaymentMethodPress = () => {
     if (paymentMethods.length === 0) {
@@ -263,7 +268,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
         onClose={() => setAddPaymentModalVisible(false)}
         onSuccess={() => {
           setAddPaymentModalVisible(false);
-          setTimeout(handleSchedule, 500);
+          setTimeout(() => handleScheduleRef.current?.(), 500);
         }}
       />
 
@@ -273,7 +278,7 @@ export default function OrderSummaryScreen({ navigation, route }) {
         onVerified={async () => {
           setPhoneVerifyVisible(false);
           await refreshProfile();
-          setTimeout(handleSchedule, 500);
+          setTimeout(() => handleScheduleRef.current?.(), 500);
         }}
         userId={currentUser?.uid || currentUser?.id}
         userTable="customers"

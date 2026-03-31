@@ -23,6 +23,7 @@ import {
   getTripId,
 } from "./CustomerHomeScreen.utils";
 import { ensureForegroundLocationAvailability } from "../../utils/locationPermissions";
+import { isPhoneVerified } from "../../utils/profileFlags";
 
 export const CUSTOMER_LOCATION_GATE_STATUS = Object.freeze({
   CHECKING: "checking",
@@ -32,9 +33,6 @@ export const CUSTOMER_LOCATION_GATE_STATUS = Object.freeze({
   STATE_UNRESOLVED: "state_unresolved",
   UNSUPPORTED_STATE: "unsupported_state",
 });
-
-const isTruthyProfileFlag = (value) =>
-  value === true || value === "true" || value === 1 || value === "1";
 
 export default function useCustomerHomeFlow({
   activeDelivery,
@@ -55,9 +53,7 @@ export default function useCustomerHomeFlow({
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
-  const isPhoneVerifiedForOrders = isTruthyProfileFlag(
-    currentUser?.phone_verified ?? currentUser?.phoneVerified
-  );
+  const isPhoneVerifiedForOrders = isPhoneVerified(currentUser);
   const isGeorgiaOrderGateOpen =
     locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
   const isPhoneVerificationRequiredForOrders =
