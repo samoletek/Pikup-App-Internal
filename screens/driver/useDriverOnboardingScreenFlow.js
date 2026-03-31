@@ -152,6 +152,24 @@ export default function useDriverOnboardingScreenFlow({
     }
   }, [currentStep, progressAnim, verificationStatus]);
 
+  const previousVerificationStatusRef = useRef(verificationStatus);
+  useEffect(() => {
+    const previousStatus = previousVerificationStatusRef.current;
+    const hasJustCompletedVerification =
+      previousStatus !== "completed" && verificationStatus === "completed";
+
+    if (hasJustCompletedVerification && currentStep === 1) {
+      Animated.timing(progressAnim, {
+        toValue: 2 / (steps.length - 1),
+        duration: 300,
+        useNativeDriver: false,
+      }).start();
+      setCurrentStep(2);
+    }
+
+    previousVerificationStatusRef.current = verificationStatus;
+  }, [currentStep, progressAnim, setCurrentStep, verificationStatus]);
+
   const {
     handleNext,
     handlePrevious,

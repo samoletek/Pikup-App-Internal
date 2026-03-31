@@ -249,15 +249,11 @@ export const invokeProcessPayout = async (payload: ProcessPayoutRequest) => {
 };
 
 export const invokeCreateVerificationSession = async (payload: CreateVerificationSessionRequest) => {
-  return supabase.functions.invoke<CreateVerificationSessionResponse>('create-verification-session', {
-    body: payload,
-  });
+  return invokeWithAuthRetry<CreateVerificationSessionResponse>('create-verification-session', payload);
 };
 
 export const invokeGetVerificationData = async (payload: GetVerificationDataRequest) => {
-  return supabase.functions.invoke<GetVerificationDataResponse>('get-verification-data', {
-    body: payload,
-  });
+  return invokeWithAuthRetry<GetVerificationDataResponse>('get-verification-data', payload);
 };
 
 export const invokeVerifyVehicle = async (payload: VerifyVehicleRequest) => {

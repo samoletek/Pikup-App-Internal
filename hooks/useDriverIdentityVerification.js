@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform } from 'react-native';
 import { useStripeIdentity } from '@stripe/stripe-identity-react-native';
 import { appConfig } from '../config/appConfig';
@@ -11,6 +11,7 @@ import {
 
 export default function useDriverIdentityVerification({ currentUser, setFormData }) {
   const [verificationSessionId, setVerificationSessionId] = useState(null);
+  const verificationSessionIdRef = useRef(null);
   const [verificationStatus, setVerificationStatus] = useState('pending');
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
@@ -47,6 +48,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
       logger.info('DriverIdentityVerification', 'Verification session received', { sessionId: data.id });
       setVerificationSessionId(data.id);
+      verificationSessionIdRef.current = data.id;
 
       if (!data.ephemeral_key_secret) {
         logger.error('DriverIdentityVerification', 'MISSING ephemeral_key_secret in response', data);
@@ -70,6 +72,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
   const fetchVerificationData = async (sessionId, retryCount = 0) => {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 3000;
+    const RETRYABLE_STATUSES = new Set(['processing', 'requires_input']);
 
     try {
       setIsLoadingVerificationData(true);
@@ -80,9 +83,15 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       } catch (error) {
         logger.error('DriverIdentityVerification', 'Error fetching verification data', error);
         let errorStatus = null;
-        if (error.context?.json) {
+        const response = error?.context;
+        if (response) {
           try {
-            const errorPayload = await error.context.json();
+            let errorPayload = null;
+            if (typeof response.clone === 'function') {
+              errorPayload = await response.clone().json();
+            } else if (typeof response.json === 'function') {
+              errorPayload = await response.json();
+            }
             errorStatus = errorPayload?.status || null;
           } catch (parseError) {
             logger.error('DriverIdentityVerification', 'Failed to parse verification error payload', parseError);
@@ -92,8 +101,9 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
         return { verified: false, status: errorStatus || 'error' };
       }
 
-      if (data?.status === 'processing' && retryCount < MAX_RETRIES) {
+      if (RETRYABLE_STATUSES.has(data?.status) && retryCount < MAX_RETRIES) {
         logger.info('DriverIdentityVerification', 'Verification processing, retrying', {
+          status: data?.status,
           retryInSeconds: RETRY_DELAY / 1000,
           attempt: retryCount + 1,
           maxRetries: MAX_RETRIES,
@@ -102,9 +112,9 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
         return fetchVerificationData(sessionId, retryCount + 1);
       }
 
-      if (data?.status === 'processing') {
+      if (RETRYABLE_STATUSES.has(data?.status)) {
         setIsLoadingVerificationData(false);
-        return { verified: false, status: 'processing' };
+        return { verified: false, status: data.status };
       }
 
       if (data?.status && data.status !== 'verified') {
@@ -162,6 +172,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
   const startIdentityVerification = async () => {
     try {
+      setVerificationStatus('pending');
       await present();
     } catch (error) {
       logger.error('DriverIdentityVerification', 'Failed to present Stripe identity sheet', error);
@@ -177,12 +188,22 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
     if (status === 'FlowCompleted') {
       const finalizeIdentityVerification = async () => {
-        if (!verificationSessionId || !currentUser) {
+        const activeSessionId = verificationSessionIdRef.current || verificationSessionId;
+        if (!activeSessionId || !currentUser) {
           setVerificationStatus('failed');
           return;
         }
 
-        const verificationResult = await fetchVerificationData(verificationSessionId);
+        const verificationResult = await fetchVerificationData(activeSessionId);
+        const latestSessionId = verificationSessionIdRef.current;
+        if (latestSessionId && activeSessionId !== latestSessionId) {
+          logger.warn('DriverIdentityVerification', 'Ignoring stale FlowCompleted verification result', {
+            staleSessionId: activeSessionId,
+            latestSessionId,
+            status: verificationResult?.status,
+          });
+          return;
+        }
 
         if (verificationResult?.verified) {
           logger.info('DriverIdentityVerification', 'Verification completed successfully');
@@ -190,7 +211,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
           markDriverIdentityVerified({
             currentUser,
-            verificationSessionId,
+            verificationSessionId: activeSessionId,
           })
             .then(() => {
               logger.info('DriverIdentityVerification', 'Driver verification status saved to DB');
@@ -201,11 +222,20 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
           return;
         }
 
-        if (verificationResult?.status === 'processing') {
+        if (verificationResult?.status === 'processing' || verificationResult?.status === 'requires_input') {
           setVerificationStatus('pending');
           Alert.alert(
             'Verification In Progress',
             'We are still reviewing your ID. Please wait a moment and try again.'
+          );
+          return;
+        }
+
+        if (verificationResult?.status === 'error') {
+          setVerificationStatus('pending');
+          Alert.alert(
+            'Verification Check Delayed',
+            'We could not confirm verification status yet. Please try again in a moment.'
           );
           return;
         }
@@ -222,12 +252,69 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       logger.warn('DriverIdentityVerification', 'Verification was canceled by user');
       setVerificationStatus('canceled');
     } else if (status === 'FlowFailed') {
-      logger.warn('DriverIdentityVerification', 'Verification failed');
-      setVerificationStatus('failed');
-      Alert.alert(
-        'Verification Failed',
-        'Your identity verification was not approved. Contact support or visit pikup-app.com.'
-      );
+      logger.warn('DriverIdentityVerification', 'Identity SDK reported FlowFailed, rechecking session status');
+      const reconcileFailedStatus = async () => {
+        const activeSessionId = verificationSessionIdRef.current || verificationSessionId;
+        if (!activeSessionId || !currentUser) {
+          setVerificationStatus('failed');
+          Alert.alert(
+            'Verification Failed',
+            'Your identity verification was not approved. Contact support or visit pikup-app.com.'
+          );
+          return;
+        }
+
+        const verificationResult = await fetchVerificationData(activeSessionId);
+        const latestSessionId = verificationSessionIdRef.current;
+        if (latestSessionId && activeSessionId !== latestSessionId) {
+          logger.warn('DriverIdentityVerification', 'Ignoring stale FlowFailed verification result', {
+            staleSessionId: activeSessionId,
+            latestSessionId,
+            status: verificationResult?.status,
+          });
+          return;
+        }
+        if (verificationResult?.verified) {
+          setVerificationStatus('completed');
+          markDriverIdentityVerified({
+            currentUser,
+            verificationSessionId: activeSessionId,
+          })
+            .then(() => {
+              logger.info('DriverIdentityVerification', 'Driver verification status reconciled after FlowFailed');
+            })
+            .catch((error) => {
+              logger.error('DriverIdentityVerification', 'Failed to persist reconciled verification status', error);
+            });
+          return;
+        }
+
+        if (verificationResult?.status === 'processing' || verificationResult?.status === 'requires_input') {
+          setVerificationStatus('pending');
+          Alert.alert(
+            'Verification In Progress',
+            'We are still reviewing your ID. Please wait a moment and try again.'
+          );
+          return;
+        }
+
+        if (verificationResult?.status === 'error') {
+          setVerificationStatus('pending');
+          Alert.alert(
+            'Verification Check Delayed',
+            'We could not confirm verification status yet. Please try again in a moment.'
+          );
+          return;
+        }
+
+        setVerificationStatus('failed');
+        Alert.alert(
+          'Verification Failed',
+          'Your identity verification was not approved. Contact support or visit pikup-app.com.'
+        );
+      };
+
+      void reconcileFailedStatus();
     }
     // fetchVerificationData remains non-memoized to preserve recursive retry behavior.
     // eslint-disable-next-line react-hooks/exhaustive-deps
