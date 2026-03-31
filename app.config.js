@@ -8,7 +8,7 @@ module.exports = {
   expo: {
     name: "pikup",
     slug: "pikup-app",
-    version: "1.0.17",
+    version: "1.0.18",
     scheme: "pikup",
     orientation: "portrait",
     icon: "./assets/icon.png",
@@ -22,7 +22,7 @@ module.exports = {
     assetBundlePatterns: ["**/*"],
 
     ios: {
-      buildNumber: "19",
+      buildNumber: "20",
       supportsTablet: true,
       usesAppleSignIn: true,
       appleTeamId: "99LU49ANLX",
@@ -64,7 +64,7 @@ module.exports = {
     },
 
     android: {
-      versionCode: 19,
+      versionCode: 20,
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
         backgroundColor: "#ffffff",
