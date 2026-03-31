@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ActivityIndicator,
   View,
   Text,
   TouchableOpacity,
@@ -30,7 +31,7 @@ import OnboardingProgressBar from "./onboarding/OnboardingProgressBar";
 import OnboardingStepContent from "./onboarding/OnboardingStepContent";
 import useDriverOnboardingScreenFlow from "./useDriverOnboardingScreenFlow";
 
-export default function DriverOnboardingScreen({ navigation }) {
+export default function DriverOnboardingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width, height: screenHeight } = useWindowDimensions();
   const { currentUser } = useAuthIdentity();
@@ -39,7 +40,15 @@ export default function DriverOnboardingScreen({ navigation }) {
     createDriverConnectAccount,
     getDriverOnboardingLink,
   } = usePaymentActions();
-  const contentMaxWidth = Math.min(layout.contentMaxWidth, width - spacing.xl);
+  const horizontalInset = spacing.xl;
+  const safeViewportWidth =
+    Number.isFinite(width) && width > horizontalInset
+      ? width
+      : layout.contentMaxWidth;
+  const contentMaxWidth = Math.max(
+    320,
+    Math.min(layout.contentMaxWidth, safeViewportWidth - horizontalInset)
+  );
 
   const {
     addressSuggestions,
@@ -53,7 +62,9 @@ export default function DriverOnboardingScreen({ navigation }) {
     handleVerifyVehicle,
     handleVideoPlaybackStatus,
     identityLoading,
+    hasForcedIdentityStepApplied,
     isIdentityVerificationRejected,
+    isDraftHydrated,
     isLoadingAddress,
     isLoadingVerificationData,
     isNextDisabled,
@@ -87,12 +98,14 @@ export default function DriverOnboardingScreen({ navigation }) {
     vinPhotoUri,
   } = useDriverOnboardingScreenFlow({
     navigation,
+    route,
     currentUser,
     updateDriverPaymentProfile,
     createDriverConnectAccount,
     getDriverOnboardingLink,
   });
   const isIdentityStepDeclined = currentStep === 1 && isIdentityVerificationRejected;
+  const isHydratingDraft = !isDraftHydrated || !hasForcedIdentityStepApplied;
   const handleVerifyAgain = React.useCallback(() => {
     if (identityLoading) {
       return;
@@ -120,7 +133,9 @@ export default function DriverOnboardingScreen({ navigation }) {
             >
               <Ionicons name="arrow-back" size={24} color={colors.white} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{screenSteps[currentStep].title}</Text>
+            <Text style={styles.headerTitle}>
+              {isHydratingDraft ? "Loading setup..." : screenSteps[currentStep].title}
+            </Text>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => navigation.goBack()}
@@ -129,12 +144,14 @@ export default function DriverOnboardingScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          <OnboardingProgressBar
-            styles={styles}
-            progressAnim={progressAnim}
-            currentStep={currentStep}
-            totalSteps={screenSteps.length}
-          />
+          {!isHydratingDraft ? (
+            <OnboardingProgressBar
+              styles={styles}
+              progressAnim={progressAnim}
+              currentStep={currentStep}
+              totalSteps={screenSteps.length}
+            />
+          ) : null}
         </View>
       </View>
 
@@ -144,105 +161,115 @@ export default function DriverOnboardingScreen({ navigation }) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.stepContainer, { maxWidth: contentMaxWidth }]}>
-          {currentStep !== 0 ? (
-            <View style={[styles.stepIcon, { backgroundColor: `${screenSteps[currentStep].color}20` }]}>
-              <Ionicons
-                name={screenSteps[currentStep].icon}
-                size={32}
-                color={screenSteps[currentStep].color}
-              />
-            </View>
-          ) : null}
+        {isHydratingDraft ? (
+          <View style={[styles.hydrationContainer, { maxWidth: contentMaxWidth }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.hydrationTitle}>Restoring your setup...</Text>
+            <Text style={styles.hydrationSubtitle}>Opening the exact step where you stopped.</Text>
+          </View>
+        ) : (
+          <View style={[styles.stepContainer, { maxWidth: contentMaxWidth }]}>
+            {currentStep !== 0 ? (
+              <View style={[styles.stepIcon, { backgroundColor: `${screenSteps[currentStep].color}20` }]}>
+                <Ionicons
+                  name={screenSteps[currentStep].icon}
+                  size={32}
+                  color={screenSteps[currentStep].color}
+                />
+              </View>
+            ) : null}
 
-          <Text style={styles.stepTitle}>{screenSteps[currentStep].title}</Text>
-          <Text style={styles.stepSubtitle}>{screenSteps[currentStep].subtitle}</Text>
+            <Text style={styles.stepTitle}>{screenSteps[currentStep].title}</Text>
+            <Text style={styles.stepSubtitle}>{screenSteps[currentStep].subtitle}</Text>
 
-          <OnboardingStepContent
-            currentStep={currentStep}
-            styles={styles}
-            videoRef={videoRef}
-            toggleVideoPlayback={toggleVideoPlayback}
-            handleVideoPlaybackStatus={handleVideoPlaybackStatus}
-            isVideoPlaying={isVideoPlaying}
-            videoWatched={videoWatched}
-            isIdentityVerificationRejected={isIdentityVerificationRejected}
-            openSupport={openSupport}
-            openWebsite={openWebsite}
-            identityLoading={identityLoading}
-            verificationStatus={verificationStatus}
-            present={present}
-            isLoadingVerificationData={isLoadingVerificationData}
-            verificationDataPopulated={verificationDataPopulated}
-            formData={formData}
-            updateFormData={updateFormData}
-            formatName={formatName}
-            formatPhoneNumber={formatPhoneNumber}
-            formatDateOfBirth={formatDateOfBirth}
-            isLoadingAddress={isLoadingAddress}
-            addressSuggestions={addressSuggestions}
-            searchAddress={searchAddress}
-            handleAddressSelect={handleAddressSelect}
-            setShowStatePicker={setShowStatePicker}
-            showStatePicker={showStatePicker}
-            statePickerRef={statePickerRef}
-            closeStatePicker={closeStatePicker}
-            screenHeight={screenHeight}
-            formatZipCode={formatZipCode}
-            carPhotoUris={carPhotoUris}
-            vinPhotoUri={vinPhotoUri}
-            vehicleVerificationStatus={vehicleVerificationStatus}
-            vehicleVerificationResult={vehicleVerificationResult}
-            vehicleVerificationError={vehicleVerificationError}
-            takeVinPhoto={takeVinPhoto}
-            takeCarPhoto={takeCarPhoto}
-            showVinHintAlert={showVinHintAlert}
-            showVehiclePhotoHintAlert={showVehiclePhotoHintAlert}
-            resetVinPhoto={resetVinPhoto}
-            resetCarPhoto={resetCarPhoto}
-            handleVerifyVehicle={handleVerifyVehicle}
-            formatYear={formatYear}
-            formatLicensePlate={formatLicensePlate}
-          />
-        </View>
+            <OnboardingStepContent
+              currentStep={currentStep}
+              styles={styles}
+              videoRef={videoRef}
+              toggleVideoPlayback={toggleVideoPlayback}
+              handleVideoPlaybackStatus={handleVideoPlaybackStatus}
+              isVideoPlaying={isVideoPlaying}
+              videoWatched={videoWatched}
+              isIdentityVerificationRejected={isIdentityVerificationRejected}
+              openSupport={openSupport}
+              openWebsite={openWebsite}
+              identityLoading={identityLoading}
+              verificationStatus={verificationStatus}
+              present={present}
+              isLoadingVerificationData={isLoadingVerificationData}
+              verificationDataPopulated={verificationDataPopulated}
+              formData={formData}
+              updateFormData={updateFormData}
+              formatName={formatName}
+              formatPhoneNumber={formatPhoneNumber}
+              formatDateOfBirth={formatDateOfBirth}
+              isLoadingAddress={isLoadingAddress}
+              addressSuggestions={addressSuggestions}
+              searchAddress={searchAddress}
+              handleAddressSelect={handleAddressSelect}
+              setShowStatePicker={setShowStatePicker}
+              showStatePicker={showStatePicker}
+              statePickerRef={statePickerRef}
+              closeStatePicker={closeStatePicker}
+              screenHeight={screenHeight}
+              formatZipCode={formatZipCode}
+              carPhotoUris={carPhotoUris}
+              vinPhotoUri={vinPhotoUri}
+              vehicleVerificationStatus={vehicleVerificationStatus}
+              vehicleVerificationResult={vehicleVerificationResult}
+              vehicleVerificationError={vehicleVerificationError}
+              takeVinPhoto={takeVinPhoto}
+              takeCarPhoto={takeCarPhoto}
+              showVinHintAlert={showVinHintAlert}
+              showVehiclePhotoHintAlert={showVehiclePhotoHintAlert}
+              resetVinPhoto={resetVinPhoto}
+              resetCarPhoto={resetCarPhoto}
+              handleVerifyVehicle={handleVerifyVehicle}
+              formatYear={formatYear}
+              formatLicensePlate={formatLicensePlate}
+            />
+          </View>
+        )}
       </ScrollView>
 
-      <View
-        style={[
-          styles.bottomActions,
-          {
-            paddingBottom: Math.max(insets.bottom, spacing.md),
-            maxWidth: contentMaxWidth,
-            width: "100%",
-            alignSelf: "center",
-          },
-        ]}
-      >
-        {currentStep > 0 && !isIdentityStepDeclined ? (
-          <AppButton
-            title="Back"
-            variant="secondary"
-            style={styles.backActionButton}
-            labelStyle={styles.backActionText}
-            onPress={handlePrevious}
-          />
-        ) : null}
-
-        <AppButton
-          title={nextButtonLabel}
-          variant={isIdentityStepDeclined ? "danger" : "primary"}
+      {!isHydratingDraft ? (
+        <View
           style={[
-            styles.nextButton,
-            (currentStep === 0 || isIdentityStepDeclined) && styles.nextButtonFull,
-            isIdentityStepDeclined && styles.nextButtonDeclined,
-            !isIdentityStepDeclined && isNextDisabled && styles.nextButtonDisabled,
+            styles.bottomActions,
+            {
+              paddingBottom: Math.max(insets.bottom, spacing.md),
+              maxWidth: contentMaxWidth,
+              width: "100%",
+              alignSelf: "center",
+            },
           ]}
-          onPress={isIdentityStepDeclined ? handleVerifyAgain : handleNext}
-          disabled={isIdentityStepDeclined ? identityLoading : isNextDisabled}
-          loading={isIdentityStepDeclined ? identityLoading : loading}
-          labelStyle={styles.nextButtonText}
-        />
-      </View>
+        >
+          {currentStep > 0 && !isIdentityStepDeclined ? (
+            <AppButton
+              title="Back"
+              variant="secondary"
+              style={styles.backActionButton}
+              labelStyle={styles.backActionText}
+              onPress={handlePrevious}
+            />
+          ) : null}
+
+          <AppButton
+            title={nextButtonLabel}
+            variant={isIdentityStepDeclined ? "danger" : "primary"}
+            style={[
+              styles.nextButton,
+              (currentStep === 0 || isIdentityStepDeclined) && styles.nextButtonFull,
+              isIdentityStepDeclined && styles.nextButtonDeclined,
+              !isIdentityStepDeclined && isNextDisabled && styles.nextButtonDisabled,
+            ]}
+            onPress={isIdentityStepDeclined ? handleVerifyAgain : handleNext}
+            disabled={isIdentityStepDeclined ? identityLoading : isNextDisabled}
+            loading={isIdentityStepDeclined ? identityLoading : loading}
+            labelStyle={styles.nextButtonText}
+          />
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
