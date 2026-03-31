@@ -72,3 +72,9 @@ server-updates.js
 cloud.md
 .claude/
 CLAUDE.md
+
+# Project checklists and agent configs (local planning docs)
+CHECKLIST.md
+PAYMENT_FLOW_FIX_CHECKLIST.md
+TECHNICAL_90_PLUS_CHECKLIST.md
+AGENTS.md

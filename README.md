@@ -2,12 +2,6 @@
 
 PikUp is a React Native/Expo application that connects users with drivers who have pickup trucks or SUVs, offering a faster, convenient, and affordable way to transport large or medium items — unlike dealing with the hassle of renting or high costs of traditional movers.
 
-## Project Status
-
-**Current Phase:** Option C - Full Build  
-**Timeline:** 8-10 weeks
-**Developer:** Andrew S. / Architeq
-
 See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 
 ---
@@ -271,48 +265,6 @@ npx eas build --platform android --profile production
 - **Landing Page:** https://pikup-app.com/
 
 ---
-
-## Future Considerations (v2)
-
-Features discussed but intentionally deferred to keep MVP lean:
-
-### Phone Calls
-- [ ] In-app calling between customer and driver (like Uber/Lyft)
-- Complex feature, requires VoIP integration
-- Current approach: messaging + push notifications
-
-### Map Animations
-- [ ] Show other drivers on map while customer is requesting
-- Animated car icons in customer's area
-- May be UI-only (not real-time sync) like Uber/Lyft
-
-### Loading/Unloading Timer
-- [ ] Timer for loading/unloading at pickup/dropoff
-- Charge extra if exceeds time limit
-- Need to define pricing model
-
-### Plaid Integration
-- [ ] Consider Plaid instead of Stripe for unified service
-- Identity verification + payments + background check in one
-- Potentially cheaper than separate services
-
-### Enhanced Rating System
-- [ ] Low-rated drivers get fewer job matches
-- [ ] Auto-suspend/terminate for complaints or criminal behavior
-- [ ] Trust score algorithm similar to Uber/Lyft
-
-### Help Page Cleanup
-- [ ] Review and remove unused features from old app
-- [ ] Keep only essential features for cleaner UX
-
-### Car Animations on Map
-- [ ] Customer sees nearby drivers while requesting
-- [ ] Animated icons showing driver movement
-- Could be real-time or decorative (TBD)
-
----
-
-**Note:** These features were discussed during planning calls but excluded from current scope to focus on core MVP functionality. Will revisit after successful App Store launch.
 
 **Last Updated:** January 25, 2026  
 **Developer:** Andrew S. / Architeq
