@@ -1,6 +1,14 @@
 // Camera Screen component: orchestrates camera capture flow with overlay guidance and thumbnail queue.
-import React from 'react';
-import { View, Text, TouchableOpacity, Modal, Platform, StatusBar } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  Platform,
+  StatusBar,
+  PanResponder,
+} from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +19,18 @@ import CameraOverlayGuide from './camera/CameraOverlayGuide';
 import CameraCaptureControls from './camera/CameraCaptureControls';
 import CameraPermissionState from './camera/CameraPermissionState';
 import { useCameraCaptureSession } from './camera/useCameraCaptureSession';
+
+const getPinchDistance = (touches = []) => {
+  if (touches.length < 2) {
+    return 0;
+  }
+
+  const [firstTouch, secondTouch] = touches;
+  const distanceX = firstTouch.pageX - secondTouch.pageX;
+  const distanceY = firstTouch.pageY - secondTouch.pageY;
+
+  return Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+};
 
 const CameraScreen = ({
   visible,
@@ -28,6 +48,9 @@ const CameraScreen = ({
     permission,
     requestPermission,
     capturedPhotos,
+    zoom,
+    setZoom,
+    maxZoom,
     cameraRef,
     canCapture,
     remaining,
@@ -41,6 +64,53 @@ const CameraScreen = ({
     alreadyCount,
     maxPhotos,
   });
+  const pinchBaseRef = useRef({ distance: 0, zoom: 0 });
+  const zoomRef = useRef(zoom);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  const pinchResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (event) => event.nativeEvent.touches.length === 2,
+        onMoveShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length === 2,
+        onPanResponderGrant: (event) => {
+          const distance = getPinchDistance(event.nativeEvent.touches);
+
+          if (!distance) {
+            return;
+          }
+
+          pinchBaseRef.current = {
+            distance,
+            zoom: zoomRef.current,
+          };
+        },
+        onPanResponderMove: (event) => {
+          const distance = getPinchDistance(event.nativeEvent.touches);
+          const baseDistance = pinchBaseRef.current.distance;
+
+          if (!distance || !baseDistance) {
+            return;
+          }
+
+          const scale = distance / baseDistance;
+          const rawZoom = pinchBaseRef.current.zoom + (scale - 1) * maxZoom;
+          const nextZoom = Math.min(maxZoom, Math.max(0, rawZoom));
+
+          setZoom(nextZoom);
+        },
+        onPanResponderRelease: () => {
+          pinchBaseRef.current.distance = 0;
+        },
+        onPanResponderTerminate: () => {
+          pinchBaseRef.current.distance = 0;
+        },
+      }),
+    [maxZoom, setZoom],
+  );
 
   if (!visible) {
     return null;
@@ -61,11 +131,14 @@ const CameraScreen = ({
         />
       ) : (
         <View style={styles.container}>
-          <CameraView
-            ref={cameraRef}
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-            facing={facing}
-          />
+          <View style={styles.cameraLayer} {...pinchResponder.panHandlers}>
+            <CameraView
+              ref={cameraRef}
+              style={styles.cameraLayer}
+              facing={facing}
+              zoom={zoom}
+            />
+          </View>
 
           <CameraOverlayGuide />
 
