@@ -18,6 +18,13 @@ function getDriverStatusConfig({
   onStartOnboarding,
   onResumeOnboarding,
 }) {
+  const normalizedStatus = String(onboardingStatus?.status || "").trim().toLowerCase();
+  const hasConnectAccount = Boolean(onboardingStatus?.connectAccountCreated);
+  const disabledReason = String(onboardingStatus?.disabledReason || "").trim();
+  const requirementCount = Array.isArray(onboardingStatus?.requirements)
+    ? onboardingStatus.requirements.length
+    : 0;
+
   if (isReadyToEarn) {
     return {
       title: "Ready to Earn",
@@ -31,12 +38,68 @@ function getDriverStatusConfig({
     };
   }
 
+  if (normalizedStatus === "under_review") {
+    return {
+      title: "Under Review",
+      subtitle: "No action is needed for now. Our partner is reviewing your account details now.",
+      icon: "time",
+      iconColor: colors.primary,
+      backgroundColor: colors.background.elevated,
+      borderColor: colors.primary,
+      ctaLabel: "View Status",
+      onPress: onResumeOnboarding,
+    };
+  }
+
+  if (normalizedStatus === "action_required") {
+    const actionSubtitle = disabledReason
+      ? `Account updates are required (${disabledReason.replace(/_/g, " ")}).`
+      : requirementCount > 0
+        ? `${requirementCount} required item${requirementCount === 1 ? "" : "s"} still need to be completed.`
+        : "Additional details are needed to enable payouts.";
+
+    return {
+      title: "Action Required",
+      subtitle: actionSubtitle,
+      icon: "alert-circle",
+      iconColor: colors.warning,
+      backgroundColor: colors.background.warningSubtle,
+      borderColor: colors.warning,
+      ctaLabel: "Continue",
+      onPress: hasConnectAccount ? onResumeOnboarding : onStartOnboarding,
+    };
+  }
+
+  if (normalizedStatus === "missing_account") {
+    return {
+      title: "Setup Required",
+      subtitle: "Create your payout account to start earning.",
+      icon: "alert-circle",
+      iconColor: colors.warning,
+      backgroundColor: colors.background.warningSubtle,
+      borderColor: colors.warning,
+      ctaLabel: "Start",
+      onPress: onStartOnboarding,
+    };
+  }
+
   if (onboardingStatus.connectAccountCreated) {
+    if (onboardingStatus.onboardingComplete) {
+      return {
+        title: "Under Review",
+        subtitle: "No action is needed for now. Our partner is reviewing your account details now.",
+        icon: "time",
+        iconColor: colors.primary,
+        backgroundColor: colors.background.elevated,
+        borderColor: colors.primary,
+        ctaLabel: "View Status",
+        onPress: onResumeOnboarding,
+      };
+    }
+
     return {
       title: "Complete Your Setup",
-      subtitle: onboardingStatus.onboardingComplete
-        ? "Documents pending review"
-        : "Finish verification to start earning",
+      subtitle: "Complete account setup to start earning",
       icon: "time",
       iconColor: colors.primary,
       backgroundColor: colors.background.elevated,

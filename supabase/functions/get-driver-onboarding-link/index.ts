@@ -15,23 +15,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_REFRESH_URL = "https://pikup-app.com/driver-onboarding";
-const DEFAULT_RETURN_URL = "https://pikup-app.com/driver-onboarding-complete";
-
-const toHttpsRedirectUrl = (value: unknown, fallback: string) => {
-  const raw = String(value || "").trim();
-  if (!raw) return fallback;
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
-    }
-    return fallback;
-  } catch (_error) {
-    return fallback;
-  }
-};
+const DEFAULT_REFRESH_URL = "https://pikup-app.com";
+const DEFAULT_RETURN_URL = "https://pikup-app.com";
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -69,8 +54,8 @@ serve(async (req) => {
 
     const payload = await req.json();
     const driverId = String(payload?.driverId || user.id);
-    const refreshUrl = toHttpsRedirectUrl(payload?.refreshUrl, DEFAULT_REFRESH_URL);
-    const returnUrl = toHttpsRedirectUrl(payload?.returnUrl, DEFAULT_RETURN_URL);
+    const refreshUrl = DEFAULT_REFRESH_URL;
+    const returnUrl = DEFAULT_RETURN_URL;
 
     if (driverId !== user.id) {
       return jsonResponse({ success: false, error: "Forbidden" }, 403);

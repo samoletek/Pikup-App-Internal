@@ -261,6 +261,11 @@ export type DriverOnboardingStatusResponse = EdgePayload<{
   onboardingComplete?: boolean
   canReceivePayments?: boolean
   requirements?: unknown[]
+  currentlyDue?: string[]
+  pastDue?: string[]
+  eventuallyDue?: string[]
+  pendingVerification?: string[]
+  disabledReason?: string | null
   status?: string
 }>
 

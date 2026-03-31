@@ -114,6 +114,10 @@ export default function DriverHomeScreen({ navigation, route }) {
     metadataOnboardingStatus === 'declined' ||
     metadataOnboardingStatus === 'rejected'
   );
+  const isOnboardingUnderReview = (
+    metadataOnboardingStatus === 'under_review' ||
+    metadataOnboardingStatus === 'review'
+  );
   const isOnboardingApproved = (
     Boolean(
       currentUser?.onboarding_complete ??
@@ -124,7 +128,8 @@ export default function DriverHomeScreen({ navigation, route }) {
       currentUser?.metadata?.canReceivePayments ??
       false
     ) ||
-    metadataOnboardingStatus === 'verified'
+    metadataOnboardingStatus === 'verified' ||
+    isOnboardingUnderReview
   );
   const showOnboardingRequiredBanner = (
     !isOnboardingApproved || isOnboardingDeclined

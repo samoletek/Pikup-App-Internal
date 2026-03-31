@@ -363,6 +363,20 @@ export const styles = StyleSheet.create({
 
     // Step 5 Styles - Vehicle Selection
     vehicleHint: { color: colors.text.muted, fontSize: typography.fontSize.base, marginBottom: spacing.base, textAlign: 'center' },
+    vehicleFitOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: colors.overlayDark,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.base,
+        zIndex: 2,
+    },
+    vehicleFitOverlayTitle: {
+        color: colors.text.primary,
+        fontSize: typography.fontSize.md,
+        fontWeight: typography.fontWeight.semibold,
+        textAlign: 'center',
+    },
     whatFitsSection: { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, padding: spacing.base, marginTop: spacing.base },
     whatFitsTitle: { color: colors.text.primary, fontSize: typography.fontSize.md, fontWeight: typography.fontWeight.semibold, marginBottom: spacing.md },
     whatFitsItem: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
