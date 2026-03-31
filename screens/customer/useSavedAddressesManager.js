@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { logger } from '../../services/logger';
 import { appConfig } from '../../config/appConfig';
+import { SUPPORTED_ORDER_COUNTRY_QUERY } from '../../constants/orderAvailability';
 import styles from './CustomerSavedAddressesScreen.styles';
 import {
   buildAddressRecord,
@@ -125,7 +126,7 @@ export default function useSavedAddressesManager() {
         const accessToken = appConfig.mapbox.publicToken;
         let url =
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
-          `access_token=${accessToken}&country=us&types=address,place,poi&limit=7&autocomplete=true&fuzzy_match=true`;
+          `access_token=${accessToken}&country=${encodeURIComponent(SUPPORTED_ORDER_COUNTRY_QUERY)}&types=address,place,poi&limit=7&autocomplete=true&fuzzy_match=true`;
 
         if (currentLocation?.longitude && currentLocation?.latitude) {
           url += `&proximity=${currentLocation.longitude},${currentLocation.latitude}`;

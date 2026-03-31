@@ -3,7 +3,10 @@ import { Alert, Keyboard } from 'react-native';
 import MapboxLocationService from '../../../services/MapboxLocationService';
 import { appConfig } from '../../../config/appConfig';
 import { logger } from '../../../services/logger';
-import { SUPPORTED_ORDER_STATE_CODES } from '../../../constants/orderAvailability';
+import {
+  SUPPORTED_ORDER_COUNTRY_QUERY,
+  SUPPORTED_ORDER_STATE_CODES,
+} from '../../../constants/orderAvailability';
 import {
   extractStateCodeFromMapboxContext,
   isSupportedOrderStateCode,
@@ -129,7 +132,7 @@ export default function useAddressSearchStepState({
         setIsLoadingSuggestions(true);
         const accessToken = appConfig.mapbox.publicToken;
         let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
-          `access_token=${accessToken}&country=us&types=address,place,poi&limit=7&autocomplete=true&fuzzy_match=true`;
+          `access_token=${accessToken}&country=${encodeURIComponent(SUPPORTED_ORDER_COUNTRY_QUERY)}&types=address,place,poi&limit=7&autocomplete=true&fuzzy_match=true`;
 
         if (userLocation) {
           url += `&proximity=${userLocation.longitude},${userLocation.latitude}`;

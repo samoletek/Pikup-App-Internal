@@ -8,9 +8,11 @@ import {
 } from './adapters/mapProviderAdapter';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { SUPPORTED_ORDER_COUNTRY_QUERY } from '../constants/orderAvailability';
 
 const MAPBOX_ACCESS_TOKEN = appConfig.mapbox.publicToken;
 const LAST_LOCATION_KEY = '@pikup_last_location';
+const REVERSE_GEOCODE_TYPES = 'address,poi,place,region,country';
 
 class MapboxLocationService {
   constructor() {
@@ -101,8 +103,7 @@ class MapboxLocationService {
       const data = await this.mapProvider.geocodeAddress({
         accessToken: MAPBOX_ACCESS_TOKEN,
         address,
-        bbox: '-85.605166,30.355757,-80.751429,35.000659',
-        country: 'US',
+        country: SUPPORTED_ORDER_COUNTRY_QUERY,
       });
 
       if (data.features && data.features.length > 0) {
@@ -129,15 +130,20 @@ class MapboxLocationService {
         accessToken: MAPBOX_ACCESS_TOKEN,
         latitude,
         longitude,
-        types: 'address,poi',
-        country: 'US',
+        types: REVERSE_GEOCODE_TYPES,
+        country: SUPPORTED_ORDER_COUNTRY_QUERY,
       });
 
       if (data.features && data.features.length > 0) {
         const feature = data.features[0];
         const context = Array.isArray(feature.context) ? feature.context : [];
-        const stateEntry = context.find((entry) => String(entry?.id || '').startsWith('region'));
-        const rawStateCode = String(stateEntry?.short_code || '').trim().toUpperCase();
+        const featureId = String(feature?.id || '');
+        const stateEntry = featureId.startsWith('region')
+          ? feature
+          : context.find((entry) => String(entry?.id || '').startsWith('region'));
+        const rawStateCode = String(stateEntry?.short_code || stateEntry?.text || '')
+          .trim()
+          .toUpperCase();
         const stateCode = rawStateCode.startsWith('US-') ? rawStateCode.slice(3) : rawStateCode;
 
         return {

@@ -68,20 +68,29 @@ const defaultMapProviderAdapter: MapProviderAdapter = {
   geocodeAddress: async ({
     accessToken,
     address,
-    bbox = '-85.605166,30.355757,-80.751429,35.000659',
-    country = 'US',
+    bbox,
+    country,
   }) => {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${accessToken}&bbox=${bbox}&country=${country}`;
+    let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${accessToken}`;
+    if (bbox) {
+      url += `&bbox=${bbox}`;
+    }
+    if (country) {
+      url += `&country=${country}`;
+    }
     return fetchJson<GeocodeResponse>(url);
   },
   reverseGeocode: async ({
     accessToken,
     latitude,
     longitude,
-    country = 'US',
+    country,
     types = 'address,poi',
   }) => {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${accessToken}&types=${types}&country=${country}`;
+    let url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${accessToken}&types=${types}`;
+    if (country) {
+      url += `&country=${country}`;
+    }
     return fetchJson<GeocodeResponse>(url);
   },
 };
