@@ -3,6 +3,7 @@ import { Keyboard } from 'react-native';
 import MapboxLocationService from '../../../services/MapboxLocationService';
 import { appConfig } from '../../../config/appConfig';
 import { logger } from '../../../services/logger';
+import { SUPPORTED_ORDER_COUNTRY_QUERY } from '../../../constants/orderAvailability';
 
 export default function useAddressSearch({ updateFormData }) {
   const statePickerRef = useRef(null);
@@ -55,7 +56,7 @@ export default function useAddressSearch({ updateFormData }) {
           const accessToken = appConfig.mapbox.publicToken;
           let url =
             `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?` +
-            `access_token=${accessToken}&country=us&types=address,place&limit=5&autocomplete=true&fuzzy_match=true`;
+            `access_token=${accessToken}&country=${encodeURIComponent(SUPPORTED_ORDER_COUNTRY_QUERY)}&types=address,place&limit=5&autocomplete=true&fuzzy_match=true`;
 
           if (userLocation) {
             url += `&proximity=${userLocation.longitude},${userLocation.latitude}`;

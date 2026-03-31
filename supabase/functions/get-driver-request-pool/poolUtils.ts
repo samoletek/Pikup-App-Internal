@@ -9,7 +9,18 @@ export const REQUEST_POOLS = Object.freeze({
   SCHEDULED: "scheduled",
 })
 
-export const DEFAULT_SUPPORTED_ORDER_STATES = Object.freeze(["GA"])
+// TODO(before production): Remove temporary Bali region whitelist used for internal testing.
+const TEMP_INTERNAL_SUPPORTED_REGION_CODES = Object.freeze(["ID-BA"])
+export const DEFAULT_SUPPORTED_ORDER_STATES = Object.freeze([
+  "GA",
+  ...TEMP_INTERNAL_SUPPORTED_REGION_CODES,
+])
+// TODO(before production): Remove temporary Bali normalization used for internal testing.
+const TEMP_INTERNAL_REGION_ALIASES: Record<string, string> = {
+  "ID-BA": "ID-BA",
+  BA: "ID-BA",
+  BALI: "ID-BA",
+}
 
 export const readEnvCsv = (names: string[], fallback: string[] = []) => {
   for (const name of names) {
@@ -316,7 +327,13 @@ export const normalizeStateCode = (value: unknown): string | null => {
   const raw = String(value || "").trim().toUpperCase()
   if (!raw) return null
 
+  const normalizedAlias = TEMP_INTERNAL_REGION_ALIASES[raw]
+  if (normalizedAlias) return normalizedAlias
+
   const normalized = raw.startsWith("US-") ? raw.slice(3) : raw
+  const normalizedCodeAlias = TEMP_INTERNAL_REGION_ALIASES[normalized]
+  if (normalizedCodeAlias) return normalizedCodeAlias
+
   if (normalized.length !== 2) return null
   return normalized
 }
@@ -324,6 +341,11 @@ export const normalizeStateCode = (value: unknown): string | null => {
 export const extractStateCodeFromAddress = (address: unknown): string | null => {
   const value = String(address || "").trim().toUpperCase()
   if (!value) return null
+
+  if (value.includes("BALI")) {
+    // TODO(before production): Remove temporary Bali matching used for internal testing.
+    return "ID-BA"
+  }
 
   const zipMatch = value.match(
     /,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?(?:\s*,?\s*(?:USA|UNITED STATES))?\s*$/
