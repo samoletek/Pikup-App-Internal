@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
   },
   header: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : spacing.xl,
     left: 0,
     right: 0,
     flexDirection: 'row',

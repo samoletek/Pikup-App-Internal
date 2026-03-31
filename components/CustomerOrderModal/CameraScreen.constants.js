@@ -7,7 +7,10 @@ export const THUMB_SIZE = 56;
 
 export const BOX_WIDTH = SCREEN_WIDTH * 0.82;
 export const BOX_HEIGHT = BOX_WIDTH * 0.78;
-export const BOX_TOP = (SCREEN_HEIGHT - BOX_HEIGHT) / 2 - 60;
+const GUIDE_HINT_HEIGHT = 24;
+const GUIDE_HINT_GAP = 16;
+const GUIDE_BLOCK_HEIGHT = BOX_HEIGHT + GUIDE_HINT_GAP + GUIDE_HINT_HEIGHT;
+export const BOX_TOP = (SCREEN_HEIGHT - GUIDE_BLOCK_HEIGHT) / 2;
 export const BOX_LEFT = (SCREEN_WIDTH - BOX_WIDTH) / 2;
 
 export const CORNER_SIZE = 28;

@@ -1,4 +1,10 @@
-export const SUPPORTED_ORDER_STATE_CODES = Object.freeze(["GA"]);
+// TODO(before production): Remove temporary Bali region whitelist used for internal testing.
+const TEMP_INTERNAL_SUPPORTED_REGION_CODES = Object.freeze(["ID-BA"]);
+
+export const SUPPORTED_ORDER_STATE_CODES = Object.freeze([
+  "GA",
+  ...TEMP_INTERNAL_SUPPORTED_REGION_CODES,
+]);
 
 export const DEFAULT_MANPOWER_SALES_TAX_RATE = 0.08;
 
