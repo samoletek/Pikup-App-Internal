@@ -169,18 +169,40 @@ export const checkDriverOnboardingStatus = async (connectAccountId = null, curre
           connectAccountId: data.accountId || connectAccountId || null,
           onboardingComplete: Boolean(data.onboardingComplete),
           canReceivePayments: Boolean(data.canReceivePayments),
+          onboardingStatus: data.status || null,
+          onboardingRequirements: Array.isArray(data.requirements) ? data.requirements : [],
+          onboardingRequirementsByBucket: {
+            currentlyDue: Array.isArray(data.currentlyDue) ? data.currentlyDue : [],
+            pastDue: Array.isArray(data.pastDue) ? data.pastDue : [],
+            eventuallyDue: Array.isArray(data.eventuallyDue) ? data.eventuallyDue : [],
+            pendingVerification: Array.isArray(data.pendingVerification) ? data.pendingVerification : [],
+          },
+          onboardingDisabledReason: data.disabledReason || null,
           onboardingLastCheckedAt: new Date().toISOString(),
         },
         'checkDriverOnboardingStatus'
       );
     }
 
+    const normalizedStatus = data.status || (
+      data.canReceivePayments
+        ? 'verified'
+        : data.onboardingComplete
+          ? 'under_review'
+          : 'action_required'
+    );
+
     return successResult({
       connectAccountId: data.accountId || connectAccountId || null,
       onboardingComplete: Boolean(data.onboardingComplete),
       canReceivePayments: Boolean(data.canReceivePayments),
       requirements: data.requirements || [],
-      status: data.status || (data.onboardingComplete ? 'verified' : 'processing'),
+      currentlyDue: Array.isArray(data.currentlyDue) ? data.currentlyDue : [],
+      pastDue: Array.isArray(data.pastDue) ? data.pastDue : [],
+      eventuallyDue: Array.isArray(data.eventuallyDue) ? data.eventuallyDue : [],
+      pendingVerification: Array.isArray(data.pendingVerification) ? data.pendingVerification : [],
+      disabledReason: data.disabledReason || null,
+      status: normalizedStatus,
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Unable to verify payout account status');

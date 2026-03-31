@@ -17,6 +17,9 @@ export default function useDriverProfileData({
     onboardingComplete: false,
     documentsVerified: false,
     canReceivePayments: false,
+    status: 'missing_account',
+    disabledReason: null,
+    requirements: [],
   });
   const [driverStats, setDriverStats] = useState({
     totalTrips: 0,
@@ -74,11 +77,53 @@ export default function useDriverProfileData({
         return;
       }
 
+      const metadata =
+        profile?.metadata &&
+        typeof profile.metadata === 'object' &&
+        !Array.isArray(profile.metadata)
+          ? profile.metadata
+          : {};
+      const connectAccountCreated = Boolean(
+        profile.connectAccountId ||
+        profile.stripe_account_id ||
+        metadata.connectAccountId
+      );
+      const onboardingComplete = Boolean(
+        profile.onboardingComplete ||
+        profile.onboarding_complete ||
+        metadata.onboardingComplete
+      );
+      const canReceivePayments = Boolean(
+        profile.canReceivePayments ||
+        profile.can_receive_payments ||
+        metadata.canReceivePayments
+      );
+      const rawStatus = String(
+        profile.onboardingStatus ||
+        profile.onboarding_status ||
+        metadata.onboardingStatus ||
+        ''
+      ).trim().toLowerCase();
+      const normalizedStatus = rawStatus || (
+        canReceivePayments
+          ? 'verified'
+          : onboardingComplete
+            ? 'under_review'
+            : connectAccountCreated
+              ? 'action_required'
+              : 'missing_account'
+      );
+
       setOnboardingStatus({
-        connectAccountCreated: !!profile.connectAccountId,
-        onboardingComplete: profile.onboardingComplete || false,
+        connectAccountCreated,
+        onboardingComplete,
         documentsVerified: profile.documentsVerified || false,
-        canReceivePayments: profile.canReceivePayments || false,
+        canReceivePayments,
+        status: normalizedStatus,
+        disabledReason: String(metadata.onboardingDisabledReason || '').trim() || null,
+        requirements: Array.isArray(metadata.onboardingRequirements)
+          ? metadata.onboardingRequirements
+          : [],
       });
 
       await loadDriverStats();
@@ -135,6 +180,31 @@ export default function useDriverProfileData({
           metadata?.canReceivePayments ??
           false
         ),
+        status: String(
+          nextProfile?.onboarding_status ||
+          metadata?.onboardingStatus ||
+          ''
+        ).trim().toLowerCase() || (
+          Boolean(
+            nextProfile?.can_receive_payments ??
+            metadata?.canReceivePayments ??
+            false
+          )
+            ? 'verified'
+            : Boolean(
+              nextProfile?.onboarding_complete ??
+              metadata?.onboardingComplete ??
+              false
+            )
+              ? 'under_review'
+              : (nextProfile?.stripe_account_id || metadata?.connectAccountId)
+                ? 'action_required'
+                : 'missing_account'
+        ),
+        disabledReason: String(metadata?.onboardingDisabledReason || '').trim() || null,
+        requirements: Array.isArray(metadata?.onboardingRequirements)
+          ? metadata.onboardingRequirements
+          : [],
       });
     });
   }, [currentUserId]);

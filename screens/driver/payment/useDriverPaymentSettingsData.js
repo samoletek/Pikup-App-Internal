@@ -65,11 +65,26 @@ export default function useDriverPaymentSettingsData({
           profile?.onboarding_complete ||
           metadata.onboardingComplete
       );
+      const onboardingStatus = String(
+        profile?.onboardingStatus ||
+          profile?.onboarding_status ||
+          metadata.onboardingStatus ||
+          ''
+      ).trim().toLowerCase() || (
+        canReceivePayments
+          ? 'verified'
+          : onboardingComplete
+            ? 'under_review'
+            : connectAccountId
+              ? 'action_required'
+              : 'missing_account'
+      );
 
       setPaymentData({
         connectAccountId,
         onboardingComplete,
         canReceivePayments,
+        onboardingStatus,
         instantPay: metadata.instantPay !== false,
         notificationsEnabled: metadata.notificationsEnabled !== false,
         instantPayoutFeeBps: Number(metadata.instantPayoutFeeBps || 0),
@@ -98,6 +113,8 @@ export default function useDriverPaymentSettingsData({
   const onboardingStatusText = useMemo(() => {
     if (!paymentData?.connectAccountId) return 'Not started';
     if (paymentData.canReceivePayments) return 'Active';
+    if (paymentData.onboardingStatus === 'under_review') return 'Under review';
+    if (paymentData.onboardingStatus === 'action_required') return 'Action required';
     if (paymentData.onboardingComplete) return 'Under review';
     return 'Incomplete';
   }, [paymentData]);

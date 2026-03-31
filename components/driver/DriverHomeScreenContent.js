@@ -140,7 +140,7 @@ export default function DriverHomeScreenContent({
             >
               <Ionicons name="shield-checkmark-outline" size={18} color={colors.white} />
               <Text style={styles.identityDeclinedBannerText}>
-                You have not completed driver verification yet. Tap to continue onboarding.
+                Account setup requires attention. Tap to view the current status.
               </Text>
               <Ionicons name="chevron-forward" size={18} color={colors.white} />
             </TouchableOpacity>

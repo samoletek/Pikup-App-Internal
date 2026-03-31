@@ -14,6 +14,10 @@ import { resolveFinalPricing } from './utils/finalPricingResolver';
 import useConfirmCountdown from './useConfirmCountdown';
 
 const COUNTDOWN_SECONDS = 5;
+const createVehicleFitGateDefaults = () => ({
+  requestFingerprint: null,
+  requestToken: null,
+});
 
 function getInsuredItems(items = []) {
   return (items || []).filter(
@@ -38,6 +42,7 @@ export default function useOrderCheckoutFlow({
   const [insuranceLoading, setInsuranceLoading] = useState(false);
   const [insuranceError, setInsuranceError] = useState(false);
   const [laborAdjustment, setLaborAdjustment] = useState(null);
+  const [vehicleFitGate, setVehicleFitGate] = useState(createVehicleFitGateDefaults);
 
   const {
     confirmCountdown,
@@ -47,6 +52,47 @@ export default function useOrderCheckoutFlow({
     resetCountdown,
   } = useConfirmCountdown();
   const quoteRequestIdRef = useRef(0);
+  const aiRecommendation = orderData.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
+  const selectedVehicleId = orderData.selectedVehicle?.id || null;
+  const selectedVehicleFitsExactly = Boolean(
+    selectedVehicleId &&
+    aiRecommendation.status === 'success' &&
+    aiRecommendation.fitByVehicle?.[selectedVehicleId]?.fits === true
+  );
+  const gateMatchesCurrentAi = Boolean(
+    vehicleFitGate.requestToken &&
+    aiRecommendation.requestToken &&
+    vehicleFitGate.requestToken === aiRecommendation.requestToken
+  );
+  const shouldShowVehicleFitOverlay = Boolean(
+    currentStep === 5 &&
+    vehicleFitGate.requestToken &&
+    gateMatchesCurrentAi &&
+    (
+      aiRecommendation.status === 'loading' ||
+      (aiRecommendation.status === 'success' && !selectedVehicleFitsExactly)
+    )
+  );
+
+  useEffect(() => {
+    if (!vehicleFitGate.requestToken || !gateMatchesCurrentAi) {
+      return;
+    }
+
+    if (aiRecommendation.status === 'error') {
+      setVehicleFitGate(createVehicleFitGateDefaults());
+      return;
+    }
+
+    if (aiRecommendation.status === 'success' && selectedVehicleFitsExactly) {
+      setVehicleFitGate(createVehicleFitGateDefaults());
+    }
+  }, [
+    aiRecommendation.status,
+    gateMatchesCurrentAi,
+    selectedVehicleFitsExactly,
+    vehicleFitGate.requestToken,
+  ]);
 
   useEffect(() => {
     if (!previewPricing || !insuranceQuote?.premium || !previewPricing.insuranceApplied) {
@@ -130,27 +176,29 @@ export default function useOrderCheckoutFlow({
   const triggerVehicleRecommendation = useCallback(async (itemsSnapshot) => {
     const validItems = (itemsSnapshot || []).filter((item) => item?.name?.trim());
     if (validItems.length === 0) {
+      setVehicleFitGate(createVehicleFitGateDefaults());
       return;
     }
 
     const requestFingerprint = buildItemsFingerprint(validItems);
+    const requestToken = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const summary = buildItemsSummary(validItems);
+    setVehicleFitGate({
+      requestFingerprint,
+      requestToken,
+    });
 
     setOrderData((prevOrderData) => {
       const currentAi = prevOrderData.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
-      if (
-        currentAi.requestFingerprint === requestFingerprint &&
-        (currentAi.status === 'loading' || currentAi.status === 'success')
-      ) {
-        return prevOrderData;
-      }
 
       return {
         ...prevOrderData,
+        selectedVehicle: null,
         aiVehicleRecommendation: {
           ...currentAi,
           status: 'loading',
           requestFingerprint,
+          requestToken,
           requestedAt: new Date().toISOString(),
           completedAt: null,
           summary,
@@ -173,7 +221,10 @@ export default function useOrderCheckoutFlow({
 
       setOrderData((prevOrderData) => {
         const currentAi = prevOrderData.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
-        if (currentAi.requestFingerprint !== requestFingerprint) {
+        if (
+          currentAi.requestFingerprint !== requestFingerprint ||
+          currentAi.requestToken !== requestToken
+        ) {
           return prevOrderData;
         }
 
@@ -202,7 +253,10 @@ export default function useOrderCheckoutFlow({
     } catch (error) {
       setOrderData((prevOrderData) => {
         const currentAi = prevOrderData.aiVehicleRecommendation || createAiVehicleRecommendationDefaults();
-        if (currentAi.requestFingerprint !== requestFingerprint) {
+        if (
+          currentAi.requestFingerprint !== requestFingerprint ||
+          currentAi.requestToken !== requestToken
+        ) {
           return prevOrderData;
         }
 
@@ -223,6 +277,9 @@ export default function useOrderCheckoutFlow({
     Keyboard.dismiss();
 
     if (isSubmitting || confirmCountdown > 0) {
+      return;
+    }
+    if (currentStep === 5 && shouldShowVehicleFitOverlay) {
       return;
     }
     const isStepValid = await Promise.resolve(validateStep());
@@ -312,6 +369,7 @@ export default function useOrderCheckoutFlow({
     customerName,
     previewPricing,
     setInsuranceQuote,
+    shouldShowVehicleFitOverlay,
     startCountdown,
     triggerVehicleRecommendation,
     validateStep,
@@ -326,6 +384,7 @@ export default function useOrderCheckoutFlow({
     setInsuranceLoading(false);
     setInsuranceError(false);
     setLaborAdjustment(null);
+    setVehicleFitGate(createVehicleFitGateDefaults());
   }, [resetCountdown]);
 
   return {
@@ -337,6 +396,7 @@ export default function useOrderCheckoutFlow({
     insuranceError,
     laborAdjustment,
     setLaborAdjustment,
+    shouldShowVehicleFitOverlay,
     handleContinue,
     cancelCountdown,
     skipCountdown,

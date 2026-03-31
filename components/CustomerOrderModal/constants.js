@@ -27,6 +27,7 @@ export const createLocationDetailsDefaults = () => ({
 export const createAiVehicleRecommendationDefaults = () => ({
     status: 'idle',
     requestFingerprint: null,
+    requestToken: null,
     requestedAt: null,
     completedAt: null,
     summary: '',

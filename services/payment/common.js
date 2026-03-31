@@ -1,12 +1,11 @@
-import { appConfig } from '../../config/appConfig';
 import { fetchDriverRowById } from '../repositories/paymentRepository';
 
 export const isNoRowsError = (error) => error?.code === 'PGRST116';
 
 export const getUserId = (currentUser) => currentUser?.uid || currentUser?.id || null;
 
-export const defaultOnboardingRefreshUrl = appConfig.stripe.onboardingRefreshUrl;
-export const defaultOnboardingReturnUrl = appConfig.stripe.onboardingReturnUrl;
+export const defaultOnboardingRefreshUrl = 'https://pikup-app.com';
+export const defaultOnboardingReturnUrl = 'https://pikup-app.com';
 
 export const getDriverProfileRow = async (driverId) => {
   if (!driverId) return null;

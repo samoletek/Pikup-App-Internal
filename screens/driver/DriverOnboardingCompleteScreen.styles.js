@@ -14,15 +14,26 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  successSection: {
-    alignItems: 'center',
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xxl + spacing.sm,
-    paddingBottom: spacing.xxl,
+  },
+  contentStack: {
+    width: '100%',
+    alignSelf: 'center',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successSection: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 0,
+    paddingVertical: spacing.xl,
   },
   successIconContainer: {
     position: 'relative',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.xxxl,
   },
   successIconGradient: {
     width: 120,
@@ -85,8 +96,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    width: '100%',
+    marginHorizontal: 0,
+    marginTop: spacing.base,
+    marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border.strong,
   },
@@ -94,6 +107,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.sm,
+  },
+  verificationLabel: {
+    fontSize: typography.fontSize.sm,
+    color: colors.text.secondary,
+    fontWeight: typography.fontWeight.semibold,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+  },
+  refreshIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.elevated,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verificationStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  verificationStatusMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
   },
   processingIcon: {
     width: 32,
@@ -124,7 +162,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   nextStepsSection: {
-    marginHorizontal: spacing.lg,
+    width: '100%',
+    marginHorizontal: 0,
     marginBottom: spacing.xl,
   },
   nextStepsTitle: {
@@ -218,8 +257,19 @@ const styles = StyleSheet.create({
   },
   buttonSection: {
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
+    marginBottom: 0,
     gap: spacing.sm,
+  },
+  fixedBottomActions: {
+    backgroundColor: colors.background.primary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.strong,
+    paddingTop: spacing.md,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 10,
   },
   primaryActionButton: {
     backgroundColor: colors.primary,
@@ -238,6 +288,17 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  secondaryActionButton: {
+    backgroundColor: colors.background.panel,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: borderRadius.full,
+  },
+  secondaryActionButtonText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
   },
   continueButton: {
     borderRadius: borderRadius.lg,

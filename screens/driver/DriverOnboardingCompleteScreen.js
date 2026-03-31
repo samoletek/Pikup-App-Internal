@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  Easing,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,7 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useAuthIdentity, usePaymentActions } from "../../contexts/AuthContext";
 import ScreenHeader from "../../components/ScreenHeader";
 import AppButton from "../../components/ui/AppButton";
-import { colors } from "../../styles/theme";
+import { colors, spacing } from "../../styles/theme";
 import styles from "./DriverOnboardingCompleteScreen.styles";
 import useDriverOnboardingCompleteFlow from "./useDriverOnboardingCompleteFlow";
 
@@ -29,12 +30,14 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const {
     checkmarkAnim,
     fadeAnim,
+    handleCheckAgain,
     handleContinue,
     handleGoHome,
     handleResumeOnboarding,
     handleSettings,
     handleViewEarnings,
     isLoading,
+    isRefreshingStatus,
     pulseAnim,
     scaleAnim,
     verificationStatus,
@@ -47,20 +50,86 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     navigation,
   });
   const isVerified = verificationStatus === "verified";
-  const isProcessing = verificationStatus === "processing";
+  const isChecking = verificationStatus === "checking";
+  const isUnderReview = verificationStatus === "under_review";
+  const isActionRequired =
+    verificationStatus === "action_required" || verificationStatus === "missing_account";
   const isError = verificationStatus === "error";
-  const statusCircleColor = isVerified ? colors.success : colors.warning;
-  const statusRingColor = isVerified ? colors.successLight : colors.warningLight;
+  const statusCircleColor = isVerified
+    ? colors.success
+    : isActionRequired || isError
+      ? colors.secondary
+      : colors.warning;
+  const statusRingColor = isVerified
+    ? colors.successLight
+    : isActionRequired || isError
+      ? colors.secondaryLight
+      : colors.warningLight;
   const primaryButtonTitle = isVerified
     ? "Start Driving"
-    : isError
-      ? "Resume Stripe Onboarding"
+    : isActionRequired
+      ? "Resume Account Setup"
       : "Go Home";
-  const primaryButtonDescription = isVerified
-    ? null
-    : isError
-      ? "Stripe setup needs another try. Tap to reopen onboarding."
-      : "We are reviewing your account now. No action is required from you.";
+  const staticSubtitle = "No action is needed for now. Our partner is reviewing your account details now.";
+  const currentStatusLabel = isRefreshingStatus
+    ? "Updating"
+    : isChecking
+      ? "Checking"
+      : isUnderReview
+        ? "Under Review"
+        : isActionRequired
+          ? "Action Required"
+          : isError
+            ? "Status Check Failed"
+            : "Verified";
+  const currentStatusIcon = isChecking
+    ? "sync-outline"
+    : isUnderReview
+      ? "time-outline"
+      : isActionRequired
+        ? "alert-circle-outline"
+        : isError
+          ? "cloud-offline-outline"
+          : "checkmark-circle";
+  const currentStatusIconColor = isVerified
+    ? colors.success
+    : isActionRequired || isError
+      ? colors.secondary
+      : colors.warning;
+  const currentStatusIconBackground = isVerified
+    ? colors.successLight
+    : isActionRequired || isError
+      ? colors.secondaryLight
+      : colors.primaryLight;
+  const refreshSpinAnim = React.useRef(new Animated.Value(0)).current;
+  const refreshIconRotation = refreshSpinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  React.useEffect(() => {
+    let loopAnimation = null;
+
+    if (isRefreshingStatus) {
+      refreshSpinAnim.setValue(0);
+      loopAnimation = Animated.loop(
+        Animated.timing(refreshSpinAnim, {
+          toValue: 1,
+          duration: 750,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      loopAnimation.start();
+    }
+
+    return () => {
+      if (loopAnimation) {
+        loopAnimation.stop();
+      }
+      refreshSpinAnim.stopAnimation();
+    };
+  }, [isRefreshingStatus, refreshSpinAnim]);
 
   const renderSuccessIcon = () => (
     <Animated.View
@@ -99,53 +168,37 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     </Animated.View>
   );
 
-  const renderVerificationStatus = () => {
-    if (isProcessing) {
-      return (
-        <View style={styles.verificationCard}>
-          <View style={styles.verificationHeader}>
-            <View style={styles.processingIcon}>
-              <Ionicons name="time-outline" size={20} color={colors.warning} />
-            </View>
-            <Text style={styles.verificationTitle}>Under Review</Text>
-          </View>
-          <Text style={styles.verificationSubtitle}>
-            We are processing your account verification. Please wait, no further action is needed.
-          </Text>
-        </View>
-      );
-    }
-
-    if (isError) {
-      return (
-        <View style={styles.verificationCard}>
-          <View style={styles.verificationHeader}>
-            <View style={styles.processingIcon}>
-              <Ionicons name="alert-circle-outline" size={20} color={colors.secondary} />
-            </View>
-            <Text style={styles.verificationTitle}>Verification Needs Attention</Text>
-          </View>
-          <Text style={styles.verificationSubtitle}>
-            We could not confirm your Stripe onboarding yet. Tap the button below to resume it.
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.verificationCard}>
-        <View style={styles.verificationHeader}>
-          <View style={styles.verifiedIcon}>
-            <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          </View>
-          <Text style={styles.verificationTitle}>Account Verified</Text>
-        </View>
-        <Text style={styles.verificationSubtitle}>
-          Your account is ready! You can now start accepting delivery requests.
-        </Text>
+  const renderVerificationStatus = () => (
+    <View style={styles.verificationCard}>
+      <View style={styles.verificationHeader}>
+        <Text style={styles.verificationLabel}>Current Status</Text>
       </View>
-    );
-  };
+      <View style={styles.verificationStatusRow}>
+        <View style={styles.verificationStatusMain}>
+          <View style={[styles.processingIcon, { backgroundColor: currentStatusIconBackground }]}>
+            <Ionicons name={currentStatusIcon} size={20} color={currentStatusIconColor} />
+          </View>
+          <Text style={styles.verificationTitle}>{currentStatusLabel}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.refreshIconButton, { backgroundColor: currentStatusIconBackground }]}
+          onPress={handleCheckAgain}
+          disabled={isRefreshingStatus}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Animated.View
+            style={isRefreshingStatus ? { transform: [{ rotate: refreshIconRotation }] } : null}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={18}
+              color={currentStatusIconColor}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   const renderNextSteps = () => (
     <View style={styles.nextStepsSection}>
@@ -196,35 +249,6 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     </View>
   );
 
-  const renderFeatureHighlights = () => (
-    <View style={styles.featuresSection}>
-      <Text style={styles.featuresTitle}>Exclusive Driver Benefits</Text>
-
-      <View style={styles.featuresList}>
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Ionicons name="flash" size={16} color={colors.success} />
-          </View>
-          <Text style={styles.featureText}>Instant pay available</Text>
-        </View>
-
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Ionicons name="shield-checkmark" size={16} color={colors.success} />
-          </View>
-          <Text style={styles.featureText}>Insurance coverage</Text>
-        </View>
-
-        <View style={styles.featureItem}>
-          <View style={styles.featureIcon}>
-            <Ionicons name="people" size={16} color={colors.success} />
-          </View>
-          <Text style={styles.featureText}>24/7 support</Text>
-        </View>
-      </View>
-    </View>
-  );
-
   return (
     <View style={styles.container}>
       <ScreenHeader
@@ -234,35 +258,51 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
         showBack
       />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.successSection}>
-          {renderSuccessIcon()}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.contentStack}>
+          <View style={styles.successSection}>
+            {renderSuccessIcon()}
 
-          <Animated.View
-            style={[
-              styles.successContent,
-              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
-            ]}
-          >
-            <Text style={styles.congratsTitle}>Congratulations!</Text>
-            <Text style={styles.congratsSubtitle}>
-              {isVerified
-                ? "Welcome to the PikUp driver community! Your account setup is complete."
-                : "Your setup is submitted. We are reviewing your account details now."}
-            </Text>
-          </Animated.View>
+            <Animated.View
+              style={[
+                styles.successContent,
+                { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+              ]}
+            >
+              <Text style={styles.congratsTitle}>All Set Up</Text>
+              <Text style={styles.congratsSubtitle}>
+                {staticSubtitle}
+              </Text>
+            </Animated.View>
+          </View>
+
+          {renderVerificationStatus()}
+
+          {verificationStatus === "verified" ? renderNextSteps() : null}
         </View>
+      </ScrollView>
 
-        {renderVerificationStatus()}
-
-        {verificationStatus === "verified" ? renderNextSteps() : null}
-        {renderFeatureHighlights()}
-
+      <View
+        style={[
+          styles.fixedBottomActions,
+          { paddingBottom: Math.max(insets.bottom, spacing.md) },
+        ]}
+      >
         <View style={styles.buttonSection}>
           <AppButton
-            title={isLoading && isVerified ? "Starting..." : primaryButtonTitle}
-            onPress={isVerified ? handleContinue : isError ? handleResumeOnboarding : handleGoHome}
-            loading={isLoading && isVerified}
+            title={isVerified && isLoading ? "Starting..." : primaryButtonTitle}
+            onPress={
+              isVerified
+                ? handleContinue
+                : isActionRequired
+                  ? handleResumeOnboarding
+                  : handleGoHome
+            }
+            loading={isVerified && isLoading}
             style={[
               styles.primaryActionButton,
               isVerified && styles.primaryActionButtonSuccess,
@@ -271,18 +311,13 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
             leftIcon={
               isVerified
                 ? <Ionicons name="car" size={16} color={colors.white} />
-                : isError
+                : isActionRequired
                   ? <Ionicons name="refresh" size={16} color={colors.white} />
-                  : <Ionicons name="home-outline" size={16} color={colors.white} />
+                : <Ionicons name="home-outline" size={16} color={colors.white} />
             }
           />
-          {primaryButtonDescription ? (
-            <Text style={styles.primaryActionHint}>{primaryButtonDescription}</Text>
-          ) : null}
         </View>
-
-        <View style={[styles.bottomSpacing, { paddingBottom: insets.bottom }]} />
-      </ScrollView>
+      </View>
     </View>
   );
 }

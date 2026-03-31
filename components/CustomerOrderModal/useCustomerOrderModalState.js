@@ -296,6 +296,23 @@ export default function useCustomerOrderModalState({
                 return true;
             }
             case 5:
+                if (orderData.aiVehicleRecommendation?.status === 'loading') {
+                    Alert.alert(
+                        'Analyzing Items',
+                        'Please wait while we confirm the best vehicle size for your items.'
+                    );
+                    return false;
+                }
+
+                if (orderData.selectedVehicle?.id && orderData.aiVehicleRecommendation?.status === 'success') {
+                    const selectedVehicleFits =
+                        orderData.aiVehicleRecommendation?.fitByVehicle?.[orderData.selectedVehicle.id]?.fits;
+                    if (selectedVehicleFits === false) {
+                        Alert.alert('Vehicle Too Small', 'Please choose a vehicle that fits all items.');
+                        return false;
+                    }
+                }
+
                 if (!orderData.selectedVehicle) {
                     Alert.alert('Missing Info', 'Please select a vehicle.');
                     return false;

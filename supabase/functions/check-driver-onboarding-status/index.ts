@@ -21,6 +21,15 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const uniqueStringList = (values: unknown[] = []) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -81,23 +90,28 @@ serve(async (req) => {
     }
 
     const account = await stripe.accounts.retrieve(accountId);
-    const requirements = Array.from(
-      new Set([
-        ...(account.requirements?.currently_due || []),
-        ...(account.requirements?.eventually_due || []),
-      ])
+    const currentlyDue = uniqueStringList(account.requirements?.currently_due || []);
+    const pastDue = uniqueStringList(account.requirements?.past_due || []);
+    const eventuallyDue = uniqueStringList(account.requirements?.eventually_due || []);
+    const pendingVerification = uniqueStringList(
+      account.requirements?.pending_verification || []
     );
-
+    const disabledReason = String(account.requirements?.disabled_reason || "").trim() || null;
+    const blockingRequirements = uniqueStringList([
+      ...currentlyDue,
+      ...pastDue,
+    ]);
     const onboardingComplete = Boolean(account.details_submitted);
+    const payoutsEnabled = Boolean(account.payouts_enabled);
     const canReceivePayments =
-      Boolean(account.charges_enabled) &&
-      Boolean(account.payouts_enabled) &&
-      requirements.length === 0;
+      payoutsEnabled &&
+      blockingRequirements.length === 0 &&
+      !disabledReason;
     const status = canReceivePayments
       ? "verified"
-      : onboardingComplete
-        ? "review"
-        : "processing";
+      : disabledReason || blockingRequirements.length > 0 || !onboardingComplete
+        ? "action_required"
+        : "under_review";
 
     const currentMeta =
       driverRow?.metadata && typeof driverRow.metadata === "object"
@@ -118,7 +132,14 @@ serve(async (req) => {
           onboardingComplete,
           canReceivePayments,
           onboardingStatus: status,
-          onboardingRequirements: requirements,
+          onboardingRequirements: blockingRequirements,
+          onboardingRequirementsByBucket: {
+            currentlyDue,
+            pastDue,
+            eventuallyDue,
+            pendingVerification,
+          },
+          onboardingDisabledReason: disabledReason,
           onboardingLastCheckedAt: now,
           updatedAt: now,
         },
@@ -135,7 +156,12 @@ serve(async (req) => {
       accountId,
       canReceivePayments,
       onboardingComplete,
-      requirements,
+      requirements: blockingRequirements,
+      currentlyDue,
+      pastDue,
+      eventuallyDue,
+      pendingVerification,
+      disabledReason,
       status,
     });
   } catch (error) {

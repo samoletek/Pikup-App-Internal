@@ -1,6 +1,6 @@
 // Customer Order Modal component: renders its UI and handles related interactions.
 import React from 'react';
-import { View, Text, TouchableOpacity, Animated, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BaseModal from '../BaseModal';
@@ -54,6 +54,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
         insuranceLoading,
         insuranceError,
         setLaborAdjustment,
+        shouldShowVehicleFitOverlay,
         handleContinue,
         cancelCountdown,
         skipCountdown,
@@ -158,6 +159,13 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         setLaborAdjustment={setLaborAdjustment}
                         setCurrentStep={setCurrentStep}
                     />
+
+                    {shouldShowVehicleFitOverlay && (
+                        <View style={styles.vehicleFitOverlay} pointerEvents="box-only">
+                            <ActivityIndicator size="large" color={colors.primary} />
+                            <Text style={styles.vehicleFitOverlayTitle}>Finding your exact vehicle fit...</Text>
+                        </View>
+                    )}
                 </Animated.View>
 
                 {/* Continue / Countdown Button */}
@@ -203,6 +211,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                         </TouchableOpacity>
                     )}
                 </View>
+
             </View>
             {renderPhoneVerification && renderPhoneVerification()}
         </BaseModal>

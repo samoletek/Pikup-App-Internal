@@ -4,8 +4,48 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ONBOARDING_DRAFT_STORAGE_PREFIX } from "./DriverOnboardingScreen.constants";
 import { logger } from "../../services/logger";
 
-const MAX_STATUS_POLL_ATTEMPTS = 20;
-const STATUS_POLL_INTERVAL_MS = 5000;
+const STATUS_POLL_INITIAL_INTERVAL_MS = 5000;
+const STATUS_POLL_MAX_INTERVAL_MS = 60000;
+
+const normalizeList = (value) => (
+  Array.isArray(value)
+    ? value.map((entry) => String(entry || "").trim()).filter(Boolean)
+    : []
+);
+
+const resolveNormalizedStatus = (result) => {
+  const rawStatus = String(result?.status || "").trim().toLowerCase();
+  if (rawStatus === "verified") return "verified";
+  if (rawStatus === "under_review" || rawStatus === "review") return "under_review";
+  if (rawStatus === "action_required") return "action_required";
+  if (rawStatus === "missing_account") return "missing_account";
+
+  if (result?.canReceivePayments) return "verified";
+  if (result?.onboardingComplete) return "under_review";
+  return "action_required";
+};
+
+const buildStatusDetails = (result, normalizedStatus) => ({
+  status: normalizedStatus,
+  requirements: normalizeList(result?.requirements),
+  currentlyDue: normalizeList(result?.currentlyDue),
+  pastDue: normalizeList(result?.pastDue),
+  eventuallyDue: normalizeList(result?.eventuallyDue),
+  pendingVerification: normalizeList(result?.pendingVerification),
+  disabledReason: String(result?.disabledReason || "").trim() || null,
+  checkedAt: new Date().toISOString(),
+});
+
+const createDefaultStatusDetails = () => ({
+  status: "checking",
+  requirements: [],
+  currentlyDue: [],
+  pastDue: [],
+  eventuallyDue: [],
+  pendingVerification: [],
+  disabledReason: null,
+  checkedAt: null,
+});
 
 export default function useDriverOnboardingCompleteFlow({
   connectAccountId,
@@ -16,18 +56,41 @@ export default function useDriverOnboardingCompleteFlow({
   navigation,
 }) {
   const userId = currentUser?.uid || currentUser?.id;
+  const initialConnectAccountId = String(connectAccountId || "").trim() || null;
 
   const [isLoading, setIsLoading] = useState(false);
-  const [verificationStatus, setVerificationStatus] = useState("processing");
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
+  const [resolvedConnectAccountId, setResolvedConnectAccountId] = useState(initialConnectAccountId);
+  const [verificationStatus, setVerificationStatus] = useState("checking");
+  const [statusDetails, setStatusDetails] = useState(createDefaultStatusDetails);
 
   const pollTimeoutRef = useRef(null);
-  const pollAttemptsRef = useRef(0);
+  const pollIntervalMsRef = useRef(STATUS_POLL_INITIAL_INTERVAL_MS);
   const pulseLoopRef = useRef(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const checkmarkAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const clearStatusPolling = useCallback(() => {
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleNextStatusCheck = useCallback((callback) => {
+    clearStatusPolling();
+    const delay = pollIntervalMsRef.current;
+    pollTimeoutRef.current = setTimeout(() => {
+      callback?.();
+    }, delay);
+    pollIntervalMsRef.current = Math.min(
+      Math.round(delay * 1.6),
+      STATUS_POLL_MAX_INTERVAL_MS
+    );
+  }, [clearStatusPolling]);
 
   const startCheckmarkAnimation = useCallback(() => {
     Animated.spring(checkmarkAnim, {
@@ -38,38 +101,80 @@ export default function useDriverOnboardingCompleteFlow({
     }).start();
   }, [checkmarkAnim]);
 
-  const checkVerificationStatus = useCallback(async () => {
-    if (!connectAccountId) {
-      setVerificationStatus("error");
-      return;
+  const checkVerificationStatus = useCallback(async ({ foreground = false, resetBackoff = false } = {}) => {
+    if (resetBackoff) {
+      pollIntervalMsRef.current = STATUS_POLL_INITIAL_INTERVAL_MS;
     }
 
+    if (foreground) {
+      setIsRefreshingStatus(true);
+    }
+
+    clearStatusPolling();
+
     try {
-      const statusResult = await checkDriverOnboardingStatus?.(connectAccountId);
+      const statusResult = await checkDriverOnboardingStatus?.(resolvedConnectAccountId);
       if (!statusResult?.success) {
         throw new Error(statusResult?.error || "Could not verify Stripe Connect status");
       }
 
-      if (statusResult.status === "verified" || statusResult.canReceivePayments) {
-        setVerificationStatus("verified");
+      const nextConnectAccountId =
+        String(
+          statusResult?.connectAccountId ||
+          statusResult?.accountId ||
+          resolvedConnectAccountId ||
+          ""
+        ).trim() || null;
+
+      setResolvedConnectAccountId(nextConnectAccountId);
+
+      const normalizedStatus = resolveNormalizedStatus(statusResult);
+      const nextDetails = buildStatusDetails(statusResult, normalizedStatus);
+
+      setStatusDetails(nextDetails);
+      setVerificationStatus(normalizedStatus);
+
+      if (normalizedStatus === "verified" || statusResult.canReceivePayments) {
         startCheckmarkAnimation();
+        clearStatusPolling();
         return;
       }
 
-      setVerificationStatus("processing");
-      if (pollAttemptsRef.current < MAX_STATUS_POLL_ATTEMPTS) {
-        pollAttemptsRef.current += 1;
-        pollTimeoutRef.current = setTimeout(() => {
+      if (normalizedStatus === "under_review") {
+        scheduleNextStatusCheck(() => {
           void checkVerificationStatus();
-        }, STATUS_POLL_INTERVAL_MS);
-      } else {
-        setVerificationStatus("error");
+        });
+        return;
       }
+
+      clearStatusPolling();
     } catch (error) {
       logger.error("DriverOnboardingCompleteFlow", "Error checking verification status", error);
       setVerificationStatus("error");
+      setStatusDetails((prev) => ({
+        ...prev,
+        status: "error",
+        checkedAt: new Date().toISOString(),
+      }));
+      clearStatusPolling();
+    } finally {
+      if (foreground) {
+        setIsRefreshingStatus(false);
+      }
     }
-  }, [checkDriverOnboardingStatus, connectAccountId, startCheckmarkAnimation]);
+  }, [
+    checkDriverOnboardingStatus,
+    clearStatusPolling,
+    resolvedConnectAccountId,
+    scheduleNextStatusCheck,
+    startCheckmarkAnimation,
+  ]);
+
+  useEffect(() => {
+    if (initialConnectAccountId) {
+      setResolvedConnectAccountId(initialConnectAccountId);
+    }
+  }, [initialConnectAccountId]);
 
   const startAnimations = useCallback(() => {
     Animated.parallel([
@@ -106,18 +211,15 @@ export default function useDriverOnboardingCompleteFlow({
 
   useEffect(() => {
     startAnimations();
-    void checkVerificationStatus();
+    void checkVerificationStatus({ foreground: true, resetBackoff: true });
 
     return () => {
-      if (pollTimeoutRef.current) {
-        clearTimeout(pollTimeoutRef.current);
-      }
-
+      clearStatusPolling();
       if (pulseLoopRef.current) {
         pulseLoopRef.current.stop();
       }
     };
-  }, [checkVerificationStatus, startAnimations]);
+  }, [checkVerificationStatus, clearStatusPolling, startAnimations]);
 
   const handleContinue = useCallback(async () => {
     setIsLoading(true);
@@ -129,7 +231,7 @@ export default function useDriverOnboardingCompleteFlow({
 
       await updateDriverPaymentProfile?.(userId, {
         onboardingComplete: true,
-        connectAccountId,
+        connectAccountId: resolvedConnectAccountId,
         completedAt: new Date().toISOString(),
         onboardingStep: null,
         onboardingDraft: null,
@@ -151,15 +253,18 @@ export default function useDriverOnboardingCompleteFlow({
     } finally {
       setIsLoading(false);
     }
-  }, [connectAccountId, navigation, updateDriverPaymentProfile, userId]);
+  }, [navigation, resolvedConnectAccountId, updateDriverPaymentProfile, userId]);
 
   const handleResumeOnboarding = useCallback(async () => {
     try {
-      if (!connectAccountId) {
+      const existingAccountId = String(
+        resolvedConnectAccountId || connectAccountId || ""
+      ).trim();
+      if (!existingAccountId) {
         throw new Error("Missing Stripe Connect account ID");
       }
 
-      const result = await getDriverOnboardingLink?.(connectAccountId);
+      const result = await getDriverOnboardingLink?.(existingAccountId);
       if (!result?.success || !result?.onboardingUrl) {
         throw new Error(result?.error || "Unable to open onboarding link");
       }
@@ -168,12 +273,16 @@ export default function useDriverOnboardingCompleteFlow({
     } catch (error) {
       Alert.alert("Onboarding Error", error?.message || "Could not reopen onboarding.");
     }
-  }, [connectAccountId, getDriverOnboardingLink]);
+  }, [connectAccountId, getDriverOnboardingLink, resolvedConnectAccountId]);
+
+  const handleCheckAgain = useCallback(async () => {
+    await checkVerificationStatus({ foreground: true, resetBackoff: true });
+  }, [checkVerificationStatus]);
 
   const handleGoHome = useCallback(() => {
     navigation.reset({
       index: 0,
-      routes: [{ name: 'DriverTabs' }],
+      routes: [{ name: "DriverTabs" }],
     });
   }, [navigation]);
 
@@ -188,14 +297,17 @@ export default function useDriverOnboardingCompleteFlow({
   return {
     checkmarkAnim,
     fadeAnim,
+    handleCheckAgain,
     handleContinue,
     handleGoHome,
     handleResumeOnboarding,
     handleSettings,
     handleViewEarnings,
     isLoading,
+    isRefreshingStatus,
     scaleAnim,
     pulseAnim,
+    statusDetails,
     verificationStatus,
   };
 }

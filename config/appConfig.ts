@@ -73,11 +73,11 @@ export const appConfig = {
     ),
     onboardingRefreshUrl: readEnv(
       "EXPO_PUBLIC_STRIPE_ONBOARDING_REFRESH_URL",
-      "https://pikup-app.com/driver-onboarding"
+      "https://pikup-app.com"
     ),
     onboardingReturnUrl: readEnv(
       "EXPO_PUBLIC_STRIPE_ONBOARDING_RETURN_URL",
-      "https://pikup-app.com/driver-onboarding-complete"
+      "https://pikup-app.com"
     ),
   },
   mapbox: {
