@@ -1,9 +1,10 @@
 // Camera Screen component: orchestrates camera capture flow with overlay guidance and thumbnail queue.
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, Platform, StatusBar } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../styles/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, spacing } from '../../styles/theme';
 import { DEFAULT_MAX_CAMERA_PHOTOS } from './CameraScreen.constants';
 import styles from './CameraScreen.styles';
 import CameraOverlayGuide from './camera/CameraOverlayGuide';
@@ -18,6 +19,9 @@ const CameraScreen = ({
   alreadyCount = 0,
   maxPhotos = DEFAULT_MAX_CAMERA_PHOTOS,
 }) => {
+  const insets = useSafeAreaInsets();
+  const androidStatusBarInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
+  const headerTopInset = Math.max(insets.top, androidStatusBarInset);
   const {
     facing,
     setFacing,
@@ -65,7 +69,7 @@ const CameraScreen = ({
 
           <CameraOverlayGuide />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { top: headerTopInset + spacing.sm }]}>
             <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
               <Ionicons name="close" size={28} color={colors.white} />
             </TouchableOpacity>

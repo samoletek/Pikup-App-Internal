@@ -56,6 +56,13 @@ const US_STATE_CODES = new Set([
   "DC",
 ]);
 
+// TODO(before production): Remove temporary Bali normalization used for internal testing.
+const TEMP_INTERNAL_REGION_ALIASES: Record<string, string> = {
+  "ID-BA": "ID-BA",
+  BA: "ID-BA",
+  BALI: "ID-BA",
+};
+
 const STATE_NAME_TO_CODE: Record<string, string> = {
   ALABAMA: "AL",
   ALASKA: "AK",
@@ -123,7 +130,18 @@ export const normalizeStateCode = (value: unknown): string | null => {
     return null;
   }
 
+  const normalizedAlias = TEMP_INTERNAL_REGION_ALIASES[raw];
+  if (normalizedAlias) {
+    return normalizedAlias;
+  }
+
   const normalized = raw.startsWith("US-") ? raw.slice(3) : raw;
+
+  const normalizedCodeAlias = TEMP_INTERNAL_REGION_ALIASES[normalized];
+  if (normalizedCodeAlias) {
+    return normalizedCodeAlias;
+  }
+
   if (!normalized || normalized.length !== 2) {
     return null;
   }
@@ -175,6 +193,12 @@ export const extractStateCodeFromAddress = (address: unknown): string | null => 
   }
 
   const upper = text.toUpperCase();
+
+  if (upper.includes("BALI")) {
+    // TODO(before production): Remove temporary Bali matching used for internal testing.
+    return "ID-BA";
+  }
+
   const usZipPattern = /,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?(?:\s*,?\s*(?:USA|UNITED STATES))?\s*$/;
   const zipMatch = upper.match(usZipPattern);
   if (zipMatch?.[1]) {
