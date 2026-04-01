@@ -63,7 +63,7 @@ export const updateProfileByTableAndUserId = async (
 ) => {
   return supabase
     .from(tableName)
-    .update(updates)
+    .update(updates, { count: 'exact' })
     .eq('id', userId);
 };
 
