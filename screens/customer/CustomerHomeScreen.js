@@ -220,7 +220,7 @@ export default function CustomerHomeScreen({ navigation }) {
           activeOpacity={0.9}
           onPress={() => setPhoneVerifyVisible(true)}
         >
-          <Ionicons name="call" size={16} color={colors.primary} />
+          <Ionicons name="call" size={16} color={colors.warning} />
           <Text style={styles.geoNoticeText}>
             {phoneGateNotice}
           </Text>
@@ -305,6 +305,9 @@ export default function CustomerHomeScreen({ navigation }) {
                 styles.floatingTriggerText,
                 isCreateOrderLocked ? styles.floatingTriggerTextDisabled : null,
               ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {createOrderTriggerTitle}
             </Text>
@@ -359,25 +362,24 @@ export default function CustomerHomeScreen({ navigation }) {
         customerName={
           [currentUser?.first_name, currentUser?.last_name].filter(Boolean).join(" ") || undefined
         }
-        renderPhoneVerification={() => (
-          <PhoneVerificationModal
-            visible={phoneVerifyVisible}
-            onClose={() => setPhoneVerifyVisible(false)}
-            onVerified={async () => {
-              setPhoneVerifyVisible(false);
-              await refreshProfile();
-              if (
-                !activeDelivery &&
-                !pendingBooking &&
-                locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
-              ) {
-                setSearchModalVisible(true);
-              }
-            }}
-            userId={currentUser?.uid || currentUser?.id}
-            userTable="customers"
-          />
-        )}
+      />
+
+      <PhoneVerificationModal
+        visible={phoneVerifyVisible}
+        onClose={() => setPhoneVerifyVisible(false)}
+        onVerified={async () => {
+          setPhoneVerifyVisible(false);
+          await refreshProfile();
+          if (
+            !activeDelivery &&
+            !pendingBooking &&
+            locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED
+          ) {
+            setSearchModalVisible(true);
+          }
+        }}
+        userId={currentUser?.uid || currentUser?.id}
+        userTable="customers"
       />
     </View>
   );

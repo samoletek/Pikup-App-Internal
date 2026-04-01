@@ -235,7 +235,7 @@ export default function useCustomerHomeFlow({
       if (isPhoneVerificationRequiredForOrders) {
         return {
           success: false,
-          error: "Please verify your phone number before creating an order in Georgia.",
+          error: "Please verify your phone number before creating an order.",
         };
       }
 
@@ -348,7 +348,7 @@ export default function useCustomerHomeFlow({
       return null;
     }
 
-    return "Please verify your phone number before creating a new order in Georgia.";
+    return "Please verify your phone number before creating a new order.";
   }, [isPhoneVerificationRequiredForOrders]);
 
   return {

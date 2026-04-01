@@ -17,7 +17,7 @@ import useCustomerOrderModalState from './useCustomerOrderModalState';
 // ============================================
 // MAIN COMPONENT
 // ============================================
-const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderPhoneVerification, customerEmail, customerName }) => {
+const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, customerEmail, customerName }) => {
     const insets = useSafeAreaInsets();
     const headerIconSize = typography.fontSize.xxl;
     const actionIconSize = typography.fontSize.xl;
@@ -213,7 +213,7 @@ const CustomerOrderModal = ({ visible, onClose, onConfirm, userLocation, renderP
                 </View>
 
             </View>
-            {renderPhoneVerification && renderPhoneVerification()}
+
         </BaseModal>
     );
 };
