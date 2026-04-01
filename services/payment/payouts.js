@@ -5,6 +5,7 @@ import {
   fetchCompletedDriverTrips,
   invokeProcessPayout,
 } from '../repositories/paymentRepository';
+import { resolveDriverPayoutAmount } from '../PricingService';
 import {
   getDriverProfileRow,
   periodStartIso,
@@ -32,7 +33,10 @@ export const getDriverEarningsHistory = async (driverId, period = 'week') => {
 
     const earnings = (data || []).map((trip) => {
       const total = toNumber(trip.price, 0);
-      const driverAmount = Number((total * 0.75).toFixed(2));
+      const driverAmount = resolveDriverPayoutAmount({
+        ...trip,
+        pricing: trip.pricing || {},
+      });
 
       return {
         id: trip.id,

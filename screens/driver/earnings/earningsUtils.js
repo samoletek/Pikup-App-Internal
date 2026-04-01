@@ -1,4 +1,5 @@
 import { TRIP_STATUS } from '../../../constants/tripStatus';
+import { resolveDriverPayoutAmount } from '../../../services/PricingService';
 
 export const getPeriodStartDate = (period) => {
   const now = new Date();
@@ -32,9 +33,7 @@ export const processTripsIntoChartData = (trips, period) => {
       const tripDate = new Date(trip.completedAt || trip.timestamp);
       const weekIndex = Math.min(Math.floor((tripDate.getDate() - 1) / 7), 4);
       weekData[weekIndex].trips += 1;
-      weekData[weekIndex].earnings += parseFloat(
-        trip.driverEarnings || trip.pricing?.total * 0.7 || 0
-      );
+      weekData[weekIndex].earnings += resolveDriverPayoutAmount(trip);
     });
 
     return weekData.filter((_, index) => {
@@ -58,9 +57,7 @@ export const processTripsIntoChartData = (trips, period) => {
 
     if (dayIndex >= 0 && dayIndex < 7) {
       weekData[dayIndex].trips += 1;
-      weekData[dayIndex].earnings += parseFloat(
-        trip.driverEarnings || trip.pricing?.total * 0.7 || 0
-      );
+      weekData[dayIndex].earnings += resolveDriverPayoutAmount(trip);
     }
   });
 
@@ -116,7 +113,7 @@ export const getRecentTrips = (driverTrips = []) =>
       time: formatTripTime(trip.completedAt || trip.timestamp),
       pickup: trip.pickupAddress || trip.pickup?.address || 'Pickup Location',
       dropoff: trip.dropoffAddress || trip.dropoff?.address || 'Dropoff Location',
-      amount: Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0),
+      amount: resolveDriverPayoutAmount(trip),
       distance: trip.distance || '0 mi',
       duration: trip.duration || '0 min',
     }));

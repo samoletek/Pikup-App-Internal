@@ -209,23 +209,29 @@ export default function OrderSummaryScreen({ navigation, route }) {
                   opacity: priceBreakdownAnim,
                   maxHeight: priceBreakdownAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [0, 150],
+                    outputRange: [0, 200],
                   }),
                 },
               ]}
             >
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Base Fare</Text>
-                <Text style={styles.priceValue}>${pricing.basePrice.toFixed(2)}</Text>
+                <Text style={styles.priceValue}>${pricing.baseFare.toFixed(2)}</Text>
               </View>
               <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Service Fee</Text>
-                <Text style={styles.priceValue}>${pricing.serviceFee.toFixed(2)}</Text>
+                <Text style={styles.priceLabel}>Mileage</Text>
+                <Text style={styles.priceValue}>${pricing.mileageFee.toFixed(2)}</Text>
               </View>
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Tax</Text>
                 <Text style={styles.priceValue}>${pricing.tax.toFixed(2)}</Text>
               </View>
+              {pricing.insurance > 0 && (
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Insurance</Text>
+                  <Text style={styles.priceValue}>${pricing.insurance.toFixed(2)}</Text>
+                </View>
+              )}
             </Animated.View>
           </View>
 

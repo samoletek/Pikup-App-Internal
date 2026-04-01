@@ -139,6 +139,9 @@ export const captureTripPayment = async ({ tripId, idempotencyKey }) => {
       paymentIntentId: data?.paymentIntentId || null,
       chargeId: data?.chargeId || null,
       status: data?.status || 'captured',
+      total: Number(data?.total || 0),
+      driverPayout: Number(data?.driverPayout || 0),
+      platformShare: Number(data?.platformShare || 0),
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to capture trip payment');

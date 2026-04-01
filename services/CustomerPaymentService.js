@@ -2,6 +2,7 @@ import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { failureResult, successResult } from './contracts/result';
 import {
+  ensurePaymentAuthSessionReady,
   invokeAttachPaymentMethod,
   invokeCreatePaymentIntent,
   invokeDetachPaymentMethod,
@@ -9,7 +10,6 @@ import {
   invokeSetDefaultPaymentMethod,
   invokeTripPriceEstimate,
 } from './repositories/paymentRepository';
-import { supabase } from '../config/supabase';
 
 const parseEdgeFunctionErrorPayload = async (error) => {
   const response = error?.context;
@@ -36,21 +36,13 @@ const parseEdgeFunctionErrorPayload = async (error) => {
 };
 
 const ensureAuthSessionReady = async () => {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionData?.session?.access_token) {
+  try {
+    await ensurePaymentAuthSessionReady();
     return null;
+  } catch (error) {
+    const normalized = normalizeError(error, 'Auth session is not ready yet');
+    return failureResult(normalized.message, 'auth_session_not_ready');
   }
-
-  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-  if (refreshedData?.session?.access_token) {
-    return null;
-  }
-
-  const normalized = normalizeError(
-    refreshError || sessionError || new Error('Auth session is not ready yet'),
-    'Auth session is not ready yet',
-  );
-  return failureResult(normalized.message, 'auth_session_not_ready');
 };
 
 export const fetchCustomerPaymentMethods = async () => {

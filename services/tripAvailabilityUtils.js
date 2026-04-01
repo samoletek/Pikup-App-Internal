@@ -23,6 +23,49 @@ const toAmount = (value) => {
 
 const toMoneyLabel = (value) => `$${toAmount(value).toFixed(2)}`;
 
+const round2 = (value) => Math.round(value * 100) / 100;
+
+const resolveDriverPayoutPercent = (pricing = {}) => {
+    const configuredPercent = Number(pricing?.driverPayoutPercent);
+    if (Number.isFinite(configuredPercent) && configuredPercent >= 0 && configuredPercent <= 1) {
+        return configuredPercent;
+    }
+
+    return 0.75;
+};
+
+const resolveSplitBaseAmount = (pricing = {}) => {
+    const directAmount = toAmount(
+        pricing?.splitBaseAmount ?? pricing?.fareAfterSurge ?? pricing?.customerSubtotal
+    );
+    if (directAmount > 0) {
+        return round2(directAmount);
+    }
+
+    const grossFare = toAmount(pricing?.grossFare);
+    const surgeFee = toAmount(pricing?.surgeFee);
+    if (grossFare > 0 || surgeFee > 0) {
+        return round2(grossFare + surgeFee);
+    }
+
+    const totalAmount = toAmount(pricing?.total);
+    const taxAmount = toAmount(pricing?.tax);
+    const insuranceAmount = toAmount(pricing?.mandatoryInsurance);
+    const platformShare = toAmount(pricing?.platformShare ?? pricing?.serviceFee);
+    const serviceFeeIncludedInTotal = pricing?.serviceFeeIncludedInTotal !== false;
+
+    if (totalAmount > 0) {
+        return round2(
+            Math.max(
+                0,
+                totalAmount - taxAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0)
+            )
+        );
+    }
+
+    return 0;
+};
+
 const resolveDriverPayoutAmount = (trip = {}) => {
     const pricing = trip?.pricing || {};
     const candidates = [
@@ -38,6 +81,11 @@ const resolveDriverPayoutAmount = (trip = {}) => {
         if (Number.isFinite(amount) && amount > 0) {
             return amount;
         }
+    }
+
+    const splitBaseAmount = resolveSplitBaseAmount(pricing);
+    if (splitBaseAmount > 0) {
+        return round2(splitBaseAmount * resolveDriverPayoutPercent(pricing));
     }
 
     return toAmount(pricing?.total ?? trip?.price);

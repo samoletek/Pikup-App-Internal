@@ -14,6 +14,7 @@ import ScreenHeader from '../../components/ScreenHeader';
 import AppButton from '../../components/ui/AppButton';
 import useDeliveryConfirmationFlow from './useDeliveryConfirmationFlow';
 import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
+import { resolveDriverPayoutAmount } from '../../services/PricingService';
 import styles from './DeliveryConfirmationScreen.styles';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 import {
@@ -23,27 +24,7 @@ import {
 } from '../../styles/theme';
 
 const resolveDriverPayoutLabel = (tripRequest) => {
-  const pricing = tripRequest?.pricing || {};
-  const candidates = [
-    tripRequest?.driverPayout,
-    tripRequest?.earnings,
-    pricing?.driverPayout,
-    tripRequest?.price,
-    pricing?.total,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.includes('$')) {
-      return candidate;
-    }
-
-    const amount = Number(candidate);
-    if (Number.isFinite(amount) && amount >= 0) {
-      return `$${amount.toFixed(2)}`;
-    }
-  }
-
-  return '$0.00';
+  return `$${resolveDriverPayoutAmount(tripRequest).toFixed(2)}`;
 };
 
 export default function DeliveryConfirmationScreen({ route, navigation }) {

@@ -2,6 +2,7 @@ import { Dimensions } from 'react-native';
 import { colors } from '../../styles/theme';
 import { createSignedTripPhotoUrl, getPhotoURL } from '../../services/StorageService';
 import { logger } from '../../services/logger';
+import { resolveDriverPayoutAmount } from '../../services/PricingService';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -360,13 +361,7 @@ export const resolveIncomingRequestData = (request, timeRemaining = 0, timerTota
   const pickupDetails = request?.pickup?.details || {};
   const dropoffDetails = request?.dropoff?.details || {};
   const pricing = request?.pricing || {};
-  const earnings = toMoneyLabel(
-    request?.driverPayout ??
-    request?.earnings ??
-    pricing?.driverPayout ??
-    request?.price ??
-    0
-  );
+  const earnings = toMoneyLabel(resolveDriverPayoutAmount(request));
   const vehicleType = request?.vehicle?.type || 'Standard';
   const scheduledTime = request?.scheduledTime;
 

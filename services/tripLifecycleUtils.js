@@ -17,10 +17,16 @@ import {
 } from './tripExpiryService';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { updateDriverEarnings } from './driverEarningsService';
 import { updateDriverRowById } from './repositories/paymentRepository';
 import {
   updateTripById,
 } from './repositories/tripRepository';
+import {
+  buildSettledTripPricing,
+  buildTripPricingCreditPatch,
+  hasDriverEarningsCredit,
+} from './payment/tripSettlement';
 import { captureTripPayment } from './tripPaymentLifecycleService';
 
 const STATUS_TIMESTAMP_FIELDS = Object.freeze({
@@ -201,6 +207,30 @@ export const getRequestById = async (requestId) => {
 export const completeDelivery = async (requestId, completionData = {}) =>
   updateDriverStatus(requestId, TRIP_STATUS.COMPLETED, null, completionData);
 
+const creditDriverBalanceForCompletedTrip = async (trip) => {
+  const normalizedTrip = trip || {};
+  const tripId = normalizedTrip.id;
+  const driverId = normalizedTrip.driverId || normalizedTrip.driver_id || null;
+  if (!tripId || !driverId || hasDriverEarningsCredit(normalizedTrip)) {
+    return;
+  }
+
+  const settledPricing = buildSettledTripPricing(normalizedTrip);
+  const creditedAt = new Date().toISOString();
+
+  await updateDriverEarnings(driverId, {
+    ...normalizedTrip,
+    pricing: settledPricing,
+    driverPayout: settledPricing.driverPayout,
+    driverEarnings: settledPricing.driverPayout,
+  });
+
+  await updateTripById(tripId, {
+    pickup_location: buildTripPricingCreditPatch(normalizedTrip, creditedAt),
+    updated_at: creditedAt,
+  });
+};
+
 export const finishDelivery = async (
   requestId,
   photos = [],
@@ -226,8 +256,12 @@ export const finishDelivery = async (
       throw new Error(captureResult.error || 'Failed to capture trip payment');
     }
 
+    const trip = await getRequestById(requestId);
+    if (captureResult.success) {
+      await creditDriverBalanceForCompletedTrip(trip);
+    }
+
     try {
-      const trip = await getRequestById(requestId);
       await completeInsuranceBookingForTrip(trip);
     } catch (insuranceErr) {
       const normalized = normalizeError(insuranceErr, 'Failed to complete insurance booking');

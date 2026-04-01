@@ -1,4 +1,8 @@
 import RedkikService from '../../../services/RedkikService';
+import {
+  recalculatePricingWithLabor,
+  refreshPricingSnapshot,
+} from '../../../services/PricingService';
 import { logger } from '../../../services/logger';
 
 const QUOTE_MAX_AGE_MS = 10 * 60 * 1000;
@@ -46,35 +50,15 @@ export const resolveFinalPricing = async ({
 
   let basePricing = rawPricing;
   if (laborAdjustment !== null && rawPricing) {
-    const bufferMinutes = rawPricing.laborBufferMinutes || 0;
-    const billable = Math.max(0, laborAdjustment - bufferMinutes);
-    const newLaborFee = Math.round(billable * (rawPricing.laborPerMin || 0) * 100) / 100;
-    const laborDiff = newLaborFee - (rawPricing.laborFee || 0);
-    const taxRate = Number(rawPricing.taxRate || 0);
-    const newTaxableLaborAmount = newLaborFee;
-    const newTax = Math.round(newTaxableLaborAmount * taxRate * 100) / 100;
-    const taxDiff = newTax - (rawPricing.tax || 0);
-
-    basePricing = {
-      ...rawPricing,
-      laborFee: newLaborFee,
-      laborMinutes: laborAdjustment,
-      laborBillableMinutes: billable,
-      taxableLaborAmount: newTaxableLaborAmount,
-      tax: newTax,
-      total: Math.round((rawPricing.total + laborDiff + taxDiff) * 100) / 100,
-    };
+    basePricing = recalculatePricingWithLabor(rawPricing, laborAdjustment);
   }
 
   let finalPricing = basePricing;
   if (activeInsuranceQuote?.premium > 0 && basePricing?.insuranceApplied) {
-    const redkikPremium = activeInsuranceQuote.premium;
-    const oldInsurance = basePricing.mandatoryInsurance || 0;
-    finalPricing = {
+    finalPricing = refreshPricingSnapshot({
       ...basePricing,
-      mandatoryInsurance: redkikPremium,
-      total: Math.round((basePricing.total - oldInsurance + redkikPremium) * 100) / 100,
-    };
+      mandatoryInsurance: activeInsuranceQuote.premium,
+    });
   }
 
   return {

@@ -14,6 +14,7 @@ import AppListEmpty from '../../components/ui/AppListEmpty';
 import { useAuthIdentity, useDriverActions } from '../../contexts/AuthContext';
 import { TRIP_STATUS } from '../../constants/tripStatus';
 import { logger } from '../../services/logger';
+import { resolveDriverPayoutAmount } from '../../services/PricingService';
 import { colors, layout, spacing } from '../../styles/theme';
 import styles from './DriverRecentTripsScreen.styles';
 
@@ -64,7 +65,7 @@ function TripRow({ trip, onPress }) {
   const timestamp = trip.completedAt || trip.createdAt || trip.timestamp;
   const pickup = trip.pickupAddress || trip.pickup?.address || 'Pickup';
   const dropoff = trip.dropoffAddress || trip.dropoff?.address || 'Dropoff';
-  const amount = Number(trip.driverEarnings || trip.pricing?.total * 0.7 || 0);
+  const amount = resolveDriverPayoutAmount(trip);
   const status = trip.status;
   const statusColor = getStatusColor(status);
 

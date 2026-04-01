@@ -1,5 +1,6 @@
 import { createSignedTripPhotoUrl, getPhotoURL } from '../../services/StorageService';
 import { logger } from '../../services/logger';
+import { resolveDriverPayoutAmount } from '../../services/PricingService';
 
 const PHOTO_URL_TTL_SECONDS = 60 * 60 * 6;
 
@@ -248,14 +249,7 @@ export const buildRequestDetails = (request) => {
     return null;
   }
 
-  const pricing = request.pricing || request.originalData?.pricing || {};
-  const payoutLabel = formatAmount(
-    request.driverPayout ??
-    request.earnings ??
-    pricing.driverPayout ??
-    request.price ??
-    pricing.total
-  );
+  const payoutLabel = formatAmount(resolveDriverPayoutAmount(request));
   const scheduleLabel = formatDateTime(request.scheduledTime || request.scheduled_time);
   const itemRows = getItemRows(request);
   const photoRows = getPhotoRows(request);

@@ -2,24 +2,22 @@ export const getPricingData = (selectedVehicle) => {
   if (selectedVehicle?.pricing) {
     const vehiclePricing = selectedVehicle.pricing;
     return {
-      basePrice: vehiclePricing.baseFare + vehiclePricing.mileageCharge,
-      serviceFee: vehiclePricing.serviceFee,
-      tax:
-        vehiclePricing.tax ||
-        (vehiclePricing.subtotal + vehiclePricing.serviceFee) * 0.08,
+      baseFare: Number(vehiclePricing.baseFare || 0),
+      mileageFee: Number(vehiclePricing.mileageFee || vehiclePricing.mileageCharge || 0),
+      tax: Number(vehiclePricing.tax || 0),
+      insurance: Number(vehiclePricing.mandatoryInsurance || 0),
       total: vehiclePricing.total.toFixed(2),
     };
   }
 
-  const basePrice = parseFloat(selectedVehicle?.price?.replace('$', '') || '40.00');
-  const serviceFee = 2.99;
-  const tax = (basePrice + serviceFee) * 0.08;
+  const baseFare = parseFloat(selectedVehicle?.price?.replace('$', '') || '40.00');
 
   return {
-    basePrice,
-    serviceFee,
-    tax,
-    total: (basePrice + serviceFee + tax).toFixed(2),
+    baseFare,
+    mileageFee: 0,
+    tax: 0,
+    insurance: 0,
+    total: baseFare.toFixed(2),
   };
 };
 

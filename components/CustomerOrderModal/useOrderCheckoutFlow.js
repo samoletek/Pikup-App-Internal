@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Keyboard } from 'react-native';
-import { calculatePrice, getVehicleRates } from '../../services/PricingService';
+import { calculatePrice, getVehicleRates, refreshPricingSnapshot } from '../../services/PricingService';
 import { recommendVehicleForItems } from '../../services/AIService';
 import RedkikService from '../../services/RedkikService';
 import {
@@ -106,12 +106,10 @@ export default function useOrderCheckoutFlow({
     }
 
     setPreviewPricing((prevPricing) => {
-      const previousInsurance = prevPricing.mandatoryInsurance || 0;
-      return {
+      return refreshPricingSnapshot({
         ...prevPricing,
         mandatoryInsurance: redkikPremium,
-        total: Math.round((prevPricing.total - previousInsurance + redkikPremium) * 100) / 100,
-      };
+      });
     });
   }, [insuranceQuote, previewPricing]);
 

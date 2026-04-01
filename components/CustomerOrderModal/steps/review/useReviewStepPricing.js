@@ -1,5 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
-import { estimateLaborMinutes } from '../../../../services/PricingService';
+import {
+  estimateLaborMinutes,
+  recalculatePricingWithLabor,
+} from '../../../../services/PricingService';
 
 export const useReviewStepPricing = ({
   orderData,
@@ -41,24 +44,7 @@ export const useReviewStepPricing = ({
       return pricing;
     }
 
-    const bufferMinutes = laborSliderConfig.bufferMinutes;
-    const billable = Math.max(0, laborAdjustment - bufferMinutes);
-    const newLaborFee = Math.round(billable * (pricing.laborPerMin || 0) * 100) / 100;
-    const laborDiff = newLaborFee - (pricing.laborFee || 0);
-    const taxRate = Number(pricing.taxRate || 0);
-    const newTaxableLaborAmount = newLaborFee;
-    const newTax = Math.round(newTaxableLaborAmount * taxRate * 100) / 100;
-    const taxDiff = newTax - (pricing.tax || 0);
-
-    return {
-      ...pricing,
-      laborFee: newLaborFee,
-      laborMinutes: laborAdjustment,
-      laborBillableMinutes: billable,
-      taxableLaborAmount: newTaxableLaborAmount,
-      tax: newTax,
-      total: Math.round((pricing.total + laborDiff + taxDiff) * 100) / 100,
-    };
+    return recalculatePricingWithLabor(pricing, laborAdjustment);
   }, [pricing, laborSliderConfig, laborAdjustment]);
 
   const handleLaborStep = useCallback((direction) => {

@@ -148,6 +148,10 @@ const invokeWithAuthRetry = async <T>(
   return result;
 };
 
+export const ensurePaymentAuthSessionReady = async () => {
+  await resolveEdgeAccessToken();
+};
+
 /**
  * Payment repository centralizes payment-related Supabase queries and edge-function calls.
  */
