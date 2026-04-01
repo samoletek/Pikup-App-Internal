@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import useDriverTripChat from '../../hooks/useDriverTripChat';
+import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { logger } from '../../services/logger';
 
 export default function usePickupConfirmationFlow({
@@ -66,10 +67,10 @@ export default function usePickupConfirmationFlow({
   }, [confirmPickup, driverLocation, navigation, photos, request, startDelivery]);
 
   const confirmPickupComplete = useCallback(() => {
-    if (photos.length === 0) {
+    if (photos.length < MIN_VERIFICATION_PHOTOS) {
       Alert.alert(
         'Photos Required',
-        'Please take at least one photo to verify the pickup.',
+        `Please take at least ${MIN_VERIFICATION_PHOTOS} photos to verify the pickup.`,
         [{ text: 'OK' }]
       );
       return;

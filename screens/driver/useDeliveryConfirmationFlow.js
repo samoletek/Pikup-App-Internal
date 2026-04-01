@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { logger } from '../../services/logger';
 
 const MAX_VERIFICATION_PHOTOS = 10;
@@ -239,10 +240,10 @@ export default function useDeliveryConfirmationFlow({
   ]);
 
   const completeDelivery = useCallback(async () => {
-    if (deliveryPhotos.length === 0) {
+    if (deliveryPhotos.length < MIN_VERIFICATION_PHOTOS) {
       Alert.alert(
         'Photos Required',
-        'Please take at least one photo to verify the delivery.',
+        `Please take at least ${MIN_VERIFICATION_PHOTOS} photos to verify the delivery.`,
         [{ text: 'OK' }]
       );
       return;

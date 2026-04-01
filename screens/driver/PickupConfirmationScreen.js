@@ -22,6 +22,7 @@ import AppButton from '../../components/ui/AppButton';
 import styles from './PickupConfirmationScreen.styles';
 import usePickupVerificationPhotos, {
   DEFAULT_MAX_VERIFICATION_PHOTOS,
+  MIN_VERIFICATION_PHOTOS,
 } from '../../hooks/usePickupVerificationPhotos';
 import useCustomerAvatarFromTripRequest from './useCustomerAvatarFromTripRequest';
 import usePickupConfirmationFlow from './usePickupConfirmationFlow';
@@ -270,17 +271,17 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           }
           style={[
             styles.confirmButton,
-            { opacity: (photos.length === 0 || isCompleting) ? 0.6 : 1 }
+            { opacity: (photos.length < MIN_VERIFICATION_PHOTOS || isCompleting) ? 0.6 : 1 }
           ]}
           onPress={confirmPickupComplete}
-          disabled={photos.length === 0 || isCompleting}
+          disabled={photos.length < MIN_VERIFICATION_PHOTOS || isCompleting}
           loading={isCompleting}
           labelStyle={styles.confirmButtonText}
           leftIcon={<Ionicons name="checkmark" size={20} color={colors.white} />}
         />
 
-        {photos.length === 0 && (
-          <Text style={styles.warningText}>⚠️ At least 1 photo required</Text>
+        {photos.length < MIN_VERIFICATION_PHOTOS && (
+          <Text style={styles.warningText}>At least {MIN_VERIFICATION_PHOTOS} photos required ({photos.length}/{MIN_VERIFICATION_PHOTOS})</Text>
         )}
       </View>
     </View>

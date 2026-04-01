@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { logger } from '../services/logger';
 
 export const DEFAULT_MAX_VERIFICATION_PHOTOS = 10;
+export const MIN_VERIFICATION_PHOTOS = 3;
 
 export default function usePickupVerificationPhotos({
   maxPhotos = DEFAULT_MAX_VERIFICATION_PHOTOS,

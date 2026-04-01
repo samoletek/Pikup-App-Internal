@@ -13,6 +13,7 @@ import { useAuthIdentity, useProfileActions, useTripActions } from '../../contex
 import ScreenHeader from '../../components/ScreenHeader';
 import AppButton from '../../components/ui/AppButton';
 import useDeliveryConfirmationFlow from './useDeliveryConfirmationFlow';
+import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import styles from './DeliveryConfirmationScreen.styles';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 import {
@@ -247,17 +248,17 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           }
           style={[
             styles.completeButton,
-            { opacity: (deliveryPhotos.length === 0 || isCompleting) ? 0.6 : 1 }
+            { opacity: (deliveryPhotos.length < MIN_VERIFICATION_PHOTOS || isCompleting) ? 0.6 : 1 }
           ]}
           onPress={completeDelivery}
-          disabled={deliveryPhotos.length === 0 || isCompleting}
+          disabled={deliveryPhotos.length < MIN_VERIFICATION_PHOTOS || isCompleting}
           loading={isCompleting}
           labelStyle={styles.completeButtonText}
           leftIcon={<Ionicons name="checkmark-circle" size={20} color={colors.white} />}
         />
 
-        {deliveryPhotos.length === 0 && (
-          <Text style={styles.warningText}>⚠️ At least 1 delivery photo required</Text>
+        {deliveryPhotos.length < MIN_VERIFICATION_PHOTOS && (
+          <Text style={styles.warningText}>At least {MIN_VERIFICATION_PHOTOS} delivery photos required ({deliveryPhotos.length}/{MIN_VERIFICATION_PHOTOS})</Text>
         )}
       </View>
     </View>
