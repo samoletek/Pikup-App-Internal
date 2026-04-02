@@ -60,12 +60,18 @@ const useMapboxNavigation = ({
     }
   };
 
-  const stopNavigation = async () => {
+  const stopNavigation = async (options = {}) => {
+    const { showAlert = true } = options;
+
     try {
       await MapboxNavigationService.stopNavigation();
       setIsNavigating(false);
-    } catch (_error) {
-      Alert.alert('Error', 'Failed to stop navigation');
+    } catch (error) {
+      if (showAlert) {
+        Alert.alert('Error', 'Failed to stop navigation');
+      } else {
+        logger.warn('MapboxNavigationHook', 'Failed to stop navigation silently', error);
+      }
     }
   };
 

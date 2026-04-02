@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { logger } from '../../services/logger';
-import { TRIP_STATUS } from '../../constants/tripStatus';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
 import { buildNavigationCameraConfig } from './navigationCamera.utils';
-import { calculateDistanceAndEta, generateFallbackRoute } from './navigationRoute.utils';
+import {
+  calculateDistanceAndEta,
+  generateFallbackRoute,
+  navigateDriverToHome,
+} from './navigationRoute.utils';
 import {
   calculateDistanceToNextTurnMeters,
   ensureNavigationLocationAccess,
@@ -12,6 +16,7 @@ import {
   setNavigationInitialCamera,
   startNavigationLocationWatch,
 } from './navigationLocation.utils';
+import { hasReachedOrPassedStatus } from '../../services/tripErrorUtils';
 
 export default function useDeliveryNavigationData({
   applyRouteSteps,
@@ -32,6 +37,7 @@ export default function useDeliveryNavigationData({
   const routeStepsRef = useRef(routeSteps || []);
   const currentStepIndexRef = useRef(currentStepIndex || 0);
   const currentHeadingRef = useRef(0);
+  const tripStatusRef = useRef(normalizeTripStatus(request?.status));
 
   const [driverLocation, setDriverLocation] = useState(initialDriverLocation);
   const [dropoffLocation, setDropoffLocation] = useState(null);
@@ -46,6 +52,10 @@ export default function useDeliveryNavigationData({
   useEffect(() => {
     dropoffLocationRef.current = dropoffLocation;
   }, [dropoffLocation]);
+
+  useEffect(() => {
+    tripStatusRef.current = normalizeTripStatus(request?.status);
+  }, [request?.status]);
 
   useEffect(() => {
     routeStepsRef.current = routeSteps || [];
@@ -76,13 +86,34 @@ export default function useDeliveryNavigationData({
 
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
-      if (request?.id) {
-        await updateDriverStatus(request.id, TRIP_STATUS.EN_ROUTE_TO_DROPOFF, location);
+      if (!request?.id || typeof updateDriverStatus !== 'function') {
+        return;
       }
+
+      const currentTripStatus = normalizeTripStatus(
+        tripStatusRef.current || requestData?.status || request?.status
+      );
+
+      // Delivery navigation should not push stale statuses once dropoff arrival is reached.
+      if (
+        hasReachedOrPassedStatus(currentTripStatus, TRIP_STATUS.ARRIVED_AT_DROPOFF) ||
+        !hasReachedOrPassedStatus(currentTripStatus, TRIP_STATUS.PICKED_UP)
+      ) {
+        return;
+      }
+
+      const updatedTrip = await updateDriverStatus(
+        request.id,
+        TRIP_STATUS.EN_ROUTE_TO_DROPOFF,
+        location
+      );
+      tripStatusRef.current = normalizeTripStatus(
+        updatedTrip?.status || TRIP_STATUS.EN_ROUTE_TO_DROPOFF
+      );
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error updating driver location', error);
     }
-  }, [request?.id, updateDriverStatus]);
+  }, [request?.id, request?.status, requestData?.status, updateDriverStatus]);
 
   const generateRealRoute = useCallback(async (start, end) => {
     try {
@@ -241,6 +272,9 @@ export default function useDeliveryNavigationData({
     try {
       const latestData = await getRequestById(request.id);
       setRequestData((prev) => ({ ...(prev || {}), ...(latestData || {}) }));
+      tripStatusRef.current = normalizeTripStatus(
+        latestData?.status || tripStatusRef.current
+      );
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error fetching request data', error);
     }
@@ -259,6 +293,23 @@ export default function useDeliveryNavigationData({
       }
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error marking arrival at dropoff', error);
+      const errorMessage = String(error?.message || '').toLowerCase();
+      if (errorMessage.includes('cancelled')) {
+        Alert.alert(
+          'Order Cancelled',
+          'The customer has cancelled this order.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigateDriverToHome(navigation);
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+        return;
+      }
       Alert.alert('Error', 'Failed to update arrival status. Please try again.');
     }
   }, [arriveAtDropoff, driverLocation, navigation, pickupPhotos, requestData]);

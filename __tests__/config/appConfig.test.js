@@ -48,4 +48,16 @@ describe("appConfig", () => {
     expect(isDriverReadinessBypassEnabled({ uid: "driver_123" })).toBe(true);
     expect(isDriverReadinessBypassEnabled({ email: "blocked@example.com" })).toBe(false);
   });
+
+  test("driver phone bypass helper checks both id and email regardless of dev mode", () => {
+    process.env.EXPO_PUBLIC_DRIVER_PHONE_BYPASS_EMAILS = "ops@example.com";
+    process.env.EXPO_PUBLIC_DRIVER_PHONE_BYPASS_USER_IDS = "driver_ops_1";
+    global.__DEV__ = false;
+
+    const { isDriverPhoneVerificationBypassEnabled } = require("../../config/appConfig");
+
+    expect(isDriverPhoneVerificationBypassEnabled({ email: "ops@example.com" })).toBe(true);
+    expect(isDriverPhoneVerificationBypassEnabled({ uid: "driver_ops_1" })).toBe(true);
+    expect(isDriverPhoneVerificationBypassEnabled({ email: "blocked@example.com" })).toBe(false);
+  });
 });

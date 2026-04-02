@@ -13,8 +13,35 @@ import {
 } from '../utils/locationState';
 
 const DEFAULT_INSURANCE_RETRY_DELAY_MS = 1500;
+const REMOTE_URL_REGEX = /^https?:\/\//i;
+const MEDIA_UPLOAD_FALLBACK_NOTICE = Object.freeze({
+  title: 'Photos not attached',
+  message:
+    'We could not attach some item photos or receipts, but your order was created successfully.',
+});
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRemoteMediaUrl = (value) =>
+  typeof value === 'string' && REMOTE_URL_REGEX.test(value.trim());
+
+const sanitizeOrderItemsForPersistence = (items = []) => {
+  const sourceItems = Array.isArray(items) ? items : [];
+
+  return sourceItems.map((item = {}) => {
+    const sourcePhotos = Array.isArray(item.photos) ? item.photos : [];
+    const persistedPhotos = sourcePhotos.filter((photo) => isRemoteMediaUrl(photo));
+    const persistedInvoicePhoto = isRemoteMediaUrl(item.invoicePhoto)
+      ? item.invoicePhoto
+      : null;
+
+    return {
+      ...item,
+      photos: persistedPhotos,
+      invoicePhoto: persistedInvoicePhoto,
+    };
+  });
+};
 
 const getDefaultPurchaseInsurance = () => {
   const redkikServiceModule = require('./RedkikService');
@@ -221,12 +248,23 @@ export const submitCustomerOrder = async ({
       userId: currentUserId,
       uploadToSupabase,
     });
+    const fallbackItems = sanitizeOrderItemsForPersistence(orderData?.items || []);
+    const persistedItems = uploadItemsResult.success
+      ? (uploadItemsResult.items || fallbackItems)
+      : fallbackItems;
+    const submissionNotices = Array.isArray(notices) ? [...notices] : [];
+
     if (!uploadItemsResult.success) {
-      return failureResult(
-        uploadItemsResult.error || 'Could not upload item photos. Please try again.',
-        null,
-        { notices, correlationId: flowContext.correlationId }
+      logger.warn(
+        'CustomerOrderSubmission',
+        'Order item media upload failed, continuing without local media attachments',
+        {
+          error: uploadItemsResult.error || null,
+          errorCode: uploadItemsResult.errorCode || null,
+          correlationId: flowContext.correlationId,
+        }
       );
+      submissionNotices.push(MEDIA_UPLOAD_FALLBACK_NOTICE);
     }
 
     const createdRequest = await createPickupRequest({
@@ -240,7 +278,7 @@ export const submitCustomerOrder = async ({
         total: finalAmount,
         distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
       },
-      items: uploadItemsResult.items,
+      items: persistedItems,
       scheduledTime:
         orderData?.scheduleType === 'scheduled'
           ? orderData?.scheduledDateTime
@@ -252,7 +290,7 @@ export const submitCustomerOrder = async ({
     logFlowInfo('CustomerOrderSubmission', 'order submission succeeded', flowContext);
     return successResult({
       createdRequest: createdRequest || null,
-      notices,
+      notices: submissionNotices,
       correlationId: flowContext.correlationId,
     });
   } catch (error) {

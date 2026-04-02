@@ -20,6 +20,15 @@ import { normalizeError } from './errorService';
 
 const MAX_UPLOAD_RETRIES = 3;
 const IMAGE_MAX_SIDE_PX = 1024;
+const MIME_TYPE_MAP = Object.freeze({
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    heic: 'image/heic',
+    heif: 'image/heif',
+    gif: 'image/gif',
+});
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,6 +66,43 @@ const shouldRetryUpload = (error) => {
         message.includes('load failed') ||
         status >= 500
     );
+};
+
+const getPathOrUriExtension = (value) => {
+    const trimmed = String(value || '').split('?')[0].trim();
+    if (!trimmed) {
+        return '';
+    }
+
+    const segments = trimmed.split('.');
+    if (segments.length < 2) {
+        return '';
+    }
+
+    return String(segments[segments.length - 1] || '').toLowerCase();
+};
+
+const resolveUploadContentType = (uri, path) => {
+    const extension = getPathOrUriExtension(path) || getPathOrUriExtension(uri);
+    return MIME_TYPE_MAP[extension] || 'application/octet-stream';
+};
+
+const resolveUploadErrorCode = (error, normalizedCode) => {
+    if (normalizedCode) {
+        return normalizedCode;
+    }
+
+    const statusCode = Number(error?.statusCode || error?.status || 0);
+    if (Number.isFinite(statusCode) && statusCode > 0) {
+        return `storage_http_${statusCode}`;
+    }
+
+    const errorName = String(error?.name || '').toLowerCase();
+    if (errorName.includes('storageapierror')) {
+        return 'storage_api_error';
+    }
+
+    return null;
 };
 
 const readLocalFileAsArrayBuffer = async (uri) => {
@@ -126,6 +172,7 @@ export const compressImage = async (uri) => {
  * @returns {Promise<string>} Public URL of uploaded file
  */
 export const uploadToSupabase = async (uri, bucket, path) => {
+    let contentType = 'application/octet-stream';
     try {
         const sessionUserId = await ensureStorageSessionUserId();
         if (!sessionUserId) {
@@ -133,12 +180,13 @@ export const uploadToSupabase = async (uri, bucket, path) => {
         }
 
         const arrayBuffer = await readLocalFileAsArrayBuffer(uri);
+        contentType = resolveUploadContentType(uri, path);
         let lastError = null;
 
         for (let attempt = 1; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
             const body = arrayBuffer.slice(0);
             const { error } = await uploadToStorageBucket(bucket, path, body, {
-                    contentType: 'image/jpeg',
+                    contentType,
                     upsert: true
                 });
 
@@ -165,8 +213,24 @@ export const uploadToSupabase = async (uri, bucket, path) => {
         throw lastError || new Error('Upload failed');
     } catch (error) {
         const normalized = normalizeError(error, 'File upload failed');
-        logger.error('StorageService', 'Supabase upload error', normalized, error);
-        throw new Error(normalized.message);
+        const resolvedCode = resolveUploadErrorCode(error, normalized.code);
+        logger.error(
+            'StorageService',
+            'Supabase upload error',
+            {
+                ...normalized,
+                code: resolvedCode,
+                bucket,
+                path,
+                contentType,
+            },
+            error
+        );
+        const uploadError = new Error(normalized.message);
+        if (resolvedCode) {
+            uploadError.code = resolvedCode;
+        }
+        throw uploadError;
     }
 };
 

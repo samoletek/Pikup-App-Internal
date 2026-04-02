@@ -3,6 +3,7 @@ import { Animated, Easing } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   DROPOFF_PHASE_STATUSES,
+  TRIP_STATUS,
   normalizeTripStatus,
 } from "../../constants/tripStatus";
 import {
@@ -97,11 +98,36 @@ export default function useDriverHomePresentation({
     }
 
     const normalizedStatus = normalizeTripStatus(trip.status);
+    const resolvedDriverLocation = (
+      trip?.driverLocation ||
+      trip?.driver_location ||
+      driverLocation ||
+      null
+    );
+    const pickupPhotos = trip?.pickupPhotos || trip?.pickup_photos || [];
+
+    if (normalizedStatus === TRIP_STATUS.ARRIVED_AT_PICKUP) {
+      navigation.navigate("PickupConfirmationScreen", {
+        request: trip,
+        driverLocation: resolvedDriverLocation,
+      });
+      return;
+    }
+
+    if (normalizedStatus === TRIP_STATUS.ARRIVED_AT_DROPOFF) {
+      navigation.navigate("DeliveryConfirmationScreen", {
+        request: trip,
+        pickupPhotos,
+        driverLocation: resolvedDriverLocation,
+      });
+      return;
+    }
 
     if (DROPOFF_PHASE_STATUSES.includes(normalizedStatus)) {
       navigation.navigate("DeliveryNavigationScreen", {
         request: trip,
-        driverLocation: trip?.driverLocation || driverLocation || null,
+        pickupPhotos,
+        driverLocation: resolvedDriverLocation,
       });
       return;
     }

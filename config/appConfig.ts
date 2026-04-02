@@ -55,9 +55,20 @@ const toCsvSet = (value: string) =>
       .filter(Boolean)
   );
 
+const mergeCsvSets = (...values: string[]) => {
+  const merged = new Set<string>();
+  values.forEach((value) => {
+    toCsvSet(value).forEach((entry) => merged.add(entry));
+  });
+  return merged;
+};
+
 const isDev = typeof __DEV__ !== "undefined" && __DEV__ === true;
 
 const defaultBypassEmails = isDev ? "drew@architeq.io" : "";
+// Temporary production/build-safe override for driver phone verification gate.
+// TODO(remove on request): drew@architeq.io should no longer bypass phone verification.
+const defaultPhoneVerificationBypassEmails = "drew@architeq.io";
 
 export const appConfig = {
   env: {
@@ -110,6 +121,13 @@ export const appConfig = {
     ),
     userIds: toCsvSet(readEnv("EXPO_PUBLIC_DRIVER_READINESS_BYPASS_USER_IDS", "")),
   },
+  driverPhoneVerificationBypass: {
+    emails: mergeCsvSets(
+      defaultPhoneVerificationBypassEmails,
+      readEnv("EXPO_PUBLIC_DRIVER_PHONE_BYPASS_EMAILS", "")
+    ),
+    userIds: toCsvSet(readEnv("EXPO_PUBLIC_DRIVER_PHONE_BYPASS_USER_IDS", "")),
+  },
   devMocks: {
     enabled: isDev && readEnv("EXPO_PUBLIC_ENABLE_DEV_MOCK_DATA", "0") === "1",
   },
@@ -126,5 +144,17 @@ export const isDriverReadinessBypassEnabled = (user?: { uid?: string; id?: strin
   return (
     (userId && appConfig.driverReadinessBypass.userIds.has(userId)) ||
     (email && appConfig.driverReadinessBypass.emails.has(email))
+  );
+};
+
+export const isDriverPhoneVerificationBypassEnabled = (
+  user?: { uid?: string; id?: string; email?: string }
+) => {
+  const userId = String(user?.uid || user?.id || "").trim().toLowerCase();
+  const email = String(user?.email || "").trim().toLowerCase();
+
+  return (
+    (userId && appConfig.driverPhoneVerificationBypass.userIds.has(userId)) ||
+    (email && appConfig.driverPhoneVerificationBypass.emails.has(email))
   );
 };

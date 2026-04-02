@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   useAuthIdentity,
@@ -22,6 +22,7 @@ import styles from './GpsNavigationScreen.styles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../styles/theme';
 import { formatDistance } from './navigationMath.utils';
+import { navigateDriverToHome } from './navigationRoute.utils';
 import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
 
@@ -29,10 +30,11 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { currentUser, userType } = useAuthIdentity();
-  const { startDriving, arriveAtPickup, getRequestById, updateDriverLocation } = useTripActions();
+  const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus } = useTripActions();
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
   const { getUserProfile } = useProfileActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
+  const cancellationHandledRef = useRef(false);
   
   const [navigationAttempted, setNavigationAttempted] = useState(false);
 
@@ -68,7 +70,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     request,
     getRequestById,
     startDriving,
-    updateDriverLocation,
+    updateDriverStatus,
     applyRouteSteps,
     routeSteps,
     currentStepIndex,
@@ -121,6 +123,28 @@ export default function GpsNavigationScreen({ route, navigation }) {
     },
   });
 
+  const handleTripCancelled = useCallback(() => {
+    if (cancellationHandledRef.current) {
+      return;
+    }
+    cancellationHandledRef.current = true;
+    clearNavigationResources();
+    stopNavigation({ showAlert: false });
+    Alert.alert(
+      'Order Cancelled',
+      'The customer has cancelled this order.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            navigateDriverToHome(navigation);
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  }, [clearNavigationResources, navigation, stopNavigation]);
+
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
   const {
     customerAvatarUrl,
@@ -135,12 +159,10 @@ export default function GpsNavigationScreen({ route, navigation }) {
   });
   
   // Monitor order status for cancellations
-  useOrderStatusMonitor(requestData?.id, navigation, {
+  useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
     currentScreen: 'GpsNavigationScreen',
-    enabled: !!requestData?.id && !isCustomerView,
-    onCancel: () => {
-      clearNavigationResources();
-    }
+    enabled: !!(requestData?.id || request?.id) && !isCustomerView,
+    onCancel: handleTripCancelled,
   });
 
   useEffect(() => {
@@ -152,9 +174,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
 
     return () => {
       clearNavigationResources();
-      if (isNavigating) {
-        stopNavigation();
-      }
+      stopNavigation({ showAlert: false });
     };
     // Navigation mode bootstrap is intentionally one-time; retry action re-initializes explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,6 +199,11 @@ export default function GpsNavigationScreen({ route, navigation }) {
       }
     } catch (error) {
       logger.error('GpsNavigationScreen', 'Error marking arrival', error);
+      const errorMessage = String(error?.message || '').toLowerCase();
+      if (errorMessage.includes('cancelled')) {
+        handleTripCancelled();
+        return;
+      }
       Alert.alert('Error', 'Failed to update arrival status. Please try again.');
     }
   };

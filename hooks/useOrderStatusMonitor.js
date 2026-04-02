@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useTripActions } from '../contexts/AuthContext';
 import { logger } from '../services/logger';
+import { navigateDriverToHome } from '../screens/driver/navigationRoute.utils';
 
 /**
  * Custom hook to monitor order status changes, specifically for cancellation detection
@@ -103,10 +104,7 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
           text: 'OK',
           onPress: () => {
             // Navigate back to driver home and clear the navigation stack
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'DriverHomeScreen' }],
-            });
+            navigateDriverToHome(navigation);
           }
         }
       ],

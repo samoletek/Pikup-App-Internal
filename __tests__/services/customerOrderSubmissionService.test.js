@@ -159,12 +159,21 @@ describe('CustomerOrderSubmissionService', () => {
     );
   });
 
-  test('returns upload error without creating payment intent', async () => {
+  test('continues order creation when item media upload fails', async () => {
     uploadOrderItemsMedia.mockResolvedValue({
       success: false,
       error: 'upload failed',
+      errorCode: 'storage_http_400',
     });
-    const orderData = createBaseOrderData();
+    const orderData = createBaseOrderData({
+      items: [
+        {
+          name: 'Laptop',
+          photos: ['file:///var/mobile/photo-1.jpg', 'https://cdn.example.com/photo-2.jpg'],
+          invoicePhoto: 'file:///var/mobile/invoice.jpg',
+        },
+      ],
+    });
     const dependencies = createDependencies();
 
     const result = await submitCustomerOrder({
@@ -172,10 +181,23 @@ describe('CustomerOrderSubmissionService', () => {
       ...dependencies,
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('upload failed');
+    expect(result.success).toBe(true);
+    expect(result.notices).toEqual([
+      expect.objectContaining({
+        title: 'Photos not attached',
+      }),
+    ]);
     expect(dependencies.createPaymentIntent).not.toHaveBeenCalled();
-    expect(dependencies.createPickupRequest).not.toHaveBeenCalled();
+    expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            photos: ['https://cdn.example.com/photo-2.jpg'],
+            invoicePhoto: null,
+          }),
+        ],
+      })
+    );
   });
 
   test('returns request creation error when trip persistence fails', async () => {
