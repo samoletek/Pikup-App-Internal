@@ -293,6 +293,20 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
   },
+  cancelTripButton: {
+    backgroundColor: colors.error,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: borderRadius.full,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  cancelTripButtonText: {
+    color: colors.white,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+  },
   // Navigation instruction styles
   navigationContainer: {
     position: 'absolute',

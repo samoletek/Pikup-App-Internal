@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,12 +25,13 @@ import {
   useProfileActions,
   useTripActions,
 } from '../../contexts/AuthContext';
-import { TRIP_STATUS } from '../../constants/tripStatus';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
 import { colors, spacing } from '../../styles/theme';
 import useCustomerTripDetailsData from '../../hooks/useCustomerTripDetailsData';
 import useCustomerTripRating from '../../hooks/useCustomerTripRating';
 import useTripConversationUnread from '../../hooks/useTripConversationUnread';
 import { logger } from '../../services/logger';
+import { shouldShowCancellationAlert } from '../../services/cancellationAlertDeduper';
 import {
   resolveDisplayNameFromUser,
   resolveDriverNameFromRequest,
@@ -119,6 +120,8 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
   const [isOpeningChat, setIsOpeningChat] = useState(false);
   const [isCancellingTrip, setIsCancellingTrip] = useState(false);
+  const previousTripStatusRef = useRef(normalizeTripStatus(displayTrip.status));
+  const lastDriverCancellationAlertTripIdRef = useRef(null);
 
   const handleOpenPhotoViewer = useCallback((photos, index = 0) => {
     if (!Array.isArray(photos) || photos.length === 0) {
@@ -279,6 +282,44 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
       ]
     );
   }, [cancelOrder, displayTrip.id, isCancellingTrip, loadTrip]);
+
+  useEffect(() => {
+    const currentStatus = normalizeTripStatus(displayTrip.status);
+    const previousStatus = previousTripStatusRef.current;
+    const cancellationReason = String(displayTrip.cancellationReason || '')
+      .trim()
+      .toLowerCase();
+    const tripIdValue = String(displayTrip.id || '').trim();
+
+    const shouldShowDriverCancellationAlert = (
+      currentStatus === TRIP_STATUS.CANCELLED &&
+      previousStatus !== TRIP_STATUS.CANCELLED &&
+      cancellationReason === 'driver_request' &&
+      tripIdValue &&
+      lastDriverCancellationAlertTripIdRef.current !== tripIdValue
+    );
+
+    if (shouldShowDriverCancellationAlert) {
+      lastDriverCancellationAlertTripIdRef.current = tripIdValue;
+      if (
+        !shouldShowCancellationAlert({
+          tripId: tripIdValue,
+          reason: cancellationReason,
+        })
+      ) {
+        previousTripStatusRef.current = currentStatus;
+        return;
+      }
+      Alert.alert(
+        'Order Cancelled',
+        'The driver has cancelled this order.',
+        [{ text: 'OK' }],
+        { cancelable: false }
+      );
+    }
+
+    previousTripStatusRef.current = currentStatus;
+  }, [displayTrip.cancellationReason, displayTrip.id, displayTrip.status]);
 
   if (loading && !tripData && !tripSummary) {
     return (

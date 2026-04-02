@@ -30,13 +30,14 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { currentUser, userType } = useAuthIdentity();
-  const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus } = useTripActions();
+  const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus, cancelOrder } = useTripActions();
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
   const { getUserProfile } = useProfileActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
   const cancellationHandledRef = useRef(false);
   
   const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const [isCancellingTrip, setIsCancellingTrip] = useState(false);
 
   const {
     routeSteps,
@@ -208,6 +209,55 @@ export default function GpsNavigationScreen({ route, navigation }) {
     }
   };
 
+  const handleCancelTrip = useCallback(() => {
+    const requestId = requestData?.id || request?.id;
+    if (!requestId || isCancellingTrip) {
+      return;
+    }
+
+    Alert.alert(
+      'Cancel trip?',
+      'This will cancel the trip for both you and the customer.',
+      [
+        { text: 'Keep trip', style: 'cancel' },
+        {
+          text: 'Cancel trip',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsCancellingTrip(true);
+              const cancellationResult = await cancelOrder(requestId, 'driver_request');
+              if (!cancellationResult?.success) {
+                throw new Error(cancellationResult?.error || 'Please try again in a moment.');
+              }
+
+              cancellationHandledRef.current = true;
+              clearNavigationResources();
+              await stopNavigation({ showAlert: false });
+              navigateDriverToHome(navigation);
+            } catch (error) {
+              logger.error('GpsNavigationScreen', 'Error cancelling trip from driver view', error);
+              Alert.alert(
+                'Unable to cancel',
+                error?.message || 'Please try again in a moment.'
+              );
+            } finally {
+              setIsCancellingTrip(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [
+    cancelOrder,
+    clearNavigationResources,
+    isCancellingTrip,
+    navigation,
+    request?.id,
+    requestData?.id,
+    stopNavigation,
+  ]);
+
   const {
     isCreatingChat,
     openChat,
@@ -288,6 +338,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
       isCreatingChat={isCreatingChat}
       hasUnreadChat={hasUnreadChat}
       handleArrive={handleArrive}
+      handleCancelTrip={handleCancelTrip}
+      isCancellingTrip={isCancellingTrip}
       nextInstruction={nextInstruction}
       currentManeuverIcon={currentManeuverIcon}
       distanceToTurn={distanceToTurn}

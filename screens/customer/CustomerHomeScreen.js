@@ -43,6 +43,8 @@ export default function CustomerHomeScreen({ navigation }) {
     activeDelivery,
     pendingBooking,
     setPendingBooking,
+    recentCancellation,
+    clearRecentCancellation,
     checkActiveDeliveries,
   } = useCustomerDeliveryTracking({
     currentUserId,
@@ -72,6 +74,8 @@ export default function CustomerHomeScreen({ navigation }) {
     currentUserId,
     navigation,
     checkActiveDeliveries,
+    recentCancellation,
+    clearRecentCancellation,
     setPendingBooking,
     cancelOrder,
     uploadToSupabase,
