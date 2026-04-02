@@ -183,14 +183,15 @@ export const updateDriverEarnings = async (driverId, tripData) => {
       lastTripCompletedAt: new Date().toISOString(),
     };
 
-    const { data, error } = await updateDriverRowById(
-      driverId,
-      {
-        metadata: newMeta,
-        completed_orders: (profile?.completed_orders || 0) + 1,
-      },
-      true
-    );
+    const driverUpdates = {
+      metadata: newMeta,
+    };
+
+    if (profile && Object.prototype.hasOwnProperty.call(profile, 'completed_orders')) {
+      driverUpdates.completed_orders = (profile?.completed_orders || 0) + 1;
+    }
+
+    const { data, error } = await updateDriverRowById(driverId, driverUpdates, true);
 
     if (error) throw error;
     return data;

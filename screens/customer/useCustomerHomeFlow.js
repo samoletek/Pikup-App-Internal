@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import {
@@ -24,6 +24,7 @@ import {
 } from "./CustomerHomeScreen.utils";
 import { ensureForegroundLocationAvailability } from "../../utils/locationPermissions";
 import { isPhoneVerified } from "../../utils/profileFlags";
+import { shouldShowCancellationAlert } from "../../services/cancellationAlertDeduper";
 
 export const CUSTOMER_LOCATION_GATE_STATUS = Object.freeze({
   CHECKING: "checking",
@@ -41,6 +42,8 @@ export default function useCustomerHomeFlow({
   currentUserId,
   navigation,
   checkActiveDeliveries,
+  recentCancellation,
+  clearRecentCancellation,
   setPendingBooking,
   cancelOrder,
   uploadToSupabase,
@@ -53,6 +56,7 @@ export default function useCustomerHomeFlow({
   const [isCancellingPending, setIsCancellingPending] = useState(false);
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
+  const lastDriverCancellationAlertTripIdRef = useRef(null);
   const isPhoneVerifiedForOrders = isPhoneVerified(currentUser);
   const isGeorgiaOrderGateOpen =
     locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
@@ -212,6 +216,39 @@ export default function useCustomerHomeFlow({
       setSearchModalVisible(false);
     }
   }, [activeDelivery, pendingBooking, searchModalVisible]);
+
+  useEffect(() => {
+    const cancelledTripId = String(recentCancellation?.id || '').trim();
+    if (!cancelledTripId) {
+      return;
+    }
+
+    const cancellationReason = String(recentCancellation?.reason || '').trim().toLowerCase();
+    if (cancellationReason !== 'driver_request') {
+      return;
+    }
+
+    if (lastDriverCancellationAlertTripIdRef.current === cancelledTripId) {
+      return;
+    }
+
+    lastDriverCancellationAlertTripIdRef.current = cancelledTripId;
+    clearRecentCancellation?.();
+    if (
+      !shouldShowCancellationAlert({
+        tripId: cancelledTripId,
+        reason: cancellationReason,
+      })
+    ) {
+      return;
+    }
+    Alert.alert(
+      'Order Cancelled',
+      'The driver has cancelled this order.',
+      [{ text: 'OK' }],
+      { cancelable: false }
+    );
+  }, [clearRecentCancellation, recentCancellation]);
 
   const handleOpenActiveTripDetails = useCallback(() => {
     if (!activeDelivery) {

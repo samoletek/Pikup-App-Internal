@@ -50,14 +50,22 @@ describe('tripCancellationUtils', () => {
     expect(info.reason).toContain('loading has started');
   });
 
-  test('driver can cancel only at pickup', () => {
+  test('driver can cancel before loading starts', () => {
+    expect(
+      ensureOrderCanBeCancelled(createOrder(TRIP_STATUS.ACCEPTED, 88), { actorRole: 'driver' })
+    ).toBe(TRIP_STATUS.ACCEPTED);
+
+    expect(
+      ensureOrderCanBeCancelled(createOrder(TRIP_STATUS.IN_PROGRESS, 88), { actorRole: 'driver' })
+    ).toBe(TRIP_STATUS.IN_PROGRESS);
+
     expect(
       ensureOrderCanBeCancelled(createOrder(TRIP_STATUS.ARRIVED_AT_PICKUP, 88), { actorRole: 'driver' })
     ).toBe(TRIP_STATUS.ARRIVED_AT_PICKUP);
 
     expect(() =>
-      ensureOrderCanBeCancelled(createOrder(TRIP_STATUS.IN_PROGRESS, 88), { actorRole: 'driver' })
-    ).toThrow('Driver can cancel only at pickup');
+      ensureOrderCanBeCancelled(createOrder(TRIP_STATUS.PICKED_UP, 88), { actorRole: 'driver' })
+    ).toThrow('Cannot cancel - loading has started');
   });
 
   test('actor role resolver uses trip ids', () => {

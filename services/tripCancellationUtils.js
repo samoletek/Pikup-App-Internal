@@ -10,6 +10,8 @@ const CUSTOMER_CANCELLABLE_TRIP_STATUSES = new Set([
 ]);
 
 const DRIVER_CANCELLABLE_TRIP_STATUSES = new Set([
+    TRIP_STATUS.ACCEPTED,
+    TRIP_STATUS.IN_PROGRESS,
     TRIP_STATUS.ARRIVED_AT_PICKUP,
 ]);
 
@@ -43,7 +45,7 @@ const getRoleSpecificCancellationError = ({ actorRole, orderData }) => {
         return 'Cannot cancel - delivery is in progress';
     }
 
-    return 'Driver can cancel only at pickup if address/details are wrong or loading help is unavailable';
+    return 'Driver can cancel only before loading starts';
 };
 
 export const resolveCancellationActorRole = ({ currentUser, orderData }) => {
