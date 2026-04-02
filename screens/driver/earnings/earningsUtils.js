@@ -1,6 +1,33 @@
 import { TRIP_STATUS } from '../../../constants/tripStatus';
 import { resolveDriverPayoutAmount } from '../../../services/PricingService';
 
+const getTripCompletedTimestamp = (trip = {}) =>
+  trip.completedAt ||
+  trip.completed_at ||
+  trip.createdAt ||
+  trip.created_at ||
+  trip.timestamp ||
+  null;
+
+const getTripCompletedDate = (trip = {}) => {
+  const timestamp = getTripCompletedTimestamp(trip);
+  if (!timestamp) {
+    return null;
+  }
+
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getTripEarningsAmount = (trip = {}) => {
+  const directAmount = Number(trip.driverEarnings);
+  if (Number.isFinite(directAmount)) {
+    return directAmount;
+  }
+
+  return resolveDriverPayoutAmount(trip);
+};
+
 export const getPeriodStartDate = (period) => {
   const now = new Date();
   if (period === 'month') {
@@ -25,15 +52,18 @@ export const processTripsIntoChartData = (trips, period) => {
     const weekData = weeks.map((label) => ({ day: label, trips: 0, earnings: 0 }));
 
     const monthTrips = trips.filter((trip) => {
-      const tripDate = new Date(trip.completedAt || trip.timestamp);
-      return tripDate >= monthStart;
+      const tripDate = getTripCompletedDate(trip);
+      return tripDate ? tripDate >= monthStart : false;
     });
 
     monthTrips.forEach((trip) => {
-      const tripDate = new Date(trip.completedAt || trip.timestamp);
+      const tripDate = getTripCompletedDate(trip);
+      if (!tripDate) {
+        return;
+      }
       const weekIndex = Math.min(Math.floor((tripDate.getDate() - 1) / 7), 4);
       weekData[weekIndex].trips += 1;
-      weekData[weekIndex].earnings += resolveDriverPayoutAmount(trip);
+      weekData[weekIndex].earnings += getTripEarningsAmount(trip);
     });
 
     return weekData.filter((_, index) => {
@@ -47,17 +77,20 @@ export const processTripsIntoChartData = (trips, period) => {
   const periodStart = getPeriodStartDate('week');
 
   const filteredTrips = trips.filter((trip) => {
-    const tripDate = new Date(trip.completedAt || trip.timestamp);
-    return tripDate >= periodStart;
+    const tripDate = getTripCompletedDate(trip);
+    return tripDate ? tripDate >= periodStart : false;
   });
 
   filteredTrips.forEach((trip) => {
-    const tripDate = new Date(trip.completedAt || trip.timestamp);
+    const tripDate = getTripCompletedDate(trip);
+    if (!tripDate) {
+      return;
+    }
     const dayIndex = tripDate.getDay() === 0 ? 6 : tripDate.getDay() - 1;
 
     if (dayIndex >= 0 && dayIndex < 7) {
       weekData[dayIndex].trips += 1;
-      weekData[dayIndex].earnings += resolveDriverPayoutAmount(trip);
+      weekData[dayIndex].earnings += getTripEarningsAmount(trip);
     }
   });
 
@@ -102,18 +135,18 @@ export const getRecentTrips = (driverTrips = []) =>
     .filter((trip) => trip.status === TRIP_STATUS.COMPLETED)
     .sort(
       (a, b) =>
-        new Date(b.completedAt || b.timestamp) -
-        new Date(a.completedAt || a.timestamp)
+        (getTripCompletedDate(b)?.getTime() || 0) -
+        (getTripCompletedDate(a)?.getTime() || 0)
     )
     .slice(0, 4)
     .map((trip) => ({
       id: trip.id,
       request: trip,
-      date: formatTripDate(trip.completedAt || trip.timestamp),
-      time: formatTripTime(trip.completedAt || trip.timestamp),
+      date: formatTripDate(getTripCompletedTimestamp(trip)),
+      time: formatTripTime(getTripCompletedTimestamp(trip)),
       pickup: trip.pickupAddress || trip.pickup?.address || 'Pickup Location',
       dropoff: trip.dropoffAddress || trip.dropoff?.address || 'Dropoff Location',
-      amount: resolveDriverPayoutAmount(trip),
+      amount: getTripEarningsAmount(trip),
       distance: trip.distance || '0 mi',
       duration: trip.duration || '0 min',
     }));

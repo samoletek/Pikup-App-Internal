@@ -27,6 +27,9 @@ import { buildDriverHomeContentProps } from './driverHomeContentProps';
 import {
   REQUEST_POOLS,
   formatRequestTime,
+  resolveDriverGeoRestriction,
+  resolveDriverOnboardingDestination,
+  resolveDriverOnboardingUiState,
 } from './DriverHomeScreen.utils';
 import {
   DRIVER_AVAILABILITY_COMING_SOON_MESSAGE,
@@ -95,45 +98,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
 
   const mapRef = useRef(null);
-  const draftVerificationStatus = String(
-    currentUser?.metadata?.onboardingDraft?.verificationStatus || ''
-  ).toLowerCase();
-  const metadataIdentityVerificationStatus = String(
-    currentUser?.metadata?.identityVerificationStatus || ''
-  ).toLowerCase();
-  const metadataOnboardingStatus = String(
-    currentUser?.metadata?.onboardingStatus || ''
-  ).toLowerCase();
-  const isIdentityVerificationDeclined = (
-    draftVerificationStatus === 'failed' ||
-    metadataIdentityVerificationStatus === 'failed'
-  );
-  const isOnboardingDeclined = (
-    isIdentityVerificationDeclined ||
-    metadataOnboardingStatus === 'failed' ||
-    metadataOnboardingStatus === 'declined' ||
-    metadataOnboardingStatus === 'rejected'
-  );
-  const isOnboardingUnderReview = (
-    metadataOnboardingStatus === 'under_review' ||
-    metadataOnboardingStatus === 'review'
-  );
-  const isOnboardingApproved = (
-    Boolean(
-      currentUser?.onboarding_complete ??
-      currentUser?.onboardingComplete ??
-      currentUser?.can_receive_payments ??
-      currentUser?.canReceivePayments ??
-      currentUser?.metadata?.onboardingComplete ??
-      currentUser?.metadata?.canReceivePayments ??
-      false
-    ) ||
-    metadataOnboardingStatus === 'verified' ||
-    isOnboardingUnderReview
-  );
-  const showOnboardingRequiredBanner = (
-    !isOnboardingApproved || isOnboardingDeclined
-  );
+  const { showOnboardingRequiredBanner } = resolveDriverOnboardingUiState(currentUser);
   const {
     driverLocation,
     driverLocationStateCode,
@@ -148,11 +113,12 @@ export default function DriverHomeScreen({ navigation, route }) {
     updateDriverHeartbeat,
     updateDriverLocation,
   });
-  const isDriverGeoRestricted = (
-    hasResolvedDriverLocationState &&
-    Boolean(driverLocationStateCode) &&
-    !isSupportedOrderStateCode(driverLocationStateCode, SUPPORTED_ORDER_STATE_CODES)
-  );
+  const isDriverGeoRestricted = resolveDriverGeoRestriction({
+    hasResolvedDriverLocationState,
+    driverLocationStateCode,
+    supportedStateCodes: SUPPORTED_ORDER_STATE_CODES,
+    isSupportedStateCode: isSupportedOrderStateCode,
+  });
 
   const {
     incomingRoute,
@@ -390,39 +356,14 @@ export default function DriverHomeScreen({ navigation, route }) {
     showIncomingModal,
   });
 
-  const resolveConnectAccountId = React.useCallback(() => {
-    const candidate =
-      currentUser?.connectAccountId ||
-      currentUser?.stripe_account_id ||
-      currentUser?.metadata?.connectAccountId ||
-      null;
-    return String(candidate || '').trim() || null;
-  }, [currentUser?.connectAccountId, currentUser?.metadata?.connectAccountId, currentUser?.stripe_account_id]);
-
   const handleOpenOnboarding = React.useCallback(async () => {
-    let connectAccountId = resolveConnectAccountId();
-
-    if (!connectAccountId && currentUserId) {
-      try {
-        const freshProfile = await getDriverProfile?.(currentUserId);
-        const freshCandidate =
-          freshProfile?.connectAccountId ||
-          freshProfile?.stripe_account_id ||
-          freshProfile?.metadata?.connectAccountId ||
-          null;
-        connectAccountId = String(freshCandidate || '').trim() || null;
-      } catch (_error) {
-        // If refresh fails, fallback to onboarding screen.
-      }
-    }
-
-    if (connectAccountId) {
-      navigation.navigate('DriverOnboardingCompleteScreen', { connectAccountId });
-      return;
-    }
-
-    navigation.navigate('DriverOnboardingScreen');
-  }, [currentUserId, getDriverProfile, navigation, resolveConnectAccountId]);
+    const destination = await resolveDriverOnboardingDestination({
+      currentUser,
+      currentUserId,
+      getDriverProfile,
+    });
+    navigation.navigate(destination.screen, destination.params);
+  }, [currentUser, currentUserId, getDriverProfile, navigation]);
 
   const contentProps = buildDriverHomeContentProps({
     styles, region, tabBarHeight, shouldShowOnlineDriverMarker, onlineDriverMarkerCoordinate,

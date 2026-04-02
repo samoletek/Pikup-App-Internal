@@ -41,6 +41,51 @@ export {
   resolvePhotoUrisAsync,
 };
 
+export const isCustomerTripPreArrivalCancellable = (status) => (
+  status === "pending" ||
+  status === "accepted" ||
+  status === "in_progress"
+);
+
+export const buildCustomerTripInfoRows = (displayTrip) => ([
+  {
+    label: "Vehicle",
+    value: `${displayTrip.driverVehicleLabel} • ${displayTrip.driverPlateLabel}`,
+  },
+  {
+    label: "Items",
+    value: `${displayTrip.itemsCount} item${displayTrip.itemsCount === 1 ? "" : "s"}`,
+  },
+  { label: "Scheduled", value: displayTrip.scheduleLabel },
+  { label: "Driver", value: displayTrip.driverName },
+]);
+
+export const getDriverCancellationAlertState = ({
+  displayTrip,
+  previousStatus,
+  lastAlertTripId,
+}) => {
+  const currentStatus = normalizeTripStatus(displayTrip?.status);
+  const cancellationReason = String(displayTrip?.cancellationReason || "")
+    .trim()
+    .toLowerCase();
+  const tripIdValue = String(displayTrip?.id || "").trim();
+  const shouldShowDriverCancellationAlert = (
+    currentStatus === "cancelled" &&
+    previousStatus !== "cancelled" &&
+    cancellationReason === "driver_request" &&
+    tripIdValue &&
+    lastAlertTripId !== tripIdValue
+  );
+
+  return {
+    currentStatus,
+    cancellationReason,
+    tripIdValue,
+    shouldShowDriverCancellationAlert,
+  };
+};
+
 const resolveNumericRating = (...values) => {
   for (const value of values) {
     const normalizedValue = typeof value === "string" ? value.replace(",", ".").trim() : value;

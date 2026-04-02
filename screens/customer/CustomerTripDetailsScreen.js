@@ -32,10 +32,8 @@ import useCustomerTripRating from '../../hooks/useCustomerTripRating';
 import useTripConversationUnread from '../../hooks/useTripConversationUnread';
 import { logger } from '../../services/logger';
 import { shouldShowCancellationAlert } from '../../services/cancellationAlertDeduper';
-import {
-  resolveDisplayNameFromUser,
-  resolveDriverNameFromRequest,
-} from '../../utils/participantIdentity';
+import { buildCustomerTripInfoRows, getDriverCancellationAlertState, isCustomerTripPreArrivalCancellable } from './CustomerTripDetailsScreen.utils';
+import { resolveDisplayNameFromUser, resolveDriverNameFromRequest } from '../../utils/participantIdentity';
 
 export default function CustomerTripDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -241,11 +239,8 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     setHasUnreadChat,
   ]);
 
-  const isPreArrivalCancellableByCustomer = (
-    displayTrip.status === TRIP_STATUS.PENDING ||
-    displayTrip.status === TRIP_STATUS.ACCEPTED ||
-    displayTrip.status === TRIP_STATUS.IN_PROGRESS
-  );
+  const isPreArrivalCancellableByCustomer =
+    isCustomerTripPreArrivalCancellable(displayTrip.status);
 
   const handleCancelTrip = useCallback(() => {
     if (!displayTrip.id || isCancellingTrip) {
@@ -284,20 +279,16 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   }, [cancelOrder, displayTrip.id, isCancellingTrip, loadTrip]);
 
   useEffect(() => {
-    const currentStatus = normalizeTripStatus(displayTrip.status);
-    const previousStatus = previousTripStatusRef.current;
-    const cancellationReason = String(displayTrip.cancellationReason || '')
-      .trim()
-      .toLowerCase();
-    const tripIdValue = String(displayTrip.id || '').trim();
-
-    const shouldShowDriverCancellationAlert = (
-      currentStatus === TRIP_STATUS.CANCELLED &&
-      previousStatus !== TRIP_STATUS.CANCELLED &&
-      cancellationReason === 'driver_request' &&
-      tripIdValue &&
-      lastDriverCancellationAlertTripIdRef.current !== tripIdValue
-    );
+    const {
+      currentStatus,
+      cancellationReason,
+      tripIdValue,
+      shouldShowDriverCancellationAlert,
+    } = getDriverCancellationAlertState({
+      displayTrip,
+      previousStatus: previousTripStatusRef.current,
+      lastAlertTripId: lastDriverCancellationAlertTripIdRef.current,
+    });
 
     if (shouldShowDriverCancellationAlert) {
       lastDriverCancellationAlertTripIdRef.current = tripIdValue;
@@ -319,7 +310,7 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     }
 
     previousTripStatusRef.current = currentStatus;
-  }, [displayTrip.cancellationReason, displayTrip.id, displayTrip.status]);
+  }, [displayTrip, displayTrip.cancellationReason, displayTrip.id, displayTrip.status]);
 
   if (loading && !tripData && !tripSummary) {
     return (
@@ -337,18 +328,7 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     );
   }
 
-  const infoRows = [
-    {
-      label: 'Vehicle',
-      value: `${displayTrip.driverVehicleLabel} • ${displayTrip.driverPlateLabel}`,
-    },
-    {
-      label: 'Items',
-      value: `${displayTrip.itemsCount} item${displayTrip.itemsCount === 1 ? '' : 's'}`,
-    },
-    { label: 'Scheduled', value: displayTrip.scheduleLabel },
-    { label: 'Driver', value: displayTrip.driverName },
-  ];
+  const infoRows = buildCustomerTripInfoRows(displayTrip);
 
   return (
     <View style={styles.container}>
