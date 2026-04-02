@@ -1,6 +1,6 @@
 import { TRIP_STATUS } from '../constants/tripStatus';
 import { mapTripFromDb } from './tripMapper';
-import { getPlatformFees } from './PricingService';
+import { getPlatformFees, resolveDriverPayoutAmount } from './PricingService';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { fetchDriverRowById, updateDriverRowById } from './repositories/paymentRepository';
@@ -12,9 +12,7 @@ import {
 
 export const calculateDriverEarnings = async (totalAmount) => {
   const platformFees = await getPlatformFees();
-  const driverPercentage = platformFees.driverPayoutPercent || 0.75;
-  const calculatedEarnings = totalAmount * driverPercentage;
-  return Math.round(calculatedEarnings * 100) / 100;
+  return resolveDriverPayoutAmount(totalAmount, platformFees);
 };
 
 export const getDriverTrips = async (driverId) => {
@@ -42,9 +40,19 @@ export const getDriverTrips = async (driverId) => {
 
     return Promise.all(data.map(async (trip) => {
       const mappedTrip = mapTripFromDb(trip);
-      const price = parseFloat(trip.price || 0);
-      const driverEarnings = await calculateDriverEarnings(price);
-      return { ...mappedTrip, driverEarnings, pricing: { total: price } };
+      const driverEarnings = await calculateDriverEarnings({
+        ...trip,
+        pricing: mappedTrip?.pricing || trip?.pricing || {},
+      });
+      return {
+        ...mappedTrip,
+        driverEarnings,
+        pricing: {
+          ...(mappedTrip?.pricing || {}),
+          total: parseFloat(trip.price || 0),
+          driverPayout: driverEarnings,
+        },
+      };
     }));
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to load driver trips');
@@ -155,7 +163,7 @@ export const getDriverStats = async (driverId) => {
 export const updateDriverEarnings = async (driverId, tripData) => {
   try {
     logger.info('DriverEarningsService', 'Updating driver earnings', { driverId });
-    const tripEarnings = tripData.driverEarnings || await calculateDriverEarnings(tripData.pricing?.total || 0);
+    const tripEarnings = tripData.driverEarnings || await calculateDriverEarnings(tripData);
 
     const { data: profile } = await fetchDriverRowById(driverId, '*', false);
 

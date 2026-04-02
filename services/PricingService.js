@@ -10,6 +10,14 @@ import {
     evaluateOrderStateCoverage,
     normalizeStateCode,
 } from '../utils/locationState';
+import {
+    recalculatePricingWithLabor,
+    refreshPricingSnapshot,
+    resolveDriverPayoutAmount,
+    resolvePricingPercentages,
+    resolveSplitBaseAmount,
+    roundPricingAmount,
+} from './pricing/pricingMath';
 
 const PRICING_CACHE_KEY = '@pikup_pricing_config';
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -24,6 +32,71 @@ const VEHICLE_IMAGES = {
 
 // Vehicle display order
 const VEHICLE_ORDER = ['midsize_suv', 'fullsize_pickup', 'fullsize_truck', 'cargo_truck'];
+const VEHICLE_DISPLAY_LABELS = {
+    midsize_suv: 'Midsize Truck/SUV',
+    fullsize_pickup: 'Full-Sized Truck/SUV',
+    fullsize_truck: 'Cargo Van',
+    cargo_truck: 'Box Truck',
+};
+
+const clampMultiplier = (value, minValue, maxValue) => {
+    const parsedValue = Number(value);
+    if (!Number.isFinite(parsedValue)) {
+        return null;
+    }
+
+    return Math.min(Math.max(parsedValue, minValue), maxValue);
+};
+
+const resolveTrafficMultiplier = (surgeConfig = {}, options = {}) => {
+    const configuredMin = Number(surgeConfig.trafficMultiplierMin);
+    const configuredMax = Number(surgeConfig.trafficMultiplierMax);
+    const minMultiplier = Number.isFinite(configuredMin) ? configuredMin : 1.2;
+    const maxMultiplier = Number.isFinite(configuredMax) && configuredMax >= minMultiplier
+        ? configuredMax
+        : minMultiplier;
+
+    const explicitMultiplier = clampMultiplier(
+        options.trafficMultiplier,
+        minMultiplier,
+        maxMultiplier
+    );
+    if (explicitMultiplier !== null) {
+        return explicitMultiplier;
+    }
+
+    const normalizedSeverity = String(options.trafficSeverity || options.trafficLevel || '')
+        .trim()
+        .toLowerCase();
+    if (normalizedSeverity === 'light') {
+        return minMultiplier;
+    }
+    if (normalizedSeverity === 'heavy') {
+        return maxMultiplier;
+    }
+    if (normalizedSeverity === 'moderate') {
+        return roundPricingAmount((minMultiplier + maxMultiplier) / 2);
+    }
+
+    const normalizedRatio = Number(options.trafficRatio ?? options.trafficIntensity);
+    if (Number.isFinite(normalizedRatio)) {
+        const clampedRatio = Math.min(Math.max(normalizedRatio, 0), 1);
+        return roundPricingAmount(minMultiplier + ((maxMultiplier - minMultiplier) * clampedRatio));
+    }
+
+    return roundPricingAmount((minMultiplier + maxMultiplier) / 2);
+};
+
+const resolveVehicleDisplayLabel = (id, fallbackLabel) => {
+    return VEHICLE_DISPLAY_LABELS[id] || fallbackLabel || 'Vehicle';
+};
+export {
+    recalculatePricingWithLabor,
+    refreshPricingSnapshot,
+    resolveDriverPayoutAmount,
+    resolvePricingPercentages,
+    resolveSplitBaseAmount,
+};
 
 /**
  * Fetch all pricing config rows from Supabase and cache them.
@@ -87,7 +160,8 @@ export const getVehicleRates = async () => {
         .map(id => ({
             id,
             ...rates[id],
-            type: rates[id].label,
+            label: resolveVehicleDisplayLabel(id, rates[id].label),
+            type: resolveVehicleDisplayLabel(id, rates[id].label),
             image: VEHICLE_IMAGES[id],
         }));
 };
@@ -198,32 +272,38 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
 
     // Gross fare (base + mileage + labor)
     const baseFare = vehicleRate.baseFare;
-    let grossFare = baseFare + mileageFee + laborFee;
+    const grossFare = baseFare + mileageFee + laborFee;
+    const surgeBaseFare = baseFare;
 
     // Surge
     let surgeFee = 0;
+    let peakSurcharge = 0;
+    let trafficSurcharge = 0;
+    let weatherSurcharge = 0;
     let surgeLabel = null;
+    let peakMultiplier = 1;
+    let trafficMultiplier = 1;
 
     if (isPeakTime(surgeConfig)) {
-        const peakMultiplier = surgeConfig.peakTimeMultiplier || 1;
-        surgeFee = grossFare * (peakMultiplier - 1);
+        peakMultiplier = surgeConfig.peakTimeMultiplier || 1;
+        peakSurcharge = surgeBaseFare * (peakMultiplier - 1);
+        surgeFee = peakSurcharge;
         surgeLabel = 'Peak Time';
     }
 
     if (options.isTraffic) {
-        const trafficMultiplier = surgeConfig.trafficMultiplierMin || 1.2;
-        const trafficFee = grossFare * (trafficMultiplier - 1);
-        surgeFee += trafficFee;
+        trafficMultiplier = resolveTrafficMultiplier(surgeConfig, options);
+        trafficSurcharge = surgeBaseFare * (trafficMultiplier - 1);
+        surgeFee += trafficSurcharge;
         surgeLabel = surgeLabel ? `${surgeLabel} + Traffic` : 'Traffic';
     }
 
     if (options.isWeather) {
         const hazardFee = surgeConfig.weatherHazardFee || 0;
+        weatherSurcharge = hazardFee;
         surgeFee += hazardFee;
         surgeLabel = surgeLabel ? `${surgeLabel} + Weather` : 'Weather';
     }
-
-    const fareAfterSurge = grossFare + surgeFee;
 
     const orderStateCoverage = evaluateOrderStateCoverage({
         pickup: options.pickup || null,
@@ -260,7 +340,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         ? options.items
         : (options.laborOptions?.items || []);
     const hasInsuredNewItem = pricingItems.some(isItemEligibleForInsurance);
-    const serviceFeePercent = platformFees.serviceFeePercent || 0.25;
     // Flat insurance estimate shown before Redkik quote arrives.
     // Replaced by actual Redkik premium + service fee at checkout.
     // Default: $11 Redkik minimum + $1.99 processing fee = $12.99
@@ -268,39 +347,32 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         ? (platformFees.mandatoryInsurance || 12.99)
         : 0;
 
-    const serviceFee = fareAfterSurge * serviceFeePercent;
-
-    // Total
-    const total = fareAfterSurge + serviceFee + mandatoryInsurance + tax;
-
-    // Driver payout
-    const driverPayoutPercent = platformFees.driverPayoutPercent || 0.75;
-    const driverPayout = fareAfterSurge * driverPayoutPercent;
-
-    return {
-        baseFare: round2(baseFare),
-        mileageFee: round2(mileageFee),
-        laborFee: round2(laborFee),
+    return refreshPricingSnapshot({
+        baseFare: roundPricingAmount(baseFare),
+        mileageFee: roundPricingAmount(mileageFee),
+        laborFee: roundPricingAmount(laborFee),
         laborMinutes: labor.totalMinutes,
         laborBillableMinutes: billableMinutes,
         laborPickupMinutes: labor.pickupMinutes,
         laborDropoffMinutes: labor.dropoffMinutes,
         laborBufferMinutes: labor.bufferMinutes,
         laborPerMin: vehicleRate.laborPerMin,
-        grossFare: round2(grossFare),
-        surgeFee: round2(surgeFee),
+        grossFare: roundPricingAmount(grossFare),
+        surgeFee: roundPricingAmount(surgeFee),
         surgeLabel,
-        serviceFee: round2(serviceFee),
-        tax: round2(tax),
+        peakMultiplier: peakMultiplier > 1 ? peakMultiplier : undefined,
+        peakSurcharge: roundPricingAmount(peakSurcharge),
+        trafficMultiplier: trafficMultiplier > 1 ? trafficMultiplier : undefined,
+        trafficSurcharge: roundPricingAmount(trafficSurcharge),
+        weatherSurcharge: roundPricingAmount(weatherSurcharge),
+        tax: roundPricingAmount(tax),
         taxRate: Number.isFinite(dropoffSalesTaxRate) ? dropoffSalesTaxRate : defaultSalesTaxRate,
-        taxableLaborAmount: round2(taxableLaborAmount),
+        taxableLaborAmount: roundPricingAmount(taxableLaborAmount),
         dropoffStateCode,
-        mandatoryInsurance: round2(mandatoryInsurance),
+        mandatoryInsurance: roundPricingAmount(mandatoryInsurance),
         insuranceApplied: hasInsuredNewItem,
-        total: round2(total),
-        driverPayout: round2(driverPayout),
         distance: dist,
-    };
+    }, platformFees);
 };
 
 /**
@@ -316,10 +388,8 @@ export const calculateEstimate = (vehicleRate, distance, duration) => {
     const mileageFee = (first10 * vehicleRate.mileageFirst10) + (after10 * vehicleRate.mileageAfter10);
     const laborFee = dur * vehicleRate.laborPerMin;
 
-    return round2(vehicleRate.baseFare + mileageFee + laborFee);
+    return roundPricingAmount(vehicleRate.baseFare + mileageFee + laborFee);
 };
-
-const round2 = (n) => Math.round(n * 100) / 100;
 
 const isItemEligibleForInsurance = (item = {}) => {
     const condition = String(item?.condition || '').trim().toLowerCase();

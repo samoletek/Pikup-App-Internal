@@ -155,6 +155,9 @@ export type CaptureTripPaymentResponse = EdgePayload<{
   paymentIntentId: string
   chargeId?: string | null
   status: string
+  total?: number
+  driverPayout?: number
+  platformShare?: number
 }>
 
 export type ReleaseTripPaymentRequest = {
