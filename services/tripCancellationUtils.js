@@ -7,7 +7,6 @@ const CUSTOMER_CANCELLABLE_TRIP_STATUSES = new Set([
     TRIP_STATUS.PENDING,
     TRIP_STATUS.ACCEPTED,
     TRIP_STATUS.IN_PROGRESS,
-    TRIP_STATUS.ARRIVED_AT_PICKUP,
 ]);
 
 const DRIVER_CANCELLABLE_TRIP_STATUSES = new Set([
@@ -170,10 +169,10 @@ export const getCancellationInfoFromOrder = (orderData) => {
 
         case TRIP_STATUS.ARRIVED_AT_PICKUP:
             return {
-                canCancel: true,
+                canCancel: false,
                 fee: 0,
-                reason: 'Free cancellation - driver has arrived, loading has not started',
-                refundAmount: orderTotal,
+                reason: 'Cannot cancel - driver has arrived at pickup',
+                refundAmount: 0,
                 driverCompensation: 0,
             };
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MapboxLocationService from '../../services/MapboxLocationService';
 import { logger } from '../../services/logger';
-import { TRIP_STATUS } from '../../constants/tripStatus';
+import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
 import { buildNavigationCameraConfig } from './navigationCamera.utils';
 import {
   calculateDistanceToNextTurnMeters,
@@ -16,6 +16,7 @@ import {
   extractDestinationFromStatus,
   generateFallbackRoute,
 } from './navigationRoute.utils';
+import { hasReachedOrPassedStatus } from '../../services/tripErrorUtils';
 
 export default function useGpsNavigationData({
   isCustomerView,
@@ -46,9 +47,11 @@ export default function useGpsNavigationData({
   const customerLocationRef = useRef(null);
   const routeStepsRef = useRef(routeSteps || []);
   const currentStepIndexRef = useRef(currentStepIndex || 0);
+  const tripStatusRef = useRef(normalizeTripStatus(request?.status));
 
   useEffect(() => {
     setRequestData(request);
+    tripStatusRef.current = normalizeTripStatus(request?.status);
   }, [request]);
 
   useEffect(() => {
@@ -126,13 +129,25 @@ export default function useGpsNavigationData({
 
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
-      if (request?.id) {
-        await updateDriverStatus(request.id, TRIP_STATUS.IN_PROGRESS, location);
+      if (!request?.id || typeof updateDriverStatus !== 'function') {
+        return;
       }
+
+      const currentTripStatus = normalizeTripStatus(
+        tripStatusRef.current || requestData?.status || request?.status
+      );
+
+      // Pickup navigation should never move the trip backwards once arrival is reached.
+      if (hasReachedOrPassedStatus(currentTripStatus, TRIP_STATUS.ARRIVED_AT_PICKUP)) {
+        return;
+      }
+
+      const updatedTrip = await updateDriverStatus(request.id, TRIP_STATUS.IN_PROGRESS, location);
+      tripStatusRef.current = normalizeTripStatus(updatedTrip?.status || TRIP_STATUS.IN_PROGRESS);
     } catch (error) {
       logger.error('GpsNavigationData', 'Error updating driver location', error);
     }
-  }, [request?.id, updateDriverStatus]);
+  }, [request?.id, request?.status, requestData?.status, updateDriverStatus]);
 
   const startLocationTracking = useCallback(async () => {
     try {
@@ -185,6 +200,9 @@ export default function useGpsNavigationData({
 
       const latestData = await getRequestById(request.id);
       setRequestData((prev) => ({ ...(prev || {}), ...(latestData || {}) }));
+      tripStatusRef.current = normalizeTripStatus(
+        latestData?.status || tripStatusRef.current
+      );
 
       if (isCustomerView && latestData?.driverLocation) {
         setDriverLocation(latestData.driverLocation);
@@ -272,9 +290,17 @@ export default function useGpsNavigationData({
       }
 
       if (!navigationStartedRef.current && request?.id) {
-        await startDriving(request.id, driverCoords);
+        const currentTripStatus = normalizeTripStatus(
+          tripStatusRef.current || requestData?.status || request?.status
+        );
+        if (!hasReachedOrPassedStatus(currentTripStatus, TRIP_STATUS.IN_PROGRESS)) {
+          const updatedTrip = await startDriving(request.id, driverCoords);
+          tripStatusRef.current = normalizeTripStatus(
+            updatedTrip?.status || TRIP_STATUS.IN_PROGRESS
+          );
+          logger.info('GpsNavigationData', 'Driver started navigation', { requestId: request.id });
+        }
         navigationStartedRef.current = true;
-        logger.info('GpsNavigationData', 'Driver started navigation', { requestId: request.id });
       }
 
       setIsLoading(false);

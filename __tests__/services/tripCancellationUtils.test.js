@@ -21,12 +21,12 @@ describe('tripCancellationUtils', () => {
     TRIP_STATUS.PENDING,
     TRIP_STATUS.ACCEPTED,
     TRIP_STATUS.IN_PROGRESS,
-    TRIP_STATUS.ARRIVED_AT_PICKUP,
   ])('ensureOrderCanBeCancelled allows status %s', (status) => {
     expect(ensureOrderCanBeCancelled(createOrder(status))).toBe(status);
   });
 
   test.each([
+    TRIP_STATUS.ARRIVED_AT_PICKUP,
     TRIP_STATUS.PICKED_UP,
     TRIP_STATUS.EN_ROUTE_TO_DROPOFF,
     TRIP_STATUS.ARRIVED_AT_DROPOFF,
@@ -36,11 +36,11 @@ describe('tripCancellationUtils', () => {
     expect(() => ensureOrderCanBeCancelled(createOrder(status))).toThrow();
   });
 
-  test('arrived_at_pickup remains cancellable until loading starts', () => {
+  test('arrived_at_pickup is not cancellable for customer once driver has arrived', () => {
     const info = getCancellationInfoFromOrder(createOrder(TRIP_STATUS.ARRIVED_AT_PICKUP, 88));
-    expect(info.canCancel).toBe(true);
-    expect(info.refundAmount).toBe(88);
-    expect(info.reason).toContain('loading has not started');
+    expect(info.canCancel).toBe(false);
+    expect(info.refundAmount).toBe(0);
+    expect(info.reason).toContain('driver has arrived');
   });
 
   test('picked_up is not cancellable once loading has started', () => {

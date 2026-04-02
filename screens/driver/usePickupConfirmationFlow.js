@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import useDriverTripChat from '../../hooks/useDriverTripChat';
 import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { logger } from '../../services/logger';
+import { navigateDriverToHome } from './navigationRoute.utils';
 
 export default function usePickupConfirmationFlow({
   confirmPickup,
@@ -56,6 +57,23 @@ export default function usePickupConfirmationFlow({
     } catch (error) {
       logger.error('PickupConfirmationFlow', 'Error confirming pickup', error);
       setIsUploadingPhotos(false);
+      const errorMessage = String(error?.message || '').toLowerCase();
+      if (errorMessage.includes('cancelled')) {
+        Alert.alert(
+          'Order Cancelled',
+          'The customer has cancelled this order.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigateDriverToHome(navigation);
+              },
+            },
+          ],
+          { cancelable: false }
+        );
+        return;
+      }
       Alert.alert(
         'Error',
         'Failed to confirm pickup and upload photos. Please try again.',

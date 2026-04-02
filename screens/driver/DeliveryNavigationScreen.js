@@ -20,6 +20,7 @@ import useNavigationCardAnimation from '../../hooks/useNavigationCardAnimation';
 import useAutoMapboxNavigationStart from '../../hooks/useAutoMapboxNavigationStart';
 import styles from './DeliveryNavigationScreen.styles';
 import { colors } from '../../styles/theme';
+import { navigateDriverToHome } from './navigationRoute.utils';
 import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
 
@@ -31,6 +32,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
   const { getUserProfile } = useProfileActions();
   const currentUserId = currentUser?.uid || currentUser?.id;
+  const cancellationHandledRef = useRef(false);
 
   const mapRef = useRef(null);
 
@@ -109,15 +111,29 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   });
   
   // Monitor order status for cancellations
-  useOrderStatusMonitor(requestData?.id, navigation, {
+  useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
     currentScreen: 'DeliveryNavigationScreen',
-    enabled: !!requestData?.id,
+    enabled: !!(requestData?.id || request?.id),
     onCancel: () => {
-      stopLocationTracking();
-      // Stop Mapbox navigation if active
-      if (isNavigating) {
-        stopNavigation();
+      if (cancellationHandledRef.current) {
+        return;
       }
+      cancellationHandledRef.current = true;
+      stopLocationTracking();
+      stopNavigation({ showAlert: false });
+      Alert.alert(
+        'Order Cancelled',
+        'The customer has cancelled this order.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigateDriverToHome(navigation);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
     }
   });
 
@@ -145,7 +161,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   useEffect(() => {
     return () => {
       if (isNavigating) {
-        stopNavigation();
+        stopNavigation({ showAlert: false });
       }
     };
   }, [isNavigating, stopNavigation]);

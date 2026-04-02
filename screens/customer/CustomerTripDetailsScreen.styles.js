@@ -232,6 +232,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     lineHeight: BODY_LINE_HEIGHT,
   },
+  cancelTripButton: {
+    marginTop: spacing.base,
+  },
   progressList: {
     paddingTop: spacing.xs,
   },

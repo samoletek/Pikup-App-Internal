@@ -120,15 +120,20 @@ export const updateDriverStatus = async (requestId, status, location = null, add
       optimisticLabel: 'driver status',
     });
   } catch (error) {
+    const { data: latestTrip, error: latestError } = await fetchTripByIdWithRetry(requestId);
+    if (!latestError && latestTrip && hasReachedOrPassedStatus(latestTrip.status, normalizedStatus)) {
+      logger.warn(
+        'TripLifecycle',
+        `Ignoring stale driver status update ${normalizedStatus}; latest trip status is ${latestTrip.status} for request ${requestId}.`
+      );
+      return mapTripFromDb(latestTrip);
+    }
+
     if (isNetworkRequestFailure(error)) {
-      const { data: latestTrip, error: latestError } = await fetchTripByIdWithRetry(requestId);
-      if (!latestError && latestTrip && hasReachedOrPassedStatus(latestTrip.status, normalizedStatus)) {
-        logger.warn(
-          'TripLifecycle',
-          `Driver status ${normalizedStatus} appears persisted despite transient network failure for request ${requestId}.`
-        );
-        return mapTripFromDb(latestTrip);
-      }
+      logger.warn(
+        'TripLifecycle',
+        `Transient network failure while updating driver status to ${normalizedStatus} for request ${requestId}.`
+      );
     }
 
     const normalized = normalizeError(error, 'Failed to update driver status');

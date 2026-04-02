@@ -6,6 +6,11 @@ const FALLBACK_DRIVER_DESTINATION = {
   latitude: 33.7540,
   longitude: -84.3830,
 };
+const DRIVER_NAVIGATION_PARENT_SEARCH_DEPTH = 5;
+const DRIVER_TABS_HOME_ROUTE = Object.freeze({
+  name: 'DriverTabs',
+  params: { screen: 'Home' },
+});
 
 function parseCoordinates(coords) {
   if (!coords) {
@@ -123,4 +128,58 @@ export function calculateDistanceAndEta(driverCoords, customerCoords) {
 
 export function generateFallbackRoute(start, end) {
   return [start, end];
+}
+
+function resolveDriverHomeRouteFromNavigation(navigation) {
+  if (!navigation || typeof navigation.getState !== 'function') {
+    return null;
+  }
+
+  const routeNames = navigation.getState()?.routeNames;
+  if (!Array.isArray(routeNames) || routeNames.length === 0) {
+    return null;
+  }
+
+  if (routeNames.includes('DriverTabs')) {
+    return DRIVER_TABS_HOME_ROUTE;
+  }
+  if (routeNames.includes('Home')) {
+    return { name: 'Home' };
+  }
+  if (routeNames.includes('DriverHomeScreen')) {
+    return { name: 'DriverHomeScreen' };
+  }
+
+  return null;
+}
+
+export function navigateDriverToHome(navigation) {
+  let cursor = navigation;
+
+  for (let depth = 0; depth < DRIVER_NAVIGATION_PARENT_SEARCH_DEPTH; depth += 1) {
+    if (!cursor) {
+      break;
+    }
+
+    const targetRoute = resolveDriverHomeRouteFromNavigation(cursor);
+    if (targetRoute) {
+      if (typeof cursor.reset === 'function') {
+        cursor.reset({
+          index: 0,
+          routes: [targetRoute],
+        });
+        return true;
+      }
+
+      if (typeof cursor.navigate === 'function') {
+        cursor.navigate(targetRoute.name, targetRoute.params);
+        return true;
+      }
+    }
+
+    cursor = typeof cursor.getParent === 'function' ? cursor.getParent() : null;
+  }
+
+  logger.warn('NavigationRouteUtils', 'Unable to resolve driver home navigation route');
+  return false;
 }

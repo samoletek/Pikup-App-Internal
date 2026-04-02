@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { getDriverReadinessProfile } from '../services/DriverService';
 import MapboxLocationService from '../services/MapboxLocationService';
 import { logger } from '../services/logger';
+import { isDriverPhoneVerificationBypassEnabled } from '../config/appConfig';
 import {
   REQUEST_POOLS,
   shouldBypassDriverReadiness,
@@ -66,7 +67,32 @@ export default function useDriverAvailabilityActions({
       };
     }
 
-    return getDriverReadinessProfile(driverId);
+    const readiness = await getDriverReadinessProfile(driverId);
+    if (!isDriverPhoneVerificationBypassEnabled(currentUserRef.current)) {
+      return readiness;
+    }
+
+    const issues = Array.isArray(readiness?.issues) ? readiness.issues : [];
+    if (!issues.includes('phone')) {
+      return readiness;
+    }
+
+    const nextIssues = issues.filter((issue) => issue !== 'phone');
+    logger.info('DriverAvailability', 'Applied phone verification bypass for driver', {
+      driverId,
+      email: currentUserRef.current?.email || null,
+    });
+
+    return {
+      ...readiness,
+      ready: nextIssues.length === 0,
+      issues: nextIssues,
+      profile: {
+        ...(readiness?.profile || {}),
+        phone_verified: true,
+        phoneVerificationBypass: true,
+      },
+    };
   }, [currentUserId]);
 
   const confirmGoOnline = useCallback(async (mode, requestPool = REQUEST_POOLS.ASAP) => {

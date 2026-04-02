@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ScreenHeader from '../../components/ScreenHeader';
 import MediaViewer from '../../components/MediaViewer';
+import AppButton from '../../components/ui/AppButton';
 import PhotoGallerySection from '../../components/trip/PhotoGallerySection';
 import TripHeroCard from '../../components/trip/TripHeroCard';
 import TripProgressSection from '../../components/trip/TripProgressSection';
@@ -38,7 +39,7 @@ import {
 export default function CustomerTripDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { currentUser, refreshProfile } = useAuthIdentity();
-  const { getRequestById } = useTripActions();
+  const { cancelOrder, getRequestById } = useTripActions();
   const {
     createConversation,
     getConversations,
@@ -117,6 +118,7 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
   const [viewerPhotos, setViewerPhotos] = useState([]);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
   const [isOpeningChat, setIsOpeningChat] = useState(false);
+  const [isCancellingTrip, setIsCancellingTrip] = useState(false);
 
   const handleOpenPhotoViewer = useCallback((photos, index = 0) => {
     if (!Array.isArray(photos) || photos.length === 0) {
@@ -236,6 +238,48 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
     setHasUnreadChat,
   ]);
 
+  const isPreArrivalCancellableByCustomer = (
+    displayTrip.status === TRIP_STATUS.PENDING ||
+    displayTrip.status === TRIP_STATUS.ACCEPTED ||
+    displayTrip.status === TRIP_STATUS.IN_PROGRESS
+  );
+
+  const handleCancelTrip = useCallback(() => {
+    if (!displayTrip.id || isCancellingTrip) {
+      return;
+    }
+
+    Alert.alert(
+      'Cancel trip?',
+      'This will cancel the trip for both you and the driver.',
+      [
+        { text: 'Keep trip', style: 'cancel' },
+        {
+          text: 'Cancel trip',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsCancellingTrip(true);
+              const cancellationResult = await cancelOrder(displayTrip.id, 'customer_request');
+              if (!cancellationResult?.success) {
+                throw new Error(cancellationResult?.error || 'Please try again in a moment.');
+              }
+              await loadTrip({ refresh: true });
+            } catch (error) {
+              logger.error('CustomerTripDetailsScreen', 'Error cancelling trip', error);
+              Alert.alert(
+                'Unable to cancel',
+                error?.message || 'Please try again in a moment.'
+              );
+            } finally {
+              setIsCancellingTrip(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [cancelOrder, displayTrip.id, isCancellingTrip, loadTrip]);
+
   if (loading && !tripData && !tripSummary) {
     return (
       <View style={styles.container}>
@@ -296,6 +340,23 @@ export default function CustomerTripDetailsScreen({ navigation, route }) {
             hasUnreadChat={isChatAvailable && hasUnreadChat}
             isOpeningChat={isOpeningChat}
           />
+
+          {isPreArrivalCancellableByCustomer ? (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>Need to cancel?</Text>
+              <Text style={styles.sectionHint}>
+                You can cancel this trip until the driver arrives at pickup.
+              </Text>
+              <AppButton
+                title="Cancel Trip"
+                variant="danger"
+                onPress={handleCancelTrip}
+                loading={isCancellingTrip}
+                disabled={isCancellingTrip}
+                style={styles.cancelTripButton}
+              />
+            </View>
+          ) : null}
 
           {!isTripCompleted ? (
             <TripProgressSection displayTrip={displayTrip} ui={styles} />
