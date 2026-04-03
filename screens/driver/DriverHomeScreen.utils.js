@@ -10,6 +10,90 @@ export const REQUEST_POOLS = Object.freeze({
 
 export const MIN_MOVE_METERS = 100;
 
+export const resolveDriverOnboardingUiState = (user) => {
+  const draftVerificationStatus = String(
+    user?.metadata?.onboardingDraft?.verificationStatus || ''
+  ).toLowerCase();
+  const metadataIdentityVerificationStatus = String(
+    user?.metadata?.identityVerificationStatus || ''
+  ).toLowerCase();
+  const metadataOnboardingStatus = String(
+    user?.metadata?.onboardingStatus || ''
+  ).toLowerCase();
+  const isIdentityVerificationDeclined = (
+    draftVerificationStatus === 'failed' ||
+    metadataIdentityVerificationStatus === 'failed'
+  );
+  const isOnboardingDeclined = (
+    isIdentityVerificationDeclined ||
+    metadataOnboardingStatus === 'failed' ||
+    metadataOnboardingStatus === 'declined' ||
+    metadataOnboardingStatus === 'rejected'
+  );
+  const isOnboardingUnderReview = (
+    metadataOnboardingStatus === 'under_review' ||
+    metadataOnboardingStatus === 'review'
+  );
+  const isOnboardingApproved = (
+    Boolean(
+      user?.onboarding_complete ??
+      user?.onboardingComplete ??
+      user?.can_receive_payments ??
+      user?.canReceivePayments ??
+      user?.metadata?.onboardingComplete ??
+      user?.metadata?.canReceivePayments ??
+      false
+    ) ||
+    metadataOnboardingStatus === 'verified' ||
+    isOnboardingUnderReview
+  );
+
+  return {
+    showOnboardingRequiredBanner: !isOnboardingApproved || isOnboardingDeclined,
+  };
+};
+
+export const resolveDriverGeoRestriction = ({
+  hasResolvedDriverLocationState,
+  driverLocationStateCode,
+  supportedStateCodes,
+  isSupportedStateCode,
+}) => (
+  hasResolvedDriverLocationState &&
+  Boolean(driverLocationStateCode) &&
+  !isSupportedStateCode(driverLocationStateCode, supportedStateCodes)
+);
+
+export const resolveDriverConnectAccountId = (user) => {
+  const candidate =
+    user?.connectAccountId ||
+    user?.stripe_account_id ||
+    user?.metadata?.connectAccountId ||
+    null;
+  return String(candidate || '').trim() || null;
+};
+
+export const resolveDriverOnboardingDestination = async ({
+  currentUser,
+  currentUserId,
+  getDriverProfile,
+}) => {
+  let connectAccountId = resolveDriverConnectAccountId(currentUser);
+
+  if (!connectAccountId && currentUserId) {
+    try {
+      const freshProfile = await getDriverProfile?.(currentUserId);
+      connectAccountId = resolveDriverConnectAccountId(freshProfile);
+    } catch (_error) {
+      // If refresh fails, fallback to onboarding screen.
+    }
+  }
+
+  return connectAccountId
+    ? { screen: 'DriverOnboardingCompleteScreen', params: { connectAccountId } }
+    : { screen: 'DriverOnboardingScreen' };
+};
+
 export const shouldBypassDriverReadiness = (user) => {
   return isDriverReadinessBypassEnabled(user);
 };

@@ -20,6 +20,7 @@ describe("mapTripFromDb", () => {
       pricing: {
         total: 44.2,
         distance: 11.3,
+        durationMinutes: 37,
       },
       items: [
         { value: 30 },
@@ -40,6 +41,8 @@ describe("mapTripFromDb", () => {
     expect(result.pickupAddress).toBe("Pickup Address");
     expect(result.dropoffAddress).toBe("Dropoff Address");
     expect(result.pickupPhotos).toEqual(["https://example.com/a.jpg"]);
+    expect(result.distance).toBe(11.3);
+    expect(result.duration).toBe(37);
     expect(result.itemValue).toBe(50.5);
     expect(result.customerId).toBe("customer_1");
     expect(result.driverId).toBe("driver_1");
@@ -51,5 +54,30 @@ describe("mapTripFromDb", () => {
       premium: 4.25,
       status: "purchased",
     });
+  });
+
+  test("prefers actual duration for completed trips when lifecycle timestamps are available", () => {
+    const trip = {
+      id: "trip_2",
+      status: "completed",
+      created_at: "2026-04-08T09:00:00.000Z",
+      picked_up_at: "2026-04-08T10:00:00.000Z",
+      completed_at: "2026-04-08T10:26:30.000Z",
+      pickup_location: {
+        address: "Pickup Address",
+        pricing: {
+          durationMinutes: 42,
+        },
+      },
+      dropoff_location: {
+        address: "Dropoff Address",
+      },
+    };
+
+    const result = mapTripFromDb(trip);
+
+    expect(result.actualDurationMinutes).toBe(27);
+    expect(result.durationMinutes).toBe(27);
+    expect(result.duration).toBe(27);
   });
 });

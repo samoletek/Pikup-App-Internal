@@ -3,10 +3,18 @@ import {
   resolveCustomerDisplayFromRequest,
   resolveDriverDisplayFromRequest,
 } from '../utils/profileDisplay';
+import { resolveActualTripDurationMinutes } from './tripDurationUtils';
 
 const toNumber = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+};
+
+const toPositiveNumber = (value) => {
+  const normalizedValue =
+    typeof value === 'string' ? value.replace(/[^0-9.-]/g, '') : value;
+  const parsed = Number(normalizedValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
 const toArray = (value) => {
@@ -41,6 +49,54 @@ const getAddress = (location, fallback = '') => {
   return location.address || location.formatted_address || fallback;
 };
 
+const resolveDistanceMiles = (trip, pricing) => {
+  const candidates = [
+    trip?.distanceMiles,
+    trip?.distance_miles,
+    trip?.distance,
+    pricing?.distanceMiles,
+    pricing?.distance_miles,
+    pricing?.distance,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toPositiveNumber(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return 0;
+};
+
+const resolveDurationMinutes = (trip, pricing) => {
+  const actualDurationMinutes = resolveActualTripDurationMinutes(trip);
+  if (actualDurationMinutes !== null) {
+    return actualDurationMinutes;
+  }
+
+  const candidates = [
+    trip?.durationMinutes,
+    trip?.duration_minutes,
+    trip?.duration,
+    pricing?.durationMinutes,
+    pricing?.duration_minutes,
+    pricing?.duration,
+    pricing?.timeMinutes,
+    pricing?.time_minutes,
+    pricing?.time,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toPositiveNumber(candidate);
+    if (parsed !== null) {
+      return Math.round(parsed);
+    }
+  }
+
+  return null;
+};
+
 export const mapTripFromDb = (trip) => {
   if (!trip) return null;
 
@@ -53,6 +109,9 @@ export const mapTripFromDb = (trip) => {
     total: toNumber(trip.price),
     distance: toNumber(trip.distance_miles)
   };
+  const distanceMiles = resolveDistanceMiles(trip, pricing);
+  const actualDurationMinutes = resolveActualTripDurationMinutes(trip);
+  const durationMinutes = resolveDurationMinutes(trip, pricing);
   const dispatchRequirements =
     trip.dispatchRequirements ||
     trip.dispatch_requirements ||
@@ -80,6 +139,12 @@ export const mapTripFromDb = (trip) => {
     pickupPhotos,
     dropoffPhotos,
     pricing,
+    distance: distanceMiles,
+    distanceMiles,
+    actualDuration: actualDurationMinutes,
+    actualDurationMinutes,
+    duration: durationMinutes,
+    durationMinutes,
     dispatchRequirements,
     scheduledTime: trip.scheduledTime || trip.scheduled_time || null,
     items: toArray(trip.items),

@@ -256,6 +256,7 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
     const platformFees = config.platform_fees || {};
 
     const dist = distance || 0;
+    const routeDurationMinutes = Math.max(0, Math.round(Number(duration) || 0));
     const threshold = platformFees.mileageThreshold || 10;
 
     // Tiered mileage
@@ -372,6 +373,8 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         mandatoryInsurance: roundPricingAmount(mandatoryInsurance),
         insuranceApplied: hasInsuredNewItem,
         distance: dist,
+        duration: routeDurationMinutes,
+        durationMinutes: routeDurationMinutes,
     }, platformFees);
 };
 

@@ -47,16 +47,22 @@ export default function RecentTripsPreview({
                 </View>
               </View>
 
-              <View style={styles.tripStats}>
-                <View style={styles.tripStatItem}>
-                  <Ionicons name="car" size={12} color={colors.text.subtle} />
-                  <Text style={styles.tripStatText}>{trip.distance}</Text>
+              {(trip.distance || trip.duration) ? (
+                <View style={styles.tripStats}>
+                  {trip.distance ? (
+                    <View style={styles.tripStatItem}>
+                      <Ionicons name="car" size={12} color={colors.text.subtle} />
+                      <Text style={styles.tripStatText}>{trip.distance}</Text>
+                    </View>
+                  ) : null}
+                  {trip.duration ? (
+                    <View style={styles.tripStatItem}>
+                      <Ionicons name="time" size={12} color={colors.text.subtle} />
+                      <Text style={styles.tripStatText}>{trip.duration}</Text>
+                    </View>
+                  ) : null}
                 </View>
-                <View style={styles.tripStatItem}>
-                  <Ionicons name="time" size={12} color={colors.text.subtle} />
-                  <Text style={styles.tripStatText}>{trip.duration}</Text>
-                </View>
-              </View>
+              ) : null}
             </View>
           </TouchableOpacity>
         ))

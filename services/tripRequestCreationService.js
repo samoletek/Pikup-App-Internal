@@ -17,65 +17,128 @@ const hasMissingColumnError = (error, columnName) => {
   );
 };
 
+const OPTIONAL_TRIP_INSERT_COLUMNS = Object.freeze([
+  'booking_payment_method_id',
+  'duration_minutes',
+]);
+
+const toPositiveInteger = (value) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+
+  return Math.round(parsedValue);
+};
+
+const resolveDurationMinutes = (requestData = {}, pricingData = null) => {
+  const candidates = [
+    requestData?.durationMinutes,
+    requestData?.duration_minutes,
+    requestData?.duration,
+    pricingData?.durationMinutes,
+    pricingData?.duration_minutes,
+    pricingData?.duration,
+    requestData?.pickupDetails?.estimatedDurationMinutes,
+  ];
+
+  for (const candidate of candidates) {
+    const parsedValue = toPositiveInteger(candidate);
+    if (parsedValue !== null) {
+      return parsedValue;
+    }
+  }
+
+  return null;
+};
+
+const insertTripWithOptionalColumnFallback = async (tripData) => {
+  const payload = { ...tripData };
+  let result = await insertTripWithSelect(payload);
+
+  while (result.error) {
+    const missingOptionalColumn = OPTIONAL_TRIP_INSERT_COLUMNS.find((columnName) => (
+      Object.prototype.hasOwnProperty.call(payload, columnName) &&
+      hasMissingColumnError(result.error, columnName)
+    ));
+
+    if (!missingOptionalColumn) {
+      break;
+    }
+
+    delete payload[missingOptionalColumn];
+    result = await insertTripWithSelect(payload);
+  }
+
+  return result;
+};
+
 export const createPickupRequest = async (requestData, currentUser) => {
   if (!currentUser) throw new Error('User not authenticated');
 
   try {
     logger.info('TripRequestCreationService', 'Creating pickup request in Supabase');
 
-    const pricingData = requestData.pricing || null;
+    const pricingData = requestData.pricing ? { ...requestData.pricing } : null;
+    const durationMinutes = resolveDurationMinutes(requestData, pricingData);
+    if (pricingData && durationMinutes !== null) {
+      pricingData.duration = toPositiveInteger(pricingData.duration) ?? durationMinutes;
+      pricingData.durationMinutes = toPositiveInteger(pricingData.durationMinutes) ?? durationMinutes;
+    }
+
     const createdAt = new Date().toISOString();
-    const dispatchRequirements = buildDispatchRequirementsFromRequest({
+    const normalizedRequestData = {
       ...requestData,
+      pricing: pricingData,
+      ...(durationMinutes !== null ? { duration: durationMinutes } : {}),
+    };
+    const dispatchRequirements = buildDispatchRequirementsFromRequest({
+      ...normalizedRequestData,
       createdAt,
     });
 
     const tripData = {
       customer_id: currentUser.uid || currentUser.id,
       pickup_location: {
-        ...requestData.pickup,
+        ...normalizedRequestData.pickup,
         details: {
-          ...(requestData.pickupDetails || {}),
+          ...(normalizedRequestData.pickupDetails || {}),
           dispatchRequirements,
         },
         pricing: pricingData,
         dispatchRequirements,
       },
       dropoff_location: {
-        ...requestData.dropoff,
-        details: requestData.dropoffDetails || {},
+        ...normalizedRequestData.dropoff,
+        details: normalizedRequestData.dropoffDetails || {},
       },
-      vehicle_type: requestData.vehicle?.type || 'Standard',
-      price: parseFloat(requestData.pricing?.total || 0),
-      distance_miles: parseFloat(requestData.pricing?.distance || 0),
-      items: requestData.items || [],
-      scheduled_time: requestData.scheduledTime || null,
+      vehicle_type: normalizedRequestData.vehicle?.type || 'Standard',
+      price: parseFloat(normalizedRequestData.pricing?.total || 0),
+      distance_miles: parseFloat(normalizedRequestData.pricing?.distance || 0),
+      items: normalizedRequestData.items || [],
+      scheduled_time: normalizedRequestData.scheduledTime || null,
       status: toDbTripStatus(TRIP_STATUS.PENDING),
       created_at: createdAt,
-      insurance_quote_id: requestData.insurance?.quoteId || null,
-      insurance_booking_id: requestData.insurance?.bookingId || null,
-      insurance_premium: requestData.insurance?.premium != null
-        ? parseFloat(requestData.insurance.premium)
+      insurance_quote_id: normalizedRequestData.insurance?.quoteId || null,
+      insurance_booking_id: normalizedRequestData.insurance?.bookingId || null,
+      insurance_premium: normalizedRequestData.insurance?.premium != null
+        ? parseFloat(normalizedRequestData.insurance.premium)
         : null,
-      insurance_status: requestData.insurance?.status || null,
-      booking_payment_method_id: requestData.selectedPaymentMethodId || null,
+      insurance_status: normalizedRequestData.insurance?.status || null,
+      booking_payment_method_id: normalizedRequestData.selectedPaymentMethodId || null,
+      ...(durationMinutes !== null ? { duration_minutes: durationMinutes } : {}),
     };
 
-    if (requestData.insurance) {
-      tripData.insurance_quote_id = requestData.insurance.quoteId || null;
-      tripData.insurance_booking_id = requestData.insurance.bookingId || null;
-      tripData.insurance_premium = requestData.insurance.premium != null
-        ? parseFloat(requestData.insurance.premium)
+    if (normalizedRequestData.insurance) {
+      tripData.insurance_quote_id = normalizedRequestData.insurance.quoteId || null;
+      tripData.insurance_booking_id = normalizedRequestData.insurance.bookingId || null;
+      tripData.insurance_premium = normalizedRequestData.insurance.premium != null
+        ? parseFloat(normalizedRequestData.insurance.premium)
         : null;
-      tripData.insurance_status = requestData.insurance.status || null;
+      tripData.insurance_status = normalizedRequestData.insurance.status || null;
     }
 
-    let { data, error } = await insertTripWithSelect(tripData);
-    if (error && hasMissingColumnError(error, 'booking_payment_method_id')) {
-      const fallbackTripData = { ...tripData };
-      delete fallbackTripData.booking_payment_method_id;
-      ({ data, error } = await insertTripWithSelect(fallbackTripData));
-    }
+    const { data, error } = await insertTripWithOptionalColumnFallback(tripData);
 
     if (error) {
       throw error;

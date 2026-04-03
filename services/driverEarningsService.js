@@ -10,7 +10,66 @@ import {
   removeRealtimeChannel,
 } from './repositories/tripRepository';
 
+const toRoundedAmount = (value) => Number((Number(value || 0)).toFixed(2));
+
+const getTripCompletionTimestamp = (trip = {}) =>
+  trip.completedAt ||
+  trip.completed_at ||
+  trip.createdAt ||
+  trip.created_at ||
+  trip.timestamp ||
+  null;
+
+const getTripCompletionDate = (trip = {}) => {
+  const timestamp = getTripCompletionTimestamp(trip);
+  if (!timestamp) {
+    return null;
+  }
+
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const buildDriverTripWithEarnings = (trip) => {
+  const mappedTrip = mapTripFromDb(trip);
+  const customerTotal = Number.parseFloat(
+    trip?.price ?? mappedTrip?.pricing?.total ?? 0
+  ) || 0;
+  const pricing = {
+    ...(mappedTrip?.pricing || {}),
+    total: customerTotal,
+    customerTotal,
+  };
+  const driverEarnings = resolveDriverPayoutAmount(
+    {
+      ...trip,
+      ...mappedTrip,
+      pricing,
+    },
+    pricing
+  );
+  const completedAt = getTripCompletionTimestamp({
+    ...trip,
+    ...mappedTrip,
+  });
+
+  return {
+    ...mappedTrip,
+    completedAt,
+    timestamp: completedAt || mappedTrip?.createdAt || trip?.created_at || null,
+    driverEarnings,
+    pricing: {
+      ...pricing,
+      driverPayout: driverEarnings,
+    },
+  };
+};
+
 export const calculateDriverEarnings = async (totalAmount) => {
+  if (totalAmount && typeof totalAmount === 'object') {
+    return resolveDriverPayoutAmount(totalAmount, totalAmount?.pricing || {});
+  }
+
   const platformFees = await getPlatformFees();
   return resolveDriverPayoutAmount(totalAmount, platformFees);
 };
@@ -38,22 +97,13 @@ export const getDriverTrips = async (driverId) => {
       tripCount: data.length,
     });
 
-    return Promise.all(data.map(async (trip) => {
-      const mappedTrip = mapTripFromDb(trip);
-      const driverEarnings = await calculateDriverEarnings({
-        ...trip,
-        pricing: mappedTrip?.pricing || trip?.pricing || {},
+    return (data || [])
+      .map(buildDriverTripWithEarnings)
+      .sort((leftTrip, rightTrip) => {
+        const rightTime = getTripCompletionDate(rightTrip)?.getTime() || 0;
+        const leftTime = getTripCompletionDate(leftTrip)?.getTime() || 0;
+        return rightTime - leftTime;
       });
-      return {
-        ...mappedTrip,
-        driverEarnings,
-        pricing: {
-          ...(mappedTrip?.pricing || {}),
-          total: parseFloat(trip.price || 0),
-          driverPayout: driverEarnings,
-        },
-      };
-    }));
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to load driver trips');
     logger.error('DriverEarningsService', 'Error getting driver trips', normalized, error);
@@ -98,15 +148,19 @@ export const getDriverStats = async (driverId) => {
     mondayDate.setHours(0, 0, 0, 0);
 
     const thisWeekTrips = completedTrips.filter((trip) => {
-      const tripDate = new Date(trip.created_at);
-      return tripDate >= mondayDate;
+      const tripDate = getTripCompletionDate(trip);
+      return tripDate ? tripDate >= mondayDate : false;
     });
 
     const currentWeekTrips = thisWeekTrips.length;
-    const weeklyEarnings = thisWeekTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+    const weeklyEarnings = toRoundedAmount(
+      thisWeekTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0)
+    );
 
     const totalTrips = completedTrips.length;
-    const totalEarnings = completedTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0);
+    const totalEarnings = toRoundedAmount(
+      completedTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0)
+    );
     const acceptanceRate = totalAssignedTrips > 0
       ? Math.round((totalTrips / totalAssignedTrips) * 100)
       : 0;
@@ -128,7 +182,7 @@ export const getDriverStats = async (driverId) => {
     const totalPayouts = Number(driverProfile.totalPayouts || 0);
     const calculatedAvailableBalance = Number.isFinite(Number(driverProfile.availableBalance))
       ? Number(driverProfile.availableBalance)
-      : Math.max(0, totalEarnings - totalPayouts);
+      : toRoundedAmount(Math.max(0, totalEarnings - totalPayouts));
 
     const stats = {
       currentWeekTrips,
@@ -139,7 +193,9 @@ export const getDriverStats = async (driverId) => {
       totalPayouts,
       rating,
       acceptanceRate,
-      lastTripCompletedAt: completedTrips.length > 0 ? completedTrips[0].created_at : null,
+      lastTripCompletedAt: completedTrips.length > 0
+        ? getTripCompletionTimestamp(completedTrips[0])
+        : null,
     };
 
     logger.info('DriverEarningsService', 'Driver stats calculated', stats);
@@ -153,6 +209,7 @@ export const getDriverStats = async (driverId) => {
       totalTrips: 0,
       totalEarnings: 0,
       availableBalance: 0,
+      totalPayouts: 0,
       rating: 0,
       acceptanceRate: 0,
       lastTripCompletedAt: null,
