@@ -11,6 +11,28 @@ import {
 } from './repositories/tripRepository';
 
 const toRoundedAmount = (value) => Number((Number(value || 0)).toFixed(2));
+const toFiniteNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const resolveDriverBalanceSnapshot = ({ tripTotalEarnings = 0, driverProfile = {} }) => {
+  const persistedTotalEarnings = toFiniteNumber(
+    driverProfile.totalEarnings ?? driverProfile.total_earnings
+  );
+  const totalPayouts = toRoundedAmount(
+    Math.max(0, toFiniteNumber(driverProfile.totalPayouts ?? driverProfile.total_payouts) ?? 0)
+  );
+  const totalEarnings = toRoundedAmount(
+    Math.max(toFiniteNumber(tripTotalEarnings) ?? 0, persistedTotalEarnings ?? 0)
+  );
+
+  return {
+    totalEarnings,
+    totalPayouts,
+    availableBalance: toRoundedAmount(Math.max(0, totalEarnings - totalPayouts)),
+  };
+};
 
 const getTripCompletionTimestamp = (trip = {}) =>
   trip.completedAt ||
@@ -158,7 +180,7 @@ export const getDriverStats = async (driverId) => {
     );
 
     const totalTrips = completedTrips.length;
-    const totalEarnings = toRoundedAmount(
+    const tripTotalEarnings = toRoundedAmount(
       completedTrips.reduce((sum, trip) => sum + (trip.driverEarnings || 0), 0)
     );
     const acceptanceRate = totalAssignedTrips > 0
@@ -179,17 +201,21 @@ export const getDriverStats = async (driverId) => {
     const ratingCount = Number.isFinite(parsedRatingCount) ? parsedRatingCount : 0;
     const parsedRating = Number(driverProfile.rating);
     const rating = ratingCount > 0 && Number.isFinite(parsedRating) ? parsedRating : 0;
-    const totalPayouts = Number(driverProfile.totalPayouts || 0);
-    const calculatedAvailableBalance = Number.isFinite(Number(driverProfile.availableBalance))
-      ? Number(driverProfile.availableBalance)
-      : toRoundedAmount(Math.max(0, totalEarnings - totalPayouts));
+    const {
+      totalEarnings,
+      totalPayouts,
+      availableBalance,
+    } = resolveDriverBalanceSnapshot({
+      tripTotalEarnings,
+      driverProfile,
+    });
 
     const stats = {
       currentWeekTrips,
       weeklyEarnings,
       totalTrips,
       totalEarnings,
-      availableBalance: calculatedAvailableBalance,
+      availableBalance,
       totalPayouts,
       rating,
       acceptanceRate,

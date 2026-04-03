@@ -28,7 +28,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuthIdentity();
   const { getDriverTrips, getDriverStats, getDriverProfile } = useDriverActions();
-  const { processInstantPayout } = usePaymentActions();
+  const { processInstantPayout, checkDriverOnboardingStatus } = usePaymentActions();
   const currentUserId = currentUser?.id || currentUser?.uid;
   const {
     scrollRef,
@@ -54,6 +54,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
     getDriverTrips,
     getDriverStats,
     getDriverProfile,
+    checkDriverOnboardingStatus,
   });
 
   const totalWeeklyEarnings = weeklyData.reduce((sum, day) => sum + day.earnings, 0);
@@ -70,6 +71,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
     handlePayoutDetails,
     isInstantPayoutDisabled,
     payoutLoading,
+    instantPayoutTitle,
   } = useDriverEarningsPayoutActions({
     currentUserId,
     driverProfile,
@@ -213,11 +215,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
           <Text style={styles.payoutNote}>Auto-deposit monthly on the 25th (11:00 AM ET)</Text>
 
           <AppButton
-            title={
-              !driverProfile?.connectAccountId || !driverProfile?.canReceivePayments
-                ? 'Setup Required'
-                : 'Instant Payout'
-            }
+            title={instantPayoutTitle}
             style={[
               styles.instantPayoutButton,
               isInstantPayoutDisabled && styles.instantPayoutButtonDisabled,

@@ -28,6 +28,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     requestInstantPayout,
     createDriverConnectAccount,
     getDriverOnboardingLink,
+    checkDriverOnboardingStatus,
     updateDriverPaymentProfile,
   } = useDriverPayoutActions();
 
@@ -49,6 +50,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     toMoney,
   } = useDriverPaymentSettingsData({
     createDriverConnectAccount,
+    checkDriverOnboardingStatus,
     currentUser,
     getDriverOnboardingLink,
     getDriverPayouts,
