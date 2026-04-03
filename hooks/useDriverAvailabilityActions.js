@@ -141,6 +141,18 @@ export default function useDriverAvailabilityActions({
           return;
         }
 
+        if (issues.includes('payment')) {
+          Alert.alert(
+            'Payment Verification Pending',
+            'Your payout account is still being reviewed. Please finish payment verification before going online.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Go to Profile', onPress: () => navigation.navigate('Account') },
+            ]
+          );
+          return;
+        }
+
         return;
       }
 
