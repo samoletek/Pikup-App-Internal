@@ -1,5 +1,13 @@
 import { TRIP_STATUS } from '../../../constants/tripStatus';
 import { resolveDriverPayoutAmount } from '../../../services/PricingService';
+import { resolveActualTripDurationMinutes } from '../../../services/tripDurationUtils';
+
+const toPositiveNumber = (value) => {
+  const normalizedValue =
+    typeof value === 'string' ? value.replace(/[^0-9.-]/g, '') : value;
+  const parsed = Number(normalizedValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 const getTripCompletedTimestamp = (trip = {}) =>
   trip.completedAt ||
@@ -17,6 +25,106 @@ const getTripCompletedDate = (trip = {}) => {
 
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const resolveTripDistanceMiles = (trip = {}) => {
+  const candidates = [
+    trip.dispatchRequirements?.estimatedDistanceMiles,
+    trip.dispatch_requirements?.estimatedDistanceMiles,
+    trip.distance,
+    trip.distanceMiles,
+    trip.distance_miles,
+    trip.pricing?.distanceMiles,
+    trip.pricing?.distance_miles,
+    trip.pricing?.distance,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toPositiveNumber(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const resolveTripDurationMinutes = (trip = {}) => {
+  const actualDurationMinutes = resolveActualTripDurationMinutes(trip);
+  if (actualDurationMinutes !== null) {
+    return actualDurationMinutes;
+  }
+
+  const candidates = [
+    trip.dispatchRequirements?.estimatedDurationMinutes,
+    trip.dispatch_requirements?.estimatedDurationMinutes,
+    trip.actualDurationMinutes,
+    trip.actual_duration_minutes,
+    trip.durationMinutes,
+    trip.duration_minutes,
+    trip.duration,
+    trip.pricing?.durationMinutes,
+    trip.pricing?.duration_minutes,
+    trip.pricing?.duration,
+    trip.pricing?.timeMinutes,
+    trip.pricing?.time_minutes,
+    trip.pricing?.time,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = toPositiveNumber(candidate);
+    if (parsed !== null) {
+      return Math.round(parsed);
+    }
+  }
+
+  const distanceMiles = resolveTripDistanceMiles(trip);
+  if (distanceMiles === null) {
+    return null;
+  }
+
+  const pickupDetails = trip?.pickup?.details || trip?.pickup_location?.details || {};
+  const dropoffDetails = trip?.dropoff?.details || trip?.dropoff_location?.details || {};
+  const items = Array.isArray(trip?.items)
+    ? trip.items
+    : trip?.item && typeof trip.item === 'object'
+      ? [trip.item]
+      : [];
+  const helpRequested = Boolean(
+    pickupDetails?.driverHelpsLoading ||
+    pickupDetails?.driverHelp ||
+    dropoffDetails?.driverHelpsUnloading ||
+    dropoffDetails?.driverHelp
+  );
+  const itemCount = Math.max(items.length, 1);
+  const estimatedMinutes = Math.round(
+    25 + (distanceMiles * 4) + (Math.min(itemCount, 8) * 3) + (helpRequested ? 20 : 0)
+  );
+
+  return Math.min(Math.max(estimatedMinutes, 30), 240);
+};
+
+const formatDistanceLabel = (trip = {}) => {
+  const miles = resolveTripDistanceMiles(trip);
+  if (miles === null) {
+    return null;
+  }
+
+  const roundedMiles = Number(miles.toFixed(1));
+  const label = Number.isInteger(roundedMiles)
+    ? roundedMiles.toFixed(0)
+    : roundedMiles.toFixed(1);
+
+  return `${label} mi`;
+};
+
+const formatDurationLabel = (trip = {}) => {
+  const durationMinutes = resolveTripDurationMinutes(trip);
+  if (durationMinutes === null) {
+    return null;
+  }
+
+  return `${Math.round(durationMinutes)} min`;
 };
 
 const getTripEarningsAmount = (trip = {}) => {
@@ -108,7 +216,11 @@ export const getMockWeeklyData = () => [
 ];
 
 export const formatTripDate = (timestamp) => {
-  const date = new Date(timestamp);
+  const date = getTripCompletedDate({ completedAt: timestamp });
+  if (!date) {
+    return 'Date unavailable';
+  }
+
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
@@ -123,12 +235,18 @@ export const formatTripDate = (timestamp) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-export const formatTripTime = (timestamp) =>
-  new Date(timestamp).toLocaleTimeString('en-US', {
+export const formatTripTime = (timestamp) => {
+  const date = getTripCompletedDate({ completedAt: timestamp });
+  if (!date) {
+    return '';
+  }
+
+  return date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   });
+};
 
 export const getRecentTrips = (driverTrips = []) =>
   driverTrips
@@ -147,6 +265,6 @@ export const getRecentTrips = (driverTrips = []) =>
       pickup: trip.pickupAddress || trip.pickup?.address || 'Pickup Location',
       dropoff: trip.dropoffAddress || trip.dropoff?.address || 'Dropoff Location',
       amount: getTripEarningsAmount(trip),
-      distance: trip.distance || '0 mi',
-      duration: trip.duration || '0 min',
+      distance: formatDistanceLabel(trip),
+      duration: formatDurationLabel(trip),
     }));

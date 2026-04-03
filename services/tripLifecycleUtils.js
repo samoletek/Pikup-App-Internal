@@ -28,6 +28,7 @@ import {
   hasDriverEarningsCredit,
 } from './payment/tripSettlement';
 import { captureTripPayment } from './tripPaymentLifecycleService';
+import { resolveActualTripDurationMinutes } from './tripDurationUtils';
 
 const STATUS_TIMESTAMP_FIELDS = Object.freeze({
   [TRIP_STATUS.IN_PROGRESS]: 'in_progress_at',
@@ -236,6 +237,48 @@ const creditDriverBalanceForCompletedTrip = async (trip) => {
   });
 };
 
+const hasPersistedActualDuration = (trip = {}) => {
+  const persistedValue = Number(trip?.actual_duration_minutes ?? trip?.actual_duration ?? 0);
+  return Number.isFinite(persistedValue) && persistedValue > 0;
+};
+
+const persistActualDurationForCompletedTrip = async (trip = {}) => {
+  const tripId = trip?.id;
+  if (!tripId || hasPersistedActualDuration(trip)) {
+    return trip;
+  }
+
+  const actualDurationMinutes = resolveActualTripDurationMinutes(trip);
+  if (actualDurationMinutes === null) {
+    return trip;
+  }
+
+  try {
+    const updatedAt = new Date().toISOString();
+    await applyTripUpdateWithColumnFallback(tripId, {
+      actual_duration_minutes: actualDurationMinutes,
+      updated_at: updatedAt,
+    });
+
+    return {
+      ...trip,
+      actualDuration: actualDurationMinutes,
+      actualDurationMinutes: actualDurationMinutes,
+      actual_duration_minutes: actualDurationMinutes,
+      updatedAt: updatedAt,
+      updated_at: updatedAt,
+    };
+  } catch (error) {
+    const normalized = normalizeError(error, 'Failed to persist actual trip duration');
+    logger.warn('TripLifecycle', 'Failed to persist actual trip duration', normalized, error);
+    return {
+      ...trip,
+      actualDuration: actualDurationMinutes,
+      actualDurationMinutes: actualDurationMinutes,
+    };
+  }
+};
+
 export const finishDelivery = async (
   requestId,
   photos = [],
@@ -248,9 +291,10 @@ export const finishDelivery = async (
       await uploadRequestPhotos(requestId, photos, 'dropoff');
     }
 
-    await completeDelivery(requestId, {
+    let completedTrip = await completeDelivery(requestId, {
       completed_by: currentUser?.id,
     });
+    completedTrip = await persistActualDurationForCompletedTrip(completedTrip);
 
     const captureResult = await captureTripPayment({
       tripId: requestId,

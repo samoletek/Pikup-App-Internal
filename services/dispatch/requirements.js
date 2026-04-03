@@ -131,6 +131,48 @@ const sumItemWeight = (items) => {
   return items.reduce((total, item) => total + normalizeWeight(item), 0);
 };
 
+const clampEstimatedDurationMinutes = (value) => {
+  return Math.min(Math.max(Math.round(value), 30), 240);
+};
+
+const toPositiveDurationMinutes = (value) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+
+  return clampEstimatedDurationMinutes(parsedValue);
+};
+
+const resolveEstimatedDurationMinutes = ({
+  tripLike = {},
+  estimatedDistanceMiles = 0,
+  itemCount = 0,
+  driverHelpRequested = false,
+}) => {
+  const explicitDurationMinutes = [
+    tripLike?.pricing?.durationMinutes,
+    tripLike?.pricing?.duration_minutes,
+    tripLike?.pricing?.duration,
+    tripLike?.durationMinutes,
+    tripLike?.duration_minutes,
+    tripLike?.duration,
+    tripLike?.pickupDetails?.estimatedDurationMinutes,
+    tripLike?.pickup?.details?.estimatedDurationMinutes,
+    tripLike?.pickup_location?.details?.estimatedDurationMinutes,
+  ]
+    .map(toPositiveDurationMinutes)
+    .find((value) => value !== null);
+
+  if (explicitDurationMinutes !== undefined) {
+    return explicitDurationMinutes;
+  }
+
+  return clampEstimatedDurationMinutes(
+    25 + Math.ceil(Math.max(estimatedDistanceMiles, 0) * 4) + (Math.min(itemCount, 8) * 3) + (driverHelpRequested ? 20 : 0)
+  );
+};
+
 const inferDispatchRequirements = (tripLike = {}, nowDate = new Date()) => {
   const items = getTripItems(tripLike);
   const pickupDetails = getTripPickupDetails(tripLike);
@@ -164,6 +206,12 @@ const inferDispatchRequirements = (tripLike = {}, nowDate = new Date()) => {
   const isLongDistance = estimatedDistanceMiles >= LONG_DISTANCE_THRESHOLD_MILES;
   const hasLargeOrExtraLargeItems =
     sizeBuckets.largeItems > 0 || sizeBuckets.extraLargeItems > 0;
+  const estimatedDurationMinutes = resolveEstimatedDurationMinutes({
+    tripLike,
+    estimatedDistanceMiles,
+    itemCount: items.length,
+    driverHelpRequested,
+  });
 
   return {
     version: REQUIREMENTS_VERSION,
@@ -173,6 +221,7 @@ const inferDispatchRequirements = (tripLike = {}, nowDate = new Date()) => {
     leadTimeMinutes,
     isShortNotice,
     estimatedDistanceMiles,
+    estimatedDurationMinutes,
     isLongDistance,
     items: {
       totalCount: items.length,
@@ -241,6 +290,9 @@ const sanitizeDispatchRequirements = (candidate, tripLike = {}, nowDate = new Da
       candidate.estimatedDistanceMiles,
       inferred.estimatedDistanceMiles
     ),
+    estimatedDurationMinutes:
+      toPositiveDurationMinutes(candidate.estimatedDurationMinutes) ??
+      inferred.estimatedDurationMinutes,
     isLongDistance: toBoolean(candidate.isLongDistance, inferred.isLongDistance),
     items: {
       totalCount: toNumber(sourceItems.totalCount, inferred.items.totalCount),

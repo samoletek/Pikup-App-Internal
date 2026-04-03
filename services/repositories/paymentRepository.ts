@@ -321,7 +321,7 @@ export const getAuthenticatedUser = async () => {
 export const fetchCompletedDriverTrips = async (driverId: string, fromIso: string) => {
   return supabase
     .from('trips')
-    .select('id, price, created_at, completed_at, distance_miles, status, pickup_location, insurance_premium')
+    .select('id, price, created_at, completed_at, distance_miles, actual_duration_minutes, status, pickup_location, insurance_premium')
     .eq('driver_id', driverId)
     .eq('status', 'completed')
     .gte('completed_at', fromIso)

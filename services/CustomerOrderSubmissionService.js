@@ -56,6 +56,14 @@ const toRoundedAmount = (value) => {
   return Math.round(parsedValue * 100) / 100;
 };
 
+const toPositiveInteger = (value) => {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+  return Math.round(parsedValue);
+};
+
 const getInsurancePremiumAmount = (insuranceQuote) => {
   const premium = Number(insuranceQuote?.premium);
   return Number.isFinite(premium) && premium > 0 ? premium : 0;
@@ -267,6 +275,13 @@ export const submitCustomerOrder = async ({
       submissionNotices.push(MEDIA_UPLOAD_FALLBACK_NOTICE);
     }
 
+    const normalizedDistanceMiles = Number(orderData?.distance || orderData?.pricing?.distance || 0);
+    const normalizedDurationMinutes =
+      toPositiveInteger(orderData?.duration) ??
+      toPositiveInteger(orderData?.pricing?.durationMinutes) ??
+      toPositiveInteger(orderData?.pricing?.duration) ??
+      null;
+
     const createdRequest = await createPickupRequest({
       pickup: orderData?.pickup,
       dropoff: orderData?.dropoff,
@@ -276,7 +291,13 @@ export const submitCustomerOrder = async ({
       pricing: {
         ...(orderData?.pricing || {}),
         total: finalAmount,
-        distance: Number(orderData?.distance || orderData?.pricing?.distance || 0),
+        distance: normalizedDistanceMiles,
+        ...(normalizedDurationMinutes !== null
+          ? {
+            duration: normalizedDurationMinutes,
+            durationMinutes: normalizedDurationMinutes,
+          }
+          : {}),
       },
       items: persistedItems,
       scheduledTime:
