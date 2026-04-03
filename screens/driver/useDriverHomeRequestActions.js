@@ -5,10 +5,12 @@ import { getTripScheduledAtMs } from '../../constants/tripStatus';
 
 export default function useDriverHomeRequestActions({
   acceptRequest,
+  appendAcceptedScheduledRequest,
   clearIncomingRoute,
   isAcceptingRequestRef,
   loadRequests,
   navigation,
+  refreshAcceptedScheduledRequests,
   refreshProfile,
   reopenRequestModalModeRef,
   reopenRequestModalOnFocusRef,
@@ -25,6 +27,18 @@ export default function useDriverHomeRequestActions({
   setRequestModalMode,
   showRequestModal,
 }) {
+  const isGenericAcceptFailureMessage = useCallback((message) => {
+    const normalizedMessage = String(message || '').trim().toLowerCase();
+    if (!normalizedMessage) {
+      return true;
+    }
+
+    return (
+      normalizedMessage === 'failed to accept request' ||
+      normalizedMessage === 'something went wrong. please try again.'
+    );
+  }, []);
+
   const handleRequestMarkerPress = useCallback((request) => {
     logger.info('DriverHomeRequestActions', 'Request marker pressed', { requestId: request.id });
     setRequestModalMode?.('available');
@@ -40,7 +54,7 @@ export default function useDriverHomeRequestActions({
     try {
       isAcceptingRequestRef.current = true;
       logger.info('DriverHomeRequestActions', 'Accepting request', { requestId: request.id });
-      await acceptRequest(request.id);
+      const acceptedRequest = await acceptRequest(request.id);
 
       const scheduledAtMs = getTripScheduledAtMs(request);
       const isFutureScheduledRequest = Number.isFinite(scheduledAtMs) && scheduledAtMs > Date.now();
@@ -54,17 +68,32 @@ export default function useDriverHomeRequestActions({
           requestId: request.id,
           scheduledAtMs,
         });
+        const acceptedScheduledRequest = acceptedRequest?.id
+          ? acceptedRequest
+          : {
+            ...request,
+            status: 'accepted',
+            driverId: request?.driverId || request?.driver_id || null,
+          };
+        if (acceptedScheduledRequest?.id && typeof appendAcceptedScheduledRequest === 'function') {
+          appendAcceptedScheduledRequest(acceptedScheduledRequest);
+        }
+        if (typeof refreshAcceptedScheduledRequests === 'function') {
+          void refreshAcceptedScheduledRequests({ silent: true });
+        }
         void loadRequests(false);
         alert('Scheduled request accepted. It will start closer to pickup time.');
         return;
       }
 
-      setAcceptedRequestId(request.id);
-      setActiveJob(request);
-      navigation.navigate('GpsNavigationScreen', { request });
+      const activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
+      setAcceptedRequestId(activeAcceptedRequest.id);
+      setActiveJob(activeAcceptedRequest);
+      navigation.navigate('GpsNavigationScreen', { request: activeAcceptedRequest });
     } catch (error) {
       logger.error('DriverHomeRequestActions', 'Error accepting request', error);
       const normalizedMessage = String(error?.message || '').trim();
+      const normalizedLower = normalizedMessage.toLowerCase();
 
       if (isUnavailableAcceptError(error)) {
         setAvailableRequests((prev) => prev.filter((item) => item.id !== request.id));
@@ -76,8 +105,18 @@ export default function useDriverHomeRequestActions({
         clearIncomingRoute();
         void loadRequests(false);
         alert('This request was already taken by another driver.');
-      } else if (normalizedMessage.toLowerCase().includes('conflicts with your accepted schedule')) {
+      } else if (
+        normalizedLower.includes('conflicts with your accepted schedule') ||
+        normalizedLower.includes('conflicts with your current schedule')
+      ) {
         alert('This request overlaps with your accepted scheduled trips.');
+      } else if (
+        normalizedLower.includes('payment authorization failed') ||
+        normalizedLower.includes('request was returned to pool')
+      ) {
+        alert('Could not accept request: customer payment hold failed. Request was returned to pool.');
+      } else if (!isGenericAcceptFailureMessage(normalizedMessage)) {
+        alert(normalizedMessage);
       } else {
         alert('Could not accept request. Please try again.');
       }
@@ -86,10 +125,13 @@ export default function useDriverHomeRequestActions({
     }
   }, [
     acceptRequest,
+    appendAcceptedScheduledRequest,
     clearIncomingRoute,
     isAcceptingRequestRef,
+    isGenericAcceptFailureMessage,
     loadRequests,
     navigation,
+    refreshAcceptedScheduledRequests,
     setAcceptedRequestId,
     setActiveJob,
     setAvailableRequests,

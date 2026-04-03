@@ -85,7 +85,7 @@ export default function DriverHomeBottomPanel({
                 onPress={onViewScheduledRequests}
                 activeOpacity={0.8}
               >
-                <Text style={styles.secondaryOnlineActionText}>View Scheduled Requests</Text>
+                <Text style={styles.secondaryOnlineActionText}>Scheduled Requests</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -93,7 +93,7 @@ export default function DriverHomeBottomPanel({
                 onPress={onViewAcceptedRequests}
                 activeOpacity={0.8}
               >
-                <Text style={styles.secondaryOnlineActionText}>View Accepted Requests</Text>
+                <Text style={styles.secondaryOnlineActionText}>Accepted Requests</Text>
               </TouchableOpacity>
             </View>
           )}

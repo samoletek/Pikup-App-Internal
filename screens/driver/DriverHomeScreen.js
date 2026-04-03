@@ -191,6 +191,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     acceptedScheduledRequests,
     acceptedScheduledLoading,
     acceptedScheduledError,
+    appendAcceptedScheduledRequest,
     refreshAcceptedScheduledRequests,
   } = useAcceptedScheduledRequests({
     currentUserId,
@@ -329,10 +330,12 @@ export default function DriverHomeScreen({ navigation, route }) {
     handleViewRequestDetails,
   } = useDriverHomeRequestActions({
     acceptRequest,
+    appendAcceptedScheduledRequest,
     clearIncomingRoute,
     isAcceptingRequestRef,
     loadRequests,
     navigation,
+    refreshAcceptedScheduledRequests,
     refreshProfile,
     reopenRequestModalModeRef,
     reopenRequestModalOnFocusRef,
@@ -440,6 +443,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     onViewAcceptedRequests: () => {
       setRequestModalMode('accepted');
       setShowAllRequests(true);
+      void refreshAcceptedScheduledRequests({ silent: false });
     },
     onExpandMiniBar: handleExpandFromMiniBar,
     requestModalVisible: showRequestModal || showAllRequests,

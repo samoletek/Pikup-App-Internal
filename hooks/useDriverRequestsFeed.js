@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { REQUEST_POOLS } from '../screens/driver/DriverHomeScreen.utils';
+import { getTripScheduledAtMs } from '../constants/tripStatus';
 import { logger } from '../services/logger';
 
 const AUTO_REFRESH_INTERVAL_MS = 10000;
@@ -27,6 +28,20 @@ const dedupeRequestsById = (requests = []) => {
   return deduped;
 };
 
+const isScheduledRequest = (request) => Number.isFinite(getTripScheduledAtMs(request));
+
+const filterRequestsByPool = (requests = [], requestPool) => {
+  if (requestPool === REQUEST_POOLS.ASAP) {
+    return requests.filter((request) => !isScheduledRequest(request));
+  }
+
+  if (requestPool === REQUEST_POOLS.SCHEDULED) {
+    return requests.filter((request) => isScheduledRequest(request));
+  }
+
+  return requests;
+};
+
 export default function useDriverRequestsFeed({
   activeRequestPool,
   checkExpiredRequests,
@@ -46,6 +61,7 @@ export default function useDriverRequestsFeed({
   const [error, setError] = useState(null);
   const backgroundRefreshInterval = useRef(null);
   const driverLocationRef = useRef(driverLocation);
+  const previousRequestPoolRef = useRef(activeRequestPool);
 
   useEffect(() => {
     driverLocationRef.current = driverLocation;
@@ -82,8 +98,9 @@ export default function useDriverRequestsFeed({
         });
         const normalizedRequests = Array.isArray(requests) ? requests : [];
         const dedupedRequests = dedupeRequestsById(normalizedRequests);
+        const poolScopedRequests = filterRequestsByPool(dedupedRequests, effectiveRequestPool);
 
-        setAvailableRequests(dedupedRequests);
+        setAvailableRequests(poolScopedRequests);
 
         if (dedupedRequests.length !== normalizedRequests.length) {
           logger.warn('DriverRequestsFeed', 'Removed duplicate requests from feed payload', {
@@ -93,8 +110,17 @@ export default function useDriverRequestsFeed({
           });
         }
 
+        if (poolScopedRequests.length !== dedupedRequests.length) {
+          logger.warn('DriverRequestsFeed', 'Dropped cross-pool requests from feed payload', {
+            requestPool: effectiveRequestPool,
+            dedupedCount: dedupedRequests.length,
+            filteredCount: poolScopedRequests.length,
+            droppedCount: dedupedRequests.length - poolScopedRequests.length,
+          });
+        }
+
         const visibleRequestIds = new Set(
-          dedupedRequests.map((item) => String(item?.id || '')).filter(Boolean)
+          poolScopedRequests.map((item) => String(item?.id || '')).filter(Boolean)
         );
         const currentIncomingId = String(incomingRequestIdRef.current || '').trim();
 
@@ -113,7 +139,8 @@ export default function useDriverRequestsFeed({
           setShowAllRequests(false);
         }
         logger.info('DriverRequestsFeed', 'Loaded requests from backend', {
-          count: dedupedRequests.length,
+          count: poolScopedRequests.length,
+          requestPool: effectiveRequestPool,
         });
       } catch (loadError) {
         logger.error('DriverRequestsFeed', 'Error loading requests', loadError);
@@ -140,6 +167,50 @@ export default function useDriverRequestsFeed({
       setShowIncomingModal,
     ]
   );
+
+  useEffect(() => {
+    const previousPool = previousRequestPoolRef.current;
+    previousRequestPoolRef.current = activeRequestPool;
+
+    if (previousPool === activeRequestPool) {
+      return;
+    }
+
+    setAvailableRequests([]);
+    setShowIncomingModal(false);
+    setIsMinimized(false);
+    setIncomingRequest(null);
+    clearIncomingRoute();
+
+    logger.info('DriverRequestsFeed', 'Request pool switched. Cleared stale requests.', {
+      previousPool,
+      activeRequestPool,
+    });
+  }, [
+    activeRequestPool,
+    clearIncomingRoute,
+    setIncomingRequest,
+    setIsMinimized,
+    setShowIncomingModal,
+  ]);
+
+  useEffect(() => {
+    if (isOnline) {
+      return;
+    }
+
+    setAvailableRequests([]);
+    setShowIncomingModal(false);
+    setIsMinimized(false);
+    setIncomingRequest(null);
+    clearIncomingRoute();
+  }, [
+    clearIncomingRoute,
+    isOnline,
+    setIncomingRequest,
+    setIsMinimized,
+    setShowIncomingModal,
+  ]);
 
   const startAutoRefresh = useCallback(() => {
     logger.info('DriverRequestsFeed', 'Starting auto-refresh');

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
+import { getTripScheduledAtMs } from '../constants/tripStatus';
 import { isUnavailableAcceptError } from '../screens/driver/DriverHomeScreen.utils';
 import { logger } from '../services/logger';
+
+const isScheduledRequest = (request) => Number.isFinite(getTripScheduledAtMs(request));
 
 export default function useDriverIncomingRequestHandlers({
   acceptRequest,
@@ -98,6 +101,8 @@ export default function useDriverIncomingRequestHandlers({
       navigation.navigate('GpsNavigationScreen', { request });
     } catch (error) {
       logger.error('DriverIncomingRequestHandlers', 'Error accepting incoming request', error);
+      const normalizedMessage = String(error?.message || '').trim();
+      const normalizedLower = normalizedMessage.toLowerCase();
 
       if (isUnavailableAcceptError(error)) {
         setAvailableRequests((prevRequests) =>
@@ -109,6 +114,13 @@ export default function useDriverIncomingRequestHandlers({
         clearIncomingRoute();
         void loadRequests(false);
         alert('This request was already taken by another driver.');
+      } else if (
+        normalizedLower.includes('payment authorization failed') ||
+        normalizedLower.includes('request was returned to pool')
+      ) {
+        alert('Could not accept request: customer payment hold failed. Request was returned to pool.');
+      } else if (normalizedMessage && normalizedLower !== 'failed to accept request') {
+        alert(normalizedMessage);
       } else {
         alert('Could not accept request. Please try again.');
       }
@@ -152,7 +164,10 @@ export default function useDriverIncomingRequestHandlers({
       setTimeout(() => {
         setAvailableRequests((currentRequests) => {
           if (currentRequests.length > 0 && isOnline) {
-            const nextRequest = currentRequests[0];
+            const nextRequest = currentRequests.find((request) => !isScheduledRequest(request));
+            if (!nextRequest) {
+              return currentRequests;
+            }
             setIncomingRequest(nextRequest);
             setShowIncomingModal(true);
             logger.info('DriverIncomingRequestHandlers', 'Auto-showing next request after decline', {
@@ -231,21 +246,22 @@ export default function useDriverIncomingRequestHandlers({
   }, [incomingRequest, isMinimized, miniBarPulse]);
 
   useEffect(() => {
+    const firstAsapRequest = availableRequests.find((request) => !isScheduledRequest(request));
+
     if (
       isOnline &&
       !isScheduledPoolActive &&
       !hasActiveTrip &&
-      availableRequests.length > 0 &&
+      Boolean(firstAsapRequest) &&
       !showIncomingModal &&
       !incomingRequest &&
       !isMinimized
     ) {
       const timer = setTimeout(() => {
-        const firstRequest = availableRequests[0];
-        setIncomingRequest(firstRequest);
+        setIncomingRequest(firstAsapRequest);
         setShowIncomingModal(true);
         logger.info('DriverIncomingRequestHandlers', 'Auto-showing incoming request', {
-          requestId: firstRequest.id,
+          requestId: firstAsapRequest.id,
         });
       }, 1000);
 
