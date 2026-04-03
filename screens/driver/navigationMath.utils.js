@@ -1,3 +1,5 @@
+export const ARRIVAL_UNLOCK_RADIUS_METERS = 30;
+
 export const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   const earthRadiusKm = 6371;
   const dLat = toRadians(lat2 - lat1);
@@ -21,25 +23,48 @@ export const formatDistance = (distanceInMeters) => {
   return `${(distanceInMeters / 1000).toFixed(1)} km`;
 };
 
-export const getManeuverIcon = (maneuverType) => {
+const resolveTurnLikeIcon = (modifier = '') => {
+  const normalizedModifier = String(modifier || '').toLowerCase();
+
+  if (normalizedModifier.includes('uturn') || normalizedModifier.includes('u-turn')) {
+    return 'return-up-back';
+  }
+  if (normalizedModifier.includes('left')) {
+    return 'arrow-back';
+  }
+  if (normalizedModifier.includes('right')) {
+    return 'arrow-forward';
+  }
+
+  return 'arrow-up';
+};
+
+export const getManeuverIcon = (maneuverType, maneuverModifier = '') => {
+  const normalizedType = String(maneuverType || '').toLowerCase();
+
+  if (normalizedType === 'turn' || normalizedType === 'fork') {
+    return resolveTurnLikeIcon(maneuverModifier);
+  }
+
+  if (normalizedType === 'new name') {
+    return 'arrow-up';
+  }
+
   const iconMap = {
-    "turn-right": "turn-sharp-right",
-    "turn-left": "turn-sharp-left",
-    "turn-slight-right": "trending-up",
-    "turn-slight-left": "trending-up",
-    continue: "arrow-up",
-    straight: "arrow-up",
-    uturn: "return-up-back",
-    merge: "git-merge",
-    "on-ramp": "arrow-up-right",
-    "off-ramp": "arrow-down-right",
-    roundabout: "refresh",
-    rotary: "refresh",
-    "roundabout-turn": "refresh",
-    notification: "flag",
-    depart: "play",
-    arrive: "flag-checkered",
+    continue: 'arrow-up',
+    straight: 'arrow-up',
+    uturn: 'return-up-back',
+    merge: 'git-merge',
+    'on-ramp': 'arrow-up-right',
+    'off-ramp': 'arrow-down-right',
+    roundabout: 'refresh',
+    rotary: 'refresh',
+    'roundabout-turn': 'refresh',
+    notification: 'flag',
+    depart: 'play',
+    arrive: 'flag-checkered',
+    end: 'flag-checkered',
   };
 
-  return iconMap[maneuverType] || "arrow-up";
+  return iconMap[normalizedType] || resolveTurnLikeIcon(maneuverModifier);
 };

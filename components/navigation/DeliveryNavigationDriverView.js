@@ -1,13 +1,12 @@
 // Delivery Navigation Driver View component: renders its UI and handles related interactions.
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Mapbox from '@rnmapbox/maps';
 import MapboxMap from '../mapbox/MapboxMap';
 import NavigationInstructionsBanner from './NavigationInstructionsBanner';
 import { colors, spacing } from '../../styles/theme';
-import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
 export default function DeliveryNavigationDriverView({
   styles,
@@ -23,10 +22,7 @@ export default function DeliveryNavigationDriverView({
   stopNavigation,
   cardAnimation,
   cardGradientColors,
-  estimatedTime,
   requestData,
-  customerAvatarUrl,
-  onCustomerAvatarError,
   openChat,
   isCreatingChat,
   hasUnreadChat,
@@ -34,14 +30,14 @@ export default function DeliveryNavigationDriverView({
   nextInstruction,
   currentManeuverIcon,
   distanceToTurn,
+  currentStreetName,
+  distanceToDestination,
+  canArrive = false,
   onBack,
 }) {
   const cardTranslateY = cardAnimation.interpolate({
     inputRange: [0, 1],
     outputRange: [200, 0],
-  });
-  const customerDisplay = resolveCustomerDisplayFromRequest(requestData, {
-    fallbackName: 'Customer',
   });
 
   if (isNavigating) {
@@ -73,30 +69,6 @@ export default function DeliveryNavigationDriverView({
                   {requestData?.dropoffAddress || 'Address not available'}
                 </Text>
               </View>
-              <View style={styles.etaBox}>
-                <Text style={styles.etaTime}>{estimatedTime}</Text>
-                <Text style={styles.etaLabel}>min</Text>
-              </View>
-            </View>
-
-            <View style={styles.customerInfoContainer}>
-              <View style={styles.customerAvatarContainer}>
-                {customerAvatarUrl ? (
-                  <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={onCustomerAvatarError} />
-                ) : (
-                  <Text style={styles.customerAvatarInitials}>{customerDisplay.initials}</Text>
-                )}
-              </View>
-
-              <View style={styles.customerDetails}>
-                <Text style={styles.customerName}>
-                  {customerDisplay.name}
-                </Text>
-                <Text style={styles.itemInfo} numberOfLines={1}>
-                  {requestData?.item?.description || 'Item information not available'}
-                </Text>
-              </View>
-
               <TouchableOpacity
                 style={styles.callButton}
                 onPress={openChat}
@@ -109,8 +81,12 @@ export default function DeliveryNavigationDriverView({
 
             <View style={styles.actionContainer}>
               <TouchableOpacity
-                style={styles.arriveButton}
+                style={[
+                  styles.arriveButton,
+                  !canArrive && styles.arriveButtonDisabled,
+                ]}
                 onPress={handleArriveAtDropoff}
+                disabled={!canArrive}
               >
                 <Text style={styles.arriveButtonText}>I've Arrived at Dropoff</Text>
               </TouchableOpacity>
@@ -145,7 +121,7 @@ export default function DeliveryNavigationDriverView({
             allowOverlap
           >
             <View style={styles.driverMarker}>
-              <Ionicons name="car" size={18} color={colors.white} />
+              <Ionicons name="navigate" size={18} color={colors.white} />
             </View>
           </Mapbox.MarkerView>
         )}
@@ -206,7 +182,9 @@ export default function DeliveryNavigationDriverView({
           nextInstruction={nextInstruction}
           isNavigating={isNavigating}
           maneuverIcon={currentManeuverIcon}
+          distanceToDestination={distanceToDestination}
           distanceToTurn={distanceToTurn}
+          streetName={currentStreetName}
           topPadding={insetsTop + spacing.sm}
           ui={styles}
         />
@@ -231,32 +209,6 @@ export default function DeliveryNavigationDriverView({
                 {requestData?.dropoffAddress || 'Address not available'}
               </Text>
             </View>
-            <View style={styles.etaBox}>
-              <Text style={styles.etaTime}>{estimatedTime}</Text>
-              <Text style={styles.etaLabel}>min</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.customerInfoContainer}>
-            <View style={styles.customerAvatarContainer}>
-              {customerAvatarUrl ? (
-                <Image source={{ uri: customerAvatarUrl }} style={styles.customerAvatarImage} onError={onCustomerAvatarError} />
-              ) : (
-                <Text style={styles.customerAvatarInitials}>{customerDisplay.initials}</Text>
-              )}
-            </View>
-
-            <View style={styles.customerDetails}>
-              <Text style={styles.customerName}>
-                {customerDisplay.name}
-              </Text>
-              <Text style={styles.itemInfo}>
-                {requestData?.item?.description || 'Item information not available'}
-              </Text>
-            </View>
-
             <TouchableOpacity
               style={styles.callButton}
               onPress={openChat}
@@ -269,8 +221,12 @@ export default function DeliveryNavigationDriverView({
 
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.arriveButton}
+              style={[
+                styles.arriveButton,
+                !canArrive && styles.arriveButtonDisabled,
+              ]}
               onPress={handleArriveAtDropoff}
+              disabled={!canArrive}
             >
               <Text style={styles.arriveButtonText}>I've Arrived at Dropoff</Text>
             </TouchableOpacity>

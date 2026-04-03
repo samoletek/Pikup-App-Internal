@@ -22,14 +22,19 @@ export default function GpsNavigationDriverView({
   stopNavigation,
   cardAnimation,
   cardGradientColors,
-  estimatedTime,
   requestData,
+  openChat,
+  isCreatingChat,
+  hasUnreadChat,
   handleArrive,
   handleCancelTrip,
   isCancellingTrip,
   nextInstruction,
   currentManeuverIcon,
   distanceToTurn,
+  currentStreetName,
+  distanceToDestination,
+  canArrive = false,
   onBack,
 }) {
   const cardTranslateY = cardAnimation.interpolate({
@@ -66,17 +71,24 @@ export default function GpsNavigationDriverView({
                   {requestData?.pickupAddress || 'Address not available'}
                 </Text>
               </View>
-              <View style={styles.etaBox}>
-                <Text style={styles.etaTime}>{estimatedTime}</Text>
-                <Text style={styles.etaLabel}>min</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.callButton}
+                onPress={openChat}
+                disabled={isCreatingChat}
+              >
+                <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+                {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
+              </TouchableOpacity>
             </View>
 
             <View style={styles.actionContainer}>
               <TouchableOpacity
-                style={styles.arriveButton}
+                style={[
+                  styles.arriveButton,
+                  (!canArrive || isCancellingTrip) && styles.arriveButtonDisabled,
+                ]}
                 onPress={handleArrive}
-                disabled={isCancellingTrip}
+                disabled={!canArrive || isCancellingTrip}
               >
                 <Text style={styles.arriveButtonText}>I've Arrived</Text>
               </TouchableOpacity>
@@ -117,7 +129,7 @@ export default function GpsNavigationDriverView({
             allowOverlap
           >
             <View style={styles.driverMarker}>
-              <Ionicons name="car" size={18} color={colors.white} />
+              <Ionicons name="navigate" size={18} color={colors.white} />
             </View>
           </Mapbox.MarkerView>
         )}
@@ -178,7 +190,9 @@ export default function GpsNavigationDriverView({
           nextInstruction={nextInstruction}
           isNavigating={false}
           maneuverIcon={currentManeuverIcon}
+          distanceToDestination={distanceToDestination}
           distanceToTurn={distanceToTurn}
+          streetName={currentStreetName}
           topPadding={insetsTop + spacing.lg}
           ui={styles}
         />
@@ -203,17 +217,24 @@ export default function GpsNavigationDriverView({
                 {requestData?.pickupAddress || 'Address not available'}
               </Text>
             </View>
-            <View style={styles.etaBox}>
-              <Text style={styles.etaTime}>{estimatedTime}</Text>
-              <Text style={styles.etaLabel}>min</Text>
-            </View>
+            <TouchableOpacity
+              style={styles.callButton}
+              onPress={openChat}
+              disabled={isCreatingChat}
+            >
+              <Ionicons name="chatbubble-ellipses" size={22} color={colors.primary} />
+              {hasUnreadChat ? <View style={styles.callButtonUnreadDot} /> : null}
+            </TouchableOpacity>
           </View>
 
           <View style={styles.actionContainer}>
             <TouchableOpacity
-              style={styles.arriveButton}
+              style={[
+                styles.arriveButton,
+                (!canArrive || isCancellingTrip) && styles.arriveButtonDisabled,
+              ]}
               onPress={handleArrive}
-              disabled={isCancellingTrip}
+              disabled={!canArrive || isCancellingTrip}
             >
               <Text style={styles.arriveButtonText}>I've Arrived</Text>
             </TouchableOpacity>

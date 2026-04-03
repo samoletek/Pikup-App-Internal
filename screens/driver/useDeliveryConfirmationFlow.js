@@ -180,6 +180,15 @@ export default function useDeliveryConfirmationFlow({
     } catch (error) {
       logger.error('DeliveryConfirmationFlow', 'Error completing delivery', error);
       setIsUploadingPhotos(false);
+      const errorMessage = String(error?.message || '').toLowerCase();
+      if (errorMessage.includes('session expired') || errorMessage.includes('sign in again')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session expired while uploading delivery photos. Please sign in again and retry.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       Alert.alert(
         'Error',
         'Failed to complete delivery and upload photos. Please try again.',

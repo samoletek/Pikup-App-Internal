@@ -29,12 +29,14 @@ export const buildNavigationCameraConfig = ({
   heading = 0,
   padding = DEFAULT_CAMERA_PADDING,
 }) => {
-  if (!location?.longitude || !location?.latitude) {
+  const longitude = Number(location?.longitude);
+  const latitude = Number(location?.latitude);
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
     return null;
   }
 
   return {
-    centerCoordinate: [location.longitude, location.latitude],
+    centerCoordinate: [longitude, latitude],
     zoomLevel: resolveNavigationZoom({ speedMetersPerSecond, distanceToNextTurn }),
     pitch: 60,
     bearing: heading || 0,
