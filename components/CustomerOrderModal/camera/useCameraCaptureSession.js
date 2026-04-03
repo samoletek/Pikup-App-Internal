@@ -68,6 +68,8 @@ export const useCameraCaptureSession = ({
   onClose,
   alreadyCount = 0,
   maxPhotos = DEFAULT_MAX_CAMERA_PHOTOS,
+  minPhotosRequired = 1,
+  enableGuideFrameCrop = true,
 }) => {
   const [facing, setFacing] = useState('back');
   const [permission, requestPermission] = useCameraPermissions();
@@ -78,6 +80,9 @@ export const useCameraCaptureSession = ({
   const totalLimit = Math.max(1, Number(maxPhotos) || DEFAULT_MAX_CAMERA_PHOTOS);
   const canCapture = capturedPhotos.length + alreadyCount < totalLimit;
   const remaining = totalLimit - alreadyCount - capturedPhotos.length;
+  const minimumRequired = Math.max(1, Number(minPhotosRequired) || 1);
+  const canDone = capturedPhotos.length >= minimumRequired;
+  const donePhotosRemaining = Math.max(0, minimumRequired - capturedPhotos.length);
 
   const handleCapture = async () => {
     if (!cameraRef.current || !canCapture) {
@@ -91,6 +96,11 @@ export const useCameraCaptureSession = ({
       });
 
       if (photo?.uri) {
+        if (!enableGuideFrameCrop) {
+          setCapturedPhotos((prev) => [...prev, photo]);
+          return;
+        }
+
         const capturedPixels = Number(photo?.width || 0) * Number(photo?.height || 0);
         const isLikelyTooSoft =
           zoom >= HIGH_ZOOM_SOFTNESS_THRESHOLD ||
@@ -146,6 +156,9 @@ export const useCameraCaptureSession = ({
   };
 
   const handleDone = () => {
+    if (!canDone) {
+      return;
+    }
     onCapture(capturedPhotos);
     setCapturedPhotos([]);
     setZoom(0);
@@ -169,6 +182,9 @@ export const useCameraCaptureSession = ({
     cameraRef,
     canCapture,
     remaining,
+    minimumRequired,
+    canDone,
+    donePhotosRemaining,
     handleCapture,
     handleRemove,
     handleDone,

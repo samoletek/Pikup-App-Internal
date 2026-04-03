@@ -14,6 +14,8 @@ const CameraCaptureControls = ({
   canCapture,
   onCapture,
   onDone,
+  canDone,
+  doneLabel = 'Done',
 }) => (
   <>
     {capturedPhotos.length > 0 && (
@@ -58,11 +60,11 @@ const CameraCaptureControls = ({
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.doneBtn, capturedPhotos.length === 0 && styles.doneBtnDisabled]}
+        style={[styles.doneBtn, !canDone && styles.doneBtnDisabled]}
         onPress={onDone}
-        disabled={capturedPhotos.length === 0}
+        disabled={!canDone}
       >
-        <Text style={styles.doneBtnText}>Done</Text>
+        <Text style={styles.doneBtnText}>{doneLabel}</Text>
       </TouchableOpacity>
     </View>
   </>

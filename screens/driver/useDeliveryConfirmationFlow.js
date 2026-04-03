@@ -30,23 +30,8 @@ export default function useDeliveryConfirmationFlow({
   const [customerRating, setCustomerRating] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [isCameraVisible, setIsCameraVisible] = useState(false);
   const scrollViewRef = useRef(null);
-
-  const requestPermissions = useCallback(async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Camera Permission',
-        'We need camera permission to take delivery verification photos.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => ImagePicker.requestCameraPermissionsAsync() },
-        ]
-      );
-      return false;
-    }
-    return true;
-  }, []);
 
   const showMaxPhotosAlert = useCallback(() => {
     Alert.alert(
@@ -63,53 +48,28 @@ export default function useDeliveryConfirmationFlow({
     }, 100);
   }, []);
 
-  const takePhotoBatch = useCallback(async () => {
-    try {
-      if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
-        showMaxPhotosAlert();
-        return;
-      }
-
-      const hasPermission = await requestPermissions();
-      if (!hasPermission) return;
-
-      let remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
-      const capturedPhotos = [];
-
-      while (remaining > 0) {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes: 'images',
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-          exif: false,
-        });
-
-        if (result.canceled || !result.assets?.length) {
-          break;
-        }
-
-        const mappedPhotos = mapAssetsToPhotos(result.assets, capturedPhotos.length).slice(0, remaining);
-        if (mappedPhotos.length === 0) {
-          break;
-        }
-
-        capturedPhotos.push(...mappedPhotos);
-        remaining -= mappedPhotos.length;
-      }
-
-      if (capturedPhotos.length > 0) {
-        appendPhotos(capturedPhotos);
-      }
-
-      if (remaining <= 0) {
-        showMaxPhotosAlert();
-      }
-    } catch (error) {
-      logger.error('DeliveryConfirmationFlow', 'Error taking photo', error);
-      Alert.alert('Error', 'Failed to take photo. Please try again.');
+  const handleCameraCapture = useCallback((capturedAssets = []) => {
+    setIsCameraVisible(false);
+    if (deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+      showMaxPhotosAlert();
+      return;
     }
-  }, [appendPhotos, deliveryPhotos.length, requestPermissions, showMaxPhotosAlert]);
+
+    const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;
+    const capturedPhotos = mapAssetsToPhotos(capturedAssets).slice(0, remaining);
+    if (capturedPhotos.length === 0) {
+      return;
+    }
+
+    appendPhotos(capturedPhotos);
+    if (deliveryPhotos.length + capturedPhotos.length >= MAX_VERIFICATION_PHOTOS) {
+      showMaxPhotosAlert();
+    }
+  }, [appendPhotos, deliveryPhotos.length, showMaxPhotosAlert]);
+
+  const closeCamera = useCallback(() => {
+    setIsCameraVisible(false);
+  }, []);
 
   const selectFromGallery = useCallback(async () => {
     try {
@@ -175,10 +135,10 @@ export default function useDeliveryConfirmationFlow({
 
     Alert.alert('Add Delivery Photo', `Add up to ${remaining} photos`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Take Photos (Camera)', onPress: takePhotoBatch },
+      { text: 'Take Photo (Camera)', onPress: () => setIsCameraVisible(true) },
       { text: `Choose from Gallery (${remaining})`, onPress: selectFromGallery },
     ]);
-  }, [deliveryPhotos.length, selectFromGallery, showMaxPhotosAlert, takePhotoBatch]);
+  }, [deliveryPhotos.length, selectFromGallery, showMaxPhotosAlert]);
 
   const navigateToDriverTabs = useCallback(() => {
     navigation.reset({
@@ -269,6 +229,9 @@ export default function useDeliveryConfirmationFlow({
     isUploadingPhotos,
     isMaxPhotosReached: deliveryPhotos.length >= MAX_VERIFICATION_PHOTOS,
     maxVerificationPhotos: MAX_VERIFICATION_PHOTOS,
+    isCameraVisible,
+    closeCamera,
+    handleCameraCapture,
     removePhoto,
     scrollViewRef,
     setCustomerRating,
