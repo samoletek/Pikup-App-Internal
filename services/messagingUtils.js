@@ -55,14 +55,19 @@ export const getConversationPreviewText = (content, messageType = 'text') => {
 };
 
 export const ensureAuthenticatedUserId = async () => {
+    const { data: sessionData } = await getAuthenticatedSession();
+    const sessionUserId = sessionData?.session?.user?.id || null;
+    if (sessionUserId) {
+        return sessionUserId;
+    }
+
     const { data: userData, error: userError } = await getAuthenticatedUser();
     if (!userError && userData?.user?.id) {
         return userData.user.id;
     }
 
-    // Try to refresh silently if local session exists but user fetch failed.
-    const { data: sessionData } = await getAuthenticatedSession();
-    if (sessionData?.session) {
+    // Only attempt a refresh when a refresh token is actually present.
+    if (sessionData?.session?.refresh_token) {
         const { data: refreshedData } = await refreshAuthenticatedSession();
         if (refreshedData?.user?.id) {
             return refreshedData.user.id;

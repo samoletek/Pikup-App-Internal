@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   useAuthIdentity,
@@ -13,7 +13,6 @@ import GpsNavigationDriverView from '../../components/navigation/GpsNavigationDr
 import NavigationScreenState from '../../components/navigation/NavigationScreenState';
 import useTripConversationUnread from '../../hooks/useTripConversationUnread';
 import useGpsRouteProgress from '../../hooks/useGpsRouteProgress';
-import useCustomerAvatarFromTripRequest from './useCustomerAvatarFromTripRequest';
 import useGpsNavigationData from './useGpsNavigationData';
 import useDriverTripChat from '../../hooks/useDriverTripChat';
 import useNavigationCardAnimation from '../../hooks/useNavigationCardAnimation';
@@ -21,10 +20,13 @@ import useAutoMapboxNavigationStart from '../../hooks/useAutoMapboxNavigationSta
 import styles from './GpsNavigationScreen.styles';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../styles/theme';
-import { formatDistance } from './navigationMath.utils';
+import { ARRIVAL_UNLOCK_RADIUS_METERS, formatDistance, getDistanceFromLatLonInKm } from './navigationMath.utils';
 import { navigateDriverToHome } from './navigationRoute.utils';
 import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
+
+const FEET_PER_METER = 3.28084;
 
 export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -44,6 +46,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     currentStepIndex,
     nextInstruction,
     distanceToTurn,
+    currentStreetName,
     currentManeuverIcon,
     applyRouteSteps,
     updateNavigationProgress,
@@ -55,11 +58,13 @@ export default function GpsNavigationScreen({ route, navigation }) {
     customerLocation,
     routeCoordinates,
     remainingDistance,
+    remainingDistanceMeters,
     estimatedTime,
     isLoading,
     locationError,
     currentHeading,
     setRemainingDistance,
+    setRemainingDistanceMeters,
     setEstimatedTime,
     setLocationError,
     setIsLoading,
@@ -99,6 +104,26 @@ export default function GpsNavigationScreen({ route, navigation }) {
     activeRequestCustomerId,
     activeRequestDriverId,
   });
+  const customerDisplayName = resolveCustomerDisplayFromRequest(requestData || request, {
+    fallbackName: 'Customer',
+  }).name;
+  const distanceToPickupMeters = useMemo(() => {
+    if (!driverLocation || !customerLocation) {
+      return null;
+    }
+
+    const distanceKm = getDistanceFromLatLonInKm(
+      driverLocation.latitude,
+      driverLocation.longitude,
+      customerLocation.latitude,
+      customerLocation.longitude
+    );
+    const distanceMeters = distanceKm * 1000;
+    return Number.isFinite(distanceMeters) ? distanceMeters : null;
+  }, [customerLocation, driverLocation]);
+  const canArriveAtPickup =
+    Number.isFinite(distanceToPickupMeters) &&
+    distanceToPickupMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
   
   // Mapbox Navigation Integration
   const { startNavigation, stopNavigation, isNavigating, isSupported } = useMapboxNavigation({
@@ -112,6 +137,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
       }
       if (progress.distanceRemaining) {
         setRemainingDistance(formatDistance(progress.distanceRemaining));
+        setRemainingDistanceMeters(progress.distanceRemaining);
       }
     },
     onArrival: () => {
@@ -147,18 +173,6 @@ export default function GpsNavigationScreen({ route, navigation }) {
   }, [clearNavigationResources, navigation, stopNavigation]);
 
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
-  const {
-    customerAvatarUrl,
-    customerDisplayName,
-    setCustomerAvatarUrl,
-  } = useCustomerAvatarFromTripRequest({
-    requestData,
-    routeRequest: request,
-    activeRequestCustomerId,
-    getUserProfile,
-    enabled: !isCustomerView,
-  });
-  
   // Monitor order status for cancellations
   useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
     currentScreen: 'GpsNavigationScreen',
@@ -193,6 +207,14 @@ export default function GpsNavigationScreen({ route, navigation }) {
   });
 
   const handleArrive = async () => {
+    if (!canArriveAtPickup) {
+      Alert.alert(
+        'Not close enough yet',
+        `Get within ${Math.round(ARRIVAL_UNLOCK_RADIUS_METERS * FEET_PER_METER)} ft of pickup to confirm arrival.`
+      );
+      return;
+    }
+
     try {
       if (requestData?.id) {
         await arriveAtPickup(requestData.id, driverLocation);
@@ -329,11 +351,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
       stopNavigation={stopNavigation}
       cardAnimation={cardAnimation}
       cardGradientColors={cardGradientColors}
-      estimatedTime={estimatedTime}
       requestData={requestData}
-      customerName={customerDisplayName}
-      customerAvatarUrl={customerAvatarUrl}
-      onCustomerAvatarError={() => setCustomerAvatarUrl(null)}
       openChat={openChat}
       isCreatingChat={isCreatingChat}
       hasUnreadChat={hasUnreadChat}
@@ -343,6 +361,9 @@ export default function GpsNavigationScreen({ route, navigation }) {
       nextInstruction={nextInstruction}
       currentManeuverIcon={currentManeuverIcon}
       distanceToTurn={distanceToTurn}
+      currentStreetName={currentStreetName}
+      distanceToDestination={remainingDistanceMeters ?? remainingDistance}
+      canArrive={canArriveAtPickup}
       onBack={() => {
         if (isNavigating) {
           stopNavigation();

@@ -75,7 +75,7 @@ export const getDriverReadinessProfile = async (driverId) => {
   try {
     const { data: profile, error } = await fetchDriverRowById(
       driverId,
-      'phone_verified, onboarding_complete, identity_verified, metadata',
+      'phone_verified, onboarding_complete, can_receive_payments, identity_verified, metadata',
       true
     );
 
@@ -100,12 +100,18 @@ export const getDriverReadinessProfile = async (driverId) => {
       metadata?.documentsVerified ??
       false
     );
+    const canReceivePayments = Boolean(
+      profile?.can_receive_payments ??
+      metadata?.canReceivePayments ??
+      false
+    );
     const phoneVerified = Boolean(profile?.phone_verified ?? false);
 
     const issues = [];
     if (!phoneVerified) issues.push('phone');
     if (!onboardingComplete) issues.push('vehicle');
     if (!identityVerified) issues.push('identity');
+    if (!canReceivePayments) issues.push('payment');
 
     return {
       ready: issues.length === 0,
@@ -114,6 +120,7 @@ export const getDriverReadinessProfile = async (driverId) => {
         ...profile,
         metadata,
         onboarding_complete: onboardingComplete,
+        can_receive_payments: canReceivePayments,
         identity_verified: identityVerified,
         phone_verified: phoneVerified,
       },

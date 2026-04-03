@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -13,7 +13,6 @@ import DeliveryNavigationDriverView from '../../components/navigation/DeliveryNa
 import NavigationScreenState from '../../components/navigation/NavigationScreenState';
 import useTripConversationUnread from '../../hooks/useTripConversationUnread';
 import useGpsRouteProgress from '../../hooks/useGpsRouteProgress';
-import useCustomerAvatarFromTripRequest from './useCustomerAvatarFromTripRequest';
 import useDeliveryNavigationData from './useDeliveryNavigationData';
 import useDriverTripChat from '../../hooks/useDriverTripChat';
 import useNavigationCardAnimation from '../../hooks/useNavigationCardAnimation';
@@ -21,8 +20,12 @@ import useAutoMapboxNavigationStart from '../../hooks/useAutoMapboxNavigationSta
 import styles from './DeliveryNavigationScreen.styles';
 import { colors } from '../../styles/theme';
 import { navigateDriverToHome } from './navigationRoute.utils';
+import { ARRIVAL_UNLOCK_RADIUS_METERS, formatDistance, getDistanceFromLatLonInKm } from './navigationMath.utils';
 import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
+import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
+
+const FEET_PER_METER = 3.28084;
 
 export default function DeliveryNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
@@ -41,6 +44,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     currentStepIndex,
     nextInstruction,
     distanceToTurn,
+    currentStreetName,
     currentManeuverIcon,
     applyRouteSteps,
     updateNavigationProgress,
@@ -49,6 +53,8 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     currentHeading,
     driverLocation,
     dropoffLocation,
+    remainingDistance,
+    remainingDistanceMeters,
     estimatedTime,
     handleArriveAtDropoff,
     initializeDeliveryTracking,
@@ -60,6 +66,8 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     setLocationError,
     setIsLoading,
     setNavigationAttempted,
+    setRemainingDistance,
+    setRemainingDistanceMeters,
     setEstimatedTime,
     stopLocationTracking,
   } = useDeliveryNavigationData({
@@ -97,18 +105,28 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     activeRequestCustomerId,
     activeRequestDriverId,
   });
+  const customerDisplayName = resolveCustomerDisplayFromRequest(requestData || request, {
+    fallbackName: 'Customer',
+  }).name;
+  const distanceToDropoffMeters = useMemo(() => {
+    if (!driverLocation || !dropoffLocation) {
+      return null;
+    }
+
+    const distanceKm = getDistanceFromLatLonInKm(
+      driverLocation.latitude,
+      driverLocation.longitude,
+      dropoffLocation.latitude,
+      dropoffLocation.longitude
+    );
+    const distanceMeters = distanceKm * 1000;
+    return Number.isFinite(distanceMeters) ? distanceMeters : null;
+  }, [driverLocation, dropoffLocation]);
+  const canArriveAtDropoff =
+    Number.isFinite(distanceToDropoffMeters) &&
+    distanceToDropoffMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
   
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
-  const {
-    customerAvatarUrl,
-    customerDisplayName,
-    setCustomerAvatarUrl,
-  } = useCustomerAvatarFromTripRequest({
-    requestData,
-    routeRequest: request,
-    activeRequestCustomerId,
-    getUserProfile,
-  });
   
   // Monitor order status for cancellations
   useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
@@ -146,6 +164,10 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       if (progress.durationRemaining) {
         const minutes = Math.round(progress.durationRemaining / 60);
         setEstimatedTime(minutes < 1 ? '<1' : minutes.toString());
+      }
+      if (progress.distanceRemaining) {
+        setRemainingDistance(formatDistance(progress.distanceRemaining));
+        setRemainingDistanceMeters(progress.distanceRemaining);
       }
     },
     onArrival: () => {
@@ -193,6 +215,17 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     navigation,
     clearUnread: () => setHasUnreadChat(false),
   });
+  const handleArriveAtDropoffPress = useCallback(() => {
+    if (!canArriveAtDropoff) {
+      Alert.alert(
+        'Not close enough yet',
+        `Get within ${Math.round(ARRIVAL_UNLOCK_RADIUS_METERS * FEET_PER_METER)} ft of dropoff to confirm arrival.`
+      );
+      return;
+    }
+
+    void handleArriveAtDropoff();
+  }, [canArriveAtDropoff, handleArriveAtDropoff]);
 
   if (isLoading || locationError) {
     return (
@@ -226,16 +259,16 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       cardGradientColors={cardGradientColors}
       estimatedTime={estimatedTime}
       requestData={requestData}
-      customerName={customerDisplayName}
-      customerAvatarUrl={customerAvatarUrl}
-      onCustomerAvatarError={() => setCustomerAvatarUrl(null)}
       openChat={openChat}
       isCreatingChat={isCreatingChat}
       hasUnreadChat={hasUnreadChat}
-      handleArriveAtDropoff={handleArriveAtDropoff}
+      handleArriveAtDropoff={handleArriveAtDropoffPress}
       nextInstruction={nextInstruction}
       currentManeuverIcon={currentManeuverIcon}
       distanceToTurn={distanceToTurn}
+      currentStreetName={currentStreetName}
+      distanceToDestination={remainingDistanceMeters ?? remainingDistance}
+      canArrive={canArriveAtDropoff}
       onBack={() => {
         if (isNavigating) {
           stopNavigation();

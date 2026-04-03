@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthIdentity, useProfileActions, useTripActions } from '../../contexts/AuthContext';
 import ScreenHeader from '../../components/ScreenHeader';
 import AppButton from '../../components/ui/AppButton';
+import CameraScreen from '../../components/CustomerOrderModal/CameraScreen';
 import useDeliveryConfirmationFlow from './useDeliveryConfirmationFlow';
 import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { resolveDriverPayoutAmount } from '../../services/PricingService';
@@ -45,6 +46,9 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
     isUploadingPhotos,
     isMaxPhotosReached,
     maxVerificationPhotos,
+    isCameraVisible,
+    closeCamera,
+    handleCameraCapture,
     removePhoto,
     scrollViewRef,
     setCustomerRating,
@@ -242,6 +246,17 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           <Text style={styles.warningText}>At least {MIN_VERIFICATION_PHOTOS} delivery photos required ({deliveryPhotos.length}/{MIN_VERIFICATION_PHOTOS})</Text>
         )}
       </View>
+
+      <CameraScreen
+        visible={isCameraVisible}
+        onCapture={handleCameraCapture}
+        onClose={closeCamera}
+        alreadyCount={deliveryPhotos.length}
+        maxPhotos={maxVerificationPhotos}
+        minPhotosRequired={Math.max(0, MIN_VERIFICATION_PHOTOS - deliveryPhotos.length)}
+        showGuideOverlay={false}
+        enableGuideFrameCrop={false}
+      />
     </View>
   );
 }

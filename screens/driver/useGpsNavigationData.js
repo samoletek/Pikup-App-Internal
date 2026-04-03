@@ -16,7 +16,10 @@ import {
   extractDestinationFromStatus,
   generateFallbackRoute,
 } from './navigationRoute.utils';
+import { getDistanceFromLatLonInKm } from './navigationMath.utils';
 import { hasReachedOrPassedStatus } from '../../services/tripErrorUtils';
+
+const ROUTE_REFRESH_INTERVAL_MS = 7000;
 
 export default function useGpsNavigationData({
   isCustomerView,
@@ -33,6 +36,7 @@ export default function useGpsNavigationData({
   const [customerLocation, setCustomerLocation] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [remainingDistance, setRemainingDistance] = useState('Calculating...');
+  const [remainingDistanceMeters, setRemainingDistanceMeters] = useState(null);
   const [estimatedTime, setEstimatedTime] = useState('--');
   const [isLoading, setIsLoading] = useState(true);
   const [locationError, setLocationError] = useState(null);
@@ -48,6 +52,9 @@ export default function useGpsNavigationData({
   const routeStepsRef = useRef(routeSteps || []);
   const currentStepIndexRef = useRef(currentStepIndex || 0);
   const tripStatusRef = useRef(normalizeTripStatus(request?.status));
+  const routeRefreshInFlightRef = useRef(false);
+  const lastRouteRefreshAtRef = useRef(0);
+  const hasRouteRef = useRef(false);
 
   useEffect(() => {
     setRequestData(request);
@@ -116,16 +123,57 @@ export default function useGpsNavigationData({
         : routeData.duration.text;
 
       setRemainingDistance(distanceText);
+      setRemainingDistanceMeters(
+        Number.isFinite(Number(routeData?.distance?.value))
+          ? Number(routeData.distance.value)
+          : null
+      );
       setEstimatedTime(durationText.replace(' mins', ' min').replace(' min', ''));
+      hasRouteRef.current = true;
     } catch (error) {
       logger.error('GpsNavigationData', 'Error getting real route', error);
       const { distanceText, etaText } = calculateDistanceAndEta(start, end);
+      const fallbackDistanceMeters = getDistanceFromLatLonInKm(
+        start.latitude,
+        start.longitude,
+        end.latitude,
+        end.longitude
+      ) * 1000;
       setRemainingDistance(distanceText);
+      setRemainingDistanceMeters(
+        Number.isFinite(fallbackDistanceMeters) ? fallbackDistanceMeters : null
+      );
       setEstimatedTime(etaText);
-      setRouteCoordinates(generateFallbackRoute(start, end));
-      applyRouteSteps([]);
+      if (!hasRouteRef.current) {
+        setRouteCoordinates(generateFallbackRoute(start, end));
+        applyRouteSteps([]);
+      }
     }
   }, [applyRouteSteps]);
+
+  const maybeRefreshRoute = useCallback(async (start, end, { force = false } = {}) => {
+    if (!start || !end) {
+      return;
+    }
+
+    const now = Date.now();
+    if (!force) {
+      if (routeRefreshInFlightRef.current) {
+        return;
+      }
+      if (now - lastRouteRefreshAtRef.current < ROUTE_REFRESH_INTERVAL_MS) {
+        return;
+      }
+    }
+
+    routeRefreshInFlightRef.current = true;
+    lastRouteRefreshAtRef.current = now;
+    try {
+      await generateRealRoute(start, end);
+    } finally {
+      routeRefreshInFlightRef.current = false;
+    }
+  }, [generateRealRoute]);
 
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
@@ -159,8 +207,9 @@ export default function useGpsNavigationData({
 
         setDriverLocation(newLocation);
 
-        if (typeof locationData.coords.heading === 'number') {
-          setCurrentHeading(locationData.coords.heading);
+        const heading = Number(locationData.coords.heading);
+        if (Number.isFinite(heading) && heading >= 0) {
+          setCurrentHeading(heading);
         }
 
         const distanceToNextTurn = calculateDistanceToNextTurnMeters({
@@ -176,7 +225,17 @@ export default function useGpsNavigationData({
         );
 
         if (customerLocationRef.current) {
-          generateRealRoute(newLocation, customerLocationRef.current);
+          const straightDistanceMeters = getDistanceFromLatLonInKm(
+            newLocation.latitude,
+            newLocation.longitude,
+            customerLocationRef.current.latitude,
+            customerLocationRef.current.longitude
+          ) * 1000;
+          if (Number.isFinite(straightDistanceMeters)) {
+            setRemainingDistanceMeters(straightDistanceMeters);
+          }
+
+          void maybeRefreshRoute(newLocation, customerLocationRef.current);
         }
 
         updateNavigationProgress(newLocation);
@@ -186,7 +245,7 @@ export default function useGpsNavigationData({
       logger.error('GpsNavigationData', 'Error starting location tracking', error);
     }
   }, [
-    generateRealRoute,
+    maybeRefreshRoute,
     updateDriverLocationInDB,
     updateNavigationCamera,
     updateNavigationProgress,
@@ -274,7 +333,10 @@ export default function useGpsNavigationData({
       setNavigationInitialCamera(mapRef, driverCoords, initialPosition.heading || 0);
 
       if (typeof initialPosition.heading === 'number') {
-        setCurrentHeading(initialPosition.heading);
+        const initialHeading = Number(initialPosition.heading);
+        if (Number.isFinite(initialHeading) && initialHeading >= 0) {
+          setCurrentHeading(initialHeading);
+        }
       }
 
       await startLocationTracking();
@@ -286,7 +348,7 @@ export default function useGpsNavigationData({
       });
       if (customerCoords) {
         setCustomerLocation(customerCoords);
-        await generateRealRoute(driverCoords, customerCoords);
+        await maybeRefreshRoute(driverCoords, customerCoords, { force: true });
       }
 
       if (!navigationStartedRef.current && request?.id) {
@@ -310,7 +372,7 @@ export default function useGpsNavigationData({
       setIsLoading(false);
     }
   }, [
-    generateRealRoute,
+    maybeRefreshRoute,
     requestData,
     request,
     startDriving,
@@ -330,11 +392,13 @@ export default function useGpsNavigationData({
     customerLocation,
     routeCoordinates,
     remainingDistance,
+    remainingDistanceMeters,
     estimatedTime,
     isLoading,
     locationError,
     currentHeading,
     setRemainingDistance,
+    setRemainingDistanceMeters,
     setEstimatedTime,
     setLocationError,
     setIsLoading,

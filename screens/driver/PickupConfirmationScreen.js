@@ -19,6 +19,7 @@ import useOrderStatusMonitor from '../../hooks/useOrderStatusMonitor';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ScreenHeader from '../../components/ScreenHeader';
 import AppButton from '../../components/ui/AppButton';
+import CameraScreen from '../../components/CustomerOrderModal/CameraScreen';
 import styles from './PickupConfirmationScreen.styles';
 import usePickupVerificationPhotos, {
   DEFAULT_MAX_VERIFICATION_PHOTOS,
@@ -54,6 +55,9 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     photos,
     isMaxPhotosReached,
     maxVerificationPhotos,
+    isCameraVisible,
+    closeCamera,
+    handleCameraCapture,
     showPhotoOptions,
     removePhoto,
   } = usePickupVerificationPhotos({
@@ -284,6 +288,17 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           <Text style={styles.warningText}>At least {MIN_VERIFICATION_PHOTOS} photos required ({photos.length}/{MIN_VERIFICATION_PHOTOS})</Text>
         )}
       </View>
+
+      <CameraScreen
+        visible={isCameraVisible}
+        onCapture={handleCameraCapture}
+        onClose={closeCamera}
+        alreadyCount={photos.length}
+        maxPhotos={maxVerificationPhotos}
+        minPhotosRequired={Math.max(0, MIN_VERIFICATION_PHOTOS - photos.length)}
+        showGuideOverlay={false}
+        enableGuideFrameCrop={false}
+      />
     </View>
   );
 }

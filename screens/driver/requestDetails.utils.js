@@ -93,6 +93,63 @@ export const formatWeight = (item = {}) => {
 };
 
 const toCoordinatePair = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const longitude = Number(value[0]);
+    const latitude = Number(value[1]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return [longitude, latitude];
+    }
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return toCoordinatePair(JSON.parse(trimmed));
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    if (trimmed.includes(',')) {
+      const [firstPart, secondPart] = trimmed.split(',').map((part) => part.trim());
+      const latitude = Number(firstPart);
+      const longitude = Number(secondPart);
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return [longitude, latitude];
+      }
+    }
+
+    return null;
+  }
+
+  if (typeof value !== 'object') {
+    return null;
+  }
+
+  if (value?.coordinates) {
+    const nestedCoordinates = toCoordinatePair(value.coordinates);
+    if (nestedCoordinates) {
+      return nestedCoordinates;
+    }
+  }
+
+  if (value?.geometry?.coordinates) {
+    const geometryCoordinates = toCoordinatePair(value.geometry.coordinates);
+    if (geometryCoordinates) {
+      return geometryCoordinates;
+    }
+  }
+
   const latitude = Number(value?.latitude ?? value?.lat);
   const longitude = Number(value?.longitude ?? value?.lng ?? value?.lon);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
@@ -100,6 +157,16 @@ const toCoordinatePair = (value) => {
   }
 
   return [longitude, latitude];
+};
+
+const resolveCoordinatePair = (...candidates) => {
+  for (const candidate of candidates) {
+    const pair = toCoordinatePair(candidate);
+    if (pair) {
+      return pair;
+    }
+  }
+  return null;
 };
 
 export const getItemRows = (request = {}) => {
@@ -255,15 +322,29 @@ export const buildRequestDetails = (request) => {
   const photoRows = getPhotoRows(request);
   const pickupDetails = request.pickup?.details || {};
   const dropoffDetails = request.dropoff?.details || {};
-  const pickupCoordinates = toCoordinatePair(
-    request?.pickup?.coordinates ||
-    request?.pickupCoordinates ||
-    request?.pickup_location
+  const pickupCoordinates = resolveCoordinatePair(
+    request?.pickup?.coordinates,
+    request?.pickupCoordinates,
+    request?.pickup_location?.coordinates,
+    request?.pickup_location,
+    request?.pickup?.location,
+    request?.pickup,
+    request?.originalData?.pickup?.coordinates,
+    request?.originalData?.pickupCoordinates,
+    request?.originalData?.pickup_location?.coordinates,
+    request?.originalData?.pickup_location
   );
-  const dropoffCoordinates = toCoordinatePair(
-    request?.dropoff?.coordinates ||
-    request?.dropoffCoordinates ||
-    request?.dropoff_location
+  const dropoffCoordinates = resolveCoordinatePair(
+    request?.dropoff?.coordinates,
+    request?.dropoffCoordinates,
+    request?.dropoff_location?.coordinates,
+    request?.dropoff_location,
+    request?.dropoff?.location,
+    request?.dropoff,
+    request?.originalData?.dropoff?.coordinates,
+    request?.originalData?.dropoffCoordinates,
+    request?.originalData?.dropoff_location?.coordinates,
+    request?.originalData?.dropoff_location
   );
 
   return {

@@ -43,16 +43,6 @@ export default function useRequestModalRoute({
     const cachedRoute = routeCacheRef.current.get(requestId);
     setSelectedRoute(cachedRoute || fallbackRouteFeature);
 
-    if (mapRef?.current) {
-      const centerLongitude = (pickup.longitude + dropoff.longitude) / 2;
-      const centerLatitude = (pickup.latitude + dropoff.latitude) / 2;
-      mapRef.current.setCamera({
-        centerCoordinate: [centerLongitude, centerLatitude],
-        zoomLevel: 11.5,
-        animationDuration: 500,
-      });
-    }
-
     const token = appConfig.mapbox.publicToken;
     if (!token) {
       return;

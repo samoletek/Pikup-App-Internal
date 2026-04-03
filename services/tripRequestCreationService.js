@@ -155,13 +155,17 @@ export const createPickupRequest = async (requestData, currentUser) => {
 
 export const getUserPickupRequests = async (currentUser) => {
   if (!currentUser) throw new Error('User not authenticated');
+  const userId = currentUser.id || currentUser.uid;
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
 
   try {
-    const { data, error } = await fetchTripsByParticipantId(currentUser.id);
+    const { data, error } = await fetchTripsByParticipantId(userId);
 
     if (error) throw error;
 
-    return data.map(mapTripFromDb);
+    return (Array.isArray(data) ? data : []).map(mapTripFromDb);
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to fetch pickup requests');
     logger.error('TripRequestCreationService', 'Error fetching pickup requests', normalized, error);

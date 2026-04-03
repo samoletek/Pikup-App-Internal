@@ -58,6 +58,14 @@ export default function usePickupConfirmationFlow({
       logger.error('PickupConfirmationFlow', 'Error confirming pickup', error);
       setIsUploadingPhotos(false);
       const errorMessage = String(error?.message || '').toLowerCase();
+      if (errorMessage.includes('session expired') || errorMessage.includes('sign in again')) {
+        Alert.alert(
+          'Session Expired',
+          'Your session expired while uploading pickup photos. Please sign in again and retry.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       if (errorMessage.includes('cancelled')) {
         Alert.alert(
           'Order Cancelled',

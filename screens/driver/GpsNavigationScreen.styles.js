@@ -288,6 +288,9 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
+  arriveButtonDisabled: {
+    opacity: 0.5,
+  },
   arriveButtonText: {
     color: colors.text.primary,
     fontSize: typography.fontSize.md,
@@ -324,7 +327,28 @@ const styles = StyleSheet.create({
   },
   
   navigationHeaderContent: {
+    alignItems: 'stretch',
+  },
+
+  maneuverRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+
+  maneuverIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.overlayDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
+  },
+
+  maneuverTextWrap: {
+    flex: 1,
+    marginRight: spacing.base,
   },
   
   distanceText: {
@@ -334,18 +358,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   
-  instructionText: {
-    fontSize: typography.fontSize.lg,
+  streetText: {
+    fontSize: typography.fontSize.lg - 1,
     color: colors.white,
-    textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 12,
-  },
-  
-  directionArrows: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 0,
   },
   
   navigationMapSection: {

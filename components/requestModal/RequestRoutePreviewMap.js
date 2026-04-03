@@ -9,6 +9,10 @@ import { buildFallbackRouteFeature } from './requestModalUtils';
 const routeCache = new Map();
 
 const toCoordinatePair = (value) => {
+  if (!value) {
+    return null;
+  }
+
   if (Array.isArray(value) && value.length >= 2) {
     const longitude = Number(value[0]);
     const latitude = Number(value[1]);
@@ -16,6 +20,46 @@ const toCoordinatePair = (value) => {
       return [longitude, latitude];
     }
     return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return toCoordinatePair(JSON.parse(trimmed));
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    if (trimmed.includes(',')) {
+      const [firstPart, secondPart] = trimmed.split(',').map((part) => part.trim());
+      const latitude = Number(firstPart);
+      const longitude = Number(secondPart);
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return [longitude, latitude];
+      }
+    }
+
+    return null;
+  }
+
+  if (value?.coordinates) {
+    const nestedCoordinates = toCoordinatePair(value.coordinates);
+    if (nestedCoordinates) {
+      return nestedCoordinates;
+    }
+  }
+
+  if (value?.geometry?.coordinates) {
+    const geometryCoordinates = toCoordinatePair(value.geometry.coordinates);
+    if (geometryCoordinates) {
+      return geometryCoordinates;
+    }
   }
 
   const latitude = Number(value?.latitude ?? value?.lat);
@@ -132,6 +176,7 @@ export default function RequestRoutePreviewMap({ request, styles }) {
         style={styles.routePreviewMap}
         centerCoordinate={centerCoordinate}
         zoomLevel={10.5}
+        animationDuration={0}
         customMapStyle={Mapbox.StyleURL.Dark}
         scrollEnabled={false}
         zoomEnabled

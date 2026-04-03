@@ -231,6 +231,8 @@ export default function useDriverOnboardingCompleteFlow({
 
       await updateDriverPaymentProfile?.(userId, {
         onboardingComplete: true,
+        canReceivePayments: true,
+        onboardingStatus: "verified",
         connectAccountId: resolvedConnectAccountId,
         completedAt: new Date().toISOString(),
         onboardingStep: null,

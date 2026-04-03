@@ -38,6 +38,9 @@ const CameraScreen = ({
   onClose,
   alreadyCount = 0,
   maxPhotos = DEFAULT_MAX_CAMERA_PHOTOS,
+  minPhotosRequired = 1,
+  showGuideOverlay = true,
+  enableGuideFrameCrop = true,
 }) => {
   const insets = useSafeAreaInsets();
   const androidStatusBarInset = Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0;
@@ -54,6 +57,8 @@ const CameraScreen = ({
     cameraRef,
     canCapture,
     remaining,
+    canDone,
+    donePhotosRemaining,
     handleCapture,
     handleRemove,
     handleDone,
@@ -63,6 +68,8 @@ const CameraScreen = ({
     onClose,
     alreadyCount,
     maxPhotos,
+    minPhotosRequired,
+    enableGuideFrameCrop,
   });
   const pinchBaseRef = useRef({ distance: 0, zoom: 0 });
   const zoomRef = useRef(zoom);
@@ -74,6 +81,8 @@ const CameraScreen = ({
   const pinchResponder = useMemo(
     () =>
       PanResponder.create({
+        onStartShouldSetPanResponder: (event) => event.nativeEvent.touches.length >= 2,
+        onStartShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length >= 2,
         onMoveShouldSetPanResponder: (event) => event.nativeEvent.touches.length === 2,
         onMoveShouldSetPanResponderCapture: (event) => event.nativeEvent.touches.length === 2,
         onPanResponderGrant: (event) => {
@@ -137,10 +146,11 @@ const CameraScreen = ({
               style={styles.cameraLayer}
               facing={facing}
               zoom={zoom}
+              pointerEvents="none"
             />
           </View>
 
-          <CameraOverlayGuide />
+          {showGuideOverlay ? <CameraOverlayGuide /> : null}
 
           <View style={[styles.header, { top: headerTopInset + spacing.sm }]}>
             <TouchableOpacity style={styles.headerBtn} onPress={handleClose}>
@@ -168,6 +178,8 @@ const CameraScreen = ({
             canCapture={canCapture}
             onCapture={handleCapture}
             onDone={handleDone}
+            canDone={canDone}
+            doneLabel={canDone ? 'Done' : `Add ${donePhotosRemaining} more`}
           />
         </View>
       )}
