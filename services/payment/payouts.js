@@ -1,6 +1,7 @@
 import { normalizeError } from '../errorService';
 import { logger } from '../logger';
 import { failureResult, successResult } from '../contracts/result';
+import { getDriverStats } from '../driverEarningsService';
 import {
   fetchCompletedDriverTrips,
   invokeProcessPayout,
@@ -102,7 +103,8 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
       return failureResult('Stripe Connect account is not configured');
     }
 
-    const availableBalance = toNumber(metadata.availableBalance, 0);
+    const stats = await getDriverStats(driverId);
+    const availableBalance = toNumber(stats?.availableBalance, 0);
     if (normalizedAmount > availableBalance) {
       return failureResult(`Insufficient available balance. Available: $${availableBalance.toFixed(2)}`);
     }
@@ -149,7 +151,8 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
     };
 
     const currentPayouts = Array.isArray(metadata.payouts) ? metadata.payouts : [];
-    const totalPayouts = toNumber(metadata.totalPayouts, 0) + payoutRecord.amount;
+    const totalPayouts = toNumber(stats?.totalPayouts, toNumber(metadata.totalPayouts, 0))
+      + payoutRecord.amount;
     const nextAvailableBalance = Math.max(
       0,
       Number((availableBalance - payoutRecord.amount).toFixed(2))

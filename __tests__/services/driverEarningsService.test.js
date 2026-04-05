@@ -198,10 +198,59 @@ describe('driverEarningsService.updateDriverEarnings', () => {
         weeklyEarnings: 44.5,
         totalTrips: 2,
         totalEarnings: 65.75,
-        availableBalance: 44.5,
+        availableBalance: 65.75,
         acceptanceRate: 67,
         lastTripCompletedAt: '2026-04-07T14:00:00.000Z',
       })
     );
+  });
+
+  test('derives available balance from settled earnings and payouts instead of stale metadata balance', async () => {
+    resolveDriverPayoutAmount.mockImplementation((trip) => {
+      return Number(trip?.pricing?.driverPayout ?? trip?.pickup_location?.pricing?.driverPayout ?? 0);
+    });
+    fetchTripsByDriverId.mockImplementation(({ status }) => {
+      if (status === 'completed') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'trip-a',
+              price: 80,
+              status: 'completed',
+              completed_at: '2026-04-08T10:00:00.000Z',
+              pickup_location: { pricing: { driverPayout: 50 } },
+            },
+            {
+              id: 'trip-b',
+              price: 40,
+              status: 'completed',
+              completed_at: '2026-04-08T11:00:00.000Z',
+              pickup_location: { pricing: { driverPayout: 25 } },
+            },
+          ],
+          error: null,
+        });
+      }
+
+      return Promise.resolve({
+        data: [{ id: 'a' }, { id: 'b' }],
+        error: null,
+      });
+    });
+    fetchDriverRowById.mockResolvedValue({
+      data: {
+        id: 'driver-1',
+        metadata: {
+          availableBalance: 10,
+          totalPayouts: 20,
+        },
+      },
+      error: null,
+    });
+
+    const stats = await getDriverStats('driver-1');
+
+    expect(stats.availableBalance).toBe(55);
+    expect(stats.totalPayouts).toBe(20);
   });
 });

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Linking } from 'react-native';
+import {
+  mergeDriverOnboardingStatus,
+  normalizeDriverPaymentState,
+  shouldRefreshDriverPaymentStatus,
+} from '../../../services/payment/paymentState';
 
 const toMoney = (value) => {
   const amount = Number(value) || 0;
@@ -19,6 +24,7 @@ const roundToCents = (value) => Number((Number(value || 0)).toFixed(2));
 
 export default function useDriverPaymentSettingsData({
   createDriverConnectAccount,
+  checkDriverOnboardingStatus,
   currentUser,
   getDriverOnboardingLink,
   getDriverPayouts,
@@ -49,42 +55,26 @@ export default function useDriverPaymentSettingsData({
         getDriverPayouts?.(currentUserId),
       ]);
 
-      const metadata = profile?.metadata || {};
-      const connectAccountId =
-        profile?.connectAccountId ||
-        profile?.stripe_account_id ||
-        metadata.connectAccountId ||
-        null;
-      const canReceivePayments = Boolean(
-        profile?.canReceivePayments ||
-          profile?.can_receive_payments ||
-          metadata.canReceivePayments
-      );
-      const onboardingComplete = Boolean(
-        profile?.onboardingComplete ||
-          profile?.onboarding_complete ||
-          metadata.onboardingComplete
-      );
-      const onboardingStatus = String(
-        profile?.onboardingStatus ||
-          profile?.onboarding_status ||
-          metadata.onboardingStatus ||
-          ''
-      ).trim().toLowerCase() || (
-        canReceivePayments
-          ? 'verified'
-          : onboardingComplete
-            ? 'under_review'
-            : connectAccountId
-              ? 'action_required'
-              : 'missing_account'
-      );
+      let resolvedProfile = normalizeDriverPaymentState(profile || {});
+      if (
+        typeof checkDriverOnboardingStatus === 'function' &&
+        shouldRefreshDriverPaymentStatus(resolvedProfile)
+      ) {
+        const onboardingResult = await checkDriverOnboardingStatus(resolvedProfile.connectAccountId);
+        if (onboardingResult?.success) {
+          resolvedProfile = mergeDriverOnboardingStatus(resolvedProfile, onboardingResult);
+        }
+      }
+
+      const metadata = resolvedProfile.metadata || {};
 
       setPaymentData({
-        connectAccountId,
-        onboardingComplete,
-        canReceivePayments,
-        onboardingStatus,
+        connectAccountId: resolvedProfile.connectAccountId,
+        onboardingComplete: resolvedProfile.onboardingComplete,
+        canReceivePayments: resolvedProfile.canReceivePayments,
+        onboardingStatus: resolvedProfile.onboardingStatus,
+        onboardingRequirements: resolvedProfile.onboardingRequirements,
+        disabledReason: resolvedProfile.disabledReason,
         instantPay: metadata.instantPay !== false,
         notificationsEnabled: metadata.notificationsEnabled !== false,
         instantPayoutFeeBps: Number(metadata.instantPayoutFeeBps || 0),
@@ -104,7 +94,13 @@ export default function useDriverPaymentSettingsData({
     } finally {
       setLoading(false);
     }
-  }, [currentUserId, getDriverPayouts, getDriverProfile, getDriverStats]);
+  }, [
+    checkDriverOnboardingStatus,
+    currentUserId,
+    getDriverPayouts,
+    getDriverProfile,
+    getDriverStats,
+  ]);
 
   useEffect(() => {
     void loadPaymentData();

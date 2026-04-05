@@ -1,6 +1,20 @@
-import { useCallback, useState } from "react";
-import { Alert } from "react-native";
-import { logger } from "../../services/logger";
+import { useCallback, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
+import { logger } from '../../services/logger';
+
+const resolveInstantPayoutTitle = (driverProfile = {}) => {
+  if (!driverProfile?.connectAccountId) {
+    return 'Setup Required';
+  }
+
+  if (!driverProfile?.canReceivePayments) {
+    return driverProfile?.onboardingStatus === 'action_required'
+      ? 'Complete Setup'
+      : 'Under Review';
+  }
+
+  return 'Payout Now';
+};
 
 export default function useDriverEarningsPayoutActions({
   currentUserId,
@@ -13,40 +27,69 @@ export default function useDriverEarningsPayoutActions({
 }) {
   const [payoutLoading, setPayoutLoading] = useState(false);
 
+  const openPayoutSettings = useCallback(() => {
+    navigation.navigate('DriverPaymentSettingsScreen');
+  }, [navigation]);
+
+  const instantPayoutTitle = useMemo(
+    () => resolveInstantPayoutTitle(driverProfile),
+    [driverProfile]
+  );
+
   const handleInstantPayout = useCallback(async () => {
-    if (driverStats.availableBalance <= 0) {
-      Alert.alert("No Balance", "You don't have any available balance to cash out.");
+    if (!currentUserId) {
       return;
     }
 
     if (!driverProfile?.connectAccountId) {
       Alert.alert(
-        "Setup Required",
-        "You need to complete your payment setup before you can receive payouts. Please complete your driver onboarding first.",
+        'Setup Required',
+        'You need to finish payout setup before you can cash out. Open payout settings to complete Stripe onboarding.',
         [
-          { text: "OK", style: "default" },
-          { text: "Setup Now", onPress: () => navigation.navigate("DriverOnboardingScreen") },
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Open Payout Setup', onPress: openPayoutSettings },
         ]
       );
       return;
     }
 
     if (!driverProfile?.canReceivePayments) {
+      const requiresAction = driverProfile?.onboardingStatus === 'action_required';
       Alert.alert(
-        "Account Under Review",
-        "Your payment account is still being reviewed. You'll be able to receive payouts once verification is complete.",
-        [{ text: "OK", style: "default" }]
+        requiresAction ? 'Complete Setup' : 'Account Under Review',
+        requiresAction
+          ? 'Your payout account still needs a few details before instant payouts can be enabled.'
+          : 'Your payout account is still under review. Instant payouts will unlock once verification completes.',
+        [
+          { text: 'OK', style: 'cancel' },
+          {
+            text: requiresAction ? 'Continue Setup' : 'Open Payout Settings',
+            onPress: openPayoutSettings,
+          },
+        ]
+      );
+      return;
+    }
+
+    if (driverStats.availableBalance <= 0) {
+      Alert.alert(
+        'No Balance',
+        "You don't have any available balance to cash out yet.",
+        [
+          { text: 'OK', style: 'cancel' },
+          { text: 'View Payout Settings', onPress: openPayoutSettings },
+        ]
       );
       return;
     }
 
     Alert.alert(
-      "Instant Payout",
+      'Instant Payout',
       `Gross: $${driverStats.availableBalance.toFixed(2)}\nFee: $0.00\nNet: $${driverStats.availableBalance.toFixed(2)}`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "Cash Out",
+          text: 'Cash Out',
           onPress: async () => {
             setPayoutLoading(true);
             try {
@@ -63,16 +106,16 @@ export default function useDriverEarningsPayoutActions({
                     : driverStats.availableBalance - feeAmount
                 );
                 Alert.alert(
-                  "Success",
+                  'Success',
                   `Payout processed.\nGross: $${driverStats.availableBalance.toFixed(2)}\nFee: $${feeAmount.toFixed(2)}\nNet: $${Math.max(0, netAmount).toFixed(2)}`
                 );
                 await loadDriverData();
               } else {
-                throw new Error(result?.error || "Payout failed");
+                throw new Error(result?.error || 'Payout failed');
               }
             } catch (error) {
-              logger.error("DriverEarningsPayoutActions", "Payout error", error);
-              Alert.alert("Error", `Failed to process payout: ${error.message}`);
+              logger.error('DriverEarningsPayoutActions', 'Payout error', error);
+              Alert.alert('Error', `Failed to process payout: ${error.message}`);
             } finally {
               setPayoutLoading(false);
             }
@@ -84,49 +127,24 @@ export default function useDriverEarningsPayoutActions({
     currentUserId,
     driverProfile?.canReceivePayments,
     driverProfile?.connectAccountId,
+    driverProfile?.onboardingStatus,
     driverStats.availableBalance,
     loadDriverData,
-    navigation,
+    openPayoutSettings,
     processInstantPayout,
   ]);
 
   const handlePayoutDetails = useCallback(() => {
-    if (!driverProfile?.connectAccountId) {
-      Alert.alert(
-        "Payout Account",
-        "Complete your driver onboarding to set up payouts via Stripe Connect.",
-        [
-          { text: "OK", style: "default" },
-          { text: "Setup Now", onPress: () => navigation.navigate("DriverOnboardingScreen") },
-        ]
-      );
-      return;
-    }
+    openPayoutSettings();
+  }, [openPayoutSettings]);
 
-    Alert.alert(
-      "Payout Account",
-      `Status: ${driverProfile?.canReceivePayments ? "Active" : "Under Review"}\nAvailable Balance: $${driverStats.availableBalance.toFixed(2)}\nAuto-deposit: Monthly on the 25th (11:00 AM ET)`,
-      [{ text: "OK", style: "default" }]
-    );
-  }, [
-    driverProfile?.canReceivePayments,
-    driverProfile?.connectAccountId,
-    driverStats.availableBalance,
-    navigation,
-  ]);
-
-  const isInstantPayoutDisabled = (
-    loading ||
-    payoutLoading ||
-    driverStats.availableBalance <= 0 ||
-    !driverProfile?.connectAccountId ||
-    !driverProfile?.canReceivePayments
-  );
+  const isInstantPayoutDisabled = loading || payoutLoading || !currentUserId;
 
   return {
     handleInstantPayout,
     handlePayoutDetails,
     isInstantPayoutDisabled,
     payoutLoading,
+    instantPayoutTitle,
   };
 }
