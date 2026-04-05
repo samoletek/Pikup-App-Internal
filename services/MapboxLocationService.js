@@ -13,6 +13,27 @@ import { SUPPORTED_ORDER_COUNTRY_QUERY } from '../constants/orderAvailability';
 const MAPBOX_ACCESS_TOKEN = appConfig.mapbox.publicToken;
 const LAST_LOCATION_KEY = '@pikup_last_location';
 const REVERSE_GEOCODE_TYPES = 'address,poi,place,region,country';
+const FEET_PER_METER = 3.28084;
+const METERS_PER_MILE = 1609.344;
+
+const formatDistanceImperialFromMeters = (metersValue) => {
+  const meters = Number(metersValue);
+  if (!Number.isFinite(meters) || meters < 0) {
+    return 'Calculating...';
+  }
+
+  const feet = meters * FEET_PER_METER;
+  if (feet < 1000) {
+    return `${Math.round(feet)} ft`;
+  }
+
+  const miles = meters / METERS_PER_MILE;
+  if (miles < 10) {
+    return `${miles.toFixed(1)} mi`;
+  }
+
+  return `${Math.round(miles)} mi`;
+};
 
 class MapboxLocationService {
   constructor() {
@@ -69,7 +90,7 @@ class MapboxLocationService {
 
         return {
           distance: {
-            text: `${(route.distance / 1000).toFixed(1)} km`,
+            text: formatDistanceImperialFromMeters(route.distance),
             value: route.distance
           },
           duration: {

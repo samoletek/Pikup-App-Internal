@@ -109,7 +109,10 @@ export const useCameraCaptureSession = ({
             capturedPixels < MIN_PIXELS_FOR_MID_ZOOM);
 
         if (isLikelyTooSoft) {
-          Alert.alert('фото недостаточно чёткое');
+          Alert.alert(
+            'Photo is too blurry',
+            'Try moving closer and holding still, then retake the photo.'
+          );
           return;
         }
 
@@ -119,7 +122,7 @@ export const useCameraCaptureSession = ({
         });
 
         if (!cropRect) {
-          Alert.alert('Не удалось обработать фото. Попробуйте снова.');
+          Alert.alert('Could not process photo. Please try again.');
           return;
         }
 
@@ -134,7 +137,7 @@ export const useCameraCaptureSession = ({
         );
 
         if (!croppedPhoto?.uri) {
-          Alert.alert('Не удалось обработать фото. Попробуйте снова.');
+          Alert.alert('Could not process photo. Please try again.');
           return;
         }
 

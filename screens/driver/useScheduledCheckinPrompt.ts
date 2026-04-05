@@ -4,13 +4,20 @@ import { resolveDriverCheckinState } from './DriverHomeScreen.utils';
 import { logger } from '../../services/logger';
 
 type TripLike = Record<string, any>;
+type ServiceResultLike = {
+  success?: boolean;
+  error?: string;
+  errorCode?: string | null;
+  trip?: TripLike;
+  requeuedTrip?: TripLike;
+};
 
 type UseScheduledCheckinPromptParams = {
   acceptedScheduledRequests: TripLike[];
   hasActiveTrip: boolean;
   isOnline: boolean;
-  confirmScheduledTripCheckin?: ((requestId: string) => Promise<TripLike | null | undefined>) | null;
-  declineScheduledTripCheckin?: ((requestId: string) => Promise<TripLike | null | undefined>) | null;
+  confirmScheduledTripCheckin?: ((requestId: string) => Promise<TripLike | ServiceResultLike | null | undefined>) | null;
+  declineScheduledTripCheckin?: ((requestId: string) => Promise<TripLike | ServiceResultLike | null | undefined>) | null;
   refreshAcceptedScheduledRequests: (options?: { silent?: boolean }) => Promise<TripLike[]>;
   setAcceptedScheduledRequests: Dispatch<SetStateAction<TripLike[]>>;
 };
@@ -52,7 +59,16 @@ export default function useScheduledCheckinPrompt({
 
       try {
         inFlightTripIdRef.current = requestId;
-        const updatedTrip = await confirmScheduledTripCheckin(requestId);
+        const confirmationResult = await confirmScheduledTripCheckin(requestId);
+        if (confirmationResult && typeof confirmationResult === 'object' && 'success' in confirmationResult) {
+          if (!confirmationResult.success) {
+            throw new Error(confirmationResult.error || 'Could not confirm this scheduled trip.');
+          }
+        }
+        const updatedTrip =
+          confirmationResult && typeof confirmationResult === 'object' && 'trip' in confirmationResult
+            ? confirmationResult.trip
+            : confirmationResult;
         if (updatedTrip?.id) {
           setAcceptedScheduledRequests((prevTrips) => replaceTripById(prevTrips, updatedTrip));
         }
@@ -81,7 +97,12 @@ export default function useScheduledCheckinPrompt({
 
       try {
         inFlightTripIdRef.current = requestId;
-        await declineScheduledTripCheckin(requestId);
+        const declineResult = await declineScheduledTripCheckin(requestId);
+        if (declineResult && typeof declineResult === 'object' && 'success' in declineResult) {
+          if (!declineResult.success) {
+            throw new Error(declineResult.error || 'Could not decline this scheduled trip.');
+          }
+        }
         setAcceptedScheduledRequests((prevTrips) => removeTripById(prevTrips, requestId));
         await refreshAcceptedScheduledRequests({ silent: true });
       } catch (error) {

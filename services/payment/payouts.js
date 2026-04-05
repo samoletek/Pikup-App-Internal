@@ -14,6 +14,29 @@ import {
 } from './common';
 import { updateDriverPaymentProfile } from './profile';
 
+const sanitizeIdempotencyToken = (value) => String(value || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9:_-]/g, '')
+  .slice(0, 150);
+
+const resolvePayoutRequestOptions = (currentUserOrOptions, maybeOptions) => {
+  if (maybeOptions && typeof maybeOptions === 'object') {
+    return maybeOptions;
+  }
+
+  const hasAuthShape = Boolean(
+    currentUserOrOptions?.uid ||
+    currentUserOrOptions?.id ||
+    currentUserOrOptions?.email
+  );
+
+  if (!hasAuthShape && currentUserOrOptions && typeof currentUserOrOptions === 'object') {
+    return currentUserOrOptions;
+  }
+
+  return {};
+};
+
 /**
  * Get driver earnings history.
  */
@@ -81,7 +104,12 @@ export const getDriverPayouts = async (driverId) => {
 /**
  * Request instant payout.
  */
-export const requestInstantPayout = async (driverId, amount, currentUser = null) => {
+export const requestInstantPayout = async (
+  driverId,
+  amount,
+  currentUserOrOptions = null,
+  maybeOptions = null
+) => {
   try {
     if (!driverId) {
       return failureResult('Driver ID is required');
@@ -109,9 +137,18 @@ export const requestInstantPayout = async (driverId, amount, currentUser = null)
       return failureResult(`Insufficient available balance. Available: $${availableBalance.toFixed(2)}`);
     }
 
-    const transferGroup = `instant_payout:${driverId}:${Date.now()}`;
     const payoutMode = 'instant';
-    const idempotencyKey = `instant_payout:${driverId}:${normalizedAmount.toFixed(2)}:${Date.now()}`;
+    const normalizedAmountCents = Math.round(normalizedAmount * 100);
+    const transferGroup = `instant_payout:${driverId}:${normalizedAmountCents}`;
+    const requestOptions = resolvePayoutRequestOptions(currentUserOrOptions, maybeOptions);
+    const explicitIdempotencyKey = sanitizeIdempotencyToken(requestOptions?.idempotencyKey);
+    const idempotencyKey = explicitIdempotencyKey || [
+      'instant_payout',
+      driverId,
+      payoutMode,
+      normalizedAmountCents,
+      Date.now(),
+    ].join(':');
 
     const { data, error } = await invokeProcessPayout({
       amount: Number(normalizedAmount.toFixed(2)),

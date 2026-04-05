@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking } from 'react-native';
 import {
   mergeDriverOnboardingStatus,
@@ -21,6 +21,13 @@ const normalizeMoneyInput = (value) => {
 };
 
 const roundToCents = (value) => Number((Number(value || 0)).toFixed(2));
+const PAYOUT_IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
+
+const buildPayoutIdempotencyKey = ({ driverId, amountCents }) => {
+  const normalizedDriverId = String(driverId || 'unknown').trim() || 'unknown';
+  const randomToken = Math.random().toString(36).slice(2, 10);
+  return `instant_payout:${normalizedDriverId}:${amountCents}:${Date.now()}:${randomToken}`;
+};
 
 export default function useDriverPaymentSettingsData({
   createDriverConnectAccount,
@@ -39,6 +46,34 @@ export default function useDriverPaymentSettingsData({
   const [refreshingOnboarding, setRefreshingOnboarding] = useState(false);
   const [paymentData, setPaymentData] = useState(null);
   const [payoutAmountInput, setPayoutAmountInput] = useState('');
+  const payoutAttemptRef = useRef({ key: null, amountCents: null, createdAt: 0 });
+
+  const resolvePayoutIdempotencyKey = useCallback((grossAmount) => {
+    const amountCents = Math.round(Number(grossAmount || 0) * 100);
+    const now = Date.now();
+    const previousAttempt = payoutAttemptRef.current;
+    const canReuseAttemptKey = (
+      previousAttempt?.key &&
+      previousAttempt?.amountCents === amountCents &&
+      (now - Number(previousAttempt?.createdAt || 0)) < PAYOUT_IDEMPOTENCY_TTL_MS
+    );
+
+    if (canReuseAttemptKey) {
+      return previousAttempt.key;
+    }
+
+    const nextKey = buildPayoutIdempotencyKey({ driverId: currentUserId, amountCents });
+    payoutAttemptRef.current = {
+      key: nextKey,
+      amountCents,
+      createdAt: now,
+    };
+    return nextKey;
+  }, [currentUserId]);
+
+  const resetPayoutAttempt = useCallback(() => {
+    payoutAttemptRef.current = { key: null, amountCents: null, createdAt: 0 };
+  }, []);
 
   const loadPaymentData = useCallback(async () => {
     if (!currentUserId) {
@@ -248,9 +283,11 @@ export default function useDriverPaymentSettingsData({
           onPress: async () => {
             setProcessingPayout(true);
             try {
+              const idempotencyKey = resolvePayoutIdempotencyKey(grossAmount);
               const result = await requestInstantPayout?.(
                 currentUserId,
-                grossAmount
+                grossAmount,
+                { idempotencyKey }
               );
               if (!result?.success) {
                 throw new Error(result?.error || 'Payout failed');
@@ -263,6 +300,7 @@ export default function useDriverPaymentSettingsData({
               );
               setPayoutAmountInput('');
               await loadPaymentData();
+              resetPayoutAttempt();
             } catch (error) {
               Alert.alert('Payout Error', error?.message || 'Unable to process payout.');
             } finally {
@@ -272,7 +310,14 @@ export default function useDriverPaymentSettingsData({
         },
       ]
     );
-  }, [currentUserId, loadPaymentData, paymentData, requestInstantPayout]);
+  }, [
+    currentUserId,
+    loadPaymentData,
+    paymentData,
+    requestInstantPayout,
+    resolvePayoutIdempotencyKey,
+    resetPayoutAttempt,
+  ]);
 
   const handleInstantPayoutAll = useCallback(async () => {
     if (!paymentData) {

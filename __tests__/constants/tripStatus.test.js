@@ -1,5 +1,6 @@
 import {
   TRIP_STATUS,
+  getTripScheduledAtMs,
   isActiveTripStatus,
   normalizeTripStatus,
   toDbTripStatus,
@@ -24,5 +25,17 @@ describe("tripStatus", () => {
   test("detects active vs non-active statuses", () => {
     expect(isActiveTripStatus("accepted")).toBe(true);
     expect(isActiveTripStatus("completed")).toBe(false);
+  });
+
+  test("resolves scheduled timestamp from nested dispatch requirements fallback fields", () => {
+    const timestamp = getTripScheduledAtMs({
+      originalData: {
+        dispatch_requirements: {
+          scheduledTime: '2026-04-10T15:30:00.000Z',
+        },
+      },
+    });
+
+    expect(timestamp).toBe(new Date('2026-04-10T15:30:00.000Z').getTime());
   });
 });

@@ -1,4 +1,6 @@
 export const ARRIVAL_UNLOCK_RADIUS_METERS = 30;
+const FEET_PER_METER = 3.28084;
+const METERS_PER_MILE = 1609.344;
 
 export const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   const earthRadiusKm = 6371;
@@ -17,10 +19,22 @@ const toRadians = (deg) => {
 };
 
 export const formatDistance = (distanceInMeters) => {
-  if (distanceInMeters < 1000) {
-    return `${Math.round(distanceInMeters)} m`;
+  const normalizedDistanceMeters = Number(distanceInMeters);
+  if (!Number.isFinite(normalizedDistanceMeters) || normalizedDistanceMeters < 0) {
+    return 'Calculating...';
   }
-  return `${(distanceInMeters / 1000).toFixed(1)} km`;
+
+  const feet = normalizedDistanceMeters * FEET_PER_METER;
+  if (feet < 1000) {
+    return `${Math.round(feet)} ft`;
+  }
+
+  const miles = normalizedDistanceMeters / METERS_PER_MILE;
+  if (miles < 10) {
+    return `${miles.toFixed(1)} mi`;
+  }
+
+  return `${Math.round(miles)} mi`;
 };
 
 const resolveTurnLikeIcon = (modifier = '') => {

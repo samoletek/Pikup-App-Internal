@@ -205,6 +205,60 @@ describe('driverEarningsService.updateDriverEarnings', () => {
     );
   });
 
+  test('uses Atlanta week boundary for weekly totals around UTC midnight crossover', async () => {
+    resolveDriverPayoutAmount.mockImplementation((trip) => {
+      return Number(trip?.pricing?.driverPayout ?? trip?.pickup_location?.pricing?.driverPayout ?? 0);
+    });
+    fetchTripsByDriverId.mockImplementation(({ status }) => {
+      if (status === 'completed') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'trip-sunday-atlanta',
+              price: 30,
+              status: 'completed',
+              completed_at: '2026-04-06T02:30:00.000Z',
+              pickup_location: { pricing: { driverPayout: 12 } },
+            },
+            {
+              id: 'trip-monday-atlanta',
+              price: 50,
+              status: 'completed',
+              completed_at: '2026-04-06T05:30:00.000Z',
+              pickup_location: { pricing: { driverPayout: 20 } },
+            },
+          ],
+          error: null,
+        });
+      }
+
+      return Promise.resolve({
+        data: [{ id: 'a' }, { id: 'b' }],
+        error: null,
+      });
+    });
+    fetchDriverRowById.mockResolvedValue({
+      data: {
+        id: 'driver-1',
+        metadata: {
+          availableBalance: 0,
+          totalPayouts: 0,
+        },
+      },
+      error: null,
+    });
+
+    const stats = await getDriverStats('driver-1');
+
+    expect(stats).toEqual(
+      expect.objectContaining({
+        currentWeekTrips: 1,
+        weeklyEarnings: 20,
+        totalTrips: 2,
+      })
+    );
+  });
+
   test('derives available balance from settled earnings and payouts instead of stale metadata balance', async () => {
     resolveDriverPayoutAmount.mockImplementation((trip) => {
       return Number(trip?.pricing?.driverPayout ?? trip?.pickup_location?.pricing?.driverPayout ?? 0);

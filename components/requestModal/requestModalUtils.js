@@ -1,4 +1,5 @@
 import { Dimensions } from 'react-native';
+import { getTripScheduledAtMs } from '../../constants/tripStatus';
 
 const { width, height } = Dimensions.get('window');
 
@@ -7,12 +8,11 @@ export const CARD_WIDTH = width * 0.9;
 export const MODAL_DISMISS_DRAG_THRESHOLD = 80;
 
 export const isScheduledRequest = (request = {}) =>
-  Boolean(
-    request?.scheduledTime ||
-      request?.scheduled_time ||
-      request?.dispatchRequirements?.scheduleType === 'scheduled' ||
-      request?.dispatch_requirements?.scheduleType === 'scheduled'
-  );
+  Number.isFinite(getTripScheduledAtMs(request)) ||
+  request?.dispatchRequirements?.scheduleType === 'scheduled' ||
+  request?.dispatch_requirements?.scheduleType === 'scheduled' ||
+  request?.originalData?.dispatchRequirements?.scheduleType === 'scheduled' ||
+  request?.originalData?.dispatch_requirements?.scheduleType === 'scheduled';
 
 export const shouldRenderRequestTimer = (request = {}) =>
   !isScheduledRequest(request) && Boolean(request?.expiresAt);

@@ -85,12 +85,32 @@ export const isActiveTripStatus = (status) => {
 };
 
 export const getTripScheduledAtMs = (trip) => {
-  const rawScheduledTime = trip?.scheduledTime || trip?.scheduled_time || null;
-  if (!rawScheduledTime) {
+  if (!trip || typeof trip !== 'object') {
     return Number.NaN;
   }
 
-  return new Date(rawScheduledTime).getTime();
+  const candidates = [
+    trip.scheduledTime,
+    trip.scheduled_time,
+    trip.dispatchRequirements?.scheduledTime,
+    trip.dispatch_requirements?.scheduledTime,
+    trip.originalData?.scheduledTime,
+    trip.originalData?.scheduled_time,
+    trip.originalData?.dispatchRequirements?.scheduledTime,
+    trip.originalData?.dispatch_requirements?.scheduledTime,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const timestamp = new Date(candidate).getTime();
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return Number.NaN;
 };
 
 export const isFutureScheduledTrip = (trip, nowDate = new Date()) => {

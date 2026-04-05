@@ -1,4 +1,4 @@
-import { TRIP_STATUS } from '../../constants/tripStatus';
+import { TRIP_STATUS, getTripScheduledAtMs } from '../../constants/tripStatus';
 
 export const DELIVERY_STATUS_STEPS = [
   {
@@ -69,10 +69,10 @@ export const formatDeliveryEta = (statusIndex) => {
   return ETA_BY_STATUS_INDEX[statusIndex] || '-- min';
 };
 
-export const isScheduledDeliveryRequest = (requestData) => Boolean(
-  requestData?.scheduledTime ||
-  requestData?.scheduled_time ||
+export const isScheduledDeliveryRequest = (requestData) =>
+  Number.isFinite(getTripScheduledAtMs(requestData)) ||
   requestData?.scheduleType === 'scheduled' ||
   requestData?.dispatchRequirements?.scheduleType === 'scheduled' ||
-  requestData?.dispatch_requirements?.scheduleType === 'scheduled'
-);
+  requestData?.dispatch_requirements?.scheduleType === 'scheduled' ||
+  requestData?.originalData?.dispatchRequirements?.scheduleType === 'scheduled' ||
+  requestData?.originalData?.dispatch_requirements?.scheduleType === 'scheduled';

@@ -76,4 +76,27 @@ describe('payment/payouts.requestInstantPayout', () => {
       })
     );
   });
+
+  test('reuses explicit idempotency key for safe payout retry handling', async () => {
+    getDriverProfileRow.mockResolvedValue({
+      id: 'driver-1',
+      stripe_account_id: 'acct_123',
+      metadata: {
+        availableBalance: 5,
+        totalPayouts: 10,
+        payouts: [],
+      },
+    });
+
+    await requestInstantPayout('driver-1', 20, {
+      idempotencyKey: 'instant_payout:driver-1:retry-123',
+    });
+
+    expect(invokeProcessPayout).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: 'instant_payout:driver-1:retry-123',
+        transferGroup: 'instant_payout:driver-1:2000',
+      })
+    );
+  });
 });

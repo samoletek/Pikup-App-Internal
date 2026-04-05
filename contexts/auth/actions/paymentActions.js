@@ -13,8 +13,8 @@ export const createPaymentDomainActions = ({
   const checkDriverOnboardingStatus = (connectAccountId = null) =>
     PaymentService.checkDriverOnboardingStatus(connectAccountId, currentUser);
 
-  const requestInstantPayout = (driverId, amount) =>
-    PaymentService.requestInstantPayout(driverId, amount, currentUser);
+  const requestInstantPayout = (driverId, amount, options = null) =>
+    PaymentService.requestInstantPayout(driverId, amount, currentUser, options);
 
   const createVerificationSession = (userData) =>
     PaymentService.createVerificationSession(userData, currentUser);

@@ -3,6 +3,7 @@ import { mapTripFromDb } from './tripMapper';
 import { getPlatformFees, resolveDriverPayoutAmount } from './PricingService';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
+import { resolveAtlantaWeekStartKey } from './timezone';
 import { fetchDriverRowById, updateDriverRowById } from './repositories/paymentRepository';
 import {
   createRealtimeChannel,
@@ -162,16 +163,13 @@ export const getDriverStats = async (driverId) => {
       );
     }
 
-    const now = new Date();
-    const currentDay = now.getDay();
-    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-    const mondayDate = new Date(now);
-    mondayDate.setDate(now.getDate() + mondayOffset);
-    mondayDate.setHours(0, 0, 0, 0);
+    const currentWeekKey = resolveAtlantaWeekStartKey(new Date());
 
     const thisWeekTrips = completedTrips.filter((trip) => {
       const tripDate = getTripCompletionDate(trip);
-      return tripDate ? tripDate >= mondayDate : false;
+      return tripDate && currentWeekKey
+        ? resolveAtlantaWeekStartKey(tripDate) === currentWeekKey
+        : false;
     });
 
     const currentWeekTrips = thisWeekTrips.length;

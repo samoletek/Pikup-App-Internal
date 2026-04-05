@@ -1,5 +1,13 @@
 import { TRIP_STATUS } from '../../../constants/tripStatus';
 import { resolveDriverPayoutAmount } from '../../../services/PricingService';
+import {
+  getAtlantaDateParts,
+  resolveAtlantaMonthStartIso,
+  resolveAtlantaMonthStartKey,
+  resolveAtlantaWeekStartIso,
+  resolveAtlantaWeekStartKey,
+  resolveAtlantaWeekdayIndex,
+} from '../../../services/timezone';
 import { resolveActualTripDurationMinutes } from '../../../services/tripDurationUtils';
 
 const toPositiveNumber = (value) => {
@@ -139,15 +147,10 @@ const getTripEarningsAmount = (trip = {}) => {
 export const getPeriodStartDate = (period) => {
   const now = new Date();
   if (period === 'month') {
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    return new Date(resolveAtlantaMonthStartIso(now));
   }
 
-  const currentDay = now.getDay();
-  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-  return monday;
+  return new Date(resolveAtlantaWeekStartIso(now));
 };
 
 export const processTripsIntoChartData = (trips, period) => {
@@ -155,38 +158,45 @@ export const processTripsIntoChartData = (trips, period) => {
 
   if (period === 'month') {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const currentMonthKey = resolveAtlantaMonthStartKey(now);
     const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
     const weekData = weeks.map((label) => ({ day: label, trips: 0, earnings: 0 }));
 
     const monthTrips = trips.filter((trip) => {
       const tripDate = getTripCompletedDate(trip);
-      return tripDate ? tripDate >= monthStart : false;
+      return tripDate && currentMonthKey
+        ? resolveAtlantaMonthStartKey(tripDate) === currentMonthKey
+        : false;
     });
 
     monthTrips.forEach((trip) => {
       const tripDate = getTripCompletedDate(trip);
-      if (!tripDate) {
+      const atlantaParts = tripDate ? getAtlantaDateParts(tripDate) : null;
+      if (!atlantaParts) {
         return;
       }
-      const weekIndex = Math.min(Math.floor((tripDate.getDate() - 1) / 7), 4);
+
+      const weekIndex = Math.min(Math.floor((atlantaParts.day - 1) / 7), 4);
       weekData[weekIndex].trips += 1;
       weekData[weekIndex].earnings += getTripEarningsAmount(trip);
     });
 
-    return weekData.filter((_, index) => {
-      const weekStart = new Date(monthStart);
-      weekStart.setDate(1 + index * 7);
-      return weekStart <= now;
-    });
+    const nowAtlantaParts = getAtlantaDateParts(now);
+    const currentMonthWeekIndex = nowAtlantaParts
+      ? Math.min(Math.floor((nowAtlantaParts.day - 1) / 7), 4)
+      : 4;
+
+    return weekData.slice(0, currentMonthWeekIndex + 1);
   }
 
   const weekData = daysOfWeek.map((day) => ({ day, trips: 0, earnings: 0 }));
-  const periodStart = getPeriodStartDate('week');
+  const currentWeekKey = resolveAtlantaWeekStartKey(new Date());
 
   const filteredTrips = trips.filter((trip) => {
     const tripDate = getTripCompletedDate(trip);
-    return tripDate ? tripDate >= periodStart : false;
+    return tripDate && currentWeekKey
+      ? resolveAtlantaWeekStartKey(tripDate) === currentWeekKey
+      : false;
   });
 
   filteredTrips.forEach((trip) => {
@@ -194,9 +204,9 @@ export const processTripsIntoChartData = (trips, period) => {
     if (!tripDate) {
       return;
     }
-    const dayIndex = tripDate.getDay() === 0 ? 6 : tripDate.getDay() - 1;
+    const dayIndex = resolveAtlantaWeekdayIndex(tripDate);
 
-    if (dayIndex >= 0 && dayIndex < 7) {
+    if (Number.isInteger(dayIndex) && dayIndex >= 0 && dayIndex < 7) {
       weekData[dayIndex].trips += 1;
       weekData[dayIndex].earnings += getTripEarningsAmount(trip);
     }

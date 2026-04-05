@@ -1,6 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { logger } from '../../services/logger';
+
+const PAYOUT_IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
+
+const buildPayoutIdempotencyKey = ({ driverId, amountCents }) => {
+  const normalizedDriverId = String(driverId || 'unknown').trim() || 'unknown';
+  const randomToken = Math.random().toString(36).slice(2, 10);
+  return `instant_payout:${normalizedDriverId}:${amountCents}:${Date.now()}:${randomToken}`;
+};
 
 const resolveInstantPayoutTitle = (driverProfile = {}) => {
   if (!driverProfile?.connectAccountId) {
@@ -26,10 +34,38 @@ export default function useDriverEarningsPayoutActions({
   navigation,
 }) {
   const [payoutLoading, setPayoutLoading] = useState(false);
+  const payoutAttemptRef = useRef({ key: null, amountCents: null, createdAt: 0 });
 
   const openPayoutSettings = useCallback(() => {
     navigation.navigate('DriverPaymentSettingsScreen');
   }, [navigation]);
+
+  const resolvePayoutIdempotencyKey = useCallback((grossAmount) => {
+    const amountCents = Math.round(Number(grossAmount || 0) * 100);
+    const now = Date.now();
+    const previousAttempt = payoutAttemptRef.current;
+    const canReuseAttemptKey = (
+      previousAttempt?.key &&
+      previousAttempt?.amountCents === amountCents &&
+      (now - Number(previousAttempt?.createdAt || 0)) < PAYOUT_IDEMPOTENCY_TTL_MS
+    );
+
+    if (canReuseAttemptKey) {
+      return previousAttempt.key;
+    }
+
+    const nextKey = buildPayoutIdempotencyKey({ driverId: currentUserId, amountCents });
+    payoutAttemptRef.current = {
+      key: nextKey,
+      amountCents,
+      createdAt: now,
+    };
+    return nextKey;
+  }, [currentUserId]);
+
+  const resetPayoutAttempt = useCallback(() => {
+    payoutAttemptRef.current = { key: null, amountCents: null, createdAt: 0 };
+  }, []);
 
   const instantPayoutTitle = useMemo(
     () => resolveInstantPayoutTitle(driverProfile),
@@ -93,9 +129,11 @@ export default function useDriverEarningsPayoutActions({
           onPress: async () => {
             setPayoutLoading(true);
             try {
+              const idempotencyKey = resolvePayoutIdempotencyKey(driverStats.availableBalance);
               const result = await processInstantPayout?.(
                 currentUserId,
-                driverStats.availableBalance
+                driverStats.availableBalance,
+                { idempotencyKey }
               );
 
               if (result?.success) {
@@ -110,6 +148,7 @@ export default function useDriverEarningsPayoutActions({
                   `Payout processed.\nGross: $${driverStats.availableBalance.toFixed(2)}\nFee: $${feeAmount.toFixed(2)}\nNet: $${Math.max(0, netAmount).toFixed(2)}`
                 );
                 await loadDriverData();
+                resetPayoutAttempt();
               } else {
                 throw new Error(result?.error || 'Payout failed');
               }
@@ -132,6 +171,8 @@ export default function useDriverEarningsPayoutActions({
     loadDriverData,
     openPayoutSettings,
     processInstantPayout,
+    resolvePayoutIdempotencyKey,
+    resetPayoutAttempt,
   ]);
 
   const handlePayoutDetails = useCallback(() => {

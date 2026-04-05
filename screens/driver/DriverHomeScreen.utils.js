@@ -30,23 +30,13 @@ export const resolveDriverOnboardingUiState = (user) => {
     metadataOnboardingStatus === 'declined' ||
     metadataOnboardingStatus === 'rejected'
   );
-  const isOnboardingUnderReview = (
-    metadataOnboardingStatus === 'under_review' ||
-    metadataOnboardingStatus === 'review'
+  const hasPayoutCapability = Boolean(
+    user?.can_receive_payments ??
+    user?.canReceivePayments ??
+    user?.metadata?.canReceivePayments ??
+    false
   );
-  const isOnboardingApproved = (
-    Boolean(
-      user?.onboarding_complete ??
-      user?.onboardingComplete ??
-      user?.can_receive_payments ??
-      user?.canReceivePayments ??
-      user?.metadata?.onboardingComplete ??
-      user?.metadata?.canReceivePayments ??
-      false
-    ) ||
-    metadataOnboardingStatus === 'verified' ||
-    isOnboardingUnderReview
-  );
+  const isOnboardingApproved = hasPayoutCapability;
 
   return {
     showOnboardingRequiredBanner: !isOnboardingApproved || isOnboardingDeclined,

@@ -1,5 +1,5 @@
 import { DROPOFF_PHASE_STATUSES, PICKUP_PHASE_STATUSES, TRIP_STATUS } from '../../constants/tripStatus';
-import { getDistanceFromLatLonInKm } from './navigationMath.utils';
+import { formatDistance, getDistanceFromLatLonInKm } from './navigationMath.utils';
 import { logger } from '../../services/logger';
 
 const FALLBACK_DRIVER_DESTINATION = {
@@ -112,10 +112,7 @@ export function calculateDistanceAndEta(driverCoords, customerCoords) {
     customerCoords.longitude
   );
 
-  const distanceText =
-    distanceInKm < 1
-      ? `${Math.round(distanceInKm * 1000)} m`
-      : `${distanceInKm.toFixed(1)} km`;
+  const distanceText = formatDistance(distanceInKm * 1000);
 
   const timeInMinutes = Math.ceil((distanceInKm / 30) * 60);
   const etaText = timeInMinutes < 1 ? '<1 min' : `${timeInMinutes} min`;

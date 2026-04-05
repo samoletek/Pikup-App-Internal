@@ -86,10 +86,11 @@ export default function useDriverIncomingRequestHandlers({
     try {
       isAcceptingRequestRef.current = true;
       logger.info('DriverIncomingRequestHandlers', 'Accepting incoming request', { requestId: request.id });
-      await acceptRequest(request.id);
+      const acceptedRequest = await acceptRequest(request.id);
+      const activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
 
-      setAcceptedRequestId(request.id);
-      setActiveJob(request);
+      setAcceptedRequestId(activeAcceptedRequest.id);
+      setActiveJob(activeAcceptedRequest);
       setAvailableRequests((prevRequests) =>
         prevRequests.filter((item) => item.id !== request.id)
       );
@@ -98,7 +99,7 @@ export default function useDriverIncomingRequestHandlers({
       setIncomingRequest(null);
       clearIncomingRoute();
 
-      navigation.navigate('GpsNavigationScreen', { request });
+      navigation.navigate('GpsNavigationScreen', { request: activeAcceptedRequest });
     } catch (error) {
       logger.error('DriverIncomingRequestHandlers', 'Error accepting incoming request', error);
       const normalizedMessage = String(error?.message || '').trim();

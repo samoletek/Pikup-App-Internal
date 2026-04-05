@@ -1,4 +1,5 @@
 import { fetchDriverRowById } from '../repositories/paymentRepository';
+import { resolveAtlantaMonthStartIso, resolveAtlantaWeekStartIso } from '../timezone';
 
 export const isNoRowsError = (error) => error?.code === 'PGRST116';
 
@@ -26,14 +27,8 @@ export const toNumber = (value, fallback = 0) => {
 export const periodStartIso = (period = 'week') => {
   const now = new Date();
   if (period === 'month') {
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    return monthStart.toISOString();
+    return resolveAtlantaMonthStartIso(now);
   }
 
-  const currentDay = now.getDay();
-  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
-  const mondayDate = new Date(now);
-  mondayDate.setDate(now.getDate() + mondayOffset);
-  mondayDate.setHours(0, 0, 0, 0);
-  return mondayDate.toISOString();
+  return resolveAtlantaWeekStartIso(now);
 };
