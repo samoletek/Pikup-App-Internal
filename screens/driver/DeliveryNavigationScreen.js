@@ -125,6 +125,24 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const canArriveAtDropoff =
     Number.isFinite(distanceToDropoffMeters) &&
     distanceToDropoffMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
+
+  const nativeNavigationOptions = useMemo(
+    () => ({
+      allowSystemCancel: false,
+      actionCard: {
+        enabled: true,
+        title: 'Dropoff Location',
+        subtitle: requestData?.dropoffAddress || 'Address not available',
+        primaryActionLabel: "I've Arrived at Dropoff",
+        unlockDistanceMeters: ARRIVAL_UNLOCK_RADIUS_METERS,
+        payload: {
+          stage: 'dropoff',
+          requestId: requestData?.id || request?.id || null,
+        },
+      },
+    }),
+    [request?.id, requestData?.dropoffAddress, requestData?.id]
+  );
   
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
   
@@ -159,6 +177,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   const { startNavigation, stopNavigation, isNavigating, isSupported } = useMapboxNavigation({
     origin: driverLocation,
     destination: dropoffLocation,
+    navigationOptions: nativeNavigationOptions,
     onRouteProgress: (progress) => {
       // Update ETA and distance from navigation progress
       if (progress.durationRemaining) {
@@ -171,12 +190,13 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
       }
     },
     onArrival: () => {
-      Alert.alert('Navigation', 'You have arrived at your destination!');
-      stopNavigation();
-      handleArriveAtDropoff();
+      void handleArriveAtDropoff();
     },
     onCancel: () => {
       logger.info('DeliveryNavigationScreen', 'Delivery navigation cancelled by user');
+    },
+    onPrimaryAction: () => {
+      void handleArriveAtDropoffPress();
     },
   });
 

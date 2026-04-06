@@ -177,7 +177,7 @@ module.exports = {
       ],
       [
         "./plugins/withMapboxNavigation",
-        { ios: false, android: false },
+        { ios: true, android: true },
       ],
       "./plugins/withStripeIdentityMaterialTheme",
       ["expo-build-properties", { ios: { useFrameworks: "static" } }],
