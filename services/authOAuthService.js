@@ -133,6 +133,19 @@ export const signInWithApple = async (userRole = 'customer') => {
     const { user, session } = data;
     logger.info('AuthOAuthService', 'Supabase Apple Sign In successful', { userId: user.id });
 
+    const { error: metadataError } = await updateAuthenticatedUser({
+      data: {
+        user_type: userRole,
+      },
+    });
+    if (metadataError) {
+      logger.warn(
+        'AuthOAuthService',
+        'Unable to persist user_type metadata after Apple sign-in',
+        metadataError
+      );
+    }
+
     let firstName = '';
     let lastName = '';
     if (fullName) {

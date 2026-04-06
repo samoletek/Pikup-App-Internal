@@ -70,6 +70,24 @@ export const normalizeDriverPaymentState = (profile = {}) => {
     metadata.onboardingComplete,
   );
 
+  const payoutsEnabled = firstDefinedBoolean(
+    normalizedProfile.payoutsEnabled,
+    normalizedProfile.payouts_enabled,
+    metadata.payoutsEnabled,
+  );
+
+  const detailsSubmitted = firstDefinedBoolean(
+    normalizedProfile.detailsSubmitted,
+    normalizedProfile.details_submitted,
+    metadata.detailsSubmitted,
+  );
+
+  const transfersCapability = firstNonEmptyString(
+    normalizedProfile.transfersCapability,
+    normalizedProfile.transfers_capability,
+    metadata.transfersCapability,
+  );
+
   const disabledReason = firstNonEmptyString(
     normalizedProfile.onboardingDisabledReason,
     normalizedProfile.onboarding_disabled_reason,
@@ -104,6 +122,9 @@ export const normalizeDriverPaymentState = (profile = {}) => {
     connectAccountId,
     canReceivePayments,
     onboardingComplete,
+    payoutsEnabled,
+    detailsSubmitted,
+    transfersCapability,
     onboardingStatus,
     onboardingRequirements: requirements,
     disabledReason,
@@ -145,6 +166,10 @@ export const mergeDriverOnboardingStatus = (profile = {}, onboardingResult = {})
       ),
       onboardingDisabledReason:
         firstNonEmptyString(onboardingResult.disabledReason, metadata.onboardingDisabledReason),
+      transfersCapability:
+        firstNonEmptyString(onboardingResult.transfersCapability, metadata.transfersCapability),
+      payoutsEnabled: firstDefinedBoolean(onboardingResult.payoutsEnabled, metadata.payoutsEnabled),
+      detailsSubmitted: firstDefinedBoolean(onboardingResult.detailsSubmitted, metadata.detailsSubmitted),
       onboardingRequirementsByBucket: {
         currentlyDue: normalizeList(onboardingResult.currentlyDue),
         pastDue: normalizeList(onboardingResult.pastDue),

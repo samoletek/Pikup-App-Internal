@@ -200,6 +200,19 @@ export const login = async (email, password, expectedRole) => {
     }
 
     const resolvedRole = resolved.resolvedRole || expectedRole;
+    const currentMetadataRole = authData.user?.user_metadata?.user_type;
+    if (resolvedRole && currentMetadataRole !== resolvedRole) {
+      const { error: metadataUpdateError } = await updateAuthenticatedUser({
+        data: {
+          user_type: resolvedRole,
+        },
+      });
+
+      if (metadataUpdateError) {
+        logger.warn('AuthService', 'Unable to sync user_type metadata during login', metadataUpdateError);
+      }
+    }
+
     const fullUser = buildFullAuthUser({
       authUser: authData.user,
       profile: resolved.profile,

@@ -15,7 +15,7 @@ export const createVerificationSession = async (userData, currentUser) => {
       userId: currentUser.uid || currentUser.id,
       email: currentUser.email,
       ...userData,
-    });
+    }, currentUser?.accessToken || null);
 
     if (error) {
       throw new Error(error.message || 'Verification session creation failed');
@@ -29,8 +29,11 @@ export const createVerificationSession = async (userData, currentUser) => {
   }
 };
 
-export const getVerificationData = async (sessionId) => {
-  const { data, error } = await invokeGetVerificationData({ sessionId });
+export const getVerificationData = async (sessionId, currentUser = null) => {
+  const { data, error } = await invokeGetVerificationData(
+    { sessionId },
+    currentUser?.accessToken || null
+  );
 
   if (error) {
     throw error;

@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as AuthService from '../services/AuthService';
+import { persistAuthUser } from '../services/authStorageService';
 import { logger } from '../services/logger';
 import {
   detectUserTypeForSession,
@@ -17,6 +18,8 @@ export default function useAuthSessionBootstrap({
   setUserType,
   setIsInitializing,
 }) {
+  const lastKnownUserTypeRef = useRef(null);
+
   useEffect(() => {
     let mounted = true;
     let authTimeout = null;
@@ -39,6 +42,7 @@ export default function useAuthSessionBootstrap({
         if (stored && mounted) {
           setCurrentUser(stored.user);
           setUserType(stored.userType);
+          lastKnownUserTypeRef.current = stored.userType || null;
           markInitialized();
           return true;
         }
@@ -63,19 +67,25 @@ export default function useAuthSessionBootstrap({
       if (!mounted) return;
 
       try {
+        const isSessionReadyEvent =
+          event === 'SIGNED_IN' ||
+          event === 'TOKEN_REFRESHED' ||
+          event === 'USER_UPDATED' ||
+          (event === 'INITIAL_SESSION' && session);
         const shouldSuppressBootstrap = AuthService.consumeRecoveryBootstrapSuppression?.();
         if (shouldSuppressBootstrap && (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session))) {
           markInitialized();
           return;
         }
 
-        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+        if (isSessionReadyEvent) {
           if (!session) return;
 
           const metadata = session.user.user_metadata || {};
           const detectedUserType = await detectUserTypeForSession({
             userId: session.user.id,
             metadataUserType: metadata.user_type,
+            preferredUserType: lastKnownUserTypeRef.current,
           });
 
           const fullUser = {
@@ -91,12 +101,22 @@ export default function useAuthSessionBootstrap({
 
           setCurrentUser(fullUser);
           setUserType(detectedUserType);
+          lastKnownUserTypeRef.current = detectedUserType;
+          void persistAuthUser({ user: fullUser, userType: detectedUserType }).catch((persistError) => {
+            logger.warn('AuthContext', 'Failed to persist auth snapshot', persistError);
+          });
           markInitialized();
 
           fetchUserProfileByRole({ userId: session.user.id, userType: detectedUserType })
             .then((data) => {
               if (data && mounted) {
-                setCurrentUser((prev) => (prev ? { ...prev, ...data } : data));
+                setCurrentUser((prev) => {
+                  const mergedUser = prev ? { ...prev, ...data } : data;
+                  void persistAuthUser({ user: mergedUser, userType: detectedUserType }).catch((persistError) => {
+                    logger.warn('AuthContext', 'Failed to persist merged auth profile', persistError);
+                  });
+                  return mergedUser;
+                });
               }
             })
             .catch((error) => {
@@ -112,6 +132,7 @@ export default function useAuthSessionBootstrap({
         } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
           setCurrentUser(null);
           setUserType(null);
+          lastKnownUserTypeRef.current = null;
           markInitialized();
         }
       } catch (error) {

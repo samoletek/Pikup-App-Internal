@@ -11,7 +11,6 @@ import {
   defaultOnboardingReturnUrl,
   getUserId,
 } from './common';
-import { updateDriverPaymentProfile } from './profile';
 
 const getEdgeFunctionErrorMessage = async (error, fallbackMessage) => {
   const normalized = normalizeError(error, fallbackMessage);
@@ -31,17 +30,6 @@ const getEdgeFunctionErrorMessage = async (error, fallbackMessage) => {
     } catch (_textError) {
       return normalized.message;
     }
-  }
-};
-
-const syncDriverPaymentProfileBestEffort = async (driverId, updates, scope) => {
-  if (!driverId) return;
-
-  try {
-    await updateDriverPaymentProfile(driverId, updates);
-  } catch (profileError) {
-    const normalized = normalizeError(profileError, 'Failed to sync driver payment profile');
-    logger.warn('PaymentService', `${scope}: profile sync skipped`, normalized, profileError);
   }
 };
 
@@ -77,13 +65,6 @@ export const createDriverConnectAccount = async (driverInfo = {}, currentUser = 
     if (!data?.success || !data?.accountId) {
       return failureResult(data?.error || 'Failed to create Stripe Connect account');
     }
-
-    await syncDriverPaymentProfileBestEffort(driverId, {
-      connectAccountId: data.accountId,
-      onboardingComplete: false,
-      canReceivePayments: false,
-      onboardingLastCheckedAt: new Date().toISOString(),
-    }, 'createDriverConnectAccount');
 
     return successResult({
       connectAccountId: data.accountId,
@@ -162,28 +143,6 @@ export const checkDriverOnboardingStatus = async (connectAccountId = null, curre
       return failureResult(data?.error || 'Could not load onboarding status');
     }
 
-    if (driverId) {
-      await syncDriverPaymentProfileBestEffort(
-        driverId,
-        {
-          connectAccountId: data.accountId || connectAccountId || null,
-          onboardingComplete: Boolean(data.onboardingComplete),
-          canReceivePayments: Boolean(data.canReceivePayments),
-          onboardingStatus: data.status || null,
-          onboardingRequirements: Array.isArray(data.requirements) ? data.requirements : [],
-          onboardingRequirementsByBucket: {
-            currentlyDue: Array.isArray(data.currentlyDue) ? data.currentlyDue : [],
-            pastDue: Array.isArray(data.pastDue) ? data.pastDue : [],
-            eventuallyDue: Array.isArray(data.eventuallyDue) ? data.eventuallyDue : [],
-            pendingVerification: Array.isArray(data.pendingVerification) ? data.pendingVerification : [],
-          },
-          onboardingDisabledReason: data.disabledReason || null,
-          onboardingLastCheckedAt: new Date().toISOString(),
-        },
-        'checkDriverOnboardingStatus'
-      );
-    }
-
     const normalizedStatus = data.status || (
       data.canReceivePayments
         ? 'verified'
@@ -202,6 +161,9 @@ export const checkDriverOnboardingStatus = async (connectAccountId = null, curre
       eventuallyDue: Array.isArray(data.eventuallyDue) ? data.eventuallyDue : [],
       pendingVerification: Array.isArray(data.pendingVerification) ? data.pendingVerification : [],
       disabledReason: data.disabledReason || null,
+      transfersCapability: data.transfersCapability || null,
+      payoutsEnabled: Boolean(data.payoutsEnabled),
+      detailsSubmitted: Boolean(data.detailsSubmitted),
       status: normalizedStatus,
     });
   } catch (error) {

@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const stripe = new Stripe(stripeKey, {
   apiVersion: "2022-11-15",
@@ -21,6 +22,11 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const normalizeMetadata = (value: unknown) =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+
 const uniqueStringList = (values: unknown[] = []) =>
   Array.from(
     new Set(
@@ -30,13 +36,46 @@ const uniqueStringList = (values: unknown[] = []) =>
     )
   );
 
+const resolveDriverOnboardingStatus = ({
+  canReceivePayments,
+  onboardingComplete,
+  disabledReason,
+  blockingRequirements,
+  pendingVerification,
+}: {
+  canReceivePayments: boolean;
+  onboardingComplete: boolean;
+  disabledReason: string | null;
+  blockingRequirements: string[];
+  pendingVerification: string[];
+}) => {
+  if (canReceivePayments) {
+    return "verified";
+  }
+
+  if (!onboardingComplete) {
+    return "action_required";
+  }
+
+  const isPendingVerificationOnly = disabledReason === "requirements.pending_verification";
+  if (isPendingVerificationOnly || pendingVerification.length > 0) {
+    return "under_review";
+  }
+
+  if (blockingRequirements.length > 0 || Boolean(disabledReason)) {
+    return "action_required";
+  }
+
+  return "under_review";
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    if (!stripeKey || !supabaseUrl || !supabaseAnonKey) {
+    if (!stripeKey || !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
       throw new Error("Missing required server configuration.");
     }
 
@@ -48,6 +87,7 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const {
       data: { user },
@@ -65,7 +105,7 @@ serve(async (req) => {
       return jsonResponse({ success: false, error: "Forbidden" }, 403);
     }
 
-    const { data: driverRow, error: driverError } = await supabaseClient
+    const { data: driverRow, error: driverError } = await adminClient
       .from("drivers")
       .select("id, stripe_account_id, metadata")
       .eq("id", driverId)
@@ -75,8 +115,20 @@ serve(async (req) => {
       throw driverError;
     }
 
-    const accountId =
-      String(payload?.connectAccountId || "").trim() || driverRow?.stripe_account_id || "";
+    const currentMeta = normalizeMetadata(driverRow?.metadata);
+    const storedAccountId = String(
+      driverRow?.stripe_account_id || currentMeta.connectAccountId || ""
+    ).trim();
+    const requestedAccountId = String(payload?.connectAccountId || "").trim();
+
+    if (requestedAccountId && storedAccountId && requestedAccountId !== storedAccountId) {
+      return jsonResponse(
+        { success: false, error: "Payout destination does not match your onboarding account." },
+        403
+      );
+    }
+
+    const accountId = storedAccountId;
 
     if (!accountId) {
       return jsonResponse({
@@ -97,52 +149,40 @@ serve(async (req) => {
       account.requirements?.pending_verification || []
     );
     const disabledReason = String(account.requirements?.disabled_reason || "").trim() || null;
+    const transfersCapability = String(account.capabilities?.transfers || "").trim().toLowerCase();
+    const isTransfersCapabilityActive = transfersCapability === "active";
+    const isTransfersCapabilityPending = transfersCapability === "pending";
+    const capabilityRequirement = !isTransfersCapabilityActive && !isTransfersCapabilityPending
+      ? ["capabilities.transfers"]
+      : [];
     const blockingRequirements = uniqueStringList([
       ...currentlyDue,
       ...pastDue,
+      ...capabilityRequirement,
     ]);
     const onboardingComplete = Boolean(account.details_submitted);
     const payoutsEnabled = Boolean(account.payouts_enabled);
     const canReceivePayments =
       payoutsEnabled &&
+      isTransfersCapabilityActive &&
       blockingRequirements.length === 0 &&
       !disabledReason;
-    const status = canReceivePayments
-      ? "verified"
-      : disabledReason || blockingRequirements.length > 0 || !onboardingComplete
-        ? "action_required"
-        : "under_review";
-
-    const currentMeta =
-      driverRow?.metadata && typeof driverRow.metadata === "object"
-        ? driverRow.metadata
-        : {};
+    const status = resolveDriverOnboardingStatus({
+      canReceivePayments,
+      onboardingComplete,
+      disabledReason,
+      blockingRequirements,
+      pendingVerification,
+    });
 
     const now = new Date().toISOString();
 
-    const { error: updateError } = await supabaseClient
+    const { error: updateError } = await adminClient
       .from("drivers")
       .update({
         stripe_account_id: accountId,
         onboarding_complete: onboardingComplete,
         can_receive_payments: canReceivePayments,
-        metadata: {
-          ...currentMeta,
-          connectAccountId: accountId,
-          onboardingComplete,
-          canReceivePayments,
-          onboardingStatus: status,
-          onboardingRequirements: blockingRequirements,
-          onboardingRequirementsByBucket: {
-            currentlyDue,
-            pastDue,
-            eventuallyDue,
-            pendingVerification,
-          },
-          onboardingDisabledReason: disabledReason,
-          onboardingLastCheckedAt: now,
-          updatedAt: now,
-        },
         updated_at: now,
       })
       .eq("id", driverId);
@@ -162,6 +202,9 @@ serve(async (req) => {
       eventuallyDue,
       pendingVerification,
       disabledReason,
+      transfersCapability,
+      payoutsEnabled,
+      detailsSubmitted: onboardingComplete,
       status,
     });
   } catch (error) {

@@ -108,9 +108,19 @@ serve(async (req) => {
 
     } catch (error) {
         console.error('Error retrieving verification data:', error);
+        const message = error instanceof Error ? error.message : 'Unexpected error';
+        const normalized = String(message || '').toLowerCase();
+        const status = normalized.includes('unauthorized')
+            ? 401
+            : normalized.includes('forbidden')
+                ? 403
+                : normalized.includes('sessionid is required')
+                    ? 422
+                    : 400;
+
         return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({ error: message }),
+            { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
     }
 })

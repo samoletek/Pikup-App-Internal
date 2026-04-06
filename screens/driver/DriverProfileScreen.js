@@ -82,6 +82,10 @@ export default function DriverProfileScreen({ navigation }) {
 
   const openDriverOnboardingEntry = React.useCallback(async () => {
     let connectAccountId = resolveConnectAccountId();
+    let forcePaymentSetupStep = Boolean(
+      driverProfile?.metadata?.onboardingDebugForcePaymentSetupStep ||
+      currentUser?.metadata?.onboardingDebugForcePaymentSetupStep
+    );
 
     if (!connectAccountId && currentUserId) {
       try {
@@ -92,6 +96,9 @@ export default function DriverProfileScreen({ navigation }) {
           freshProfile?.metadata?.connectAccountId ||
           null;
         connectAccountId = String(freshCandidate || "").trim() || null;
+        forcePaymentSetupStep = forcePaymentSetupStep || Boolean(
+          freshProfile?.metadata?.onboardingDebugForcePaymentSetupStep
+        );
       } catch (_error) {
         // Keep fallback navigation path if profile refresh fails.
       }
@@ -102,8 +109,17 @@ export default function DriverProfileScreen({ navigation }) {
       return;
     }
 
-    navigation.navigate("DriverOnboardingScreen");
-  }, [currentUserId, getDriverProfile, navigation, resolveConnectAccountId]);
+    navigation.navigate("DriverOnboardingScreen", forcePaymentSetupStep ? {
+      forcePaymentSetupStep: true,
+    } : undefined);
+  }, [
+    currentUser?.metadata?.onboardingDebugForcePaymentSetupStep,
+    currentUserId,
+    driverProfile?.metadata?.onboardingDebugForcePaymentSetupStep,
+    getDriverProfile,
+    navigation,
+    resolveConnectAccountId,
+  ]);
 
   const handleStartOnboarding = () => {
     void openDriverOnboardingEntry();

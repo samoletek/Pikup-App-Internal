@@ -63,6 +63,7 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     handleVideoPlaybackStatus,
     identityLoading,
     hasForcedIdentityStepApplied,
+    hasForcedPaymentSetupStepApplied,
     isIdentityVerificationRejected,
     isDraftHydrated,
     isLoadingAddress,
@@ -105,7 +106,10 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     getDriverOnboardingLink,
   });
   const isIdentityStepDeclined = currentStep === 1 && isIdentityVerificationRejected;
-  const isHydratingDraft = !isDraftHydrated || !hasForcedIdentityStepApplied;
+  const isHydratingDraft =
+    !isDraftHydrated ||
+    !hasForcedIdentityStepApplied ||
+    !hasForcedPaymentSetupStepApplied;
   const handleVerifyAgain = React.useCallback(() => {
     if (identityLoading) {
       return;

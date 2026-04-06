@@ -14,10 +14,23 @@ import {
   mergeDriverPreferences,
 } from '../driverPreferencesColumns';
 
+const SENSITIVE_PAYMENT_FIELDS = new Set([
+  'onboardingComplete',
+  'canReceivePayments',
+  'connectAccountId',
+  'onboardingStatus',
+  'onboardingRequirements',
+  'onboardingRequirementsByBucket',
+  'onboardingDisabledReason',
+  'transfersCapability',
+  'payoutsEnabled',
+  'detailsSubmitted',
+]);
+
 /**
  * Update driver payment profile metadata.
  */
-export const updateDriverPaymentProfile = async (driverId, updates = {}) => {
+export const updateDriverPaymentProfile = async (driverId, updates = {}, options = {}) => {
   try {
     if (!driverId) {
       throw new Error('Driver ID is required');
@@ -27,7 +40,31 @@ export const updateDriverPaymentProfile = async (driverId, updates = {}) => {
     const profile = await getDriverProfileRow(driverId);
     const currentMeta = profile?.metadata || {};
 
-    const safeUpdates = updates && typeof updates === 'object' ? updates : {};
+    const providedUpdates = updates && typeof updates === 'object' ? updates : {};
+    const allowSensitivePaymentFields = Boolean(options?.allowSensitivePaymentFields);
+
+    const safeUpdates = {};
+    const ignoredSensitiveFields = [];
+    Object.entries(providedUpdates).forEach(([key, value]) => {
+      if (!allowSensitivePaymentFields && SENSITIVE_PAYMENT_FIELDS.has(key)) {
+        ignoredSensitiveFields.push(key);
+        return;
+      }
+
+      safeUpdates[key] = value;
+    });
+
+    if (ignoredSensitiveFields.length > 0) {
+      logger.warn(
+        'PaymentService',
+        'Ignoring sensitive payment profile fields from client update',
+        {
+          driverId,
+          fields: ignoredSensitiveFields,
+        },
+      );
+    }
+
     const hasDriverPreferencesUpdate = (
       Object.prototype.hasOwnProperty.call(safeUpdates, 'driverPreferences') &&
       safeUpdates.driverPreferences &&
@@ -59,15 +96,15 @@ export const updateDriverPaymentProfile = async (driverId, updates = {}) => {
       );
     }
 
-    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'onboardingComplete')) {
+    if (allowSensitivePaymentFields && Object.prototype.hasOwnProperty.call(safeUpdates, 'onboardingComplete')) {
       columnUpdates.onboarding_complete = Boolean(safeUpdates.onboardingComplete);
     }
 
-    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'canReceivePayments')) {
+    if (allowSensitivePaymentFields && Object.prototype.hasOwnProperty.call(safeUpdates, 'canReceivePayments')) {
       columnUpdates.can_receive_payments = Boolean(safeUpdates.canReceivePayments);
     }
 
-    if (Object.prototype.hasOwnProperty.call(safeUpdates, 'connectAccountId')) {
+    if (allowSensitivePaymentFields && Object.prototype.hasOwnProperty.call(safeUpdates, 'connectAccountId')) {
       columnUpdates.stripe_account_id = safeUpdates.connectAccountId || null;
     }
 

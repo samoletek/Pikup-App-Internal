@@ -10,9 +10,19 @@ import {
 } from '../services/payment/verification';
 
 export default function useDriverIdentityVerification({ currentUser, setFormData }) {
+  const resolveInitialVerificationStatus = () => {
+    const metadataStatus = String(currentUser?.metadata?.identityVerificationStatus || '')
+      .trim()
+      .toLowerCase();
+    const isIdentityVerified = Boolean(currentUser?.identity_verified || metadataStatus === 'completed');
+    return isIdentityVerified ? 'completed' : 'pending';
+  };
+
   const [verificationSessionId, setVerificationSessionId] = useState(null);
   const verificationSessionIdRef = useRef(null);
-  const [verificationStatus, setVerificationStatus] = useState('pending');
+  const handledFlowCompletedSessionRef = useRef(null);
+  const handledFlowFailedSessionRef = useRef(null);
+  const [verificationStatus, setVerificationStatus] = useState(resolveInitialVerificationStatus);
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
 
@@ -49,6 +59,8 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       logger.info('DriverIdentityVerification', 'Verification session received', { sessionId: data.id });
       setVerificationSessionId(data.id);
       verificationSessionIdRef.current = data.id;
+      handledFlowCompletedSessionRef.current = null;
+      handledFlowFailedSessionRef.current = null;
 
       if (!data.ephemeral_key_secret) {
         logger.error('DriverIdentityVerification', 'MISSING ephemeral_key_secret in response', data);
@@ -73,18 +85,22 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 3000;
     const RETRYABLE_STATUSES = new Set(['processing', 'requires_input']);
+    const RETRYABLE_HTTP_STATUSES = new Set([401]);
 
     try {
       setIsLoadingVerificationData(true);
 
       let data = null;
       try {
-        data = await getVerificationData(sessionId);
+        data = await getVerificationData(sessionId, currentUser);
       } catch (error) {
         logger.error('DriverIdentityVerification', 'Error fetching verification data', error);
         let errorStatus = null;
+        let httpStatus = null;
+        let errorMessage = '';
         const response = error?.context;
         if (response) {
+          httpStatus = Number(response?.status || 0) || null;
           try {
             let errorPayload = null;
             if (typeof response.clone === 'function') {
@@ -93,10 +109,31 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
               errorPayload = await response.json();
             }
             errorStatus = errorPayload?.status || null;
+            errorMessage = String(errorPayload?.error || errorPayload?.message || '').trim().toLowerCase();
           } catch (parseError) {
             logger.error('DriverIdentityVerification', 'Failed to parse verification error payload', parseError);
           }
         }
+
+        const isRetryableUnauthorized400 =
+          httpStatus === 400 &&
+          (errorMessage.includes('unauthorized') || errorMessage.includes('jwt'));
+
+        if (
+          ((httpStatus && RETRYABLE_HTTP_STATUSES.has(httpStatus)) || isRetryableUnauthorized400) &&
+          retryCount < MAX_RETRIES
+        ) {
+          logger.warn('DriverIdentityVerification', 'Verification auth check failed, retrying', {
+            httpStatus,
+            errorMessage,
+            retryInSeconds: RETRY_DELAY / 1000,
+            attempt: retryCount + 1,
+            maxRetries: MAX_RETRIES,
+          });
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+          return fetchVerificationData(sessionId, retryCount + 1);
+        }
+
         setIsLoadingVerificationData(false);
         return { verified: false, status: errorStatus || 'error' };
       }
@@ -184,9 +221,32 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
   };
 
   useEffect(() => {
+    const metadataStatus = String(currentUser?.metadata?.identityVerificationStatus || '')
+      .trim()
+      .toLowerCase();
+    if (!currentUser?.identity_verified && metadataStatus !== 'completed') {
+      return;
+    }
+
+    setVerificationStatus((prev) => (prev === 'completed' ? prev : 'completed'));
+  }, [currentUser?.identity_verified, currentUser?.metadata?.identityVerificationStatus]);
+
+  useEffect(() => {
     logger.info('DriverIdentityVerification', 'Stripe Identity status changed', { status });
 
     if (status === 'FlowCompleted') {
+      const activeSessionId = verificationSessionIdRef.current || verificationSessionId;
+      if (activeSessionId && handledFlowCompletedSessionRef.current === activeSessionId) {
+        logger.info('DriverIdentityVerification', 'FlowCompleted already processed for session', {
+          sessionId: activeSessionId,
+        });
+        return;
+      }
+
+      if (activeSessionId) {
+        handledFlowCompletedSessionRef.current = activeSessionId;
+      }
+
       const finalizeIdentityVerification = async () => {
         const activeSessionId = verificationSessionIdRef.current || verificationSessionId;
         if (!activeSessionId || !currentUser) {
@@ -252,6 +312,18 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       logger.warn('DriverIdentityVerification', 'Verification was canceled by user');
       setVerificationStatus('canceled');
     } else if (status === 'FlowFailed') {
+      const activeSessionId = verificationSessionIdRef.current || verificationSessionId;
+      if (activeSessionId && handledFlowFailedSessionRef.current === activeSessionId) {
+        logger.info('DriverIdentityVerification', 'FlowFailed already processed for session', {
+          sessionId: activeSessionId,
+        });
+        return;
+      }
+
+      if (activeSessionId) {
+        handledFlowFailedSessionRef.current = activeSessionId;
+      }
+
       logger.warn('DriverIdentityVerification', 'Identity SDK reported FlowFailed, rechecking session status');
       const reconcileFailedStatus = async () => {
         const activeSessionId = verificationSessionIdRef.current || verificationSessionId;

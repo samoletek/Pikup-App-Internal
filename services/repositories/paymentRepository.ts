@@ -36,61 +36,9 @@ import type {
   VerifyVehicleResponse,
 } from '../../supabase/functions/_shared/contracts';
 
-const EDGE_TOKEN_EXPIRY_SKEW_SECONDS = 60;
-
 type PaymentMethodsResponse = GetPaymentMethodsResponse & {
   paymentMethods?: PaymentMethod[];
   defaultPaymentMethod?: PaymentMethod | null;
-};
-
-const isSessionFresh = (session?: { access_token?: string; expires_at?: number | null } | null) => {
-  if (!session?.access_token) {
-    return false;
-  }
-
-  const expiresAt = Number(session.expires_at || 0);
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  return expiresAt > nowSeconds + EDGE_TOKEN_EXPIRY_SKEW_SECONDS;
-};
-
-const looksLikeJwt = (token: string) => token.split('.').length === 3;
-
-const isUsableAccessToken = async (token: string) => {
-  const candidate = String(token || '').trim();
-  if (!looksLikeJwt(candidate)) {
-    return false;
-  }
-
-  const { data, error } = await supabase.auth.getUser(candidate);
-  return !error && Boolean(data?.user);
-};
-
-const resolveEdgeAccessToken = async (accessTokenHint?: string | null) => {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  const currentSession = sessionData?.session;
-
-  if (!sessionError && isSessionFresh(currentSession) && await isUsableAccessToken(currentSession.access_token)) {
-    return currentSession.access_token;
-  }
-
-  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-  const refreshedSession = refreshedData?.session;
-
-  if (!refreshError && refreshedSession?.access_token && await isUsableAccessToken(refreshedSession.access_token)) {
-    return refreshedSession.access_token;
-  }
-
-  const currentSessionToken = String(currentSession?.access_token || '').trim();
-  if (await isUsableAccessToken(currentSessionToken)) {
-    return currentSessionToken;
-  }
-
-  const hintedAccessTokenValue = String(accessTokenHint || '').trim();
-  if (await isUsableAccessToken(hintedAccessTokenValue)) {
-    return hintedAccessTokenValue;
-  }
-
-  throw new Error('Session expired. Please sign in again.');
 };
 
 const isInvalidJwtEdgeError = async (error: unknown) => {
@@ -114,20 +62,16 @@ const isInvalidJwtEdgeError = async (error: unknown) => {
   }
 };
 
+const invokeEdgeFunction = async <T>(functionName: string, payload?: Record<string, unknown>) => {
+  return supabase.functions.invoke<T>(functionName, payload ? { body: payload } : undefined);
+};
+
 const invokeWithAuthRetry = async <T>(
   functionName: string,
   payload?: Record<string, unknown>,
+  _accessTokenHint?: string | null,
 ) => {
-  const invoke = async (accessToken: string) =>
-    supabase.functions.invoke<T>(functionName, {
-      ...(payload ? { body: payload } : {}),
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-  const accessToken = await resolveEdgeAccessToken();
-  let result = await invoke(accessToken);
+  let result = await invokeEdgeFunction<T>(functionName, payload);
 
   if (!result.error) {
     return result;
@@ -138,18 +82,29 @@ const invokeWithAuthRetry = async <T>(
     return result;
   }
 
-  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
-  const refreshedToken = String(refreshedData?.session?.access_token || '').trim();
-  if (refreshError || !refreshedToken) {
+  const { error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError) {
     return result;
   }
 
-  result = await invoke(refreshedToken);
+  result = await invokeEdgeFunction<T>(functionName, payload);
   return result;
 };
 
 export const ensurePaymentAuthSessionReady = async () => {
-  await resolveEdgeAccessToken();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw sessionError;
+  }
+
+  if (sessionData?.session?.access_token) {
+    return;
+  }
+
+  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+  if (refreshError || !refreshedData?.session?.access_token) {
+    throw new Error('Session expired. Please sign in again.');
+  }
 };
 
 /**
@@ -211,39 +166,33 @@ export const invokeCreateDriverConnectAccount = async (
   payload: CreateDriverConnectAccountRequest,
   accessTokenHint?: string | null,
 ) => {
-  const accessToken = await resolveEdgeAccessToken(accessTokenHint);
-  return supabase.functions.invoke<CreateDriverConnectAccountResponse>('create-driver-connect-account', {
-    body: payload,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  return invokeWithAuthRetry<CreateDriverConnectAccountResponse>(
+    'create-driver-connect-account',
+    payload,
+    accessTokenHint,
+  );
 };
 
 export const invokeDriverOnboardingLink = async (
   payload: DriverOnboardingLinkRequest,
   accessTokenHint?: string | null,
 ) => {
-  const accessToken = await resolveEdgeAccessToken(accessTokenHint);
-  return supabase.functions.invoke<DriverOnboardingLinkResponse>('get-driver-onboarding-link', {
-    body: payload,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  return invokeWithAuthRetry<DriverOnboardingLinkResponse>(
+    'get-driver-onboarding-link',
+    payload,
+    accessTokenHint,
+  );
 };
 
 export const invokeDriverOnboardingStatus = async (
   payload: DriverOnboardingStatusRequest,
   accessTokenHint?: string | null,
 ) => {
-  const accessToken = await resolveEdgeAccessToken(accessTokenHint);
-  return supabase.functions.invoke<DriverOnboardingStatusResponse>('check-driver-onboarding-status', {
-    body: payload,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  return invokeWithAuthRetry<DriverOnboardingStatusResponse>(
+    'check-driver-onboarding-status',
+    payload,
+    accessTokenHint,
+  );
 };
 
 export const invokeProcessPayout = async (payload: ProcessPayoutRequest) => {
@@ -252,12 +201,26 @@ export const invokeProcessPayout = async (payload: ProcessPayoutRequest) => {
   });
 };
 
-export const invokeCreateVerificationSession = async (payload: CreateVerificationSessionRequest) => {
-  return invokeWithAuthRetry<CreateVerificationSessionResponse>('create-verification-session', payload);
+export const invokeCreateVerificationSession = async (
+  payload: CreateVerificationSessionRequest,
+  accessTokenHint?: string | null,
+) => {
+  return invokeWithAuthRetry<CreateVerificationSessionResponse>(
+    'create-verification-session',
+    payload,
+    accessTokenHint,
+  );
 };
 
-export const invokeGetVerificationData = async (payload: GetVerificationDataRequest) => {
-  return invokeWithAuthRetry<GetVerificationDataResponse>('get-verification-data', payload);
+export const invokeGetVerificationData = async (
+  payload: GetVerificationDataRequest,
+  accessTokenHint?: string | null,
+) => {
+  return invokeWithAuthRetry<GetVerificationDataResponse>(
+    'get-verification-data',
+    payload,
+    accessTokenHint,
+  );
 };
 
 export const invokeVerifyVehicle = async (payload: VerifyVehicleRequest) => {

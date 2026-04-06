@@ -68,6 +68,9 @@ export const resolveDriverOnboardingDestination = async ({
   currentUserId,
   getDriverProfile,
 }) => {
+  const forcePaymentSetupStep = Boolean(
+    currentUser?.metadata?.onboardingDebugForcePaymentSetupStep
+  );
   let connectAccountId = resolveDriverConnectAccountId(currentUser);
 
   if (!connectAccountId && currentUserId) {
@@ -81,7 +84,10 @@ export const resolveDriverOnboardingDestination = async ({
 
   return connectAccountId
     ? { screen: 'DriverOnboardingCompleteScreen', params: { connectAccountId } }
-    : { screen: 'DriverOnboardingScreen' };
+    : {
+      screen: 'DriverOnboardingScreen',
+      params: forcePaymentSetupStep ? { forcePaymentSetupStep: true } : undefined,
+    };
 };
 
 export const shouldBypassDriverReadiness = (user) => {

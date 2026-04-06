@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, AppState, Linking } from 'react-native';
 import {
   mergeDriverOnboardingStatus,
   normalizeDriverPaymentState,
@@ -47,6 +47,8 @@ export default function useDriverPaymentSettingsData({
   const [paymentData, setPaymentData] = useState(null);
   const [payoutAmountInput, setPayoutAmountInput] = useState('');
   const payoutAttemptRef = useRef({ key: null, amountCents: null, createdAt: 0 });
+  const appStateRef = useRef(AppState.currentState);
+  const pendingStripeOnboardingReturnRef = useRef(false);
 
   const resolvePayoutIdempotencyKey = useCallback((grossAmount) => {
     const amountCents = Math.round(Number(grossAmount || 0) * 100);
@@ -141,6 +143,27 @@ export default function useDriverPaymentSettingsData({
     void loadPaymentData();
   }, [loadPaymentData]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      const hasReturnedToForeground = (
+        (previousState === 'inactive' || previousState === 'background') &&
+        nextState === 'active'
+      );
+
+      if (hasReturnedToForeground && pendingStripeOnboardingReturnRef.current) {
+        pendingStripeOnboardingReturnRef.current = false;
+        void loadPaymentData();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [loadPaymentData]);
+
   const onboardingStatusText = useMemo(() => {
     if (!paymentData?.connectAccountId) return 'Not started';
     if (paymentData.canReceivePayments) return 'Active';
@@ -185,8 +208,8 @@ export default function useDriverPaymentSettingsData({
         connectAccountId = createResult.connectAccountId;
 
         if (createResult.onboardingUrl) {
+          pendingStripeOnboardingReturnRef.current = true;
           await Linking.openURL(createResult.onboardingUrl);
-          await loadPaymentData();
           return;
         }
       }
@@ -196,9 +219,10 @@ export default function useDriverPaymentSettingsData({
         throw new Error(linkResult?.error || 'Could not get onboarding link');
       }
 
+      pendingStripeOnboardingReturnRef.current = true;
       await Linking.openURL(linkResult.onboardingUrl);
-      await loadPaymentData();
     } catch (error) {
+      pendingStripeOnboardingReturnRef.current = false;
       Alert.alert('Stripe Onboarding', error?.message || 'Unable to start onboarding.');
     } finally {
       setRefreshingOnboarding(false);
@@ -208,7 +232,6 @@ export default function useDriverPaymentSettingsData({
     currentUser?.email,
     currentUserId,
     getDriverOnboardingLink,
-    loadPaymentData,
     paymentData?.connectAccountId,
   ]);
 

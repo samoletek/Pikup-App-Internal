@@ -141,6 +141,119 @@ const markDriverPayoutByTransferId = async (
   }
 }
 
+const uniqueStringList = (values: unknown[] = []) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  )
+
+const resolveDriverOnboardingStatus = ({
+  canReceivePayments,
+  onboardingComplete,
+  disabledReason,
+  blockingRequirements,
+  pendingVerification,
+}: {
+  canReceivePayments: boolean
+  onboardingComplete: boolean
+  disabledReason: string | null
+  blockingRequirements: string[]
+  pendingVerification: string[]
+}) => {
+  if (canReceivePayments) {
+    return "verified"
+  }
+
+  if (!onboardingComplete) {
+    return "action_required"
+  }
+
+  const isPendingVerificationOnly = disabledReason === "requirements.pending_verification"
+  if (isPendingVerificationOnly || pendingVerification.length > 0) {
+    return "under_review"
+  }
+
+  if (blockingRequirements.length > 0 || Boolean(disabledReason)) {
+    return "action_required"
+  }
+
+  return "under_review"
+}
+
+const syncDriverOnboardingByAccount = async (
+  adminClient: ReturnType<typeof createClient>,
+  account: Stripe.Account,
+) => {
+  const accountId = String(account.id || "").trim()
+  if (!accountId) {
+    return
+  }
+
+  const currentlyDue = uniqueStringList(account.requirements?.currently_due || [])
+  const pastDue = uniqueStringList(account.requirements?.past_due || [])
+  const eventuallyDue = uniqueStringList(account.requirements?.eventually_due || [])
+  const pendingVerification = uniqueStringList(account.requirements?.pending_verification || [])
+  const disabledReason = String(account.requirements?.disabled_reason || "").trim() || null
+  const transfersCapability = String(account.capabilities?.transfers || "").trim().toLowerCase()
+  const isTransfersCapabilityActive = transfersCapability === "active"
+  const isTransfersCapabilityPending = transfersCapability === "pending"
+  const capabilityRequirement = !isTransfersCapabilityActive && !isTransfersCapabilityPending
+    ? ["capabilities.transfers"]
+    : []
+  const blockingRequirements = uniqueStringList([
+    ...currentlyDue,
+    ...pastDue,
+    ...capabilityRequirement,
+  ])
+  const onboardingComplete = Boolean(account.details_submitted)
+  const payoutsEnabled = Boolean(account.payouts_enabled)
+  const canReceivePayments =
+    payoutsEnabled &&
+    isTransfersCapabilityActive &&
+    blockingRequirements.length === 0 &&
+    !disabledReason
+
+  const status = resolveDriverOnboardingStatus({
+    canReceivePayments,
+    onboardingComplete,
+    disabledReason,
+    blockingRequirements,
+    pendingVerification,
+  })
+
+  const nowIso = new Date().toISOString()
+  const { data: driverRows, error: driverFetchError } = await adminClient
+    .from("drivers")
+    .select("id")
+    .eq("stripe_account_id", accountId)
+
+  if (driverFetchError) {
+    throw driverFetchError
+  }
+
+  if (!Array.isArray(driverRows) || driverRows.length === 0) {
+    return
+  }
+
+  for (const driverRow of driverRows) {
+    const { error: updateError } = await adminClient
+      .from("drivers")
+      .update({
+        onboarding_complete: onboardingComplete,
+        can_receive_payments: canReceivePayments,
+        updated_at: nowIso,
+      })
+      .eq("id", String(driverRow.id || ""))
+
+    if (updateError) {
+      throw updateError
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -251,6 +364,11 @@ serve(async (req) => {
     if (event.type === "transfer.reversed") {
       const transfer = event.data.object as Stripe.Transfer
       await markDriverPayoutByTransferId(adminClient, transfer, "reversed")
+    }
+
+    if (event.type === "account.updated") {
+      const account = event.data.object as Stripe.Account
+      await syncDriverOnboardingByAccount(adminClient, account)
     }
 
     return jsonResponse({ received: true })

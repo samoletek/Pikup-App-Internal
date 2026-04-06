@@ -83,9 +83,17 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         )
     } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unexpected error';
+        const normalized = String(message || '').toLowerCase();
+        const status = normalized.includes('unauthorized')
+            ? 401
+            : normalized.includes('forbidden')
+                ? 403
+                : 400;
+
         return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            JSON.stringify({ error: message }),
+            { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         )
     }
 })

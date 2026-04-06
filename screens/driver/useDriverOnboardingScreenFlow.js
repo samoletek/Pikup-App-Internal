@@ -23,11 +23,17 @@ export default function useDriverOnboardingScreenFlow({
 }) {
   const userId = currentUser?.uid || currentUser?.id;
   const forceIdentityStep = Boolean(route?.params?.forceIdentityStep);
+  const forcePaymentSetupStep = Boolean(
+    route?.params?.forcePaymentSetupStep ||
+    currentUser?.metadata?.onboardingDebugForcePaymentSetupStep
+  );
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState(initialFormData);
   const [hasForcedIdentityStepApplied, setHasForcedIdentityStepApplied] = useState(!forceIdentityStep);
+  const [hasForcedPaymentSetupStepApplied, setHasForcedPaymentSetupStepApplied] = useState(!forcePaymentSetupStep);
   const forceIdentityAppliedRef = useRef(false);
+  const forcePaymentSetupAppliedRef = useRef(false);
 
   const {
     verificationStatus,
@@ -146,6 +152,29 @@ export default function useDriverOnboardingScreenFlow({
     setHasForcedIdentityStepApplied(true);
   }, [forceIdentityStep, isDraftHydrated, progressAnim, setCurrentStep, setVerificationStatus]);
 
+  useEffect(() => {
+    if (!forcePaymentSetupStep) {
+      setHasForcedPaymentSetupStepApplied(true);
+      return;
+    }
+
+    if (!isDraftHydrated || forcePaymentSetupAppliedRef.current) {
+      return;
+    }
+
+    forcePaymentSetupAppliedRef.current = true;
+    setVerificationStatus('completed');
+    setCurrentStep(steps.length - 1);
+    progressAnim.setValue(1);
+    setHasForcedPaymentSetupStepApplied(true);
+  }, [
+    forcePaymentSetupStep,
+    isDraftHydrated,
+    progressAnim,
+    setCurrentStep,
+    setVerificationStatus,
+  ]);
+
   const openWebsite = useCallback(async () => {
     try {
       const supported = await Linking.canOpenURL(WEBSITE_URL);
@@ -172,6 +201,17 @@ export default function useDriverOnboardingScreenFlow({
       progressAnim.setValue(1 / (steps.length - 1));
     }
   }, [currentStep, progressAnim, verificationStatus]);
+
+  useEffect(() => {
+    if (forceIdentityStep || !isDraftHydrated) {
+      return;
+    }
+
+    if (currentStep === 1 && verificationStatus === "completed") {
+      setCurrentStep(2);
+      progressAnim.setValue(2 / (steps.length - 1));
+    }
+  }, [currentStep, forceIdentityStep, isDraftHydrated, progressAnim, setCurrentStep, verificationStatus]);
 
   const previousVerificationStatusRef = useRef(verificationStatus);
   useEffect(() => {
@@ -212,7 +252,6 @@ export default function useDriverOnboardingScreenFlow({
     vehicleVerificationStatus,
     createDriverConnectAccount,
     getDriverOnboardingLink,
-    updateDriverPaymentProfile,
     loading,
     setLoading,
   });
@@ -257,6 +296,7 @@ export default function useDriverOnboardingScreenFlow({
     vehicleVerificationResult,
     vehicleVerificationStatus,
     hasForcedIdentityStepApplied,
+    hasForcedPaymentSetupStepApplied,
     isDraftHydrated,
     verificationDataPopulated,
     verificationStatus,

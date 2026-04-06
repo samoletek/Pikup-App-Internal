@@ -47,10 +47,15 @@ export default function WelcomeScreen({ navigation }) {
         try {
           if (userType === "driver") {
             const driverProfile = await getDriverProfile(currentUser.uid || currentUser.id);
+            const forcePaymentSetupStep = Boolean(
+              driverProfile?.metadata?.onboardingDebugForcePaymentSetupStep
+            );
             if (driverProfile?.onboardingComplete) {
               navigation.replace("DriverTabs");
             } else {
-              navigation.replace("DriverOnboardingScreen");
+              navigation.replace("DriverOnboardingScreen", forcePaymentSetupStep ? {
+                forcePaymentSetupStep: true,
+              } : undefined);
             }
           } else {
             navigation.replace("CustomerTabs");

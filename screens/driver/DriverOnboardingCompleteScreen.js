@@ -17,9 +17,16 @@ import { colors, spacing } from "../../styles/theme";
 import styles from "./DriverOnboardingCompleteScreen.styles";
 import useDriverOnboardingCompleteFlow from "./useDriverOnboardingCompleteFlow";
 
+const formatRequirementLabel = (requirement) =>
+  String(requirement || "")
+    .trim()
+    .replace(/[_.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { currentUser } = useAuthIdentity();
+  const { currentUser, refreshProfile } = useAuthIdentity();
   const {
     updateDriverPaymentProfile,
     checkDriverOnboardingStatus,
@@ -40,6 +47,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     isRefreshingStatus,
     pulseAnim,
     scaleAnim,
+    statusDetails,
     verificationStatus,
   } = useDriverOnboardingCompleteFlow({
     connectAccountId,
@@ -47,6 +55,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     updateDriverPaymentProfile,
     checkDriverOnboardingStatus,
     getDriverOnboardingLink,
+    refreshProfile,
     navigation,
   });
   const isVerified = verificationStatus === "verified";
@@ -70,7 +79,29 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     : isActionRequired
       ? "Resume Account Setup"
       : "Go Home";
-  const staticSubtitle = "No action is needed for now. Our partner is reviewing your account details now.";
+  const actionableRequirements = Array.isArray(statusDetails?.requirements)
+    ? statusDetails.requirements.slice(0, 4)
+    : [];
+  const readableRequirements = actionableRequirements
+    .map(formatRequirementLabel)
+    .filter(Boolean);
+  const disabledReason = String(statusDetails?.disabledReason || "").trim();
+  const subtitleText = isVerified
+    ? "Your payout account is active. You can now go online and receive jobs."
+    : isActionRequired
+      ? "Stripe still needs additional details before payouts can be enabled."
+      : isError
+        ? "We could not refresh Stripe status. Please try again."
+        : "Stripe is still processing your account details. This can take a few moments.";
+  const titleText = isVerified
+    ? "All Set Up"
+    : isActionRequired
+      ? "Action Needed"
+      : isError
+        ? "Status Check Failed"
+        : isUnderReview
+          ? "Setup Submitted"
+          : "Checking Setup";
   const currentStatusLabel = isRefreshingStatus
     ? "Updating"
     : isChecking
@@ -200,6 +231,37 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     </View>
   );
 
+  const renderStatusDetails = () => {
+    if (!(isActionRequired || isUnderReview || isError)) {
+      return null;
+    }
+
+    if (!disabledReason && readableRequirements.length === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.statusDetailsCard}>
+        <Text style={styles.statusDetailsTitle}>Details</Text>
+        {disabledReason ? (
+          <Text style={styles.statusDetailsText}>
+            {disabledReason}
+          </Text>
+        ) : null}
+        {readableRequirements.map((item) => (
+          <View key={item} style={styles.statusRequirementRow}>
+            <Ionicons
+              name={isActionRequired ? "alert-circle-outline" : "time-outline"}
+              size={14}
+              color={isActionRequired ? colors.secondary : colors.warning}
+            />
+            <Text style={styles.statusRequirementText}>{item}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderNextSteps = () => (
     <View style={styles.nextStepsSection}>
       <Text style={styles.nextStepsTitle}>What's Next?</Text>
@@ -270,17 +332,18 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
             <Animated.View
               style={[
                 styles.successContent,
-                { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
               ]}
             >
-              <Text style={styles.congratsTitle}>All Set Up</Text>
+              <Text style={styles.congratsTitle}>{titleText}</Text>
               <Text style={styles.congratsSubtitle}>
-                {staticSubtitle}
+                {subtitleText}
               </Text>
             </Animated.View>
           </View>
 
           {renderVerificationStatus()}
+          {renderStatusDetails()}
 
           {verificationStatus === "verified" ? renderNextSteps() : null}
         </View>

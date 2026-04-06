@@ -1,12 +1,15 @@
 import { fetchDriverRowById } from '../repositories/paymentRepository';
 import { resolveAtlantaMonthStartIso, resolveAtlantaWeekStartIso } from '../timezone';
+import { appConfig } from '../../config/appConfig';
 
 export const isNoRowsError = (error) => error?.code === 'PGRST116';
 
 export const getUserId = (currentUser) => currentUser?.uid || currentUser?.id || null;
 
-export const defaultOnboardingRefreshUrl = 'https://pikup-app.com';
-export const defaultOnboardingReturnUrl = 'https://pikup-app.com';
+export const defaultOnboardingRefreshUrl =
+  appConfig?.stripe?.onboardingRefreshUrl || 'https://pikup-app.com';
+export const defaultOnboardingReturnUrl =
+  appConfig?.stripe?.onboardingReturnUrl || 'https://pikup-app.com';
 
 export const getDriverProfileRow = async (driverId) => {
   if (!driverId) return null;

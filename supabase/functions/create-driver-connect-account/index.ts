@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const stripeKey = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const stripe = new Stripe(stripeKey, {
   apiVersion: "2022-11-15",
@@ -17,6 +18,21 @@ const corsHeaders = {
 
 const DEFAULT_REFRESH_URL = "https://pikup-app.com";
 const DEFAULT_RETURN_URL = "https://pikup-app.com";
+const APP_SCHEME = "pikup:";
+const DEFAULT_HTTPS_REDIRECT_HOSTS = ["pikup-app.com", "www.pikup-app.com"];
+
+const parseAllowedHttpsHosts = () => {
+  const configured = String(
+    Deno.env.get("STRIPE_ONBOARDING_ALLOWED_REDIRECT_HOSTS") || ""
+  )
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  return new Set([...DEFAULT_HTTPS_REDIRECT_HOSTS, ...configured]);
+};
+
+const ALLOWED_HTTPS_REDIRECT_HOSTS = parseAllowedHttpsHosts();
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -24,13 +40,57 @@ const jsonResponse = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+const resolveSafeRedirectUrl = (value: unknown, fallbackUrl: string) => {
+  const candidate = String(value || "").trim();
+  if (!candidate) {
+    return fallbackUrl;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol === APP_SCHEME) {
+      return parsed.toString();
+    }
+
+    if (
+      parsed.protocol === "https:" &&
+      ALLOWED_HTTPS_REDIRECT_HOSTS.has(parsed.hostname.toLowerCase())
+    ) {
+      return parsed.toString();
+    }
+  } catch (_error) {
+    // Ignore malformed redirect URLs and fallback to a safe default.
+  }
+
+  return fallbackUrl;
+};
+
+const normalizeMetadata = (value: unknown) =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+
+const ensureTransfersCapabilityRequested = async (accountId: string) => {
+  const account = await stripe.accounts.retrieve(accountId);
+  const transfersCapability = String(account.capabilities?.transfers || "").trim().toLowerCase();
+  if (transfersCapability === "active" || transfersCapability === "pending") {
+    return;
+  }
+
+  await stripe.accounts.update(accountId, {
+    capabilities: {
+      transfers: { requested: true },
+    },
+  });
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    if (!stripeKey || !supabaseUrl || !supabaseAnonKey) {
+    if (!stripeKey || !supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
       throw new Error("Missing required server configuration.");
     }
 
@@ -42,6 +102,7 @@ serve(async (req) => {
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     const {
       data: { user },
@@ -55,14 +116,14 @@ serve(async (req) => {
     const payload = await req.json();
     const driverId = String(payload?.driverId || user.id);
     const email = String(payload?.email || user.email || "").trim() || undefined;
-    const refreshUrl = DEFAULT_REFRESH_URL;
-    const returnUrl = DEFAULT_RETURN_URL;
+    const refreshUrl = resolveSafeRedirectUrl(payload?.refreshUrl, DEFAULT_REFRESH_URL);
+    const returnUrl = resolveSafeRedirectUrl(payload?.returnUrl, DEFAULT_RETURN_URL);
 
     if (driverId !== user.id) {
       return jsonResponse({ success: false, error: "Forbidden" }, 403);
     }
 
-    const { data: driverRow, error: driverError } = await supabaseClient
+    const { data: driverRow, error: driverError } = await adminClient
       .from("drivers")
       .select("id, email, stripe_account_id, metadata")
       .eq("id", driverId)
@@ -72,19 +133,37 @@ serve(async (req) => {
       throw driverError;
     }
 
-    let accountId = driverRow?.stripe_account_id || "";
+    const currentMeta = normalizeMetadata(driverRow?.metadata);
+    const storedAccountId = String(
+      driverRow?.stripe_account_id || currentMeta.connectAccountId || ""
+    ).trim();
+    const requestedAccountId = String(payload?.connectAccountId || "").trim();
+
+    if (requestedAccountId && storedAccountId && requestedAccountId !== storedAccountId) {
+      return jsonResponse(
+        { success: false, error: "Payout destination does not match your onboarding account." },
+        403
+      );
+    }
+
+    let accountId = storedAccountId;
 
     if (!accountId) {
       const account = await stripe.accounts.create({
         type: "express",
         country: "US",
         email: email || driverRow?.email || undefined,
+        capabilities: {
+          transfers: { requested: true },
+        },
         metadata: {
           driver_id: driverId,
         },
       });
       accountId = account.id;
     }
+
+    await ensureTransfersCapabilityRequested(accountId);
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
@@ -93,25 +172,14 @@ serve(async (req) => {
       type: "account_onboarding",
     });
 
-    const currentMeta =
-      driverRow?.metadata && typeof driverRow.metadata === "object"
-        ? driverRow.metadata
-        : {};
-
     const now = new Date().toISOString();
 
-    const { error: updateError } = await supabaseClient
+    const { error: updateError } = await adminClient
       .from("drivers")
       .update({
         stripe_account_id: accountId,
         onboarding_complete: false,
         can_receive_payments: false,
-        metadata: {
-          ...currentMeta,
-          connectAccountId: accountId,
-          onboardingLastCheckedAt: now,
-          updatedAt: now,
-        },
         updated_at: now,
       })
       .eq("id", driverId);

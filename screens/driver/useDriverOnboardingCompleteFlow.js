@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Animated, Linking } from "react-native";
+import { Alert, Animated, AppState, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ONBOARDING_DRAFT_STORAGE_PREFIX } from "./DriverOnboardingScreen.constants";
 import { logger } from "../../services/logger";
@@ -53,6 +53,7 @@ export default function useDriverOnboardingCompleteFlow({
   updateDriverPaymentProfile,
   checkDriverOnboardingStatus,
   getDriverOnboardingLink,
+  refreshProfile,
   navigation,
 }) {
   const userId = currentUser?.uid || currentUser?.id;
@@ -67,6 +68,7 @@ export default function useDriverOnboardingCompleteFlow({
   const pollTimeoutRef = useRef(null);
   const pollIntervalMsRef = useRef(STATUS_POLL_INITIAL_INTERVAL_MS);
   const pulseLoopRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -221,6 +223,25 @@ export default function useDriverOnboardingCompleteFlow({
     };
   }, [checkVerificationStatus, clearStatusPolling, startAnimations]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      const hasReturnedToForeground =
+        (previousState === "background" || previousState === "inactive") &&
+        nextState === "active";
+
+      if (hasReturnedToForeground) {
+        void checkVerificationStatus({ foreground: true, resetBackoff: true });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [checkVerificationStatus]);
+
   const handleContinue = useCallback(async () => {
     setIsLoading(true);
 
@@ -229,11 +250,29 @@ export default function useDriverOnboardingCompleteFlow({
         throw new Error("User not found");
       }
 
+      const latestStatus = await checkDriverOnboardingStatus?.(resolvedConnectAccountId);
+      if (!latestStatus?.success) {
+        throw new Error(latestStatus?.error || "Could not verify Stripe Connect status");
+      }
+
+      const latestNormalizedStatus = resolveNormalizedStatus(latestStatus);
+      const latestStatusDetails = buildStatusDetails(latestStatus, latestNormalizedStatus);
+      setVerificationStatus(latestNormalizedStatus);
+      setStatusDetails(latestStatusDetails);
+
+      if (latestNormalizedStatus !== "verified" || !latestStatus?.canReceivePayments) {
+        const requirementHint = latestStatusDetails.requirements.length > 0
+          ? `\n\nOutstanding requirements:\n${latestStatusDetails.requirements.slice(0, 3).join("\n")}`
+          : "";
+        const baseMessage = latestNormalizedStatus === "action_required"
+          ? "Stripe still needs additional account details. Please resume account setup."
+          : "Stripe is still processing your account. Try again in a moment.";
+
+        Alert.alert("Verification Incomplete", `${baseMessage}${requirementHint}`);
+        return;
+      }
+
       await updateDriverPaymentProfile?.(userId, {
-        onboardingComplete: true,
-        canReceivePayments: true,
-        onboardingStatus: "verified",
-        connectAccountId: resolvedConnectAccountId,
         completedAt: new Date().toISOString(),
         onboardingStep: null,
         onboardingDraft: null,
@@ -241,6 +280,7 @@ export default function useDriverOnboardingCompleteFlow({
       });
 
       await AsyncStorage.removeItem(`${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`);
+      await refreshProfile?.();
 
       navigation.reset({
         index: 0,
@@ -255,7 +295,14 @@ export default function useDriverOnboardingCompleteFlow({
     } finally {
       setIsLoading(false);
     }
-  }, [navigation, resolvedConnectAccountId, updateDriverPaymentProfile, userId]);
+  }, [
+    checkDriverOnboardingStatus,
+    navigation,
+    refreshProfile,
+    resolvedConnectAccountId,
+    updateDriverPaymentProfile,
+    userId,
+  ]);
 
   const handleResumeOnboarding = useCallback(async () => {
     try {

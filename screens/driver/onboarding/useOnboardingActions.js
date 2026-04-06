@@ -19,7 +19,6 @@ export default function useOnboardingActions({
   vehicleVerificationStatus,
   createDriverConnectAccount,
   getDriverOnboardingLink,
-  updateDriverPaymentProfile,
   loading,
   setLoading,
 }) {
@@ -99,16 +98,6 @@ export default function useOnboardingActions({
         throw new Error(onboardingResult?.error || 'Failed to get onboarding link');
       }
 
-      try {
-        await updateDriverPaymentProfile?.(driverId, {
-          connectAccountId: onboardingResult.connectAccountId || connectAccountId,
-          onboardingComplete: false,
-          canReceivePayments: false,
-        });
-      } catch (profileSyncError) {
-        logger.warn('OnboardingActions', 'Skipping non-blocking profile sync before Stripe redirect', profileSyncError);
-      }
-
       await Linking.openURL(onboardingResult.onboardingUrl);
 
       navigation.navigate('DriverOnboardingCompleteScreen', {
@@ -131,7 +120,6 @@ export default function useOnboardingActions({
     getDriverOnboardingLink,
     navigation,
     setLoading,
-    updateDriverPaymentProfile,
   ]);
 
   const handleNext = useCallback(async () => {
