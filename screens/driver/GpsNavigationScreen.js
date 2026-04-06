@@ -124,11 +124,31 @@ export default function GpsNavigationScreen({ route, navigation }) {
   const canArriveAtPickup =
     Number.isFinite(distanceToPickupMeters) &&
     distanceToPickupMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
+
+  const nativeNavigationOptions = useMemo(
+    () => ({
+      allowSystemCancel: false,
+      actionCard: {
+        enabled: true,
+        title: 'Pickup Location',
+        subtitle: requestData?.pickupAddress || 'Address not available',
+        primaryActionLabel: "I've Arrived",
+        secondaryActionLabel: 'Cancel Trip',
+        unlockDistanceMeters: ARRIVAL_UNLOCK_RADIUS_METERS,
+        payload: {
+          stage: 'pickup',
+          requestId: requestData?.id || request?.id || null,
+        },
+      },
+    }),
+    [request?.id, requestData?.id, requestData?.pickupAddress]
+  );
   
   // Mapbox Navigation Integration
   const { startNavigation, stopNavigation, isNavigating, isSupported } = useMapboxNavigation({
     origin: driverLocation,
     destination: customerLocation,
+    navigationOptions: nativeNavigationOptions,
     onRouteProgress: (progress) => {
       // Update ETA and distance from navigation progress
       if (progress.durationRemaining) {
@@ -141,12 +161,16 @@ export default function GpsNavigationScreen({ route, navigation }) {
       }
     },
     onArrival: () => {
-      Alert.alert('Navigation', 'You have arrived at your destination!');
-      stopNavigation();
-      handleArrive();
+      void handleArrive();
     },
     onCancel: () => {
       logger.info('GpsNavigationScreen', 'Navigation cancelled by user');
+    },
+    onPrimaryAction: () => {
+      void handleArrive();
+    },
+    onSecondaryAction: () => {
+      handleCancelTrip();
     },
   });
 

@@ -173,7 +173,7 @@ export default function DeliveryNavigationDriverView({
           onPress={startNavigation}
         >
           <Ionicons name="navigate" size={20} color={colors.white} />
-          <Text style={styles.startNavText}>Start Navigation</Text>
+          <Text style={styles.startNavText}>Open Navigator</Text>
         </TouchableOpacity>
       )}
 

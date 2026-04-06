@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
 import { logger } from '../services/logger';
 
 export default function useAutoMapboxNavigationStart({
@@ -15,7 +14,6 @@ export default function useAutoMapboxNavigationStart({
   useEffect(() => {
     if (
       !enabled ||
-      Platform.OS !== 'ios' ||
       !isSupported ||
       isNavigating ||
       navigationAttempted
@@ -25,9 +23,15 @@ export default function useAutoMapboxNavigationStart({
 
     setNavigationAttempted(true);
 
-    startNavigation().catch((error) => {
-      logger.warn(logScope, fallbackLogMessage, error);
-    });
+    startNavigation({ showAlert: false })
+      .then((started) => {
+        if (!started) {
+          logger.warn(logScope, fallbackLogMessage, { reason: 'native_navigation_not_started' });
+        }
+      })
+      .catch((error) => {
+        logger.warn(logScope, fallbackLogMessage, error);
+      });
   }, [
     enabled,
     isNavigating,

@@ -1,6 +1,7 @@
 import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
 import { normalizeError } from './errorService';
 import { logger } from './logger';
+import { appConfig } from '../config/appConfig';
 
 // Try different possible module names
 const MapboxNavigation = NativeModules.MapboxNavigation || 
@@ -23,21 +24,22 @@ if (__DEV__) {
 
 class MapboxNavigationService {
   constructor() {
-    this.eventEmitter = Platform.OS === 'ios' && isNavigationModuleAvailable
+    this.eventEmitter = isNavigationModuleAvailable
       ? new NativeEventEmitter(MapboxNavigation) 
       : null;
     this.listeners = [];
   }
 
   isAvailable() {
-    return Platform.OS === 'ios' && isNavigationModuleAvailable;
+    return isNavigationModuleAvailable;
   }
 
-  startNavigation(origin, destination) {
+  startNavigation(origin, destination, options = {}) {
     return new Promise((resolve, reject) => {
       logger.info('MapboxNavigationService', '=== START NAVIGATION ATTEMPT ===');
       logger.info('MapboxNavigationService', 'Origin', origin);
       logger.info('MapboxNavigationService', 'Destination', destination);
+      logger.info('MapboxNavigationService', 'Options', options);
       logger.info('MapboxNavigationService', 'MapboxNavigation available', this.isAvailable());
       
       if (!this.isAvailable()) {
@@ -47,8 +49,23 @@ class MapboxNavigationService {
         return;
       }
 
-      logger.info('MapboxNavigationService', 'Calling MapboxNavigation.startNavigation');
-      MapboxNavigation.startNavigation(origin, destination)
+      const supportsOptionsEntry =
+        typeof MapboxNavigation.startNavigationWithOptions === 'function';
+      const optionsWithToken = {
+        ...(options || {}),
+        mapboxAccessToken: appConfig.mapbox.publicToken,
+      };
+      logger.info(
+        'MapboxNavigationService',
+        'Calling MapboxNavigation start method',
+        { supportsOptionsEntry }
+      );
+
+      const startNavigationPromise = supportsOptionsEntry
+        ? MapboxNavigation.startNavigationWithOptions(origin, destination, optionsWithToken)
+        : MapboxNavigation.startNavigation(origin, destination);
+
+      startNavigationPromise
         .then((result) => {
           logger.info('MapboxNavigationService', 'Navigation started successfully', result);
           resolve(result);
