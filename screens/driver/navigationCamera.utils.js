@@ -28,6 +28,7 @@ export const buildNavigationCameraConfig = ({
   distanceToNextTurn,
   heading = 0,
   padding = DEFAULT_CAMERA_PADDING,
+  animationDuration = 900,
 }) => {
   const longitude = Number(location?.longitude);
   const latitude = Number(location?.latitude);
@@ -40,7 +41,7 @@ export const buildNavigationCameraConfig = ({
     zoomLevel: resolveNavigationZoom({ speedMetersPerSecond, distanceToNextTurn }),
     pitch: 60,
     bearing: heading || 0,
-    animationDuration: 900,
+    animationDuration,
     padding: {
       top: padding?.top ?? DEFAULT_CAMERA_PADDING.top,
       bottom: padding?.bottom ?? DEFAULT_CAMERA_PADDING.bottom,

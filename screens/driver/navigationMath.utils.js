@@ -1,6 +1,11 @@
 export const ARRIVAL_UNLOCK_RADIUS_METERS = 30;
 const FEET_PER_METER = 3.28084;
 const METERS_PER_MILE = 1609.344;
+const MIN_MOVEMENT_HEADING_METERS = 4;
+const MIN_MOVEMENT_SPEED_MPS = 1.5;
+const DEFAULT_HEADING_SMOOTHING = 0.3;
+const FAST_HEADING_SMOOTHING = 0.55;
+const LARGE_HEADING_DELTA_DEGREES = 35;
 
 export const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
   const earthRadiusKm = 6371;
@@ -16,6 +21,10 @@ export const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
 
 const toRadians = (deg) => {
   return deg * (Math.PI / 180);
+};
+
+const toDegrees = (radians) => {
+  return radians * (180 / Math.PI);
 };
 
 export const formatDistance = (distanceInMeters) => {
@@ -37,6 +46,113 @@ export const formatDistance = (distanceInMeters) => {
   return `${Math.round(miles)} mi`;
 };
 
+export const normalizeHeading = (heading) => {
+  const normalizedHeading = Number(heading);
+  if (!Number.isFinite(normalizedHeading)) {
+    return null;
+  }
+
+  const boundedHeading = ((normalizedHeading % 360) + 360) % 360;
+  return Number.isFinite(boundedHeading) ? boundedHeading : null;
+};
+
+export const calculateBearing = (start, end) => {
+  const startLatitude = Number(start?.latitude);
+  const startLongitude = Number(start?.longitude);
+  const endLatitude = Number(end?.latitude);
+  const endLongitude = Number(end?.longitude);
+
+  if (
+    !Number.isFinite(startLatitude) ||
+    !Number.isFinite(startLongitude) ||
+    !Number.isFinite(endLatitude) ||
+    !Number.isFinite(endLongitude)
+  ) {
+    return null;
+  }
+
+  const latitude1 = toRadians(startLatitude);
+  const latitude2 = toRadians(endLatitude);
+  const deltaLongitude = toRadians(endLongitude - startLongitude);
+
+  const y = Math.sin(deltaLongitude) * Math.cos(latitude2);
+  const x =
+    Math.cos(latitude1) * Math.sin(latitude2) -
+    Math.sin(latitude1) * Math.cos(latitude2) * Math.cos(deltaLongitude);
+
+  return normalizeHeading(toDegrees(Math.atan2(y, x)));
+};
+
+export const interpolateHeading = (fromHeading, toHeading, factor = DEFAULT_HEADING_SMOOTHING) => {
+  const normalizedFrom = normalizeHeading(fromHeading);
+  const normalizedTo = normalizeHeading(toHeading);
+
+  if (normalizedTo === null) {
+    return normalizedFrom ?? 0;
+  }
+  if (normalizedFrom === null) {
+    return normalizedTo;
+  }
+
+  const delta = ((normalizedTo - normalizedFrom + 540) % 360) - 180;
+  if (Math.abs(delta) < 1) {
+    return normalizedTo;
+  }
+
+  const clampedFactor = Math.max(0, Math.min(1, factor));
+  return normalizeHeading(normalizedFrom + (delta * clampedFactor)) ?? normalizedTo;
+};
+
+export const resolveNavigationHeading = ({
+  previousLocation,
+  nextLocation,
+  nativeHeading,
+  currentHeading,
+  speedMetersPerSecond = 0,
+}) => {
+  const normalizedCurrentHeading = normalizeHeading(currentHeading);
+  const normalizedNativeHeading = normalizeHeading(nativeHeading);
+  const speed = Number(speedMetersPerSecond);
+  const movementDistanceMeters =
+    previousLocation && nextLocation
+      ? getDistanceFromLatLonInKm(
+          previousLocation.latitude,
+          previousLocation.longitude,
+          nextLocation.latitude,
+          nextLocation.longitude
+        ) * 1000
+      : null;
+  const movementHeading =
+    Number.isFinite(movementDistanceMeters) && movementDistanceMeters >= MIN_MOVEMENT_HEADING_METERS
+      ? calculateBearing(previousLocation, nextLocation)
+      : null;
+
+  let targetHeading = normalizedNativeHeading;
+  if (
+    movementHeading !== null &&
+    (
+      !Number.isFinite(speed) ||
+      speed >= MIN_MOVEMENT_SPEED_MPS ||
+      normalizedNativeHeading === null
+    )
+  ) {
+    targetHeading = movementHeading;
+  }
+
+  if (targetHeading === null) {
+    return normalizedCurrentHeading ?? 0;
+  }
+
+  const current = normalizedCurrentHeading ?? targetHeading;
+  const delta = ((targetHeading - current + 540) % 360) - 180;
+  const smoothingFactor =
+    Math.abs(delta) >= LARGE_HEADING_DELTA_DEGREES
+      ? FAST_HEADING_SMOOTHING
+      : DEFAULT_HEADING_SMOOTHING;
+
+  return interpolateHeading(current, targetHeading, smoothingFactor);
+};
+
 const resolveTurnLikeIcon = (modifier = '') => {
   const normalizedModifier = String(modifier || '').toLowerCase();
 
@@ -53,14 +169,27 @@ const resolveTurnLikeIcon = (modifier = '') => {
   return 'arrow-up';
 };
 
-export const getManeuverIcon = (maneuverType, maneuverModifier = '') => {
-  const normalizedType = String(maneuverType || '').toLowerCase();
+export const normalizeManeuverType = (maneuverType) => {
+  return String(maneuverType || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-');
+};
 
-  if (normalizedType === 'turn' || normalizedType === 'fork') {
+export const getManeuverIcon = (maneuverType, maneuverModifier = '') => {
+  const normalizedType = normalizeManeuverType(maneuverType);
+
+  if (
+    normalizedType === 'turn' ||
+    normalizedType === 'fork' ||
+    normalizedType === 'merge' ||
+    normalizedType === 'on-ramp' ||
+    normalizedType === 'off-ramp'
+  ) {
     return resolveTurnLikeIcon(maneuverModifier);
   }
 
-  if (normalizedType === 'new name') {
+  if (normalizedType === 'new-name') {
     return 'arrow-up';
   }
 
@@ -68,16 +197,13 @@ export const getManeuverIcon = (maneuverType, maneuverModifier = '') => {
     continue: 'arrow-up',
     straight: 'arrow-up',
     uturn: 'return-up-back',
-    merge: 'git-merge',
-    'on-ramp': 'arrow-up-right',
-    'off-ramp': 'arrow-down-right',
     roundabout: 'refresh',
     rotary: 'refresh',
     'roundabout-turn': 'refresh',
-    notification: 'flag',
-    depart: 'play',
-    arrive: 'flag-checkered',
-    end: 'flag-checkered',
+    notification: 'arrow-up',
+    depart: 'arrow-up',
+    arrive: 'flag',
+    end: 'flag',
   };
 
   return iconMap[normalizedType] || resolveTurnLikeIcon(maneuverModifier);

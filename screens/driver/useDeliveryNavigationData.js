@@ -13,13 +13,18 @@ import {
   calculateDistanceToNextTurnMeters,
   ensureNavigationLocationAccess,
   resolveInitialDriverPosition,
-  setNavigationInitialCamera,
   startNavigationLocationWatch,
 } from './navigationLocation.utils';
 import { hasReachedOrPassedStatus } from '../../services/tripErrorUtils';
-import { getDistanceFromLatLonInKm } from './navigationMath.utils';
+import {
+  formatDistance,
+  getDistanceFromLatLonInKm,
+  resolveNavigationHeading,
+} from './navigationMath.utils';
+import useNavigationPresentationSmoothing from './useNavigationPresentationSmoothing';
 
 const ROUTE_REFRESH_INTERVAL_MS = 7000;
+const MAX_NAVIGATION_LOCATION_ACCURACY_METERS = 80;
 
 export default function useDeliveryNavigationData({
   applyRouteSteps,
@@ -27,7 +32,6 @@ export default function useDeliveryNavigationData({
   currentStepIndex,
   getRequestById,
   initialDriverLocation,
-  mapRef,
   navigation,
   pickupPhotos,
   request,
@@ -44,6 +48,7 @@ export default function useDeliveryNavigationData({
   const routeRefreshInFlightRef = useRef(false);
   const lastRouteRefreshAtRef = useRef(0);
   const hasRouteRef = useRef(false);
+  const previousDriverLocationRef = useRef(null);
 
   const [driverLocation, setDriverLocation] = useState(initialDriverLocation);
   const [dropoffLocation, setDropoffLocation] = useState(null);
@@ -56,6 +61,15 @@ export default function useDeliveryNavigationData({
   const [requestData, setRequestData] = useState(request);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const [currentHeading, setCurrentHeading] = useState(0);
+  const [cameraConfig, setCameraConfig] = useState(null);
+  const {
+    animatePresentation,
+    displayCameraConfig,
+    displayHeading,
+    displayLocation,
+    resetPresentation,
+    syncPresentation,
+  } = useNavigationPresentationSmoothing();
 
   useEffect(() => {
     dropoffLocationRef.current = dropoffLocation;
@@ -77,20 +91,18 @@ export default function useDeliveryNavigationData({
     currentHeadingRef.current = currentHeading || 0;
   }, [currentHeading]);
 
-  const updateNavigationCamera = useCallback((location, speed, distanceToNextTurn) => {
-    if (!mapRef.current) return;
-
-    const cameraConfig = buildNavigationCameraConfig({
+  const updateNavigationCamera = useCallback((location, speed, distanceToNextTurn, heading = currentHeadingRef.current) => {
+    const nextCameraConfig = buildNavigationCameraConfig({
       location,
       speedMetersPerSecond: speed,
       distanceToNextTurn,
-      heading: currentHeadingRef.current,
+      heading,
     });
 
-    if (cameraConfig) {
-      mapRef.current.setCamera(cameraConfig);
+    if (nextCameraConfig) {
+      setCameraConfig(nextCameraConfig);
     }
-  }, [mapRef]);
+  }, []);
 
   const updateDriverLocationInDB = useCallback(async (location) => {
     try {
@@ -142,8 +154,13 @@ export default function useDeliveryNavigationData({
       );
       setEstimatedTime(durationText.replace(' mins', ' min').replace(' min', ''));
       hasRouteRef.current = true;
+      return routeData.coordinates;
     } catch (error) {
       logger.error('DeliveryNavigationData', 'Error getting real route', error);
+      if (hasRouteRef.current) {
+        return routeCoordinates;
+      }
+
       const { distanceText, etaText } = calculateDistanceAndEta(start, end);
       const fallbackDistanceMeters = getDistanceFromLatLonInKm(
         start.latitude,
@@ -157,11 +174,15 @@ export default function useDeliveryNavigationData({
       );
       setEstimatedTime(etaText.replace(' min', ''));
       if (!hasRouteRef.current) {
-        setRouteCoordinates(generateFallbackRoute(start, end));
+        const fallbackCoordinates = generateFallbackRoute(start, end);
+        setRouteCoordinates(fallbackCoordinates);
         applyRouteSteps([]);
+        return fallbackCoordinates;
       }
+
+      return [];
     }
-  }, [applyRouteSteps]);
+  }, [applyRouteSteps, routeCoordinates]);
 
   const maybeRefreshRoute = useCallback(async (start, end, { force = false } = {}) => {
     if (!start || !end) {
@@ -181,7 +202,7 @@ export default function useDeliveryNavigationData({
     routeRefreshInFlightRef.current = true;
     lastRouteRefreshAtRef.current = now;
     try {
-      await generateRealRoute(start, end);
+      return await generateRealRoute(start, end);
     } finally {
       routeRefreshInFlightRef.current = false;
     }
@@ -219,66 +240,119 @@ export default function useDeliveryNavigationData({
     }
   }, []);
 
-  const startLocationTracking = useCallback(async () => {
-    try {
-      locationSubscription.current = await startNavigationLocationWatch(
-        (locationData) => {
-          const newLocation = {
-            latitude: locationData.coords.latitude,
-            longitude: locationData.coords.longitude,
-          };
-
-          setDriverLocation(newLocation);
-
-          const heading = Number(locationData.coords.heading);
-          if (Number.isFinite(heading) && heading >= 0) {
-            setCurrentHeading(heading);
-          }
-
-          const distanceToNextTurn = calculateDistanceToNextTurnMeters({
-            routeSteps: routeStepsRef.current,
-            currentStepIndex: currentStepIndexRef.current,
-            location: newLocation,
-          });
-
-          updateNavigationCamera(
-            newLocation,
-            locationData.coords.speed || 0,
-            distanceToNextTurn
-          );
-
-          const destination = dropoffLocationRef.current;
-          if (destination) {
-            const straightDistanceMeters = getDistanceFromLatLonInKm(
-              newLocation.latitude,
-              newLocation.longitude,
-              destination.latitude,
-              destination.longitude
-            ) * 1000;
-            if (Number.isFinite(straightDistanceMeters)) {
-              setRemainingDistanceMeters(straightDistanceMeters);
-            }
-
-            void maybeRefreshRoute(newLocation, destination);
-          }
-
-          updateNavigationProgress(newLocation);
-          void updateDriverLocationInDB(newLocation);
-        }
-      );
-    } catch (error) {
-      logger.error('DeliveryNavigationData', 'Error starting location tracking', error);
+  const applyDriverLocationUpdate = useCallback((newLocation, {
+    nativeHeading = null,
+    speedMetersPerSecond = 0,
+    remainingDistanceMetersOverride = null,
+    shouldRefreshRoute = true,
+  } = {}) => {
+    const resolvedHeading = resolveNavigationHeading({
+      previousLocation: previousDriverLocationRef.current,
+      nextLocation: newLocation,
+      nativeHeading,
+      currentHeading: currentHeadingRef.current,
+      speedMetersPerSecond,
+    });
+    previousDriverLocationRef.current = newLocation;
+    setDriverLocation(newLocation);
+    if (Number.isFinite(resolvedHeading)) {
+      setCurrentHeading(resolvedHeading);
     }
+
+    const distanceToNextTurn = calculateDistanceToNextTurnMeters({
+      routeSteps: routeStepsRef.current,
+      currentStepIndex: currentStepIndexRef.current,
+      location: newLocation,
+    });
+
+    updateNavigationCamera(
+      newLocation,
+      Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
+      distanceToNextTurn,
+      resolvedHeading
+    );
+    animatePresentation({
+      location: newLocation,
+      heading: resolvedHeading,
+      speedMetersPerSecond: Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
+      distanceToNextTurn,
+    });
+
+    const destination = dropoffLocationRef.current;
+    if (Number.isFinite(remainingDistanceMetersOverride)) {
+      setRemainingDistance(formatDistance(remainingDistanceMetersOverride));
+      setRemainingDistanceMeters(remainingDistanceMetersOverride);
+      if (remainingDistanceMetersOverride <= 15) {
+        setEstimatedTime('<1');
+      } else if (Number.isFinite(speedMetersPerSecond) && speedMetersPerSecond > 0) {
+        const etaMinutes = Math.max(1, Math.ceil(remainingDistanceMetersOverride / speedMetersPerSecond / 60));
+        setEstimatedTime(String(etaMinutes));
+      }
+    } else if (destination && !hasRouteRef.current) {
+      const straightDistanceMeters = getDistanceFromLatLonInKm(
+        newLocation.latitude,
+        newLocation.longitude,
+        destination.latitude,
+        destination.longitude
+      ) * 1000;
+      if (Number.isFinite(straightDistanceMeters)) {
+        setRemainingDistance(formatDistance(straightDistanceMeters));
+        setRemainingDistanceMeters(straightDistanceMeters);
+      }
+    }
+
+    if (shouldRefreshRoute && destination) {
+      void maybeRefreshRoute(newLocation, destination);
+    }
+
+    updateNavigationProgress(newLocation);
+    void updateDriverLocationInDB(newLocation);
   }, [
+    animatePresentation,
     maybeRefreshRoute,
     updateDriverLocationInDB,
     updateNavigationCamera,
     updateNavigationProgress,
   ]);
 
+  const startLocationTracking = useCallback(async () => {
+    try {
+      locationSubscription.current = await startNavigationLocationWatch(
+        (locationData) => {
+          const accuracy = Number(locationData?.coords?.accuracy);
+          if (
+            previousDriverLocationRef.current &&
+            Number.isFinite(accuracy) &&
+            accuracy > MAX_NAVIGATION_LOCATION_ACCURACY_METERS
+          ) {
+            return;
+          }
+
+          const newLocation = {
+            latitude: locationData.coords.latitude,
+            longitude: locationData.coords.longitude,
+          };
+          const speedMetersPerSecond = Number(locationData.coords.speed);
+
+          applyDriverLocationUpdate(newLocation, {
+            nativeHeading: locationData.coords.heading,
+            speedMetersPerSecond: Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
+          });
+        }
+      );
+    } catch (error) {
+      logger.error('DeliveryNavigationData', 'Error starting location tracking', error);
+    }
+  }, [
+    applyDriverLocationUpdate,
+  ]);
+
   const initializeDeliveryTracking = useCallback(async () => {
     try {
       setIsLoading(true);
+      setCameraConfig(null);
+      hasRouteRef.current = false;
+      previousDriverLocationRef.current = null;
 
       const accessResult = await ensureNavigationLocationAccess();
       if (!accessResult.granted) {
@@ -301,16 +375,34 @@ export default function useDeliveryNavigationData({
 
       const currentLocation = initialPosition.coords;
       setDriverLocation(currentLocation);
-      setNavigationInitialCamera(mapRef, currentLocation, initialPosition.heading || 0);
+      previousDriverLocationRef.current = currentLocation;
 
-      if (typeof initialPosition.heading === 'number') {
-        const initialHeading = Number(initialPosition.heading);
-        if (Number.isFinite(initialHeading) && initialHeading >= 0) {
-          setCurrentHeading(initialHeading);
-        }
+      const initialHeading = resolveNavigationHeading({
+        previousLocation: null,
+        nextLocation: currentLocation,
+        nativeHeading: initialPosition.heading,
+        currentHeading: 0,
+        speedMetersPerSecond: 0,
+      });
+      if (Number.isFinite(initialHeading)) {
+        setCurrentHeading(initialHeading);
       }
 
-      await startLocationTracking();
+      const initialCameraConfig = buildNavigationCameraConfig({
+        location: currentLocation,
+        speedMetersPerSecond: 0,
+        distanceToNextTurn: null,
+        heading: initialHeading,
+      });
+      if (initialCameraConfig) {
+        setCameraConfig(initialCameraConfig);
+      }
+      syncPresentation({
+        location: currentLocation,
+        heading: initialHeading,
+        speedMetersPerSecond: 0,
+        distanceToNextTurn: null,
+      });
 
       const dropoffCoords = extractDropoffLocation(currentLocation);
       if (dropoffCoords) {
@@ -318,6 +410,8 @@ export default function useDeliveryNavigationData({
         setDropoffLocation(dropoffCoords);
         await maybeRefreshRoute(currentLocation, dropoffCoords, { force: true });
       }
+
+      await startLocationTracking();
 
       setIsLoading(false);
     } catch (error) {
@@ -329,8 +423,8 @@ export default function useDeliveryNavigationData({
     extractDropoffLocation,
     maybeRefreshRoute,
     initialDriverLocation,
-    mapRef,
     startLocationTracking,
+    syncPresentation,
   ]);
 
   const fetchRequestData = useCallback(async () => {
@@ -383,6 +477,7 @@ export default function useDeliveryNavigationData({
     void initializeDeliveryTracking();
     return () => {
       stopLocationTracking();
+      resetPresentation();
     };
     // Delivery bootstrap is intentionally one-time; retry action re-initializes explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,6 +492,8 @@ export default function useDeliveryNavigationData({
   return {
     currentHeading,
     driverLocation,
+    displayDriverLocation: displayLocation || driverLocation,
+    displayHeading,
     dropoffLocation,
     remainingDistance,
     remainingDistanceMeters,
@@ -408,6 +505,7 @@ export default function useDeliveryNavigationData({
     navigationAttempted,
     requestData,
     routeCoordinates,
+    cameraConfig: displayCameraConfig || cameraConfig,
     setLocationError,
     setIsLoading,
     setNavigationAttempted,

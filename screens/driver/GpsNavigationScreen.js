@@ -30,7 +30,11 @@ const FEET_PER_METER = 3.28084;
 
 export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
+  const {
+    request,
+    isCustomerView = false,
+    stage = 'pickup',
+  } = route.params || {};
   const { currentUser, userType } = useAuthIdentity();
   const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus, cancelOrder } = useTripActions();
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
@@ -55,6 +59,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
     mapRef,
     requestData,
     driverLocation,
+    displayDriverLocation,
     customerLocation,
     routeCoordinates,
     remainingDistance,
@@ -62,7 +67,8 @@ export default function GpsNavigationScreen({ route, navigation }) {
     estimatedTime,
     isLoading,
     locationError,
-    currentHeading,
+    displayHeading,
+    cameraConfig,
     setRemainingDistance,
     setRemainingDistanceMeters,
     setEstimatedTime,
@@ -323,7 +329,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
       driverLocation={driverLocation}
       customerLocation={customerLocation}
       routeCoordinates={routeCoordinates}
-      currentHeading={currentHeading}
+      currentHeading={displayHeading}
       insetsTop={insets.top}
       cardAnimation={cardAnimation}
       cardGradientColors={cardGradientColors}
@@ -340,10 +346,11 @@ export default function GpsNavigationScreen({ route, navigation }) {
     <GpsNavigationDriverView
       styles={styles}
       mapRef={mapRef}
-      driverLocation={driverLocation}
+      driverLocation={displayDriverLocation}
       customerLocation={customerLocation}
       routeCoordinates={routeCoordinates}
-      currentHeading={currentHeading}
+      currentHeading={displayHeading}
+      cameraConfig={cameraConfig}
       insetsTop={insets.top}
       isNavigating={isNavigating}
       isSupported={isSupported}

@@ -56,11 +56,15 @@ const formatDistanceImperial = (rawDistance) => {
   }
 
   const feet = meters * FEET_PER_METER;
-  if (feet < 1000) {
+  if (feet < 1600) {
     return `${Math.max(0, Math.round(feet))} ft`;
   }
 
   const miles = feet / FEET_PER_MILE;
+  if (miles < 1) {
+    return `${miles.toFixed(2)} mi`;
+  }
+
   if (miles < 10) {
     return `${miles.toFixed(1)} mi`;
   }
@@ -90,7 +94,14 @@ const extractStreetFromInstruction = (instruction = "") => {
 };
 
 const resolveDirectionIcon = ({ maneuverIcon, instruction }) => {
-  const allowedIcons = new Set(["arrow-up", "arrow-back", "arrow-forward", "return-up-back"]);
+  const allowedIcons = new Set([
+    "arrow-up",
+    "arrow-back",
+    "arrow-forward",
+    "return-up-back",
+    "refresh",
+    "flag",
+  ]);
   if (typeof maneuverIcon === "string" && allowedIcons.has(maneuverIcon)) {
     return maneuverIcon;
   }
@@ -110,6 +121,15 @@ const resolveDirectionIcon = ({ maneuverIcon, instruction }) => {
   return "arrow-up";
 };
 
+const resolvePrimaryDistance = ({ distanceToTurn, distanceToDestination }) => {
+  const parsedTurnDistanceMeters = parseDistanceMeters(distanceToTurn);
+  if (Number.isFinite(parsedTurnDistanceMeters) && parsedTurnDistanceMeters >= 0) {
+    return distanceToTurn;
+  }
+
+  return distanceToDestination;
+};
+
 const NavigationInstructionsBanner = ({
   nextInstruction,
   isNavigating,
@@ -122,11 +142,17 @@ const NavigationInstructionsBanner = ({
 }) => {
   if (!nextInstruction || isNavigating) return null;
   const styles = ui || {};
-  const distanceValue = distanceToDestination ?? distanceToTurn;
+  const distanceValue = resolvePrimaryDistance({
+    distanceToTurn,
+    distanceToDestination,
+  });
   const formattedDistance = formatDistanceImperial(distanceValue);
   const routeStreet = typeof streetName === "string" && streetName.trim().length > 0
     ? streetName.trim()
     : extractStreetFromInstruction(nextInstruction);
+  const instructionText = typeof nextInstruction === "string" && nextInstruction.trim().length > 0
+    ? nextInstruction.trim()
+    : routeStreet;
   const directionIcon = resolveDirectionIcon({
     maneuverIcon,
     instruction: nextInstruction,
@@ -142,7 +168,7 @@ const NavigationInstructionsBanner = ({
                 {formattedDistance}
               </Text>
               <Text style={styles.streetText} numberOfLines={1}>
-                {routeStreet || nextInstruction}
+                {instructionText}
               </Text>
             </View>
 

@@ -207,12 +207,18 @@ export default function useDriverAvailabilityActions({
         return;
       }
 
-      if (!isSupportedOrderStateCode(driverStateCode, SUPPORTED_ORDER_STATE_CODES)) {
+      if (
+        driverStateCode &&
+        !isSupportedOrderStateCode(driverStateCode, SUPPORTED_ORDER_STATE_CODES)
+      ) {
         Alert.alert(DRIVER_GEO_RESTRICTED_TITLE, DRIVER_GEO_RESTRICTED_MESSAGE);
         return;
       }
 
-      setDriverLocation({ ...driverPos, stateCode: driverStateCode });
+      setDriverLocation({
+        ...driverPos,
+        stateCode: driverStateCode,
+      });
       const sessionId = await setDriverOnline(currentUserId, driverPos, mode);
 
       setActiveRequestPool(requestPool);

@@ -7,7 +7,6 @@ import {
   calculateDistanceToNextTurnMeters,
   ensureNavigationLocationAccess,
   resolveInitialDriverPosition,
-  setNavigationInitialCamera,
   startNavigationLocationWatch,
 } from './navigationLocation.utils';
 import {
@@ -16,21 +15,27 @@ import {
   extractDestinationFromStatus,
   generateFallbackRoute,
 } from './navigationRoute.utils';
-import { getDistanceFromLatLonInKm } from './navigationMath.utils';
+import {
+  formatDistance,
+  getDistanceFromLatLonInKm,
+  resolveNavigationHeading,
+} from './navigationMath.utils';
 import { hasReachedOrPassedStatus } from '../../services/tripErrorUtils';
+import useNavigationPresentationSmoothing from './useNavigationPresentationSmoothing';
 
 const ROUTE_REFRESH_INTERVAL_MS = 7000;
+const MAX_NAVIGATION_LOCATION_ACCURACY_METERS = 80;
 
 export default function useGpsNavigationData({
-  isCustomerView,
-  request,
-  getRequestById,
-  startDriving,
-  updateDriverStatus,
-  applyRouteSteps,
-  routeSteps,
-  currentStepIndex,
-  updateNavigationProgress,
+    isCustomerView,
+    request,
+    getRequestById,
+    startDriving,
+    updateDriverStatus,
+    applyRouteSteps,
+    routeSteps,
+    currentStepIndex,
+    updateNavigationProgress,
 }) {
   const [driverLocation, setDriverLocation] = useState(null);
   const [customerLocation, setCustomerLocation] = useState(null);
@@ -42,11 +47,23 @@ export default function useGpsNavigationData({
   const [locationError, setLocationError] = useState(null);
   const [requestData, setRequestData] = useState(request);
   const [currentHeading, setCurrentHeading] = useState(0);
+  const [cameraConfig, setCameraConfig] = useState(null);
+  const {
+    animatePresentation,
+    displayCameraConfig,
+    displayHeading,
+    displayLocation,
+    resetPresentation,
+    syncPresentation,
+  } = useNavigationPresentationSmoothing({
+    enabled: !isCustomerView,
+  });
 
   const mapRef = useRef(null);
   const locationSubscription = useRef(null);
   const refreshIntervalRef = useRef(null);
   const navigationStartedRef = useRef(false);
+  const previousDriverLocationRef = useRef(null);
   const currentHeadingRef = useRef(0);
   const customerLocationRef = useRef(null);
   const routeStepsRef = useRef(routeSteps || []);
@@ -94,20 +111,22 @@ export default function useGpsNavigationData({
   const clearNavigationResources = useCallback(() => {
     stopLocationTracking();
     clearCustomerPolling();
-  }, [clearCustomerPolling, stopLocationTracking]);
+    previousDriverLocationRef.current = null;
+    hasRouteRef.current = false;
+    setCameraConfig(null);
+    resetPresentation();
+  }, [clearCustomerPolling, resetPresentation, stopLocationTracking]);
 
-  const updateNavigationCamera = useCallback((location, speed, distanceToNextTurn) => {
-    if (!mapRef.current) return;
-
-    const cameraConfig = buildNavigationCameraConfig({
+  const updateNavigationCamera = useCallback((location, speed, distanceToNextTurn, heading = currentHeadingRef.current) => {
+    const nextCameraConfig = buildNavigationCameraConfig({
       location,
       speedMetersPerSecond: speed,
       distanceToNextTurn,
-      heading: currentHeadingRef.current,
+      heading,
     });
 
-    if (cameraConfig) {
-      mapRef.current.setCamera(cameraConfig);
+    if (nextCameraConfig) {
+      setCameraConfig(nextCameraConfig);
     }
   }, []);
 
@@ -130,8 +149,13 @@ export default function useGpsNavigationData({
       );
       setEstimatedTime(durationText.replace(' mins', ' min').replace(' min', ''));
       hasRouteRef.current = true;
+      return routeData.coordinates;
     } catch (error) {
       logger.error('GpsNavigationData', 'Error getting real route', error);
+      if (hasRouteRef.current) {
+        return routeCoordinates;
+      }
+
       const { distanceText, etaText } = calculateDistanceAndEta(start, end);
       const fallbackDistanceMeters = getDistanceFromLatLonInKm(
         start.latitude,
@@ -145,11 +169,15 @@ export default function useGpsNavigationData({
       );
       setEstimatedTime(etaText);
       if (!hasRouteRef.current) {
-        setRouteCoordinates(generateFallbackRoute(start, end));
+        const fallbackCoordinates = generateFallbackRoute(start, end);
+        setRouteCoordinates(fallbackCoordinates);
         applyRouteSteps([]);
+        return fallbackCoordinates;
       }
+
+      return [];
     }
-  }, [applyRouteSteps]);
+  }, [applyRouteSteps, routeCoordinates]);
 
   const maybeRefreshRoute = useCallback(async (start, end, { force = false } = {}) => {
     if (!start || !end) {
@@ -169,7 +197,7 @@ export default function useGpsNavigationData({
     routeRefreshInFlightRef.current = true;
     lastRouteRefreshAtRef.current = now;
     try {
-      await generateRealRoute(start, end);
+      return await generateRealRoute(start, end);
     } finally {
       routeRefreshInFlightRef.current = false;
     }
@@ -197,58 +225,108 @@ export default function useGpsNavigationData({
     }
   }, [request?.id, request?.status, requestData?.status, updateDriverStatus]);
 
+  const applyDriverLocationUpdate = useCallback((newLocation, {
+    nativeHeading = null,
+    speedMetersPerSecond = 0,
+    remainingDistanceMetersOverride = null,
+    shouldRefreshRoute = true,
+  } = {}) => {
+    const resolvedHeading = resolveNavigationHeading({
+      previousLocation: previousDriverLocationRef.current,
+      nextLocation: newLocation,
+      nativeHeading,
+      currentHeading: currentHeadingRef.current,
+      speedMetersPerSecond,
+    });
+    previousDriverLocationRef.current = newLocation;
+    setDriverLocation(newLocation);
+    if (Number.isFinite(resolvedHeading)) {
+      setCurrentHeading(resolvedHeading);
+    }
+
+    const distanceToNextTurn = calculateDistanceToNextTurnMeters({
+      routeSteps: routeStepsRef.current,
+      currentStepIndex: currentStepIndexRef.current,
+      location: newLocation,
+    });
+
+    updateNavigationCamera(
+      newLocation,
+      Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
+      distanceToNextTurn,
+      resolvedHeading
+    );
+    animatePresentation({
+      location: newLocation,
+      heading: resolvedHeading,
+      speedMetersPerSecond: Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
+      distanceToNextTurn,
+    });
+
+    if (Number.isFinite(remainingDistanceMetersOverride)) {
+      setRemainingDistance(formatDistance(remainingDistanceMetersOverride));
+      setRemainingDistanceMeters(remainingDistanceMetersOverride);
+      if (remainingDistanceMetersOverride <= 15) {
+        setEstimatedTime('<1');
+      } else if (Number.isFinite(speedMetersPerSecond) && speedMetersPerSecond > 0) {
+        const etaMinutes = Math.max(1, Math.ceil(remainingDistanceMetersOverride / speedMetersPerSecond / 60));
+        setEstimatedTime(String(etaMinutes));
+      }
+    } else if (customerLocationRef.current && !hasRouteRef.current) {
+      const straightDistanceMeters = getDistanceFromLatLonInKm(
+        newLocation.latitude,
+        newLocation.longitude,
+        customerLocationRef.current.latitude,
+        customerLocationRef.current.longitude
+      ) * 1000;
+      if (Number.isFinite(straightDistanceMeters)) {
+        setRemainingDistance(formatDistance(straightDistanceMeters));
+        setRemainingDistanceMeters(straightDistanceMeters);
+      }
+    }
+
+    if (shouldRefreshRoute && customerLocationRef.current) {
+      void maybeRefreshRoute(newLocation, customerLocationRef.current);
+    }
+
+    updateNavigationProgress(newLocation);
+    updateDriverLocationInDB(newLocation);
+  }, [
+    animatePresentation,
+    maybeRefreshRoute,
+    updateDriverLocationInDB,
+    updateNavigationCamera,
+    updateNavigationProgress,
+  ]);
+
   const startLocationTracking = useCallback(async () => {
     try {
       locationSubscription.current = await startNavigationLocationWatch((locationData) => {
+        const accuracy = Number(locationData?.coords?.accuracy);
+        if (
+          previousDriverLocationRef.current &&
+          Number.isFinite(accuracy) &&
+          accuracy > MAX_NAVIGATION_LOCATION_ACCURACY_METERS
+        ) {
+          return;
+        }
+
         const newLocation = {
           latitude: locationData.coords.latitude,
           longitude: locationData.coords.longitude,
         };
+        const speedMetersPerSecond = Number(locationData.coords.speed);
 
-        setDriverLocation(newLocation);
-
-        const heading = Number(locationData.coords.heading);
-        if (Number.isFinite(heading) && heading >= 0) {
-          setCurrentHeading(heading);
-        }
-
-        const distanceToNextTurn = calculateDistanceToNextTurnMeters({
-          routeSteps: routeStepsRef.current,
-          currentStepIndex: currentStepIndexRef.current,
-          location: newLocation,
+        applyDriverLocationUpdate(newLocation, {
+          nativeHeading: locationData.coords.heading,
+          speedMetersPerSecond: Number.isFinite(speedMetersPerSecond) ? speedMetersPerSecond : 0,
         });
-
-        updateNavigationCamera(
-          newLocation,
-          locationData.coords.speed || 0,
-          distanceToNextTurn
-        );
-
-        if (customerLocationRef.current) {
-          const straightDistanceMeters = getDistanceFromLatLonInKm(
-            newLocation.latitude,
-            newLocation.longitude,
-            customerLocationRef.current.latitude,
-            customerLocationRef.current.longitude
-          ) * 1000;
-          if (Number.isFinite(straightDistanceMeters)) {
-            setRemainingDistanceMeters(straightDistanceMeters);
-          }
-
-          void maybeRefreshRoute(newLocation, customerLocationRef.current);
-        }
-
-        updateNavigationProgress(newLocation);
-        updateDriverLocationInDB(newLocation);
       });
     } catch (error) {
       logger.error('GpsNavigationData', 'Error starting location tracking', error);
     }
   }, [
-    maybeRefreshRoute,
-    updateDriverLocationInDB,
-    updateNavigationCamera,
-    updateNavigationProgress,
+    applyDriverLocationUpdate,
   ]);
 
   const fetchRequestData = useCallback(async () => {
@@ -310,6 +388,9 @@ export default function useGpsNavigationData({
   const initializeDriverNavigation = useCallback(async () => {
     try {
       setIsLoading(true);
+      setCameraConfig(null);
+      hasRouteRef.current = false;
+      previousDriverLocationRef.current = null;
 
       const accessResult = await ensureNavigationLocationAccess();
       if (!accessResult.granted) {
@@ -330,16 +411,34 @@ export default function useGpsNavigationData({
 
       const driverCoords = initialPosition.coords;
       setDriverLocation(driverCoords);
-      setNavigationInitialCamera(mapRef, driverCoords, initialPosition.heading || 0);
+      previousDriverLocationRef.current = driverCoords;
 
-      if (typeof initialPosition.heading === 'number') {
-        const initialHeading = Number(initialPosition.heading);
-        if (Number.isFinite(initialHeading) && initialHeading >= 0) {
-          setCurrentHeading(initialHeading);
-        }
+      const initialHeading = resolveNavigationHeading({
+        previousLocation: null,
+        nextLocation: driverCoords,
+        nativeHeading: initialPosition.heading,
+        currentHeading: 0,
+        speedMetersPerSecond: 0,
+      });
+      if (Number.isFinite(initialHeading)) {
+        setCurrentHeading(initialHeading);
       }
 
-      await startLocationTracking();
+      const initialCameraConfig = buildNavigationCameraConfig({
+        location: driverCoords,
+        speedMetersPerSecond: 0,
+        distanceToNextTurn: null,
+        heading: initialHeading,
+      });
+      if (initialCameraConfig) {
+        setCameraConfig(initialCameraConfig);
+      }
+      syncPresentation({
+        location: driverCoords,
+        heading: initialHeading,
+        speedMetersPerSecond: 0,
+        distanceToNextTurn: null,
+      });
 
       const customerCoords = extractCustomerLocationFromRequest({
         requestData,
@@ -350,6 +449,8 @@ export default function useGpsNavigationData({
         setCustomerLocation(customerCoords);
         await maybeRefreshRoute(driverCoords, customerCoords, { force: true });
       }
+
+      await startLocationTracking();
 
       if (!navigationStartedRef.current && request?.id) {
         const currentTripStatus = normalizeTripStatus(
@@ -377,6 +478,7 @@ export default function useGpsNavigationData({
     request,
     startDriving,
     startLocationTracking,
+    syncPresentation,
   ]);
 
   useEffect(() => {
@@ -390,6 +492,8 @@ export default function useGpsNavigationData({
     requestData,
     driverLocation,
     customerLocation,
+    displayDriverLocation: isCustomerView ? driverLocation : (displayLocation || driverLocation),
+    displayHeading: isCustomerView ? currentHeading : displayHeading,
     routeCoordinates,
     remainingDistance,
     remainingDistanceMeters,
@@ -397,6 +501,7 @@ export default function useGpsNavigationData({
     isLoading,
     locationError,
     currentHeading,
+    cameraConfig: isCustomerView ? cameraConfig : (displayCameraConfig || cameraConfig),
     setRemainingDistance,
     setRemainingDistanceMeters,
     setEstimatedTime,

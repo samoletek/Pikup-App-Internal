@@ -214,6 +214,22 @@ export default function useCustomerOrderModalState({
                         return false;
                     }
 
+                    const hasPickupCoordinates = (
+                        Number.isFinite(Number(orderData.pickup?.coordinates?.latitude)) &&
+                        Number.isFinite(Number(orderData.pickup?.coordinates?.longitude))
+                    );
+                    const hasDropoffCoordinates = (
+                        Number.isFinite(Number(orderData.dropoff?.coordinates?.latitude)) &&
+                        Number.isFinite(Number(orderData.dropoff?.coordinates?.longitude))
+                    );
+                    if (!hasPickupCoordinates || !hasDropoffCoordinates) {
+                        Alert.alert(
+                            'Address Required',
+                            'Please select pickup and dropoff addresses from suggestions.'
+                        );
+                        return false;
+                    }
+
                     const stateCoverage = evaluateOrderStateCoverage({
                         pickup: orderData.pickup,
                         dropoff: orderData.dropoff,

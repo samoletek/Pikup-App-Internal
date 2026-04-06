@@ -18,8 +18,8 @@ const LAST_KNOWN_OPTIONS = Object.freeze({
 
 export const NAVIGATION_WATCH_OPTIONS = Object.freeze({
   accuracy: Location.Accuracy.BestForNavigation,
-  timeInterval: 1000,
-  distanceInterval: 5,
+  timeInterval: 700,
+  distanceInterval: 3,
 });
 
 const normalizeCoordinates = (coords) => ({

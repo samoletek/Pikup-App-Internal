@@ -29,7 +29,11 @@ const FEET_PER_METER = 3.28084;
 
 export default function DeliveryNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const { request, pickupPhotos, driverLocation: initialDriverLocation } = route.params;
+  const {
+    request,
+    pickupPhotos,
+    driverLocation: initialDriverLocation,
+  } = route.params;
   const { currentUser, userType } = useAuthIdentity();
   const { arriveAtDropoff, getRequestById, updateDriverStatus } = useTripActions();
   const { getConversations, createConversation, subscribeToConversations } = useMessagingActions();
@@ -50,8 +54,9 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     updateNavigationProgress,
   } = useGpsRouteProgress();
   const {
-    currentHeading,
     driverLocation,
+    displayDriverLocation,
+    displayHeading,
     dropoffLocation,
     remainingDistance,
     remainingDistanceMeters,
@@ -63,6 +68,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     navigationAttempted,
     requestData,
     routeCoordinates,
+    cameraConfig,
     setLocationError,
     setIsLoading,
     setNavigationAttempted,
@@ -76,7 +82,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     currentStepIndex,
     getRequestById,
     initialDriverLocation,
-    mapRef,
     navigation,
     pickupPhotos,
     request,
@@ -127,33 +132,6 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     distanceToDropoffMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
   
   const { cardAnimation } = useNavigationCardAnimation({ isLoading });
-  
-  // Monitor order status for cancellations
-  useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
-    currentScreen: 'DeliveryNavigationScreen',
-    enabled: !!(requestData?.id || request?.id),
-    onCancel: () => {
-      if (cancellationHandledRef.current) {
-        return;
-      }
-      cancellationHandledRef.current = true;
-      stopLocationTracking();
-      stopNavigation({ showAlert: false });
-      Alert.alert(
-        'Order Cancelled',
-        'The customer has cancelled this order.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              navigateDriverToHome(navigation);
-            },
-          },
-        ],
-        { cancelable: false }
-      );
-    }
-  });
 
   // Mapbox Navigation Integration
   const { startNavigation, stopNavigation, isNavigating, isSupported } = useMapboxNavigation({
@@ -197,6 +175,33 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     startNavigation,
     logScope: 'DeliveryNavigationScreen',
     fallbackLogMessage: 'Mapbox navigation not available for delivery, using fallback map',
+  });
+
+  // Monitor order status for cancellations
+  useOrderStatusMonitor(requestData?.id || request?.id, navigation, {
+    currentScreen: 'DeliveryNavigationScreen',
+    enabled: !!(requestData?.id || request?.id),
+    onCancel: () => {
+      if (cancellationHandledRef.current) {
+        return;
+      }
+      cancellationHandledRef.current = true;
+      stopLocationTracking();
+      stopNavigation({ showAlert: false });
+      Alert.alert(
+        'Order Cancelled',
+        'The customer has cancelled this order.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              navigateDriverToHome(navigation);
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    }
   });
 
   const {
@@ -246,10 +251,11 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     <DeliveryNavigationDriverView
       styles={styles}
       mapRef={mapRef}
-      driverLocation={driverLocation}
+      driverLocation={displayDriverLocation}
       dropoffLocation={dropoffLocation}
       routeCoordinates={routeCoordinates}
-      currentHeading={currentHeading}
+      currentHeading={displayHeading}
+      cameraConfig={cameraConfig}
       insetsTop={insets.top}
       isNavigating={isNavigating}
       isSupported={isSupported}

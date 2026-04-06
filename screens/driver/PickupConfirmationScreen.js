@@ -68,7 +68,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
   // Monitor order status for cancellations
   useOrderStatusMonitor(request?.id, navigation, {
     currentScreen: 'PickupConfirmationScreen',
-    enabled: !!request?.id
+    enabled: !!request?.id,
   });
 
   const {
@@ -110,6 +110,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
       ),
     [customerAvatarUrl, request]
   );
+  const isConfirmDisabled = photos.length < MIN_VERIFICATION_PHOTOS || isCompleting;
 
   return (
     <View style={styles.container}>
@@ -275,10 +276,10 @@ export default function PickupConfirmationScreen({ route, navigation }) {
           }
           style={[
             styles.confirmButton,
-            { opacity: (photos.length < MIN_VERIFICATION_PHOTOS || isCompleting) ? 0.6 : 1 }
+            { opacity: isConfirmDisabled ? 0.6 : 1 }
           ]}
           onPress={confirmPickupComplete}
-          disabled={photos.length < MIN_VERIFICATION_PHOTOS || isCompleting}
+          disabled={isConfirmDisabled}
           loading={isCompleting}
           labelStyle={styles.confirmButtonText}
           leftIcon={<Ionicons name="checkmark" size={20} color={colors.white} />}

@@ -323,6 +323,30 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.semibold,
     marginLeft: spacing.sm - 2,
   },
+  recenterButton: {
+    position: 'absolute',
+    right: spacing.lg,
+    backgroundColor: colors.overlayDark,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1205,
+    borderWidth: 1,
+    borderColor: colors.navigation.tabBarBorder,
+    elevation: 30,
+  },
+  recenterButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  recenterButtonText: {
+    color: colors.white,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.xs + 1,
+  },
 });
 
 export default styles;

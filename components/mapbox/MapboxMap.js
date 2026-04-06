@@ -5,6 +5,65 @@ import { logger } from '../../services/logger';
 
 ensureMapboxConfigured();
 
+const DEFAULT_CENTER_COORDINATE = [-84.388, 33.749];
+const DEFAULT_EDGE_PADDING = [100, 100, 100, 100];
+
+const isValidCoordinate = (coordinate) =>
+  Array.isArray(coordinate) &&
+  coordinate.length >= 2 &&
+  Number.isFinite(Number(coordinate[0])) &&
+  Number.isFinite(Number(coordinate[1]));
+
+const normalizeEdgePadding = (paddingConfig = DEFAULT_EDGE_PADDING) => {
+  if (typeof paddingConfig === 'number') {
+    return paddingConfig;
+  }
+
+  if (Array.isArray(paddingConfig)) {
+    return paddingConfig;
+  }
+
+  if (paddingConfig && typeof paddingConfig === 'object') {
+    return [
+      Number(paddingConfig.top) || 0,
+      Number(paddingConfig.right) || 0,
+      Number(paddingConfig.bottom) || 0,
+      Number(paddingConfig.left) || 0,
+    ];
+  }
+
+  return DEFAULT_EDGE_PADDING;
+};
+
+const buildCoordinateBounds = (coordinates = []) => {
+  const validCoordinates = coordinates
+    .filter((coordinate) => Number.isFinite(Number(coordinate?.longitude)) && Number.isFinite(Number(coordinate?.latitude)))
+    .map((coordinate) => [Number(coordinate.longitude), Number(coordinate.latitude)]);
+
+  if (validCoordinates.length === 0) {
+    return null;
+  }
+
+  const [firstLongitude, firstLatitude] = validCoordinates[0];
+  let minLongitude = firstLongitude;
+  let maxLongitude = firstLongitude;
+  let minLatitude = firstLatitude;
+  let maxLatitude = firstLatitude;
+
+  validCoordinates.forEach(([longitude, latitude]) => {
+    minLongitude = Math.min(minLongitude, longitude);
+    maxLongitude = Math.max(maxLongitude, longitude);
+    minLatitude = Math.min(minLatitude, latitude);
+    maxLatitude = Math.max(maxLatitude, latitude);
+  });
+
+  return {
+    northeast: [maxLongitude, maxLatitude],
+    southwest: [minLongitude, minLatitude],
+    singlePoint: validCoordinates.length === 1,
+  };
+};
+
 const MapboxMap = forwardRef(({
   style,
   children,
@@ -30,12 +89,14 @@ const MapboxMap = forwardRef(({
     setCamera: (config) => {
       if (cameraRef.current) {
         cameraRef.current.setCamera({
-          centerCoordinate: config.centerCoordinate,
-          zoomLevel: config.zoomLevel || zoomLevel,
+          centerCoordinate: isValidCoordinate(config?.centerCoordinate)
+            ? config.centerCoordinate
+            : (centerCoordinate || DEFAULT_CENTER_COORDINATE),
+          zoomLevel: config.zoomLevel ?? zoomLevel,
           pitch: config.pitch !== undefined ? config.pitch : pitch,
-          heading: config.bearing || bearing, // Mapbox uses 'heading' internally
-          animationDuration: config.animationDuration || animationDuration,
-          padding: config.padding || padding,
+          heading: config.bearing ?? bearing,
+          animationDuration: config.animationDuration ?? animationDuration,
+          padding: config.padding ?? padding,
         });
       }
     },
@@ -55,12 +116,26 @@ const MapboxMap = forwardRef(({
     // Fit to coordinates with padding
     fitToCoordinates: (coordinates, options = {}) => {
       if (cameraRef.current && coordinates.length > 0) {
-        const bounds = coordinates.map(coord => [coord.longitude, coord.latitude]);
+        const bounds = buildCoordinateBounds(coordinates);
+        if (!bounds) {
+          return;
+        }
+
+        if (bounds.singlePoint) {
+          cameraRef.current.setCamera({
+            centerCoordinate: bounds.northeast,
+            zoomLevel: options.zoomLevel ?? zoomLevel,
+            animationDuration: options.animationDuration ?? animationDuration,
+            padding: padding,
+          });
+          return;
+        }
+
         cameraRef.current.fitBounds(
-          bounds[0], // ne
-          bounds[bounds.length - 1], // sw
-          options.edgePadding || [100, 100, 100, 100],
-          options.animationDuration || 1000
+          bounds.northeast,
+          bounds.southwest,
+          normalizeEdgePadding(options.edgePadding),
+          options.animationDuration ?? animationDuration
         );
       }
     }
@@ -83,7 +158,7 @@ const MapboxMap = forwardRef(({
     >
       <Mapbox.Camera
         ref={cameraRef}
-        centerCoordinate={centerCoordinate || [-84.388, 33.749]} // Atlanta default
+        centerCoordinate={centerCoordinate || DEFAULT_CENTER_COORDINATE}
         zoomLevel={zoomLevel}
         pitch={pitch}
         heading={bearing}

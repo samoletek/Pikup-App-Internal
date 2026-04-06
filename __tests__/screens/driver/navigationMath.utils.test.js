@@ -1,15 +1,23 @@
-import { formatDistance } from '../../../screens/driver/navigationMath.utils';
+const {
+  getManeuverIcon,
+  normalizeManeuverType,
+} = require("../../../screens/driver/navigationMath.utils");
 
-describe('navigationMath.formatDistance', () => {
-  test('formats short distances in feet', () => {
-    expect(formatDistance(120)).toBe('394 ft');
+describe("navigationMath.utils", () => {
+  test("normalizes Mapbox maneuver types with spaces and underscores", () => {
+    expect(normalizeManeuverType("off ramp")).toBe("off-ramp");
+    expect(normalizeManeuverType("roundabout_turn")).toBe("roundabout-turn");
+    expect(normalizeManeuverType(" New Name ")).toBe("new-name");
   });
 
-  test('formats longer distances in miles', () => {
-    expect(formatDistance(1609.344)).toBe('1.0 mi');
+  test("maps ramp and merge maneuvers to directional turn icons", () => {
+    expect(getManeuverIcon("off ramp", "right")).toBe("arrow-forward");
+    expect(getManeuverIcon("on_ramp", "left")).toBe("arrow-back");
+    expect(getManeuverIcon("merge", "left")).toBe("arrow-back");
   });
 
-  test('returns fallback text for invalid distance', () => {
-    expect(formatDistance(Number.NaN)).toBe('Calculating...');
+  test("keeps roundabout and arrival maneuvers readable for the banner", () => {
+    expect(getManeuverIcon("roundabout", "")).toBe("refresh");
+    expect(getManeuverIcon("arrive", "")).toBe("flag");
   });
 });

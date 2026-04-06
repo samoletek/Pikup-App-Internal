@@ -63,6 +63,11 @@ const mergeCsvSets = (...values: string[]) => {
   return merged;
 };
 
+const isExplicitlyEnabled = (value: string): boolean => {
+  const normalizedValue = normalizeEnvValue(value).toLowerCase();
+  return normalizedValue === "1" || normalizedValue === "true" || normalizedValue === "yes";
+};
+
 const isDev = typeof __DEV__ !== "undefined" && __DEV__ === true;
 
 const defaultBypassEmails = isDev ? "drew@architeq.io" : "";
@@ -129,7 +134,7 @@ export const appConfig = {
     userIds: toCsvSet(readEnv("EXPO_PUBLIC_DRIVER_PHONE_BYPASS_USER_IDS", "")),
   },
   devMocks: {
-    enabled: isDev && readEnv("EXPO_PUBLIC_ENABLE_DEV_MOCK_DATA", "0") === "1",
+    enabled: isDev && isExplicitlyEnabled(readEnv("EXPO_PUBLIC_ENABLE_DEV_MOCK_DATA", "0")),
   },
 };
 

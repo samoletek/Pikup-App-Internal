@@ -1,4 +1,6 @@
-import { isDriverReadinessBypassEnabled } from '../../config/appConfig';
+import {
+  isDriverReadinessBypassEnabled,
+} from '../../config/appConfig';
 import { TRIP_STATUS, normalizeTripStatus } from '../../constants/tripStatus';
 
 export const DEFAULT_REQUEST_TIMER_SECONDS = 180;
@@ -11,6 +13,7 @@ export const REQUEST_POOLS = Object.freeze({
 export const MIN_MOVE_METERS = 100;
 
 export const resolveDriverOnboardingUiState = (user) => {
+  const isReadinessBypassed = isDriverReadinessBypassEnabled(user);
   const draftVerificationStatus = String(
     user?.metadata?.onboardingDraft?.verificationStatus || ''
   ).toLowerCase();
@@ -39,7 +42,8 @@ export const resolveDriverOnboardingUiState = (user) => {
   const isOnboardingApproved = hasPayoutCapability;
 
   return {
-    showOnboardingRequiredBanner: !isOnboardingApproved || isOnboardingDeclined,
+    showOnboardingRequiredBanner:
+      !isReadinessBypassed && (!isOnboardingApproved || isOnboardingDeclined),
   };
 };
 
@@ -48,11 +52,13 @@ export const resolveDriverGeoRestriction = ({
   driverLocationStateCode,
   supportedStateCodes,
   isSupportedStateCode,
-}) => (
-  hasResolvedDriverLocationState &&
-  Boolean(driverLocationStateCode) &&
-  !isSupportedStateCode(driverLocationStateCode, supportedStateCodes)
-);
+}) => {
+  return (
+    hasResolvedDriverLocationState &&
+    Boolean(driverLocationStateCode) &&
+    !isSupportedStateCode(driverLocationStateCode, supportedStateCodes)
+  );
+};
 
 export const resolveDriverConnectAccountId = (user) => {
   const candidate =

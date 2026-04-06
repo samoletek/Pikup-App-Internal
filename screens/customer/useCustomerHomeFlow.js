@@ -58,10 +58,8 @@ export default function useCustomerHomeFlow({
   const [orderModalKey, setOrderModalKey] = useState(0);
   const lastDriverCancellationAlertTripIdRef = useRef(null);
   const isPhoneVerifiedForOrders = isPhoneVerified(currentUser);
-  const isGeorgiaOrderGateOpen =
-    locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
-  const isPhoneVerificationRequiredForOrders =
-    isGeorgiaOrderGateOpen && !isPhoneVerifiedForOrders;
+  const isGeorgiaOrderGateOpen = locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
+  const isPhoneVerificationRequiredForOrders = isGeorgiaOrderGateOpen && !isPhoneVerifiedForOrders;
 
   const canCreateOrder = (
     !activeDelivery &&

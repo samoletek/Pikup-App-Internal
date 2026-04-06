@@ -31,7 +31,11 @@ const resolveDriverPayoutLabel = (tripRequest) => {
 export default function DeliveryConfirmationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { request, pickupPhotos, driverLocation } = route.params;
+  const {
+    request,
+    pickupPhotos,
+    driverLocation,
+  } = route.params;
   const { refreshProfile } = useAuthIdentity();
   const { finishDelivery } = useTripActions();
   const { submitTripRating } = useProfileActions();
@@ -88,6 +92,7 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   });
   const customerName = customerDisplay.name;
   const driverPayoutLabel = resolveDriverPayoutLabel(request);
+  const isCompleteDisabled = deliveryPhotos.length < MIN_VERIFICATION_PHOTOS || isCompleting;
 
   return (
     <View style={styles.container}>
@@ -233,10 +238,10 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
           }
           style={[
             styles.completeButton,
-            { opacity: (deliveryPhotos.length < MIN_VERIFICATION_PHOTOS || isCompleting) ? 0.6 : 1 }
+            { opacity: isCompleteDisabled ? 0.6 : 1 }
           ]}
           onPress={completeDelivery}
-          disabled={deliveryPhotos.length < MIN_VERIFICATION_PHOTOS || isCompleting}
+          disabled={isCompleteDisabled}
           loading={isCompleting}
           labelStyle={styles.completeButtonText}
           leftIcon={<Ionicons name="checkmark-circle" size={20} color={colors.white} />}

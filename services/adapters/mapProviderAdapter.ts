@@ -62,7 +62,7 @@ const defaultMapProviderAdapter: MapProviderAdapter = {
         ? waypoints.map((point) => `${point.longitude},${point.latitude}`).join(';')
         : '';
 
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${originStr}${waypointsStr ? `;${waypointsStr}` : ''};${destinationStr}?access_token=${accessToken}&geometries=geojson&steps=true&voice_instructions=true&alternatives=true`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${originStr}${waypointsStr ? `;${waypointsStr}` : ''};${destinationStr}?access_token=${accessToken}&geometries=geojson&steps=true&banner_instructions=true&voice_instructions=true&alternatives=true`;
     return fetchJson<DirectionsResponse>(url);
   },
   geocodeAddress: async ({
