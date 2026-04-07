@@ -21,6 +21,39 @@ import { getDistanceFromLatLonInKm } from './navigationMath.utils';
 
 const ROUTE_REFRESH_INTERVAL_MS = 7000;
 
+const parseCoordinatePair = (candidate) => {
+  if (!candidate) {
+    return null;
+  }
+
+  if (Array.isArray(candidate) && candidate.length >= 2) {
+    const longitude = Number(candidate[0]);
+    const latitude = Number(candidate[1]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+  }
+
+  if (typeof candidate === 'object') {
+    const latitude = Number(candidate.latitude ?? candidate.lat ?? candidate.y);
+    const longitude = Number(candidate.longitude ?? candidate.lng ?? candidate.lon ?? candidate.x);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+  }
+
+  if (typeof candidate === 'string') {
+    try {
+      const parsed = JSON.parse(candidate);
+      return parseCoordinatePair(parsed);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  return null;
+};
+
 export default function useDeliveryNavigationData({
   applyRouteSteps,
   arriveAtDropoff,
@@ -44,6 +77,7 @@ export default function useDeliveryNavigationData({
   const routeRefreshInFlightRef = useRef(false);
   const lastRouteRefreshAtRef = useRef(0);
   const hasRouteRef = useRef(false);
+  const dropoffArrivalHandledRef = useRef(false);
 
   const [driverLocation, setDriverLocation] = useState(initialDriverLocation);
   const [dropoffLocation, setDropoffLocation] = useState(null);
@@ -188,15 +222,36 @@ export default function useDeliveryNavigationData({
   }, [generateRealRoute]);
 
   const extractDropoffLocation = useCallback((currentLocation) => {
-    if (requestData?.dropoffCoordinates) {
-      return requestData.dropoffCoordinates;
+    const coordinateCandidates = [
+      requestData?.dropoff?.coordinates,
+      requestData?.dropoffCoordinates,
+      requestData?.dropoff_location?.coordinates,
+      requestData?.dropoff_location,
+      requestData?.originalData?.dropoff?.coordinates,
+      requestData?.originalData?.dropoffCoordinates,
+      requestData?.originalData?.dropoff_location?.coordinates,
+      requestData?.originalData?.dropoff_location,
+      request?.dropoff?.coordinates,
+      request?.dropoffCoordinates,
+      request?.dropoff_location?.coordinates,
+      request?.dropoff_location,
+      request?.originalData?.dropoff?.coordinates,
+      request?.originalData?.dropoffCoordinates,
+      request?.originalData?.dropoff_location?.coordinates,
+      request?.originalData?.dropoff_location,
+    ];
+
+    for (const candidate of coordinateCandidates) {
+      const parsed = parseCoordinatePair(candidate);
+      if (parsed) {
+        return parsed;
+      }
     }
 
-    if (requestData?.dropoffLat && requestData?.dropoffLng) {
-      return {
-        latitude: requestData.dropoffLat,
-        longitude: requestData.dropoffLng,
-      };
+    const latitude = Number(requestData?.dropoffLat ?? request?.dropoffLat);
+    const longitude = Number(requestData?.dropoffLng ?? request?.dropoffLng);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
     }
 
     if (currentLocation) {
@@ -210,7 +265,7 @@ export default function useDeliveryNavigationData({
       latitude: 33.7540,
       longitude: -84.3830,
     };
-  }, [requestData?.dropoffCoordinates, requestData?.dropoffLat, requestData?.dropoffLng]);
+  }, [request, requestData]);
 
   const stopLocationTracking = useCallback(() => {
     if (locationSubscription.current) {
@@ -346,17 +401,32 @@ export default function useDeliveryNavigationData({
   }, [getRequestById, request.id]);
 
   const handleArriveAtDropoff = useCallback(async () => {
-    try {
-      if (requestData?.id) {
-        await arriveAtDropoff(requestData.id, driverLocation);
+    if (dropoffArrivalHandledRef.current) {
+      return;
+    }
+    dropoffArrivalHandledRef.current = true;
 
-        navigation.navigate('DeliveryConfirmationScreen', {
-          request: requestData,
-          pickupPhotos,
-          driverLocation,
+    try {
+      const requestId = requestData?.id || request?.id;
+      if (!requestId) {
+        dropoffArrivalHandledRef.current = false;
+        logger.warn('DeliveryNavigationData', 'Cannot arrive at dropoff without request id', {
+          requestDataId: requestData?.id,
+          routeRequestId: request?.id,
         });
+        Alert.alert('Error', 'Trip data is missing. Please reopen navigation and try again.');
+        return;
       }
+
+      await arriveAtDropoff(requestId, driverLocation);
+
+      navigation.replace('DeliveryConfirmationScreen', {
+        request: requestData,
+        pickupPhotos,
+        driverLocation,
+      });
     } catch (error) {
+      dropoffArrivalHandledRef.current = false;
       logger.error('DeliveryNavigationData', 'Error marking arrival at dropoff', error);
       const errorMessage = String(error?.message || '').toLowerCase();
       if (errorMessage.includes('cancelled')) {
@@ -377,7 +447,7 @@ export default function useDeliveryNavigationData({
       }
       Alert.alert('Error', 'Failed to update arrival status. Please try again.');
     }
-  }, [arriveAtDropoff, driverLocation, navigation, pickupPhotos, requestData]);
+  }, [arriveAtDropoff, driverLocation, navigation, pickupPhotos, request?.id, requestData]);
 
   useEffect(() => {
     void initializeDeliveryTracking();

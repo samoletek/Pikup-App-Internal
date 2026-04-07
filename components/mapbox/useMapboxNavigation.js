@@ -18,8 +18,6 @@ const useMapboxNavigation = ({
   const nativeNavigationAvailable = MapboxNavigationService.isAvailable();
 
   useEffect(() => {
-    if (!nativeNavigationAvailable) return;
-
     // Set up event listeners
     const progressListener = MapboxNavigationService.addListener('onRouteProgress', (data) => {
       if (onRouteProgress) onRouteProgress(data);
@@ -66,11 +64,12 @@ const useMapboxNavigation = ({
   ]);
 
   const startNavigation = async ({ showAlert = true, options } = {}) => {
-    if (!nativeNavigationAvailable) {
-      if (showAlert) {
-        Alert.alert('Navigation', 'Turn-by-turn navigation is currently unavailable on this build.');
-      }
-      return false;
+    const supportsNativeNavigation = MapboxNavigationService.isAvailable();
+    if (!supportsNativeNavigation) {
+      logger.warn(
+        'MapboxNavigationHook',
+        'Native module availability check returned false; attempting start anyway'
+      );
     }
 
     if (!origin || !destination) {
@@ -84,11 +83,21 @@ const useMapboxNavigation = ({
     try {
       setIsNavigating(true);
       const resolvedOptions = options || navigationOptions || {};
-      const result = await MapboxNavigationService.startNavigation(
+      const executeStart = () => MapboxNavigationService.startNavigation(
         origin,
         destination,
         resolvedOptions
       );
+
+      let result = await executeStart();
+      if (result?.started === false && result?.alreadyActive) {
+        logger.warn(
+          'MapboxNavigationHook',
+          'Native navigation reported an active stale session, attempting recovery'
+        );
+        await MapboxNavigationService.stopNavigation();
+        result = await executeStart();
+      }
       const started = !(result && result.started === false);
 
       if (!started) {

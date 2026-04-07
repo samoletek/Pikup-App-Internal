@@ -17,7 +17,6 @@ export default function GpsNavigationDriverView({
   currentHeading,
   insetsTop,
   isNavigating,
-  isSupported,
   startNavigation,
   stopNavigation,
   cardAnimation,
@@ -129,7 +128,7 @@ export default function GpsNavigationDriverView({
             allowOverlap
           >
             <View style={styles.driverMarker}>
-              <Ionicons name="navigate" size={18} color={colors.white} />
+              <Ionicons name="navigate" size={30} color={colors.background.primary} />
             </View>
           </Mapbox.MarkerView>
         )}
@@ -175,7 +174,7 @@ export default function GpsNavigationDriverView({
         <Ionicons name="arrow-back" size={24} color={colors.white} />
       </TouchableOpacity>
 
-      {isSupported && !isNavigating && driverLocation && customerLocation && (
+      {!isNavigating && driverLocation && customerLocation && (
         <TouchableOpacity
           style={[styles.startNavButton, { top: insetsTop + spacing.sm }]}
           onPress={startNavigation}

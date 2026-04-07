@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import {
   useAuthIdentity,
   useMessagingActions,
@@ -26,10 +27,9 @@ import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
-const FEET_PER_METER = 3.28084;
-
 export default function GpsNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { request, isCustomerView = false, stage = 'pickup' } = route.params || {};
   const { currentUser, userType } = useAuthIdentity();
   const { startDriving, arriveAtPickup, getRequestById, updateDriverStatus, cancelOrder } = useTripActions();
@@ -121,9 +121,15 @@ export default function GpsNavigationScreen({ route, navigation }) {
     const distanceMeters = distanceKm * 1000;
     return Number.isFinite(distanceMeters) ? distanceMeters : null;
   }, [customerLocation, driverLocation]);
+  const effectiveDistanceToPickupMeters = useMemo(() => {
+    if (Number.isFinite(remainingDistanceMeters)) {
+      return remainingDistanceMeters;
+    }
+    return distanceToPickupMeters;
+  }, [distanceToPickupMeters, remainingDistanceMeters]);
   const canArriveAtPickup =
-    Number.isFinite(distanceToPickupMeters) &&
-    distanceToPickupMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
+    Number.isFinite(effectiveDistanceToPickupMeters) &&
+    effectiveDistanceToPickupMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
 
   const nativeNavigationOptions = useMemo(
     () => ({
@@ -151,22 +157,28 @@ export default function GpsNavigationScreen({ route, navigation }) {
     navigationOptions: nativeNavigationOptions,
     onRouteProgress: (progress) => {
       // Update ETA and distance from navigation progress
-      if (progress.durationRemaining) {
+      if (Number.isFinite(progress?.durationRemaining)) {
         const minutes = Math.round(progress.durationRemaining / 60);
         setEstimatedTime(minutes < 1 ? '<1' : minutes.toString());
       }
-      if (progress.distanceRemaining) {
+      if (Number.isFinite(progress?.distanceRemaining)) {
         setRemainingDistance(formatDistance(progress.distanceRemaining));
         setRemainingDistanceMeters(progress.distanceRemaining);
       }
     },
     onArrival: () => {
+      if (!isFocused) {
+        return;
+      }
       void handleArrive();
     },
     onCancel: () => {
       logger.info('GpsNavigationScreen', 'Navigation cancelled by user');
     },
     onPrimaryAction: () => {
+      if (!isFocused) {
+        return;
+      }
       void handleArrive();
     },
     onSecondaryAction: () => {
@@ -220,7 +232,7 @@ export default function GpsNavigationScreen({ route, navigation }) {
   }, []);
 
   useAutoMapboxNavigationStart({
-    enabled: Boolean(!isCustomerView && driverLocation && customerLocation),
+    enabled: Boolean(isFocused && !isCustomerView && driverLocation && customerLocation),
     isSupported,
     isNavigating,
     navigationAttempted,
@@ -231,17 +243,22 @@ export default function GpsNavigationScreen({ route, navigation }) {
   });
 
   const handleArrive = async () => {
+    if (!isFocused) {
+      return;
+    }
     if (!canArriveAtPickup) {
-      Alert.alert(
-        'Not close enough yet',
-        `Get within ${Math.round(ARRIVAL_UNLOCK_RADIUS_METERS * FEET_PER_METER)} ft of pickup to confirm arrival.`
-      );
       return;
     }
 
     try {
       if (requestData?.id) {
         await arriveAtPickup(requestData.id, driverLocation);
+        clearNavigationResources();
+        try {
+          await stopNavigation({ showAlert: false });
+        } catch (stopError) {
+          logger.warn('GpsNavigationScreen', 'Failed to stop native navigation after pickup arrival', stopError);
+        }
         navigation.navigate('PickupConfirmationScreen', { request: requestData, driverLocation });
       }
     } catch (error) {

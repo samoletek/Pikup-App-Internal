@@ -17,7 +17,6 @@ export default function DeliveryNavigationDriverView({
   currentHeading,
   insetsTop,
   isNavigating,
-  isSupported,
   startNavigation,
   stopNavigation,
   cardAnimation,
@@ -121,7 +120,7 @@ export default function DeliveryNavigationDriverView({
             allowOverlap
           >
             <View style={styles.driverMarker}>
-              <Ionicons name="navigate" size={18} color={colors.white} />
+              <Ionicons name="navigate" size={30} color={colors.background.primary} />
             </View>
           </Mapbox.MarkerView>
         )}
@@ -167,7 +166,7 @@ export default function DeliveryNavigationDriverView({
         <Ionicons name="arrow-back" size={24} color={colors.white} />
       </TouchableOpacity>
 
-      {isSupported && !isNavigating && driverLocation && dropoffLocation && (
+      {!isNavigating && driverLocation && dropoffLocation && (
         <TouchableOpacity
           style={[styles.startNavButton, { top: insetsTop + spacing.sm }]}
           onPress={startNavigation}

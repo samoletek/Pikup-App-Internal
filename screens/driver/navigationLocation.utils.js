@@ -27,6 +27,10 @@ const normalizeCoordinates = (coords) => ({
   longitude: coords.longitude,
 });
 
+const hasValidCoordinatePair = (coords) => (
+  Number.isFinite(Number(coords?.latitude)) && Number.isFinite(Number(coords?.longitude))
+);
+
 export async function ensureNavigationLocationAccess() {
   const availability = await ensureForegroundLocationAvailability({
     loggerScope: 'NavigationLocation',
@@ -47,20 +51,34 @@ export async function ensureNavigationLocationAccess() {
 }
 
 export async function resolveInitialDriverPosition({ initialLocation = null } = {}) {
-  if (initialLocation?.latitude && initialLocation?.longitude) {
-    return { coords: initialLocation, heading: 0 };
+  const initialFallback =
+    hasValidCoordinatePair(initialLocation)
+      ? {
+        latitude: Number(initialLocation.latitude),
+        longitude: Number(initialLocation.longitude),
+      }
+      : null;
+
+  try {
+    const position = await getCurrentPositionWithFallback({
+      currentPositionOptions: CURRENT_POSITION_OPTIONS,
+      lastKnownOptions: LAST_KNOWN_OPTIONS,
+    });
+
+    if (position?.coords) {
+      return {
+        coords: normalizeCoordinates(position.coords),
+        heading: position.coords.heading ?? null,
+      };
+    }
+  } catch (error) {
+    if (!initialFallback) {
+      throw error;
+    }
   }
 
-  const position = await getCurrentPositionWithFallback({
-    currentPositionOptions: CURRENT_POSITION_OPTIONS,
-    lastKnownOptions: LAST_KNOWN_OPTIONS,
-  });
-
-  if (position?.coords) {
-    return {
-      coords: normalizeCoordinates(position.coords),
-      heading: position.coords.heading ?? null,
-    };
+  if (initialFallback) {
+    return { coords: initialFallback, heading: 0 };
   }
 
   throw new Error('No location available');

@@ -214,6 +214,27 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
   },
+  activeDriverMarkerContainer: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeDriverMarkerCore: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.45,
+    shadowRadius: 7,
+    elevation: 9,
+  },
 });
 
 export default styles;

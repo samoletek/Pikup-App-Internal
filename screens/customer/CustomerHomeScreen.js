@@ -28,6 +28,7 @@ import {
 } from "../../styles/theme";
 import useCustomerDeliveryTracking from "../../hooks/useCustomerDeliveryTracking";
 import usePendingBookingSearchUi from "../../hooks/usePendingBookingSearchUi";
+import { toMapboxCoordinate } from "./CustomerHomeScreen.utils";
 import useCustomerHomeFlow, { CUSTOMER_LOCATION_GATE_STATUS } from "./useCustomerHomeFlow";
 
 export default function CustomerHomeScreen({ navigation }) {
@@ -45,6 +46,8 @@ export default function CustomerHomeScreen({ navigation }) {
     setPendingBooking,
     recentCancellation,
     clearRecentCancellation,
+    recentCompletion,
+    clearRecentCompletion,
     checkActiveDeliveries,
   } = useCustomerDeliveryTracking({
     currentUserId,
@@ -76,6 +79,8 @@ export default function CustomerHomeScreen({ navigation }) {
     checkActiveDeliveries,
     recentCancellation,
     clearRecentCancellation,
+    recentCompletion,
+    clearRecentCompletion,
     setPendingBooking,
     cancelOrder,
     uploadToSupabase,
@@ -112,9 +117,18 @@ export default function CustomerHomeScreen({ navigation }) {
     [insets.bottom]
   );
 
+  const activeDriverCoordinate = useMemo(
+    () => toMapboxCoordinate(activeDelivery?.driverLocation || activeDelivery?.driver_location || null),
+    [activeDelivery]
+  );
+
   const mapCenterCoordinate = useMemo(() => {
     if (pendingBooking && searchingMarkerCoordinate) {
       return searchingMarkerCoordinate;
+    }
+
+    if (activeDriverCoordinate) {
+      return activeDriverCoordinate;
     }
 
     if (userLocation?.longitude && userLocation?.latitude) {
@@ -122,7 +136,7 @@ export default function CustomerHomeScreen({ navigation }) {
     }
 
     return [-84.388, 33.749];
-  }, [pendingBooking, searchingMarkerCoordinate, userLocation]);
+  }, [activeDriverCoordinate, pendingBooking, searchingMarkerCoordinate, userLocation]);
 
   const showCreateOrderTrigger = !activeDelivery && !pendingBooking;
   const isCheckingLocationGate = (
@@ -194,6 +208,22 @@ export default function CustomerHomeScreen({ navigation }) {
               />
               <View style={styles.searchingMarkerCore}>
                 <Ionicons name="search" size={16} color={colors.white} />
+              </View>
+            </View>
+          </Mapbox.MarkerView>
+        ) : null}
+
+        {activeDelivery && activeDriverCoordinate ? (
+          <Mapbox.MarkerView
+            id="active-driver-marker"
+            coordinate={activeDriverCoordinate}
+            anchor={{ x: 0.5, y: 0.5 }}
+            allowOverlap
+            allowOverlapWithPuck
+          >
+            <View style={styles.activeDriverMarkerContainer}>
+              <View style={styles.activeDriverMarkerCore}>
+                <Ionicons name="car-sport" size={16} color={colors.white} />
               </View>
             </View>
           </Mapbox.MarkerView>

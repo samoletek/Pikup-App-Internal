@@ -1,4 +1,4 @@
-import { normalizeTripStatus } from "../../constants/tripStatus";
+import { TRIP_STATUS, normalizeTripStatus } from "../../constants/tripStatus";
 import { typography } from "../../styles/theme";
 import {
   STATUS_STEPS,
@@ -41,11 +41,14 @@ export {
   resolvePhotoUrisAsync,
 };
 
-export const isCustomerTripPreArrivalCancellable = (status) => (
-  status === "pending" ||
-  status === "accepted" ||
-  status === "in_progress"
-);
+export const isCustomerTripPreArrivalCancellable = (status) => {
+  const normalizedStatus = normalizeTripStatus(status);
+  return (
+    normalizedStatus === TRIP_STATUS.PENDING ||
+    normalizedStatus === TRIP_STATUS.ACCEPTED ||
+    normalizedStatus === TRIP_STATUS.IN_PROGRESS
+  );
+};
 
 export const buildCustomerTripInfoRows = (displayTrip) => ([
   {

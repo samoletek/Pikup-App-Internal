@@ -14,6 +14,7 @@ export default function useCustomerDeliveryTracking({
   const [activeDelivery, setActiveDelivery] = useState(null);
   const [pendingBooking, setPendingBooking] = useState(null);
   const [recentCancellation, setRecentCancellation] = useState(null);
+  const [recentCompletion, setRecentCompletion] = useState(null);
   const activeDeliveryRef = useRef(activeDelivery);
 
   useEffect(() => {
@@ -24,11 +25,16 @@ export default function useCustomerDeliveryTracking({
     setRecentCancellation(null);
   }, []);
 
+  const clearRecentCompletion = useCallback(() => {
+    setRecentCompletion(null);
+  }, []);
+
   const checkActiveDeliveries = useCallback(async () => {
     if (!currentUserId) {
       setActiveDelivery(null);
       setPendingBooking(null);
       setRecentCancellation(null);
+      setRecentCompletion(null);
       activeDeliveryRef.current = null;
       return;
     }
@@ -53,6 +59,24 @@ export default function useCustomerDeliveryTracking({
       ).trim();
 
       if (previousActiveId && previousActiveId !== nextActiveId) {
+        const completedTrip = requestList.find((request) => {
+          const requestId = String(
+            request?.id || request?.requestId || request?.request_id || ''
+          ).trim();
+
+          return (
+            requestId === previousActiveId &&
+            normalizeTripStatus(request?.status) === TRIP_STATUS.COMPLETED
+          );
+        });
+
+        if (completedTrip) {
+          setRecentCompletion({
+            id: previousActiveId,
+            tripSnapshot: completedTrip,
+          });
+        }
+
         const cancelledTrip = requestList.find((request) => {
           const requestId = String(
             request?.id || request?.requestId || request?.request_id || ''
@@ -110,6 +134,8 @@ export default function useCustomerDeliveryTracking({
     setPendingBooking,
     recentCancellation,
     clearRecentCancellation,
+    recentCompletion,
+    clearRecentCompletion,
     checkActiveDeliveries,
   };
 }

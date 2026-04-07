@@ -44,6 +44,8 @@ export default function useCustomerHomeFlow({
   checkActiveDeliveries,
   recentCancellation,
   clearRecentCancellation,
+  recentCompletion,
+  clearRecentCompletion,
   setPendingBooking,
   cancelOrder,
   uploadToSupabase,
@@ -57,6 +59,7 @@ export default function useCustomerHomeFlow({
   const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
   const [orderModalKey, setOrderModalKey] = useState(0);
   const lastDriverCancellationAlertTripIdRef = useRef(null);
+  const lastAutoOpenedCompletedTripIdRef = useRef(null);
   const isPhoneVerifiedForOrders = isPhoneVerified(currentUser);
   const isGeorgiaOrderGateOpen =
     locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
@@ -249,6 +252,26 @@ export default function useCustomerHomeFlow({
       { cancelable: false }
     );
   }, [clearRecentCancellation, recentCancellation]);
+
+  useEffect(() => {
+    const completedTripId = String(recentCompletion?.id || '').trim();
+    if (!completedTripId) {
+      return;
+    }
+
+    if (lastAutoOpenedCompletedTripIdRef.current === completedTripId) {
+      return;
+    }
+
+    lastAutoOpenedCompletedTripIdRef.current = completedTripId;
+    clearRecentCompletion?.();
+
+    navigation.navigate("CustomerTripDetailsScreen", {
+      tripId: completedTripId,
+      tripSummary: recentCompletion?.tripSnapshot || null,
+      tripSnapshot: recentCompletion?.tripSnapshot || null,
+    });
+  }, [clearRecentCompletion, navigation, recentCompletion]);
 
   const handleOpenActiveTripDetails = useCallback(() => {
     if (!activeDelivery) {

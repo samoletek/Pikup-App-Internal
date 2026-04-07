@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useIsFocused } from '@react-navigation/native';
 import {
   useAuthIdentity,
   useMessagingActions,
@@ -25,10 +26,9 @@ import { logger } from '../../services/logger';
 import { resolveRequestConversationContext } from './requestConversationContext.utils';
 import { resolveCustomerDisplayFromRequest } from '../../utils/profileDisplay';
 
-const FEET_PER_METER = 3.28084;
-
 export default function DeliveryNavigationScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
+  const isFocused = useIsFocused();
   const { request, pickupPhotos, driverLocation: initialDriverLocation } = route.params;
   const { currentUser, userType } = useAuthIdentity();
   const { arriveAtDropoff, getRequestById, updateDriverStatus } = useTripActions();
@@ -122,9 +122,15 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     const distanceMeters = distanceKm * 1000;
     return Number.isFinite(distanceMeters) ? distanceMeters : null;
   }, [driverLocation, dropoffLocation]);
+  const effectiveDistanceToDropoffMeters = useMemo(() => {
+    if (Number.isFinite(remainingDistanceMeters)) {
+      return remainingDistanceMeters;
+    }
+    return distanceToDropoffMeters;
+  }, [distanceToDropoffMeters, remainingDistanceMeters]);
   const canArriveAtDropoff =
-    Number.isFinite(distanceToDropoffMeters) &&
-    distanceToDropoffMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
+    Number.isFinite(effectiveDistanceToDropoffMeters) &&
+    effectiveDistanceToDropoffMeters <= ARRIVAL_UNLOCK_RADIUS_METERS;
 
   const nativeNavigationOptions = useMemo(
     () => ({
@@ -180,22 +186,28 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     navigationOptions: nativeNavigationOptions,
     onRouteProgress: (progress) => {
       // Update ETA and distance from navigation progress
-      if (progress.durationRemaining) {
+      if (Number.isFinite(progress?.durationRemaining)) {
         const minutes = Math.round(progress.durationRemaining / 60);
         setEstimatedTime(minutes < 1 ? '<1' : minutes.toString());
       }
-      if (progress.distanceRemaining) {
+      if (Number.isFinite(progress?.distanceRemaining)) {
         setRemainingDistance(formatDistance(progress.distanceRemaining));
         setRemainingDistanceMeters(progress.distanceRemaining);
       }
     },
     onArrival: () => {
+      if (!isFocused) {
+        return;
+      }
       void handleArriveAtDropoff();
     },
     onCancel: () => {
       logger.info('DeliveryNavigationScreen', 'Delivery navigation cancelled by user');
     },
     onPrimaryAction: () => {
+      if (!isFocused) {
+        return;
+      }
       void handleArriveAtDropoffPress();
     },
   });
@@ -209,7 +221,7 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
   }, [isNavigating, stopNavigation]);
 
   useAutoMapboxNavigationStart({
-    enabled: Boolean(driverLocation && dropoffLocation),
+    enabled: Boolean(isFocused && driverLocation && dropoffLocation),
     isSupported,
     isNavigating,
     navigationAttempted,
@@ -235,17 +247,22 @@ export default function DeliveryNavigationScreen({ route, navigation }) {
     navigation,
     clearUnread: () => setHasUnreadChat(false),
   });
-  const handleArriveAtDropoffPress = useCallback(() => {
+  const handleArriveAtDropoffPress = useCallback(async () => {
+    if (!isFocused) {
+      return;
+    }
     if (!canArriveAtDropoff) {
-      Alert.alert(
-        'Not close enough yet',
-        `Get within ${Math.round(ARRIVAL_UNLOCK_RADIUS_METERS * FEET_PER_METER)} ft of dropoff to confirm arrival.`
-      );
       return;
     }
 
+    stopLocationTracking();
+    try {
+      await stopNavigation({ showAlert: false });
+    } catch (stopError) {
+      logger.warn('DeliveryNavigationScreen', 'Failed to stop native navigation after dropoff arrival', stopError);
+    }
     void handleArriveAtDropoff();
-  }, [canArriveAtDropoff, handleArriveAtDropoff]);
+  }, [canArriveAtDropoff, handleArriveAtDropoff, isFocused, stopLocationTracking, stopNavigation]);
 
   if (isLoading || locationError) {
     return (

@@ -236,6 +236,9 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
   private var primaryActionUnlockDistanceMeters: CLLocationDistance?
   private var destinationCoordinate: CLLocationCoordinate2D?
   private var allowSystemCancelForCurrentSession = false
+  private var isDismissingNavigationSession = false
+  private var configuredDirections: Directions?
+  private var configuredDirectionsKey: String?
   private weak var eventEmitter: RCTEventEmitter?
 
   @objc func setEventEmitter(_ emitter: RCTEventEmitter) {
@@ -280,11 +283,24 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
       self.destinationCoordinate = destinationCoordinate
       self.allowSystemCancelForCurrentSession = allowSystemCancel
 
+      guard let accessToken = self.resolveMapboxAccessToken(from: options) else {
+        reject(
+          "missing_mapbox_access_token",
+          "Mapbox access token is missing. Provide mapboxAccessToken in options or MBXAccessToken in Info.plist.",
+          nil
+        )
+        return
+      }
+
+      let directionsHost = self.resolveDirectionsHost(from: options)
+      let directions = self.prepareDirections(accessToken: accessToken, host: directionsHost)
       let routeOptions = NavigationRouteOptions(
         coordinates: [originCoordinate, destinationCoordinate],
         profileIdentifier: .automobileAvoidingTraffic
       )
-      Directions.shared.calculate(routeOptions) { (_, result) in
+
+      directions.calculate(routeOptions) { [weak self] (_, result) in
+        guard let self else { return }
         self.queue.async {
           switch result {
           case .failure(let error):
@@ -301,6 +317,7 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
               routeResponse: response,
               routeIndex: 0,
               routeOptions: routeOptions,
+              directions: directions,
               simulating: simulationMode
             )
             let navigationOptions = NavigationOptions(navigationService: navigationService)
@@ -313,6 +330,8 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
               navigationOptions: navigationOptions
             )
             controller.delegate = self
+            controller.showsReportFeedback = false
+            controller.showsEndOfRouteFeedback = false
             controller.modalPresentationStyle = .fullScreen
             self.applyBranding(to: controller)
             self.enforceBrandStyle(on: controller)
@@ -327,10 +346,12 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
                 guard let self, let controller else { return }
                 self.updateBottomBannerVisibility(on: controller)
                 self.enable3DBuildings(on: controller)
+                self.repositionFloatingButtons(on: controller)
                 self.bringActionCardToFront(on: controller)
               }
               self.navigationViewController = controller
               self.installActionCardIfNeeded(on: controller, options: actionCardOptions)
+              self.repositionFloatingButtons(on: controller)
               resolve(["started": true])
             }
           }
@@ -381,7 +402,7 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
       ]
     )
 
-    updatePrimaryActionAvailability(with: location)
+    updatePrimaryActionAvailability(with: location, distanceRemaining: progress.distanceRemaining)
   }
 
   func navigationViewController(_ navigationViewController: NavigationViewController, didArriveAt waypoint: Waypoint) -> Bool {
@@ -403,7 +424,23 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     if canceled {
       emitEvent(name: "onCancel", payload: ["cancelled": true])
     }
-    cleanupNavigationSession()
+
+    guard !isDismissingNavigationSession else { return }
+    isDismissingNavigationSession = true
+
+    let finishCleanup: () -> Void = { [weak self] in
+      self?.cleanupNavigationSession()
+      self?.isDismissingNavigationSession = false
+    }
+
+    if navigationViewController.presentingViewController != nil {
+      navigationViewController.dismiss(animated: true) {
+        finishCleanup()
+      }
+      return
+    }
+
+    finishCleanup()
   }
 
   func navigationViewController(_ navigationViewController: NavigationViewController, didRerouteAlong route: Route) {
@@ -457,8 +494,6 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
       actionPayload = [:]
     }
 
-    let title = (options["title"] as? String) ?? "Current Stop"
-    let subtitle = (options["subtitle"] as? String) ?? ""
     let primaryActionLabel = (options["primaryActionLabel"] as? String) ?? "Confirm"
     let secondaryActionLabel = options["secondaryActionLabel"] as? String
     let unlockDistanceMeters = (options["unlockDistanceMeters"] as? NSNumber)?.doubleValue
@@ -466,26 +501,7 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
 
     let card = UIView()
     card.translatesAutoresizingMaskIntoConstraints = false
-    card.backgroundColor = UIColor(red: 10/255, green: 10/255, blue: 31/255, alpha: 1.0)
-    card.layer.cornerRadius = 20
-    card.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-    card.layer.borderWidth = 0
-    card.layer.borderColor = UIColor.clear.cgColor
-    card.clipsToBounds = true
-
-    let titleLabel = UILabel()
-    titleLabel.translatesAutoresizingMaskIntoConstraints = false
-    titleLabel.text = title
-    titleLabel.font = UIFont.systemFont(ofSize: 24, weight: .bold)
-    titleLabel.textColor = .white
-    titleLabel.numberOfLines = 1
-
-    let subtitleLabel = UILabel()
-    subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-    subtitleLabel.text = subtitle
-    subtitleLabel.font = UIFont.systemFont(ofSize: 15, weight: .regular)
-    subtitleLabel.textColor = UIColor(white: 1.0, alpha: 0.72)
-    subtitleLabel.numberOfLines = 2
+    card.backgroundColor = .clear
 
     let primaryButton = UIButton(type: .system)
     primaryButton.translatesAutoresizingMaskIntoConstraints = false
@@ -499,18 +515,16 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     primaryButton.addTarget(self, action: #selector(handlePrimaryActionTap), for: .touchUpInside)
     primaryActionButton = primaryButton
     setPrimaryActionEnabled(unlockDistanceMeters == nil)
+    primaryButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
 
-    let contentStack = UIStackView()
-    contentStack.translatesAutoresizingMaskIntoConstraints = false
-    contentStack.axis = .vertical
-    contentStack.spacing = 12
-    contentStack.alignment = .fill
+    let buttonRow = UIStackView()
+    buttonRow.translatesAutoresizingMaskIntoConstraints = false
+    buttonRow.axis = .horizontal
+    buttonRow.spacing = 10
+    buttonRow.alignment = .fill
+    buttonRow.distribution = .fill
 
-    contentStack.addArrangedSubview(titleLabel)
-    if !subtitle.isEmpty {
-      contentStack.addArrangedSubview(subtitleLabel)
-    }
-    contentStack.addArrangedSubview(primaryButton)
+    buttonRow.addArrangedSubview(primaryButton)
 
     if let secondaryLabel = secondaryActionLabel, !secondaryLabel.isEmpty {
       let secondaryButton = UIButton(type: .system)
@@ -523,21 +537,23 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
       secondaryButton.layer.masksToBounds = true
       secondaryButton.contentEdgeInsets = UIEdgeInsets(top: 9, left: 16, bottom: 9, right: 16)
       secondaryButton.addTarget(self, action: #selector(handleSecondaryActionTap), for: .touchUpInside)
-      contentStack.addArrangedSubview(secondaryButton)
+      secondaryButton.heightAnchor.constraint(equalToConstant: 52).isActive = true
+      buttonRow.addArrangedSubview(secondaryButton)
+      primaryButton.widthAnchor.constraint(equalTo: secondaryButton.widthAnchor, multiplier: 2).isActive = true
     }
 
-    card.addSubview(contentStack)
+    card.addSubview(buttonRow)
     controller.view.addSubview(card)
 
     NSLayoutConstraint.activate([
-      contentStack.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
-      contentStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
-      contentStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
-      contentStack.bottomAnchor.constraint(equalTo: card.safeAreaLayoutGuide.bottomAnchor, constant: -16),
+      buttonRow.topAnchor.constraint(equalTo: card.topAnchor),
+      buttonRow.leadingAnchor.constraint(equalTo: card.leadingAnchor),
+      buttonRow.trailingAnchor.constraint(equalTo: card.trailingAnchor),
+      buttonRow.bottomAnchor.constraint(equalTo: card.bottomAnchor),
 
-      card.leadingAnchor.constraint(equalTo: controller.view.leadingAnchor),
-      card.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor),
-      card.bottomAnchor.constraint(equalTo: controller.view.bottomAnchor),
+      card.leadingAnchor.constraint(equalTo: controller.view.leadingAnchor, constant: 12),
+      card.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor, constant: -12),
+      card.bottomAnchor.constraint(equalTo: controller.view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
     ])
 
     controller.view.bringSubviewToFront(card)
@@ -556,6 +572,7 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     controller.navigationView.tintColor = PikupNavigationPalette.accent
     controller.navigationView.topBannerContainerView.backgroundColor = PikupNavigationPalette.header
     controller.navigationView.bottomBannerContainerView.backgroundColor = PikupNavigationPalette.surface
+    applyCompactTopBanner(on: controller)
   }
 
   private func updateBottomBannerVisibility(on controller: NavigationViewController) {
@@ -587,15 +604,61 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     navigationMapView.maneuverArrowColor = PikupNavigationPalette.accent
     navigationMapView.maneuverArrowStrokeColor = PikupNavigationPalette.accentMuted
     navigationMapView.buildingDefaultColor = UIColor(red: 49/255, green: 53/255, blue: 75/255, alpha: 1.0)
+    let courseView = UserPuckCourseView(frame: CGRect(origin: .zero, size: CGSize(width: 48, height: 48)))
+    courseView.puckColor = PikupNavigationPalette.accent
+    courseView.fillColor = UIColor.clear
+    courseView.shadowColor = UIColor.clear
+    courseView.minimizesInOverview = false
+    navigationMapView.userLocationStyle = .courseView(courseView)
     controller.floatingButtons?.forEach { button in
-      button.backgroundColor = PikupNavigationPalette.header.withAlphaComponent(0.94)
+      let className = NSStringFromClass(type(of: button))
+      let isResumeButton = className.contains("ResumeButton")
+      button.backgroundColor = isResumeButton
+        ? PikupNavigationPalette.accent
+        : PikupNavigationPalette.header.withAlphaComponent(0.94)
       button.tintColor = PikupNavigationPalette.textPrimary
-      button.layer.borderColor = PikupNavigationPalette.accent.withAlphaComponent(0.65).cgColor
+      button.layer.borderColor = isResumeButton
+        ? PikupNavigationPalette.accentMuted.cgColor
+        : PikupNavigationPalette.accent.withAlphaComponent(0.65).cgColor
       button.layer.borderWidth = 1
     }
+    applyCompactTopBanner(on: controller)
     if let route = controller.route {
       navigationMapView.show([route], legIndex: controller.navigationService.routeProgress.legIndex)
     }
+  }
+
+  private func applyCompactTopBanner(on controller: NavigationViewController) {
+    let topBannerContainer = controller.navigationView.topBannerContainerView
+    guard let instructionsBannerView = findInstructionsBannerView(in: topBannerContainer) else { return }
+
+    let compactHeight: CGFloat = 86
+    let constraints = instructionsBannerView.constraints.filter { constraint in
+      constraint.firstAttribute == .height && (constraint.firstItem as? UIView) === instructionsBannerView
+    }
+
+    if constraints.isEmpty {
+      instructionsBannerView.heightAnchor.constraint(equalToConstant: compactHeight).isActive = true
+    } else {
+      constraints.forEach { $0.constant = compactHeight }
+    }
+
+    topBannerContainer.setNeedsLayout()
+    topBannerContainer.layoutIfNeeded()
+  }
+
+  private func findInstructionsBannerView(in rootView: UIView) -> UIView? {
+    if NSStringFromClass(type(of: rootView)).contains("InstructionsBannerView") {
+      return rootView
+    }
+
+    for subview in rootView.subviews {
+      if let matched = findInstructionsBannerView(in: subview) {
+        return matched
+      }
+    }
+
+    return nil
   }
 
   private func enable3DBuildings(on controller: NavigationViewController) {
@@ -661,7 +724,78 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     controller.view.bringSubviewToFront(actionCardView)
   }
 
-  private func updatePrimaryActionAvailability(with location: CLLocation) {
+  private func repositionFloatingButtons(on controller: NavigationViewController) {
+    guard let floatingButtons = controller.floatingButtons, !floatingButtons.isEmpty else {
+      repositionDefaultResumeButton(on: controller)
+      return
+    }
+
+    let sortedButtons = floatingButtons.sorted { lhs, rhs in
+      let lhsFrame = lhs.superview?.convert(lhs.frame, to: controller.view) ?? lhs.frame
+      let rhsFrame = rhs.superview?.convert(rhs.frame, to: controller.view) ?? rhs.frame
+      return lhsFrame.minY < rhsFrame.minY
+    }
+
+    for (index, button) in sortedButtons.enumerated() {
+      guard let container = button.superview else { continue }
+
+      let constraintsToDeactivate = container.constraints.filter { constraint in
+        (constraint.firstItem as? UIView) === button || (constraint.secondItem as? UIView) === button
+      } + controller.view.constraints.filter { constraint in
+        (constraint.firstItem as? UIView) === button || (constraint.secondItem as? UIView) === button
+      }
+
+      NSLayoutConstraint.deactivate(constraintsToDeactivate)
+      button.translatesAutoresizingMaskIntoConstraints = false
+
+      NSLayoutConstraint.activate([
+        button.topAnchor.constraint(equalTo: controller.view.safeAreaLayoutGuide.topAnchor, constant: 132 + (CGFloat(index) * 58)),
+        button.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor, constant: -16)
+      ])
+
+      controller.view.bringSubviewToFront(button)
+    }
+  }
+
+  private func repositionDefaultResumeButton(on controller: NavigationViewController) {
+    guard let resumeButton = findDefaultResumeButton(in: controller.navigationView) else { return }
+    guard let container = resumeButton.superview else { return }
+
+    let constraintsToDeactivate = container.constraints.filter { constraint in
+      (constraint.firstItem as? UIView) === resumeButton || (constraint.secondItem as? UIView) === resumeButton
+    } + controller.view.constraints.filter { constraint in
+      (constraint.firstItem as? UIView) === resumeButton || (constraint.secondItem as? UIView) === resumeButton
+    }
+
+    NSLayoutConstraint.deactivate(constraintsToDeactivate)
+    resumeButton.translatesAutoresizingMaskIntoConstraints = false
+    resumeButton.backgroundColor = PikupNavigationPalette.accent
+    resumeButton.tintColor = PikupNavigationPalette.textPrimary
+    resumeButton.layer.borderColor = PikupNavigationPalette.accentMuted.cgColor
+    resumeButton.layer.borderWidth = 1
+    resumeButton.layer.cornerRadius = max(22, resumeButton.bounds.height * 0.5)
+    NSLayoutConstraint.activate([
+      resumeButton.topAnchor.constraint(equalTo: controller.view.safeAreaLayoutGuide.topAnchor, constant: 132),
+      resumeButton.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor, constant: -16)
+    ])
+    controller.view.bringSubviewToFront(resumeButton)
+  }
+
+  private func findDefaultResumeButton(in rootView: UIView) -> UIButton? {
+    if NSStringFromClass(type(of: rootView)).contains("ResumeButton"), let button = rootView as? UIButton {
+      return button
+    }
+
+    for subview in rootView.subviews {
+      if let button = findDefaultResumeButton(in: subview) {
+        return button
+      }
+    }
+
+    return nil
+  }
+
+  private func updatePrimaryActionAvailability(with location: CLLocation, distanceRemaining: CLLocationDistance?) {
     guard
       let unlockDistanceMeters = primaryActionUnlockDistanceMeters,
       let destinationCoordinate
@@ -672,7 +806,9 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
 
     let destination = CLLocation(latitude: destinationCoordinate.latitude, longitude: destinationCoordinate.longitude)
     let currentDistance = location.distance(from: destination)
-    setPrimaryActionEnabled(currentDistance <= unlockDistanceMeters)
+    let routeDistance = distanceRemaining.flatMap { $0.isFinite ? max(0, $0) : nil }
+    let resolvedDistance = routeDistance.map { min($0, currentDistance) } ?? currentDistance
+    setPrimaryActionEnabled(resolvedDistance <= unlockDistanceMeters)
   }
 
   private func setPrimaryActionEnabled(_ enabled: Bool) {
@@ -693,6 +829,65 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
   private func hasBackgroundAudioModeEnabled() -> Bool {
     let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
     return modes.contains("audio")
+  }
+
+  private func prepareDirections(accessToken: String, host: URL) -> Directions {
+    let key = "\(accessToken)|\(host.absoluteString)"
+    if let cachedDirections = configuredDirections, configuredDirectionsKey == key {
+      return cachedDirections
+    }
+
+    // Keep fallback token sources populated so SDK internals that touch Directions.shared
+    // do not assert when build-time plist substitution is absent.
+    UserDefaults.standard.set(accessToken, forKey: "MBXAccessToken")
+    UserDefaults.standard.set(accessToken, forKey: "MGLMapboxAccessToken")
+
+    let directions = Directions(
+      credentials: Credentials(
+        accessToken: accessToken,
+        host: host
+      )
+    )
+    configuredDirections = directions
+    configuredDirectionsKey = key
+    NavigationSettings.shared.initialize(with: .init(directions: directions))
+    return directions
+  }
+
+  private func resolveMapboxAccessToken(from options: NSDictionary?) -> String? {
+    let candidates: [Any?] = [
+      options?["mapboxAccessToken"],
+      options?["accessToken"],
+      Bundle.main.object(forInfoDictionaryKey: "MBXAccessToken"),
+      Bundle.main.object(forInfoDictionaryKey: "MGLMapboxAccessToken")
+    ]
+
+    for candidate in candidates {
+      guard let token = candidate as? String else { continue }
+      let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmedToken.isEmpty { continue }
+      if trimmedToken.contains("\${") { continue }
+      if trimmedToken.contains("$(") { continue }
+      let loweredToken = trimmedToken.lowercased()
+      if loweredToken == "null" || loweredToken == "undefined" || loweredToken == "(null)" {
+        continue
+      }
+      return trimmedToken
+    }
+
+    return nil
+  }
+
+  private func resolveDirectionsHost(from options: NSDictionary?) -> URL {
+    if let rawHost = (options?["mapboxHost"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !rawHost.isEmpty,
+       !rawHost.contains("$("),
+       let customHost = URL(string: rawHost),
+       customHost.scheme != nil {
+      return customHost
+    }
+
+    return URL(string: "https://api.mapbox.com")!
   }
 
   private func coordinate(from payload: NSDictionary?) -> CLLocationCoordinate2D? {

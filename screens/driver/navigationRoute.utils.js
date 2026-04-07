@@ -17,15 +17,23 @@ function parseCoordinates(coords) {
     return null;
   }
 
-  if (typeof coords === 'object' && coords.latitude && coords.longitude) {
-    return coords;
+  if (typeof coords === 'object' && !Array.isArray(coords)) {
+    const latitude = Number(coords.latitude ?? coords.lat ?? coords.y);
+    const longitude = Number(coords.longitude ?? coords.lng ?? coords.lon ?? coords.x);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
   }
 
   if (typeof coords === 'string') {
     try {
       const parsed = JSON.parse(coords);
-      if (parsed.latitude && parsed.longitude) {
-        return parsed;
+      if (parsed && typeof parsed === 'object') {
+        const latitude = Number(parsed.latitude ?? parsed.lat ?? parsed.y);
+        const longitude = Number(parsed.longitude ?? parsed.lng ?? parsed.lon ?? parsed.x);
+        if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+          return { latitude, longitude };
+        }
       }
     } catch (error) {
       logger.error('NavigationRouteUtils', 'Failed to parse coordinates', error);
