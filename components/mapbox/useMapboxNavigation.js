@@ -104,7 +104,8 @@ const useMapboxNavigation = ({
       if (showAlert) {
         Alert.alert('Navigation Error', error.message);
       }
-      throw error;
+      logger.error('MapboxNavigationHook', 'Native navigation start failed', error);
+      return false;
     }
   };
 

@@ -256,6 +256,15 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
         return
       }
 
+      guard self.hasBackgroundAudioModeEnabled() else {
+        reject(
+          "missing_background_audio_mode",
+          "UIBackgroundModes must include 'audio' for Mapbox voice navigation.",
+          nil
+        )
+        return
+      }
+
       guard
         let originCoordinate = self.coordinate(from: origin),
         let destinationCoordinate = self.coordinate(from: destination)
@@ -276,52 +285,54 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
         profileIdentifier: .automobileAvoidingTraffic
       )
       Directions.shared.calculate(routeOptions) { (_, result) in
-        switch result {
-        case .failure(let error):
-          reject("route_calculation_failed", error.localizedDescription, error as NSError)
-        case .success(let response):
-          let indexedRouteResponse = IndexedRouteResponse(routeResponse: response, routeIndex: 0)
+        self.queue.async {
+          switch result {
+          case .failure(let error):
+            reject("route_calculation_failed", error.localizedDescription, error as NSError)
+          case .success(let response):
+            let indexedRouteResponse = IndexedRouteResponse(routeResponse: response, routeIndex: 0)
 
-          guard let presenter = self.topViewController() else {
-            reject("presenter_not_found", "Unable to find a presenter view controller.", nil)
-            return
-          }
+            guard let presenter = self.topViewController() else {
+              reject("presenter_not_found", "Unable to find a presenter view controller.", nil)
+              return
+            }
 
-          let navigationService = MapboxNavigationService(
-            routeResponse: response,
-            routeIndex: 0,
-            routeOptions: routeOptions,
-            simulating: simulationMode
-          )
-          let navigationOptions = NavigationOptions(navigationService: navigationService)
-          navigationOptions.styles = [PikupNavigationStyle()]
-          if !allowSystemCancel {
-            navigationOptions.bottomBanner = PikupBottomBannerViewController()
-          }
-          let controller = NavigationViewController(
-            for: indexedRouteResponse,
-            navigationOptions: navigationOptions
-          )
-          controller.delegate = self
-          controller.modalPresentationStyle = .fullScreen
-          self.applyBranding(to: controller)
-          self.enforceBrandStyle(on: controller)
-          self.updateBottomBannerVisibility(on: controller)
-
-          presenter.present(controller, animated: true) {
+            let navigationService = MapboxNavigationService(
+              routeResponse: response,
+              routeIndex: 0,
+              routeOptions: routeOptions,
+              simulating: simulationMode
+            )
+            let navigationOptions = NavigationOptions(navigationService: navigationService)
+            navigationOptions.styles = [PikupNavigationStyle()]
+            if !allowSystemCancel {
+              navigationOptions.bottomBanner = PikupBottomBannerViewController()
+            }
+            let controller = NavigationViewController(
+              for: indexedRouteResponse,
+              navigationOptions: navigationOptions
+            )
+            controller.delegate = self
+            controller.modalPresentationStyle = .fullScreen
+            self.applyBranding(to: controller)
             self.enforceBrandStyle(on: controller)
             self.updateBottomBannerVisibility(on: controller)
-            self.enable3DBuildings(on: controller)
-            self.styleLoadedCancelable?.cancel()
-            self.styleLoadedCancelable = controller.navigationMapView?.mapView.mapboxMap.onEvery(event: .styleLoaded) { [weak self, weak controller] _ in
-              guard let self, let controller else { return }
+
+            presenter.present(controller, animated: true) {
+              self.enforceBrandStyle(on: controller)
               self.updateBottomBannerVisibility(on: controller)
               self.enable3DBuildings(on: controller)
-              self.bringActionCardToFront(on: controller)
+              self.styleLoadedCancelable?.cancel()
+              self.styleLoadedCancelable = controller.navigationMapView?.mapView.mapboxMap.onEvery(event: .styleLoaded) { [weak self, weak controller] _ in
+                guard let self, let controller else { return }
+                self.updateBottomBannerVisibility(on: controller)
+                self.enable3DBuildings(on: controller)
+                self.bringActionCardToFront(on: controller)
+              }
+              self.navigationViewController = controller
+              self.installActionCardIfNeeded(on: controller, options: actionCardOptions)
+              resolve(["started": true])
             }
-            self.navigationViewController = controller
-            self.installActionCardIfNeeded(on: controller, options: actionCardOptions)
-            resolve(["started": true])
           }
         }
       }
@@ -677,6 +688,11 @@ class MapboxNavigationModule: NSObject, NavigationViewControllerDelegate {
     destinationCoordinate = nil
     allowSystemCancelForCurrentSession = false
     navigationViewController = nil
+  }
+
+  private func hasBackgroundAudioModeEnabled() -> Bool {
+    let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+    return modes.contains("audio")
   }
 
   private func coordinate(from payload: NSDictionary?) -> CLLocationCoordinate2D? {
