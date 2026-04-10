@@ -5,6 +5,7 @@ import {
   formatEdgeInvokeError,
   getAvailableRequestsFromEdge,
   hasValidCoordinatePair,
+  isDriverRequestPoolAuthError,
   normalizeRequestPool,
 } from './tripDispatchUtils';
 import {
@@ -138,6 +139,10 @@ export const getAvailableRequestsForDriver = async ({ currentUser, options = {} 
 
     return edgeRequests;
   } catch (edgeError) {
+    if (await isDriverRequestPoolAuthError(edgeError)) {
+      throw new Error('Session expired. Please sign in again.');
+    }
+
     const normalized = normalizeError(edgeError, 'Driver request pool edge function failed');
     logger.warn(
       'TripDriverAvailability',

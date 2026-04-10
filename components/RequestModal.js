@@ -160,6 +160,10 @@ export default function RequestModal({
   }, [dragTranslateY, resetRoute, slideAnim, visible]);
 
   useEffect(() => {
+    if (!isAvailableMode) {
+      return;
+    }
+
     if (!selectedRequest || requestList.length === 0) {
       return;
     }
@@ -181,7 +185,7 @@ export default function RequestModal({
         viewPosition: 0.5,
       });
     }, 100);
-  }, [requestList, selectedRequest]);
+  }, [isAvailableMode, requestList, selectedRequest]);
 
   useEffect(() => {
     if (selectedIndex >= requestList.length) {

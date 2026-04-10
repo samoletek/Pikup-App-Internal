@@ -5,6 +5,7 @@ import { isUnavailableAcceptError } from '../screens/driver/DriverHomeScreen.uti
 import { logger } from '../services/logger';
 
 const isScheduledRequest = (request) => Number.isFinite(getTripScheduledAtMs(request));
+const normalizeRequestId = (value) => String(value || '').trim();
 
 export default function useDriverIncomingRequestHandlers({
   acceptRequest,
@@ -35,7 +36,7 @@ export default function useDriverIncomingRequestHandlers({
   const miniBarPulse = useRef(new Animated.Value(0)).current;
 
   const handleIncomingRequestTimeout = useCallback(() => {
-    const currentRequestId = incomingRequest?.id;
+    const currentRequestId = normalizeRequestId(incomingRequest?.id);
     const declineOnTimeoutPromise = currentRequestId && typeof declineRequestOffer === 'function'
       ? declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
         .catch((declineError) => {
@@ -48,7 +49,7 @@ export default function useDriverIncomingRequestHandlers({
     setIncomingRequest(null);
     clearIncomingRoute();
     setAvailableRequests((prevRequests) =>
-      prevRequests.filter((request) => request.id !== currentRequestId)
+      prevRequests.filter((request) => normalizeRequestId(request?.id) !== currentRequestId)
     );
     logger.info('DriverIncomingRequestHandlers', 'Incoming request timed out', { requestId: currentRequestId });
 
@@ -162,13 +163,10 @@ export default function useDriverIncomingRequestHandlers({
   ]);
 
   const handleIncomingRequestDecline = useCallback(() => {
-    const currentRequestId = incomingRequest?.id;
-    if (currentRequestId && typeof declineRequestOffer === 'function') {
-      void declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
-        .catch((declineError) => {
-          logger.warn('DriverIncomingRequestHandlers', 'Decline request offer call failed', declineError);
-        });
-    }
+    const currentRequestId = normalizeRequestId(incomingRequest?.id);
+    const declinePromise = currentRequestId && typeof declineRequestOffer === 'function'
+      ? declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
+      : Promise.resolve();
 
     setShowIncomingModal(false);
     setIsMinimized(false);
@@ -177,34 +175,33 @@ export default function useDriverIncomingRequestHandlers({
     logger.info('DriverIncomingRequestHandlers', 'Declined incoming request', { requestId: currentRequestId });
 
     setAvailableRequests((prevRequests) =>
-      prevRequests.filter((request) => request.id !== currentRequestId)
+      prevRequests.filter((request) => normalizeRequestId(request?.id) !== currentRequestId)
     );
 
-    if (!isScheduledPoolActive) {
-      setTimeout(() => {
-        setAvailableRequests((currentRequests) => {
-          if (currentRequests.length > 0 && isOnline) {
-            const nextRequest = currentRequests.find((request) => !isScheduledRequest(request));
-            if (!nextRequest) {
-              return currentRequests;
-            }
-            setIncomingRequest(nextRequest);
-            setShowIncomingModal(true);
-            logger.info('DriverIncomingRequestHandlers', 'Auto-showing next request after decline', {
-              requestId: nextRequest.id,
-            });
-          }
-          return currentRequests;
-        });
-      }, 2000);
+    if (!isScheduledPoolActive && isOnline && !hasActiveTrip) {
+      void (async () => {
+        try {
+          await declinePromise;
+        } catch (declineError) {
+          logger.warn('DriverIncomingRequestHandlers', 'Decline request offer call failed', declineError);
+        }
+        await loadRequests(false);
+      })();
+      return;
     }
+
+    void declinePromise.catch((declineError) => {
+      logger.warn('DriverIncomingRequestHandlers', 'Decline request offer call failed', declineError);
+    });
   }, [
     activeRequestPool,
     clearIncomingRoute,
     declineRequestOffer,
+    hasActiveTrip,
     incomingRequest?.id,
     isOnline,
     isScheduledPoolActive,
+    loadRequests,
     setAvailableRequests,
     setIncomingRequest,
     setIsMinimized,

@@ -3,6 +3,8 @@ import { normalizeTripStatus, TRIP_STATUS } from '../constants/tripStatus';
 import { subscribeToDriverRequestPoolUpdates } from '../services/driverRequestPoolRealtimeService';
 import { logger } from '../services/logger';
 
+const normalizeRequestId = (value) => String(value || '').trim();
+
 export default function useDriverRequestPoolRealtime({
   currentUserId,
   isOnline,
@@ -19,13 +21,18 @@ export default function useDriverRequestPoolRealtime({
       return undefined;
     }
 
-    const removeRequestFromPool = (tripId) => {
+    const removeRequestFromPool = (tripIdValue) => {
+      const tripId = normalizeRequestId(tripIdValue);
       if (!tripId) return;
 
-      setAvailableRequests((prev) => prev.filter((request) => request.id !== tripId));
-      setSelectedRequest((prev) => (prev?.id === tripId ? null : prev));
+      setAvailableRequests((prev) =>
+        prev.filter((request) => normalizeRequestId(request?.id) !== tripId)
+      );
+      setSelectedRequest((prev) => (
+        normalizeRequestId(prev?.id) === tripId ? null : prev
+      ));
 
-      if (incomingRequestIdRef.current === tripId) {
+      if (normalizeRequestId(incomingRequestIdRef.current) === tripId) {
         setShowIncomingModal(false);
         setIsMinimized(false);
         setIncomingRequest(null);

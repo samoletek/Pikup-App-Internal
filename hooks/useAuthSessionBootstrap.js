@@ -5,6 +5,7 @@ import { logger } from '../services/logger';
 import {
   detectUserTypeForSession,
   fetchUserProfileByRole,
+  getCurrentAuthSession,
   subscribeToAuthStateChanges,
 } from '../services/authSessionService';
 
@@ -130,6 +131,31 @@ export default function useAuthSessionBootstrap({
               logger.warn('AuthContext', 'Failed to fetch profile during auth state change', error);
             });
         } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
+          if (event === 'SIGNED_OUT') {
+            try {
+              const { data: latestSessionData, error: latestSessionError } = await getCurrentAuthSession();
+              const latestSession = latestSessionData?.session || null;
+
+              if (latestSession?.user?.id) {
+                logger.warn('AuthContext', 'Ignoring transient SIGNED_OUT event while session is still active', {
+                  userId: latestSession.user.id,
+                });
+                markInitialized();
+                return;
+              }
+
+              if (latestSessionError) {
+                logger.warn('AuthContext', 'Failed to verify session after SIGNED_OUT', latestSessionError);
+              }
+            } catch (sessionCheckError) {
+              logger.warn('AuthContext', 'Session verification after SIGNED_OUT failed', sessionCheckError);
+            }
+          }
+
+          logger.warn('AuthContext', 'Auth session ended', {
+            event,
+            hadSession: Boolean(session),
+          });
           setCurrentUser(null);
           setUserType(null);
           lastKnownUserTypeRef.current = null;

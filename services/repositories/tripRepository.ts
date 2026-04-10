@@ -44,9 +44,16 @@ const DRIVER_PREFERENCE_SELECT_COLUMNS = [
 /**
  * Trip repository centralizes transport-level access for trip/request-related storage and edge functions.
  */
-export const invokeDriverRequestPool = async (payload: DriverRequestPoolRequest) => {
+export const invokeDriverRequestPool = async (
+  payload: DriverRequestPoolRequest,
+  options: { accessToken?: string | null } = {},
+) => {
+  const accessToken = options.accessToken?.trim();
   return supabase.functions.invoke<DriverRequestPoolResponse>(DRIVER_REQUEST_POOL_FUNCTION, {
     body: payload,
+    ...(accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : {}),
   });
 };
 

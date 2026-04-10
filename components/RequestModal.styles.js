@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.base,
   },
   cardsListVerticalScrollable: {
-    paddingBottom: spacing.xxxl,
+    paddingBottom: spacing.xxxl * 3,
   },
   card: {
     width: CARD_WIDTH,

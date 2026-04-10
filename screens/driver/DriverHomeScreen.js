@@ -910,7 +910,8 @@ export default function DriverHomeScreen({ navigation, route }) {
   });
 
   useEffect(() => {
-    incomingRequestIdRef.current = incomingRequest?.id || null;
+    const normalizedIncomingRequestId = String(incomingRequest?.id || '').trim();
+    incomingRequestIdRef.current = normalizedIncomingRequestId || null;
   }, [incomingRequest?.id]);
 
   useDriverRequestPoolRealtime({

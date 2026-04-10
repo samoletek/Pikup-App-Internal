@@ -1,5 +1,6 @@
 import {
   fetchProfileByTableAndUserId,
+  getAuthenticatedSession,
   subscribeAuthStateChanges,
 } from './repositories/authRepository';
 
@@ -24,6 +25,10 @@ export const subscribeToAuthStateChanges = (handler) => {
   return () => {
     subscription?.unsubscribe();
   };
+};
+
+export const getCurrentAuthSession = async () => {
+  return getAuthenticatedSession();
 };
 
 export const detectUserTypeForSession = async ({

@@ -1,11 +1,11 @@
 import { logger } from './logger';
 import {
   formatEdgeInvokeError,
+  invokeDriverRequestPoolWithAuthRetry,
   normalizeRequestPool,
 } from './tripDispatchUtils';
 import { getAvailableRequestsForDriver } from './tripDriverAvailabilityService';
 import { acceptRequestForDriver } from './tripDriverAcceptanceService';
-import { invokeDriverRequestPool } from './repositories/tripRepository';
 import { normalizeError } from './errorService';
 
 export const getAvailableRequests = async (currentUser, options = {}) => {
@@ -29,7 +29,7 @@ export const declineRequestOffer = async (requestId, currentUser, options = {}) 
   const requestPool = normalizeRequestPool(options?.requestPool);
 
   try {
-    const { data, error } = await invokeDriverRequestPool({
+    const { data, error } = await invokeDriverRequestPoolWithAuthRetry({
       action: 'decline',
       tripId: normalizedRequestId,
       requestPool,

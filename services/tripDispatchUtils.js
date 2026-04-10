@@ -1,4 +1,5 @@
 import { appConfig } from '../config/appConfig';
+import { supabase } from '../config/supabase';
 import { findDriverScheduleConflictForTrip } from './dispatch/scheduleConflicts';
 import { invokeDriverRequestPool } from './repositories/tripRepository';
 import { resolveDispatchRequirements } from './dispatch/requirements';
@@ -71,13 +72,73 @@ export const formatEdgeInvokeError = (error) => {
     return [status, message].filter(Boolean).join(': ');
 };
 
+const getEdgeErrorStatus = (error) => {
+  const status = Number(error?.context?.status || error?.status || 0);
+  return Number.isFinite(status) ? status : 0;
+};
+
+const getEdgeErrorText = async (error) => {
+  const directMessage = String(error?.message || error?.details || '').trim().toLowerCase();
+
+  try {
+    const payload = await error?.context?.clone?.().json?.();
+    const payloadMessage = String(payload?.error || payload?.message || '').trim().toLowerCase();
+    const payloadCode = String(payload?.code || payload?.errorCode || '').trim().toLowerCase();
+    return [directMessage, payloadMessage, payloadCode].filter(Boolean).join(' | ');
+  } catch {
+    return directMessage;
+  }
+};
+
+export const isDriverRequestPoolAuthError = async (error) => {
+  const status = getEdgeErrorStatus(error);
+  if (status === 401) {
+    return true;
+  }
+
+  const text = await getEdgeErrorText(error);
+  return (
+    text.includes('invalid jwt') ||
+    text.includes('jwt expired') ||
+    text.includes('unauthorized') ||
+    text.includes('not authenticated') ||
+    text.includes('auth session missing') ||
+    text.includes('code 401') ||
+    text.includes('status 401')
+  );
+};
+
+export const invokeDriverRequestPoolWithAuthRetry = async (payload) => {
+  let result = await invokeDriverRequestPool(payload);
+  if (!result?.error) {
+    return result;
+  }
+
+  const shouldRetry = await isDriverRequestPoolAuthError(result.error);
+  if (!shouldRetry) {
+    return result;
+  }
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    return result;
+  }
+  const accessToken = String(sessionData?.session?.access_token || '').trim();
+  if (!accessToken) {
+    return result;
+  }
+
+  result = await invokeDriverRequestPool(payload, { accessToken });
+  return result;
+};
+
 export const getAvailableRequestsFromEdge = async ({ requestPool, driverLocation }) => {
     const payload = { requestPool };
     if (driverLocation) {
         payload.driverLocation = driverLocation;
     }
 
-    const { data, error } = await invokeDriverRequestPool(payload);
+    const { data, error } = await invokeDriverRequestPoolWithAuthRetry(payload);
 
     if (error) {
         throw error;

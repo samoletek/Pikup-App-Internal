@@ -70,9 +70,10 @@ export default function RequestCardsSection({
           decelerationRate={isVerticalList ? "normal" : "fast"}
           directionalLockEnabled={!isVerticalList}
           scrollEnabled={isVerticalList ? true : requests.length > 1}
-          bounces={isVerticalList}
+          bounces={!isVerticalList}
           alwaysBounceHorizontal={!isVerticalList}
-          alwaysBounceVertical={isVerticalList}
+          alwaysBounceVertical={false}
+          overScrollMode={isVerticalList ? 'never' : 'always'}
           nestedScrollEnabled={isVerticalList}
           contentContainerStyle={
             isVerticalList
