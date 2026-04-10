@@ -1,4 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
+import { Platform } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import { ensureMapboxConfigured } from '../../config/mapbox';
 import { logger } from '../../services/logger';
@@ -76,6 +77,7 @@ const MapboxMap = forwardRef(({
       onPress={onPress}
       styleURL={customMapStyle || Mapbox.StyleURL.Dark} // Dark theme like current app
       scaleBarEnabled={false} // Remove scale bar
+      {...(Platform.OS === 'android' ? { surfaceView: false } : {})}
       onMapLoadingError={handleMapError}
       logoPosition={{ bottom: 8, left: 8 }} // Symmetric bottom-left
       attributionPosition={{ bottom: 8, right: 0 }} // Closer to right edge

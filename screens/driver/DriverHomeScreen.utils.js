@@ -11,6 +11,13 @@ export const REQUEST_POOLS = Object.freeze({
 export const MIN_MOVE_METERS = 100;
 
 export const resolveDriverOnboardingUiState = (user) => {
+  const hasUser = Boolean(user && typeof user === 'object');
+  if (!hasUser) {
+    return {
+      showOnboardingRequiredBanner: false,
+    };
+  }
+
   const draftVerificationStatus = String(
     user?.metadata?.onboardingDraft?.verificationStatus || ''
   ).toLowerCase();
@@ -30,13 +37,35 @@ export const resolveDriverOnboardingUiState = (user) => {
     metadataOnboardingStatus === 'declined' ||
     metadataOnboardingStatus === 'rejected'
   );
-  const hasPayoutCapability = Boolean(
+  const rawCanReceivePayments =
     user?.can_receive_payments ??
     user?.canReceivePayments ??
-    user?.metadata?.canReceivePayments ??
-    false
+    user?.metadata?.canReceivePayments;
+  const hasExplicitPayoutCapability = rawCanReceivePayments === true || rawCanReceivePayments === false;
+  const hasKnownOnboardingState = (
+    hasExplicitPayoutCapability ||
+    Boolean(draftVerificationStatus) ||
+    Boolean(metadataIdentityVerificationStatus) ||
+    Boolean(metadataOnboardingStatus)
   );
-  const isOnboardingApproved = hasPayoutCapability;
+
+  if (!hasKnownOnboardingState) {
+    return {
+      showOnboardingRequiredBanner: false,
+    };
+  }
+
+  const hasPayoutCapability = Boolean(rawCanReceivePayments);
+  const requiresAttentionByStatus = (
+    metadataOnboardingStatus === 'action_required' ||
+    metadataOnboardingStatus === 'requires_input' ||
+    metadataOnboardingStatus === 'under_review' ||
+    metadataOnboardingStatus === 'pending' ||
+    metadataOnboardingStatus === 'incomplete'
+  );
+  const isOnboardingApproved = hasExplicitPayoutCapability
+    ? hasPayoutCapability
+    : !requiresAttentionByStatus;
 
   return {
     showOnboardingRequiredBanner: !isOnboardingApproved || isOnboardingDeclined,

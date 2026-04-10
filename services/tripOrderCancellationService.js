@@ -42,10 +42,18 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
       idempotencyKey: `trip_release:${orderId}:${reason}`,
     });
 
+    let paymentReleaseWarning = null;
     if (!releaseResult.success && releaseResult.errorCode !== 'missing_authorization') {
-      return failureResult(
-        releaseResult.error || 'Failed to release trip payment authorization',
-        releaseResult.errorCode || null,
+      paymentReleaseWarning = releaseResult.error || 'Failed to release trip payment authorization';
+      logger.warn(
+        'TripOrderCancellationService',
+        'Trip payment release failed during cancellation, proceeding with trip cancellation',
+        {
+          orderId,
+          reason,
+          errorCode: releaseResult.errorCode || null,
+          error: releaseResult.error || null,
+        }
       );
     }
 
@@ -57,7 +65,9 @@ export const cancelOrder = async (orderId, reason = 'customer_request', currentU
 
     await cancelInsuranceBookingForTrip(orderData);
 
-    return successResult();
+    return successResult({
+      paymentReleaseWarning,
+    });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to cancel order');
     logger.error('TripOrderCancellationService', 'Error cancelling order', normalized, error);

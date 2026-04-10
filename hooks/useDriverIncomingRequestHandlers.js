@@ -22,13 +22,14 @@ export default function useDriverIncomingRequestHandlers({
   isOnline,
   isScheduledPoolActive,
   loadRequests,
-  navigation,
+  onTripAccepted,
   setAcceptedRequestId,
   setActiveJob,
   setAvailableRequests,
   setIncomingRequest,
   setIsMinimized,
   setShowIncomingModal,
+  startDriving,
   showIncomingModal,
 }) {
   const miniBarPulse = useRef(new Animated.Value(0)).current;
@@ -87,7 +88,22 @@ export default function useDriverIncomingRequestHandlers({
       isAcceptingRequestRef.current = true;
       logger.info('DriverIncomingRequestHandlers', 'Accepting incoming request', { requestId: request.id });
       const acceptedRequest = await acceptRequest(request.id);
-      const activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
+      let activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
+      const scheduledAtMs = getTripScheduledAtMs(request);
+      const isFutureScheduledRequest = Number.isFinite(scheduledAtMs) && scheduledAtMs > Date.now();
+      if (!isFutureScheduledRequest && typeof startDriving === 'function') {
+        try {
+          const startedTrip = await startDriving(activeAcceptedRequest.id, null);
+          if (startedTrip?.id) {
+            activeAcceptedRequest = startedTrip;
+          }
+        } catch (startError) {
+          logger.warn('DriverIncomingRequestHandlers', 'Failed to mark accepted incoming request as in progress', {
+            requestId: activeAcceptedRequest.id,
+            error: startError?.message || startError,
+          });
+        }
+      }
 
       setAcceptedRequestId(activeAcceptedRequest.id);
       setActiveJob(activeAcceptedRequest);
@@ -99,7 +115,9 @@ export default function useDriverIncomingRequestHandlers({
       setIncomingRequest(null);
       clearIncomingRoute();
 
-      navigation.navigate('GpsNavigationScreen', { request: activeAcceptedRequest });
+      if (typeof onTripAccepted === 'function') {
+        await onTripAccepted(activeAcceptedRequest);
+      }
     } catch (error) {
       logger.error('DriverIncomingRequestHandlers', 'Error accepting incoming request', error);
       const normalizedMessage = String(error?.message || '').trim();
@@ -133,13 +151,14 @@ export default function useDriverIncomingRequestHandlers({
     clearIncomingRoute,
     isAcceptingRequestRef,
     loadRequests,
-    navigation,
+    onTripAccepted,
     setAcceptedRequestId,
     setActiveJob,
     setAvailableRequests,
     setIncomingRequest,
     setIsMinimized,
     setShowIncomingModal,
+    startDriving,
   ]);
 
   const handleIncomingRequestDecline = useCallback(() => {

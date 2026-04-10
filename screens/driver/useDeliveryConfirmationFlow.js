@@ -1,10 +1,82 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { logger } from '../../services/logger';
 
 const MAX_VERIFICATION_PHOTOS = 10;
+
+const resolvePreferredAssetRepresentationMode = () => {
+  const modes = ImagePicker?.UIImagePickerPreferredAssetRepresentationMode;
+  return (
+    modes?.Automatic ||
+    modes?.automatic ||
+    modes?.Compatible ||
+    modes?.compatible ||
+    modes?.Current ||
+    modes?.current ||
+    undefined
+  );
+};
+
+const launchGalleryImages = async (selectionLimit, loggerScope) => {
+  const preferredAssetRepresentationMode = resolvePreferredAssetRepresentationMode();
+  const normalizedSelectionLimit = Math.max(1, Number(selectionLimit) || 1);
+  const baseOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: false,
+    exif: false,
+  };
+  const buildOptions = (options = {}) => ({
+    ...baseOptions,
+    ...(preferredAssetRepresentationMode ? { preferredAssetRepresentationMode } : {}),
+    ...options,
+  });
+  const shouldTryMultiSelect = normalizedSelectionLimit > 1;
+
+  if (shouldTryMultiSelect) {
+    try {
+      return await ImagePicker.launchImageLibraryAsync(
+        buildOptions({
+          allowsMultipleSelection: true,
+          selectionLimit: normalizedSelectionLimit,
+          ...(Platform.OS === 'ios' ? { orderedSelection: true } : {}),
+        })
+      );
+    } catch (error) {
+      logger.warn(
+        loggerScope,
+        'Multi-select photo picker failed, retrying with single-select mode',
+        error
+      );
+    }
+  }
+
+  try {
+    return await ImagePicker.launchImageLibraryAsync(
+      buildOptions({
+        allowsMultipleSelection: false,
+        selectionLimit: 1,
+      })
+    );
+  } catch (singleSelectError) {
+    if (!preferredAssetRepresentationMode) {
+      throw singleSelectError;
+    }
+
+    logger.warn(
+      loggerScope,
+      'Single-select photo picker failed with preferred representation mode, retrying without it',
+      singleSelectError
+    );
+
+    return ImagePicker.launchImageLibraryAsync({
+      ...baseOptions,
+      allowsMultipleSelection: false,
+      selectionLimit: 1,
+    });
+  }
+};
 
 const mapAssetsToPhotos = (assets = [], startIndex = 0) => {
   const timestamp = new Date().toISOString();
@@ -84,14 +156,10 @@ export default function useDeliveryConfirmationFlow({
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsMultipleSelection: true,
-        selectionLimit: MAX_VERIFICATION_PHOTOS - deliveryPhotos.length,
-        allowsEditing: false,
-        quality: 0.8,
-        exif: false,
-      });
+      const result = await launchGalleryImages(
+        MAX_VERIFICATION_PHOTOS - deliveryPhotos.length,
+        'DeliveryConfirmationFlow'
+      );
 
       if (!result.canceled && result.assets?.length) {
         const remaining = MAX_VERIFICATION_PHOTOS - deliveryPhotos.length;

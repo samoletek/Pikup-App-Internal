@@ -11,6 +11,7 @@ import {
   extractStateCodeFromMapboxContext,
   isSupportedOrderStateCode,
 } from '../../../utils/locationState';
+import { buildAddressSuggestionFromMapboxFeature } from '../../../utils/mapboxAddressFormatter';
 
 export const MAX_SCHEDULE_DAYS_AHEAD = 30;
 
@@ -142,17 +143,15 @@ export default function useAddressSearchStepState({
         const data = await response.json();
 
         if (data.features?.length > 0) {
-          const formattedSuggestions = data.features.map((feature) => ({
-            id: feature.id,
-            name: feature.text,
-            address: feature.place_name.replace(`${feature.text}, `, ''),
-            full_description: feature.place_name,
-            coordinates: { latitude: feature.center[1], longitude: feature.center[0] },
-            stateCode: extractStateCodeFromMapboxContext(feature.context),
-            context: feature.context || [],
-          })).filter((suggestion) => (
-            isSupportedOrderStateCode(suggestion.stateCode, SUPPORTED_ORDER_STATE_CODES)
-          ));
+          const formattedSuggestions = data.features
+            .map((feature) => ({
+              ...buildAddressSuggestionFromMapboxFeature(feature),
+              stateCode: extractStateCodeFromMapboxContext(feature.context),
+              context: feature.context || [],
+            }))
+            .filter((suggestion) => (
+              isSupportedOrderStateCode(suggestion.stateCode, SUPPORTED_ORDER_STATE_CODES)
+            ));
 
           if (fieldType === 'pickup') {
             setPickupSuggestions(formattedSuggestions);

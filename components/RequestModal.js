@@ -69,6 +69,9 @@ export default function RequestModal({
   const isScheduledMode = mode === 'scheduled';
   const isAcceptedMode = mode === 'accepted';
   const isAvailableMode = !isScheduledMode && !isAcceptedMode;
+  const modalModeStyle = isAvailableMode
+    ? styles.modalContainerAvailable
+    : styles.modalContainerRequestList;
   const modalTitle = isAcceptedMode
     ? 'Accepted Requests'
     : isScheduledMode
@@ -231,6 +234,7 @@ export default function RequestModal({
       <Animated.View
         style={[
           styles.modalContainer,
+          modalModeStyle,
           {
             transform: [{ translateY: Animated.add(slideAnim, dragTranslateY) }],
           },

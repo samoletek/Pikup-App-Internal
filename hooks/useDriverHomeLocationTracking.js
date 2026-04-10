@@ -99,6 +99,23 @@ export default function useDriverHomeLocationTracking({
     }
   }, [shouldResolveDriverState]);
 
+  const applyResolvedLocation = useCallback((latitude, longitude) => {
+    const nextLocation = {
+      latitude,
+      longitude,
+      stateCode: null,
+    };
+
+    setRegion({
+      ...nextLocation,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    });
+    setDriverLocation(nextLocation);
+    latestDriverLocationRef.current = nextLocation;
+    void resolveDriverStateCode(nextLocation, true);
+  }, [resolveDriverStateCode]);
+
   const initializeLocation = useCallback(async () => {
     const availability = await ensureForegroundLocationAvailability({
       loggerScope: 'DriverHomeLocationTracking',
@@ -117,32 +134,34 @@ export default function useDriverHomeLocationTracking({
     }
 
     const loc = await getCurrentPositionWithFallback();
+    const liveLatitude = Number(loc?.coords?.latitude ?? loc?.latitude);
+    const liveLongitude = Number(loc?.coords?.longitude ?? loc?.longitude);
 
-    if (!loc?.coords?.latitude || !loc?.coords?.longitude) {
-      showOpenLocationSettingsAlert({
-        title: 'Location Required',
-        message:
-          'We could not determine your location. Please check Location settings and try again.',
-        loggerScope: 'DriverHomeLocationTracking',
-      });
+    if (Number.isFinite(liveLatitude) && Number.isFinite(liveLongitude)) {
+      applyResolvedLocation(liveLatitude, liveLongitude);
       return;
     }
 
-    const nextLocation = {
-      latitude: loc.coords.latitude,
-      longitude: loc.coords.longitude,
-      stateCode: null,
-    };
+    const lastKnownLocation = await MapboxLocationService.getLastKnownLocation();
+    const fallbackLatitude = Number(lastKnownLocation?.latitude);
+    const fallbackLongitude = Number(lastKnownLocation?.longitude);
 
-    setRegion({
-      ...nextLocation,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
+    if (Number.isFinite(fallbackLatitude) && Number.isFinite(fallbackLongitude)) {
+      logger.warn(
+        'DriverHomeLocationTracking',
+        'Using last known location fallback while current location is unavailable'
+      );
+      applyResolvedLocation(fallbackLatitude, fallbackLongitude);
+      return;
+    }
+
+    showOpenLocationSettingsAlert({
+      title: 'Location Required',
+      message:
+        'We could not determine your location. Please check Location settings and try again.',
+      loggerScope: 'DriverHomeLocationTracking',
     });
-    setDriverLocation(nextLocation);
-    latestDriverLocationRef.current = nextLocation;
-    void resolveDriverStateCode(nextLocation, true);
-  }, [resolveDriverStateCode]);
+  }, [applyResolvedLocation]);
 
   const startLocationTracking = useCallback(async () => {
     locationSubscription.current = await Location.watchPositionAsync(
@@ -165,6 +184,12 @@ export default function useDriverHomeLocationTracking({
           latestDriverLocationRef.current = nextLocation;
           return nextLocation;
         });
+        setRegion((prevRegion) => ({
+          latitude: newLocation.latitude,
+          longitude: newLocation.longitude,
+          latitudeDelta: prevRegion?.latitudeDelta || 0.01,
+          longitudeDelta: prevRegion?.longitudeDelta || 0.01,
+        }));
 
         const currentUserId = currentUser?.uid || currentUser?.id;
         if (isOnline && currentUserId) {
@@ -215,7 +240,7 @@ export default function useDriverHomeLocationTracking({
   }, [initializeLocation]);
 
   useEffect(() => {
-    if (isOnline && !hasActiveTrip) {
+    if (!hasActiveTrip) {
       if (!locationSubscription.current) {
         void startLocationTracking();
       }
@@ -223,7 +248,7 @@ export default function useDriverHomeLocationTracking({
     }
 
     stopLocationTracking();
-  }, [hasActiveTrip, isOnline, startLocationTracking, stopLocationTracking]);
+  }, [hasActiveTrip, startLocationTracking, stopLocationTracking]);
 
   return {
     driverLocation,

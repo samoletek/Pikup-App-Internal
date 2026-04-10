@@ -25,6 +25,55 @@ const toMoneyLabel = (value) => `$${toAmount(value).toFixed(2)}`;
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
+const firstNonEmptyText = (...candidates) => {
+    for (const candidate of candidates) {
+        if (typeof candidate !== 'string') {
+            continue;
+        }
+
+        const trimmed = candidate.trim();
+        if (trimmed) {
+            return trimmed;
+        }
+    }
+
+    return '';
+};
+
+const resolveTripPointAddress = (trip = {}, pointName = 'pickup') => {
+    if (pointName === 'dropoff') {
+        return firstNonEmptyText(
+            trip?.dropoff?.address,
+            trip?.dropoff?.formatted_address,
+            trip?.dropoff_location?.address,
+            trip?.dropoff_location?.formatted_address,
+            trip?.dropoffAddress,
+            trip?.dropoff_address,
+            trip?.originalData?.dropoff?.address,
+            trip?.originalData?.dropoff?.formatted_address,
+            trip?.originalData?.dropoff_location?.address,
+            trip?.originalData?.dropoff_location?.formatted_address,
+            trip?.originalData?.dropoffAddress,
+            trip?.originalData?.dropoff_address
+        );
+    }
+
+    return firstNonEmptyText(
+        trip?.pickup?.address,
+        trip?.pickup?.formatted_address,
+        trip?.pickup_location?.address,
+        trip?.pickup_location?.formatted_address,
+        trip?.pickupAddress,
+        trip?.pickup_address,
+        trip?.originalData?.pickup?.address,
+        trip?.originalData?.pickup?.formatted_address,
+        trip?.originalData?.pickup_location?.address,
+        trip?.originalData?.pickup_location?.formatted_address,
+        trip?.originalData?.pickupAddress,
+        trip?.originalData?.pickup_address
+    );
+};
+
 const resolveDriverPayoutPercent = (pricing = {}) => {
     const configuredPercent = Number(pricing?.driverPayoutPercent);
     if (Number.isFinite(configuredPercent) && configuredPercent >= 0 && configuredPercent <= 1) {
@@ -299,12 +348,12 @@ export const mapAvailableRequestsForDriver = (sortedTrips, customerMap = {}) =>
             type: 'Moves',
             vehicle: { type: trip.vehicleType || 'Standard' },
             pickup: {
-                address: trip.pickupAddress || 'Unknown',
+                address: resolveTripPointAddress(trip, 'pickup') || 'Unknown',
                 coordinates: trip.pickup?.coordinates || null,
                 details: trip.pickup?.details || {},
             },
             dropoff: {
-                address: trip.dropoffAddress || '',
+                address: resolveTripPointAddress(trip, 'dropoff') || '',
                 coordinates: trip.dropoff?.coordinates || null,
                 details: trip.dropoff?.details || {},
             },

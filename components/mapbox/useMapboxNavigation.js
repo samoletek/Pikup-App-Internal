@@ -13,6 +13,7 @@ const useMapboxNavigation = ({
   onReroute,
   onPrimaryAction,
   onSecondaryAction,
+  onChatAction,
 }) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const nativeNavigationAvailable = MapboxNavigationService.isAvailable();
@@ -45,6 +46,10 @@ const useMapboxNavigation = ({
       if (onSecondaryAction) onSecondaryAction(data);
     });
 
+    const chatActionListener = MapboxNavigationService.addListener('onChatAction', (data) => {
+      if (onChatAction) onChatAction(data);
+    });
+
     return () => {
       progressListener?.remove();
       arrivalListener?.remove();
@@ -52,6 +57,7 @@ const useMapboxNavigation = ({
       rerouteListener?.remove();
       primaryActionListener?.remove();
       secondaryActionListener?.remove();
+      chatActionListener?.remove();
     };
   }, [
     nativeNavigationAvailable,
@@ -61,6 +67,7 @@ const useMapboxNavigation = ({
     onReroute,
     onPrimaryAction,
     onSecondaryAction,
+    onChatAction,
   ]);
 
   const startNavigation = async ({ showAlert = true, options } = {}) => {
@@ -133,9 +140,19 @@ const useMapboxNavigation = ({
     }
   };
 
+  const updateNavigationOptions = async (options = {}) => {
+    try {
+      return await MapboxNavigationService.updateNavigationOptions(options);
+    } catch (error) {
+      logger.warn('MapboxNavigationHook', 'Failed to update navigation options', error);
+      return { updated: false, reason: 'update_failed' };
+    }
+  };
+
   return {
     startNavigation,
     stopNavigation,
+    updateNavigationOptions,
     isNavigating,
     isSupported: nativeNavigationAvailable
   };

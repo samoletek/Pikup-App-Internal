@@ -4,6 +4,7 @@ import useDriverTripChat from '../../hooks/useDriverTripChat';
 import { MIN_VERIFICATION_PHOTOS } from '../../hooks/usePickupVerificationPhotos';
 import { logger } from '../../services/logger';
 import { navigateDriverToHome } from './navigationRoute.utils';
+import { TRIP_STATUS } from '../../constants/tripStatus';
 
 export default function usePickupConfirmationFlow({
   confirmPickup,
@@ -16,6 +17,7 @@ export default function usePickupConfirmationFlow({
   photos,
   request,
   startDelivery,
+  onDeliveryStarted,
 }) {
   const [isCompleting, setIsCompleting] = useState(false);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
@@ -47,12 +49,18 @@ export default function usePickupConfirmationFlow({
       await confirmPickup(requestId, photos, driverLocation);
       setIsUploadingPhotos(false);
 
-      await startDelivery(requestId, driverLocation);
-
-      navigation.replace('DeliveryNavigationScreen', {
-        request,
-        pickupPhotos: photos,
-        driverLocation,
+      const deliveryTrip = await startDelivery(requestId, driverLocation);
+      const resolvedDeliveryTrip = deliveryTrip || {
+        ...request,
+        status: TRIP_STATUS.EN_ROUTE_TO_DROPOFF,
+        driverLocation: driverLocation || null,
+        driver_location: driverLocation || null,
+      };
+      if (typeof onDeliveryStarted === 'function') {
+        await onDeliveryStarted(resolvedDeliveryTrip);
+      }
+      navigateDriverToHome(navigation, {
+        activatedTrip: resolvedDeliveryTrip,
       });
     } catch (error) {
       logger.error('PickupConfirmationFlow', 'Error confirming pickup', error);
@@ -90,7 +98,7 @@ export default function usePickupConfirmationFlow({
     } finally {
       setIsCompleting(false);
     }
-  }, [confirmPickup, driverLocation, navigation, photos, request, startDelivery]);
+  }, [confirmPickup, driverLocation, navigation, onDeliveryStarted, photos, request, startDelivery]);
 
   const confirmPickupComplete = useCallback(() => {
     if (photos.length < MIN_VERIFICATION_PHOTOS) {

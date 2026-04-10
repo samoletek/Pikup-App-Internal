@@ -24,8 +24,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    maxHeight: height * 0.8,
     paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
+  },
+  modalContainerAvailable: {
+    maxHeight: height * 0.8,
+  },
+  modalContainerRequestList: {
+    minHeight: height * 0.58,
+    maxHeight: height * 0.92,
   },
   modalHandle: {
     width: 40,
@@ -81,12 +87,19 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing.lg,
   },
+  cardsContainerVertical: {
+    minHeight: height * 0.42,
+    flexGrow: 1,
+  },
   cardsList: {
     paddingHorizontal: spacing.lg,
   },
   cardsListVertical: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.base,
+  },
+  cardsListVerticalScrollable: {
+    paddingBottom: spacing.xxxl,
   },
   card: {
     width: CARD_WIDTH,

@@ -33,7 +33,7 @@ export const renderAddressRowItem = ({
         {item?.name || 'Saved Address'}
       </Text>
       <Text style={styles.addressFullText} numberOfLines={2}>
-        {item?.full_description || item?.address || 'Unknown address'}
+        {item?.address || item?.full_description || 'Unknown address'}
       </Text>
     </View>
     <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />

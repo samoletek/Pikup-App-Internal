@@ -315,6 +315,37 @@ class MapboxNavigationService {
     });
   }
 
+  updateNavigationOptions(options = {}) {
+    return new Promise((resolve, reject) => {
+      const nativeModule = this.getNativeModule();
+      if (!isCallableNativeMethod(nativeModule, 'updateNavigationOptions')) {
+        resolve({
+          updated: false,
+          active: !!nativeModule,
+          reason: 'unsupported',
+        });
+        return;
+      }
+
+      const invocationResult = invokeNativeMethod(nativeModule, 'updateNavigationOptions', [options]);
+      if (invocationResult == null) {
+        resolve({
+          updated: false,
+          active: !!nativeModule,
+          reason: 'native_update_method_missing',
+        });
+        return;
+      }
+
+      Promise.resolve(invocationResult)
+        .then(resolve)
+        .catch((error) => {
+          const normalized = normalizeError(error, 'Failed to update navigation options');
+          reject(new Error(normalized.message || 'Failed to update navigation options'));
+        });
+    });
+  }
+
   addListener(eventName, callback) {
     const emitter = this.ensureEventEmitter();
     if (!emitter) return null;

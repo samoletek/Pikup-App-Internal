@@ -59,7 +59,7 @@ export default function useAcceptedScheduledRequests({
   declineScheduledTripCheckin,
   isOnline,
   hasActiveTrip,
-  navigation,
+  onTripActivated,
   setAcceptedRequestId,
   setActiveJob,
   setShowRequestModal,
@@ -274,8 +274,20 @@ export default function useAcceptedScheduledRequests({
     setShowRequestModal(false);
     setShowAllRequests(false);
     setRequestModalMode('available');
-    navigation.navigate('GpsNavigationScreen', { request: dueScheduledRequest, stage: 'pickup' });
-  }, [acceptedScheduledRequests, hasActiveTrip, isOnline, navigation, setAcceptedRequestId, setActiveJob, setRequestModalMode, setShowAllRequests, setShowRequestModal]);
+    if (typeof onTripActivated === 'function') {
+      void onTripActivated(dueScheduledRequest);
+    }
+  }, [
+    acceptedScheduledRequests,
+    hasActiveTrip,
+    isOnline,
+    onTripActivated,
+    setAcceptedRequestId,
+    setActiveJob,
+    setRequestModalMode,
+    setShowAllRequests,
+    setShowRequestModal,
+  ]);
 
   return {
     acceptedScheduledRequests,

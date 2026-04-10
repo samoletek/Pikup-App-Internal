@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { useTripActions } from '../contexts/AuthContext';
 import { logger } from '../services/logger';
 import { navigateDriverToHome } from '../screens/driver/navigationRoute.utils';
+import { normalizeTripStatus, TRIP_STATUS } from '../constants/tripStatus';
 
 /**
  * Custom hook to monitor order status changes, specifically for cancellation detection
@@ -120,19 +121,17 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
     
     retryCountRef.current += 1;
     
-    // If we've exceeded retry attempts, stop monitoring
+    // Keep monitoring even after repeated failures: navigation can remain active for a long time
+    // and transient network issues should not permanently disable cancellation detection.
     if (retryCountRef.current >= MAX_RETRIES) {
       logger.error(
         'OrderStatusMonitor',
-        `[${currentScreen}] Stopping monitoring after ${MAX_RETRIES} consecutive failures`
+        `[${currentScreen}] Reached ${MAX_RETRIES} consecutive failures, continuing monitoring`
       );
-      
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      
-      // Call custom error handler if provided
+
+      retryCountRef.current = 0;
+
+      // Call custom error handler if provided for telemetry/diagnostics
       const errorHandler = onErrorRef.current;
       if (errorHandler) {
         errorHandler(error);
@@ -166,7 +165,8 @@ const useOrderStatusMonitor = (requestId, navigation, options = {}) => {
       }
 
       // Check for cancellation
-      if (request.status === 'cancelled') {
+      const normalizedStatus = normalizeTripStatus(request?.status);
+      if (normalizedStatus === TRIP_STATUS.CANCELLED) {
         handleCancellation(request);
       }
 

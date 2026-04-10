@@ -7,17 +7,45 @@ const FALLBACK_DRIVER_DESTINATION = {
   longitude: -84.3830,
 };
 const DRIVER_NAVIGATION_PARENT_SEARCH_DEPTH = 5;
-const DRIVER_TABS_HOME_ROUTE = Object.freeze({
+const createDriverTabsHomeRoute = (homeParams) => ({
   name: 'DriverTabs',
-  params: { screen: 'Home' },
+  params: homeParams
+    ? { screen: 'Home', params: homeParams }
+    : { screen: 'Home' },
 });
 
-function parseCoordinates(coords) {
+export function parseCoordinates(coords) {
   if (!coords) {
     return null;
   }
 
+  const tryArrayCoordinates = (candidate) => {
+    if (!Array.isArray(candidate) || candidate.length < 2) {
+      return null;
+    }
+
+    const longitude = Number(candidate[0]);
+    const latitude = Number(candidate[1]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+
+    return null;
+  };
+
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const parsedFromArray = tryArrayCoordinates(coords);
+    if (parsedFromArray) {
+      return parsedFromArray;
+    }
+  }
+
   if (typeof coords === 'object' && !Array.isArray(coords)) {
+    const nestedCoordinates = tryArrayCoordinates(coords.coordinates);
+    if (nestedCoordinates) {
+      return nestedCoordinates;
+    }
+
     const latitude = Number(coords.latitude ?? coords.lat ?? coords.y);
     const longitude = Number(coords.longitude ?? coords.lng ?? coords.lon ?? coords.x);
     if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -28,7 +56,17 @@ function parseCoordinates(coords) {
   if (typeof coords === 'string') {
     try {
       const parsed = JSON.parse(coords);
+      const parsedFromArray = tryArrayCoordinates(parsed);
+      if (parsedFromArray) {
+        return parsedFromArray;
+      }
+
       if (parsed && typeof parsed === 'object') {
+        const nestedCoordinates = tryArrayCoordinates(parsed.coordinates);
+        if (nestedCoordinates) {
+          return nestedCoordinates;
+        }
+
         const latitude = Number(parsed.latitude ?? parsed.lat ?? parsed.y);
         const longitude = Number(parsed.longitude ?? parsed.lng ?? parsed.lon ?? parsed.x);
         if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -135,7 +173,7 @@ export function generateFallbackRoute(start, end) {
   return [start, end];
 }
 
-function resolveDriverHomeRouteFromNavigation(navigation) {
+function resolveDriverHomeRouteFromNavigation(navigation, homeParams) {
   if (!navigation || typeof navigation.getState !== 'function') {
     return null;
   }
@@ -146,19 +184,19 @@ function resolveDriverHomeRouteFromNavigation(navigation) {
   }
 
   if (routeNames.includes('DriverTabs')) {
-    return DRIVER_TABS_HOME_ROUTE;
+    return createDriverTabsHomeRoute(homeParams);
   }
   if (routeNames.includes('Home')) {
-    return { name: 'Home' };
+    return { name: 'Home', params: homeParams };
   }
   if (routeNames.includes('DriverHomeScreen')) {
-    return { name: 'DriverHomeScreen' };
+    return { name: 'DriverHomeScreen', params: homeParams };
   }
 
   return null;
 }
 
-export function navigateDriverToHome(navigation) {
+export function navigateDriverToHome(navigation, homeParams = undefined) {
   let cursor = navigation;
 
   for (let depth = 0; depth < DRIVER_NAVIGATION_PARENT_SEARCH_DEPTH; depth += 1) {
@@ -166,7 +204,7 @@ export function navigateDriverToHome(navigation) {
       break;
     }
 
-    const targetRoute = resolveDriverHomeRouteFromNavigation(cursor);
+    const targetRoute = resolveDriverHomeRouteFromNavigation(cursor, homeParams);
     if (targetRoute) {
       if (typeof cursor.reset === 'function') {
         cursor.reset({

@@ -251,7 +251,9 @@ export const subscribeToMessages = (conversationId, onInitialLoad, onNewMessage)
 
 export const markMessageAsRead = async (conversationId, userType) => {
   try {
-    const updates = {};
+    const updates = {
+      updated_at: new Date().toISOString(),
+    };
     if (userType === 'customer') {
       updates.unread_by_customer = 0;
     } else {

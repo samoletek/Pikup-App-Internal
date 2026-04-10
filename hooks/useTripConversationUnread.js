@@ -24,6 +24,7 @@ export default function useTripConversationUnread({
       conversationUserType === 'customer'
         ? activeRequestDriverId
         : activeRequestCustomerId;
+    const peerIdString = peerId ? String(peerId) : '';
     const peerField = conversationUserType === 'customer' ? 'driverId' : 'customerId';
 
     const updateUnreadState = (userConversations = []) => {
@@ -34,17 +35,23 @@ export default function useTripConversationUnread({
       const unreadConversations = userConversations.filter(
         (conversation) => Number(conversation?.[unreadKey] || 0) > 0
       );
+      const hasTripContext = Boolean(requestIdString || peerIdString);
 
-      const hasTripMatchUnread = unreadConversations.some(
-        (conversation) =>
-          (
-            (requestIdString && String(conversation?.requestId || '') === requestIdString) ||
-            (peerId && String(conversation?.[peerField] || '') === peerId)
-          )
-      );
+      const hasTripMatchUnread = unreadConversations.some((conversation) => {
+        if (requestIdString) {
+          return (
+            String(conversation?.requestId || conversation?.request_id || '') === requestIdString
+          );
+        }
 
-      // Fallback for legacy rows with weak trip linkage.
-      setHasUnreadChat(hasTripMatchUnread || unreadConversations.length > 0);
+        if (peerIdString) {
+          return String(conversation?.[peerField] || '') === peerIdString;
+        }
+
+        return false;
+      });
+
+      setHasUnreadChat(hasTripContext ? hasTripMatchUnread : unreadConversations.length > 0);
     };
 
     const refreshUnread = async () => {

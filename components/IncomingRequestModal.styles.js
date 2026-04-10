@@ -167,6 +167,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.bold,
   },
+  actionBtnDisabled: {
+    opacity: 0.7,
+  },
   detailsScroll: {
     flex: 1,
   },

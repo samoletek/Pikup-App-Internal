@@ -11,6 +11,7 @@ import {
   buildAddressRecord,
   RECENT_ADDRESSES_KEY,
 } from './savedAddresses.utils';
+import { buildAddressSuggestionFromMapboxFeature } from '../../utils/mapboxAddressFormatter';
 import {
   renderAddressRowItem,
   renderAddressSuggestions,
@@ -136,16 +137,9 @@ export default function useSavedAddressesManager() {
         const data = await response.json();
 
         if (data?.features?.length > 0) {
-          const formatted = data.features.map((feature) => ({
-            id: feature.id,
-            name: feature.text,
-            address: feature.place_name.replace(`${feature.text}, `, ''),
-            full_description: feature.place_name,
-            coordinates: {
-              latitude: feature.center[1],
-              longitude: feature.center[0],
-            },
-          }));
+          const formatted = data.features.map((feature) =>
+            buildAddressSuggestionFromMapboxFeature(feature)
+          );
           setSuggestions(formatted);
         } else {
           setSuggestions([]);

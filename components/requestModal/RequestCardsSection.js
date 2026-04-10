@@ -42,7 +42,7 @@ export default function RequestCardsSection({
       : 'New requests will appear here when customers need pickups';
 
   return (
-    <View style={styles.cardsContainer}>
+    <View style={[styles.cardsContainer, isVerticalList && styles.cardsContainerVertical]}>
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
@@ -69,11 +69,16 @@ export default function RequestCardsSection({
           snapToAlignment={isVerticalList ? undefined : "center"}
           decelerationRate={isVerticalList ? "normal" : "fast"}
           directionalLockEnabled={!isVerticalList}
-          scrollEnabled={requests.length > 1}
-          bounces={false}
+          scrollEnabled={isVerticalList ? true : requests.length > 1}
+          bounces={isVerticalList}
           alwaysBounceHorizontal={!isVerticalList}
-          alwaysBounceVertical={false}
-          contentContainerStyle={isVerticalList ? styles.cardsListVertical : styles.cardsList}
+          alwaysBounceVertical={isVerticalList}
+          nestedScrollEnabled={isVerticalList}
+          contentContainerStyle={
+            isVerticalList
+              ? [styles.cardsListVertical, styles.cardsListVerticalScrollable]
+              : styles.cardsList
+          }
           keyExtractor={(item) => String(item.id)}
           renderItem={renderRequestCard}
           onScroll={isVerticalList ? undefined : onScroll}

@@ -47,6 +47,11 @@ const readEnv = (key: string, fallback = ""): string => {
   return fallback;
 };
 
+const readEnvBoolean = (key: string, fallback = false): boolean => {
+  const rawValue = readEnv(key, fallback ? "1" : "0").trim().toLowerCase();
+  return ["1", "true", "yes", "on"].includes(rawValue);
+};
+
 const toCsvSet = (value: string) =>
   new Set(
     String(value || "")
@@ -93,6 +98,10 @@ export const appConfig = {
   },
   mapbox: {
     publicToken: readEnv("EXPO_PUBLIC_MAPBOX_PUBLIC_TOKEN"),
+  },
+  navigation: {
+    // Dev-only by design. Production defaults to real GPS navigation.
+    mapboxSimulationEnabled: isDev && readEnvBoolean("EXPO_PUBLIC_MAPBOX_NAV_SIMULATE", true),
   },
   supabase: {
     url: readEnv("EXPO_PUBLIC_SUPABASE_URL"),

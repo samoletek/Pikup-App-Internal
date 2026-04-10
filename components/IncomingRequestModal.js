@@ -8,6 +8,7 @@ import {
   ScrollView,
   Animated,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,9 +54,38 @@ export default function IncomingRequestModal({
     onSnapChange,
   });
 
-  const handleAccept = useCallback(() => {
-    onAccept(request);
-  }, [request, onAccept]);
+  const [pendingAction, setPendingAction] = useState(null);
+  const isAccepting = pendingAction === 'accept';
+  const isDeclining = pendingAction === 'decline';
+  const isActionPending = Boolean(pendingAction);
+
+  useEffect(() => {
+    if (!visible || !request?.id) {
+      setPendingAction(null);
+    }
+  }, [request?.id, visible]);
+
+  const handleAccept = useCallback(async () => {
+    if (isActionPending || !request) {
+      return;
+    }
+
+    setPendingAction('accept');
+    try {
+      await Promise.resolve(onAccept?.(request));
+    } finally {
+      setPendingAction(null);
+    }
+  }, [isActionPending, onAccept, request]);
+
+  const handleDecline = useCallback(() => {
+    if (isActionPending) {
+      return;
+    }
+
+    setPendingAction('decline');
+    dismiss();
+  }, [dismiss, isActionPending]);
 
   // Photo viewer state (must be before early return to satisfy Rules of Hooks)
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
@@ -234,12 +264,30 @@ export default function IncomingRequestModal({
 
         {/* ===== BUTTONS ===== */}
         <View style={styles.buttonsRow}>
-          <TouchableOpacity style={styles.declineBtn} onPress={dismiss} activeOpacity={0.85}>
-            <Text style={styles.declineTxt}>Decline</Text>
+          <TouchableOpacity
+            style={[styles.declineBtn, isActionPending && styles.actionBtnDisabled]}
+            onPress={handleDecline}
+            activeOpacity={0.85}
+            disabled={isActionPending}
+          >
+            {isDeclining ? (
+              <ActivityIndicator size="small" color={colors.text.primary} />
+            ) : (
+              <Text style={styles.declineTxt}>Decline</Text>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept} activeOpacity={0.85}>
-            <Text style={styles.acceptTxt}>Accept</Text>
+          <TouchableOpacity
+            style={[styles.acceptBtn, isActionPending && styles.actionBtnDisabled]}
+            onPress={handleAccept}
+            activeOpacity={0.85}
+            disabled={isActionPending}
+          >
+            {isAccepting ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Text style={styles.acceptTxt}>Accept</Text>
+            )}
           </TouchableOpacity>
         </View>
 

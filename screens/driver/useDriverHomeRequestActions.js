@@ -7,9 +7,11 @@ export default function useDriverHomeRequestActions({
   acceptRequest,
   appendAcceptedScheduledRequest,
   clearIncomingRoute,
+  driverLocation,
   isAcceptingRequestRef,
   loadRequests,
   navigation,
+  onTripAccepted,
   refreshAcceptedScheduledRequests,
   refreshProfile,
   reopenRequestModalModeRef,
@@ -25,6 +27,7 @@ export default function useDriverHomeRequestActions({
   setShowIncomingModal,
   setShowRequestModal,
   setRequestModalMode,
+  startDriving,
   showRequestModal,
 }) {
   const isGenericAcceptFailureMessage = useCallback((message) => {
@@ -86,10 +89,25 @@ export default function useDriverHomeRequestActions({
         return;
       }
 
-      const activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
+      let activeAcceptedRequest = acceptedRequest?.id ? acceptedRequest : request;
+      if (typeof startDriving === 'function') {
+        try {
+          const startedTrip = await startDriving(activeAcceptedRequest.id, driverLocation || null);
+          if (startedTrip?.id) {
+            activeAcceptedRequest = startedTrip;
+          }
+        } catch (startError) {
+          logger.warn('DriverHomeRequestActions', 'Failed to mark accepted request as in progress', {
+            requestId: activeAcceptedRequest.id,
+            error: startError?.message || startError,
+          });
+        }
+      }
       setAcceptedRequestId(activeAcceptedRequest.id);
       setActiveJob(activeAcceptedRequest);
-      navigation.navigate('GpsNavigationScreen', { request: activeAcceptedRequest });
+      if (typeof onTripAccepted === 'function') {
+        await onTripAccepted(activeAcceptedRequest);
+      }
     } catch (error) {
       logger.error('DriverHomeRequestActions', 'Error accepting request', error);
       const normalizedMessage = String(error?.message || '').trim();
@@ -127,10 +145,11 @@ export default function useDriverHomeRequestActions({
     acceptRequest,
     appendAcceptedScheduledRequest,
     clearIncomingRoute,
+    driverLocation,
     isAcceptingRequestRef,
     isGenericAcceptFailureMessage,
     loadRequests,
-    navigation,
+    onTripAccepted,
     refreshAcceptedScheduledRequests,
     setAcceptedRequestId,
     setActiveJob,
@@ -141,6 +160,7 @@ export default function useDriverHomeRequestActions({
     setShowAllRequests,
     setShowIncomingModal,
     setShowRequestModal,
+    startDriving,
   ]);
 
   const handleViewRequestDetails = useCallback((request) => {

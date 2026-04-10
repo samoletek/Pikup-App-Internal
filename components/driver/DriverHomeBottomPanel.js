@@ -12,6 +12,7 @@ export default function DriverHomeBottomPanel({
   activeJobDestinationAddress,
   activeJobSecondaryLabel,
   onResumeTrip,
+  isNavigationActiveInBackground = false,
   isOnline,
   isScheduledPoolActive,
   waitTime,
@@ -58,7 +59,9 @@ export default function DriverHomeBottomPanel({
             onPress={onResumeTrip}
             activeOpacity={0.85}
           >
-            <Text style={styles.activeTripButtonText}>Resume trip</Text>
+            <Text style={styles.activeTripButtonText}>
+              {isNavigationActiveInBackground ? 'Return to navigator' : 'Open navigator'}
+            </Text>
           </TouchableOpacity>
         </View>
       ) : isOnline ? (

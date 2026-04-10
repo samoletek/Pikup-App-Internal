@@ -6,6 +6,41 @@ import { logger } from '../services/logger';
 export const DEFAULT_MAX_VERIFICATION_PHOTOS = 10;
 export const MIN_VERIFICATION_PHOTOS = 3;
 
+const resolvePreferredAssetRepresentationMode = () => {
+  const modes = ImagePicker?.UIImagePickerPreferredAssetRepresentationMode;
+  return modes?.Current || modes?.current || undefined;
+};
+
+const launchGalleryImages = async (selectionLimit) => {
+  const preferredAssetRepresentationMode = resolvePreferredAssetRepresentationMode();
+  const baseOptions = {
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: false,
+    exif: false,
+  };
+  const multiSelectOptions = {
+    ...baseOptions,
+    allowsMultipleSelection: true,
+    selectionLimit,
+    ...(preferredAssetRepresentationMode ? { preferredAssetRepresentationMode } : {}),
+  };
+
+  try {
+    return await ImagePicker.launchImageLibraryAsync(multiSelectOptions);
+  } catch (error) {
+    logger.warn(
+      'PickupVerificationPhotos',
+      'Multi-select photo picker failed, retrying with single-select mode',
+      error
+    );
+    return ImagePicker.launchImageLibraryAsync({
+      ...baseOptions,
+      allowsMultipleSelection: false,
+      ...(preferredAssetRepresentationMode ? { preferredAssetRepresentationMode } : {}),
+    });
+  }
+};
+
 export default function usePickupVerificationPhotos({
   maxPhotos = DEFAULT_MAX_VERIFICATION_PHOTOS,
   scrollViewRef,
@@ -78,14 +113,7 @@ export default function usePickupVerificationPhotos({
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsMultipleSelection: true,
-        selectionLimit: maxPhotos - photos.length,
-        allowsEditing: false,
-        quality: 0.8,
-        exif: false,
-      });
+      const result = await launchGalleryImages(maxPhotos - photos.length);
 
       if (!result.canceled && result.assets?.length) {
         const remaining = maxPhotos - photos.length;

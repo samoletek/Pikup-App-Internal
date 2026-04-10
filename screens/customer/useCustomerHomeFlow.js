@@ -46,6 +46,8 @@ export default function useCustomerHomeFlow({
   clearRecentCancellation,
   recentCompletion,
   clearRecentCompletion,
+  recentScheduledAcceptance,
+  clearRecentScheduledAcceptance,
   setPendingBooking,
   cancelOrder,
   uploadToSupabase,
@@ -60,6 +62,7 @@ export default function useCustomerHomeFlow({
   const [orderModalKey, setOrderModalKey] = useState(0);
   const lastDriverCancellationAlertTripIdRef = useRef(null);
   const lastAutoOpenedCompletedTripIdRef = useRef(null);
+  const lastScheduledAcceptanceAlertTripIdRef = useRef(null);
   const isPhoneVerifiedForOrders = isPhoneVerified(currentUser);
   const isGeorgiaOrderGateOpen =
     locationGateStatus === CUSTOMER_LOCATION_GATE_STATUS.ALLOWED;
@@ -272,6 +275,27 @@ export default function useCustomerHomeFlow({
       tripSnapshot: recentCompletion?.tripSnapshot || null,
     });
   }, [clearRecentCompletion, navigation, recentCompletion]);
+
+  useEffect(() => {
+    const acceptedTripId = String(recentScheduledAcceptance?.id || '').trim();
+    if (!acceptedTripId) {
+      return;
+    }
+
+    if (lastScheduledAcceptanceAlertTripIdRef.current === acceptedTripId) {
+      return;
+    }
+
+    lastScheduledAcceptanceAlertTripIdRef.current = acceptedTripId;
+    clearRecentScheduledAcceptance?.();
+
+    Alert.alert(
+      'Driver Found',
+      "Great news! A driver has been found for your scheduled trip. We'll confirm their availability again closer to your pickup time.",
+      [{ text: 'OK' }],
+      { cancelable: false }
+    );
+  }, [clearRecentScheduledAcceptance, recentScheduledAcceptance]);
 
   const handleOpenActiveTripDetails = useCallback(() => {
     if (!activeDelivery) {

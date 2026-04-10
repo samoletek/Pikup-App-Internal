@@ -14,6 +14,59 @@ import {
 const WAIT_TIME_LABEL = "5 to 11 min";
 const DEFAULT_PROGRESS_VALUE = 0.3;
 
+const firstNonEmptyText = (...candidates) => {
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+
+    const trimmed = candidate.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+
+  return '';
+};
+
+const resolveTripAddress = (trip, pointName) => {
+  if (!trip || typeof trip !== 'object') {
+    return '';
+  }
+
+  if (pointName === 'dropoff') {
+    return firstNonEmptyText(
+      trip?.dropoff?.address,
+      trip?.dropoff?.formatted_address,
+      trip?.dropoff_location?.address,
+      trip?.dropoff_location?.formatted_address,
+      trip?.dropoffAddress,
+      trip?.dropoff_address,
+      trip?.originalData?.dropoff?.address,
+      trip?.originalData?.dropoff?.formatted_address,
+      trip?.originalData?.dropoff_location?.address,
+      trip?.originalData?.dropoff_location?.formatted_address,
+      trip?.originalData?.dropoffAddress,
+      trip?.originalData?.dropoff_address,
+    );
+  }
+
+  return firstNonEmptyText(
+    trip?.pickup?.address,
+    trip?.pickup?.formatted_address,
+    trip?.pickup_location?.address,
+    trip?.pickup_location?.formatted_address,
+    trip?.pickupAddress,
+    trip?.pickup_address,
+    trip?.originalData?.pickup?.address,
+    trip?.originalData?.pickup?.formatted_address,
+    trip?.originalData?.pickup_location?.address,
+    trip?.originalData?.pickup_location?.formatted_address,
+    trip?.originalData?.pickupAddress,
+    trip?.originalData?.pickup_address,
+  );
+};
+
 export default function useDriverHomePresentation({
   acceptedRequestId,
   activeJob,
@@ -25,6 +78,7 @@ export default function useDriverHomePresentation({
   reopenRequestModalModeRef,
   reopenRequestModalOnFocusRef,
   route,
+  onOpenNativeNavigation,
   setSelectedRequest,
   setShowAllRequests,
   setShowRequestModal,
@@ -73,10 +127,10 @@ export default function useDriverHomePresentation({
     }
 
     if (DROPOFF_PHASE_STATUSES.includes(activeJobStatus)) {
-      return activeJob.dropoffAddress || activeJob?.dropoff?.address || "Drop-off location";
+      return resolveTripAddress(activeJob, 'dropoff') || "Drop-off location";
     }
 
-    return activeJob.pickupAddress || activeJob?.pickup?.address || "Pickup location";
+    return resolveTripAddress(activeJob, 'pickup') || "Pickup location";
   }, [activeJob, activeJobStatus]);
 
   const activeJobSecondaryLabel = useMemo(() => {
@@ -124,19 +178,23 @@ export default function useDriverHomePresentation({
     }
 
     if (DROPOFF_PHASE_STATUSES.includes(normalizedStatus)) {
-      navigation.navigate("DeliveryNavigationScreen", {
-        request: trip,
-        pickupPhotos,
-        driverLocation: resolvedDriverLocation,
-      });
+      if (typeof onOpenNativeNavigation === 'function') {
+        onOpenNativeNavigation({
+          ...trip,
+          driverLocation: resolvedDriverLocation,
+          pickupPhotos,
+        });
+      }
       return;
     }
 
-    navigation.navigate("GpsNavigationScreen", {
-      request: trip,
-      stage: "pickup",
-    });
-  }, [driverLocation, navigation]);
+    if (typeof onOpenNativeNavigation === 'function') {
+      onOpenNativeNavigation({
+        ...trip,
+        driverLocation: resolvedDriverLocation,
+      });
+    }
+  }, [driverLocation, navigation, onOpenNativeNavigation]);
 
   useEffect(() => {
     if (!shouldShowOnlineDriverMarker) {

@@ -38,6 +38,7 @@ export default function DriverHomeScreenContent({
   activeJobDestinationAddress,
   activeJobSecondaryLabel,
   onResumeTrip,
+  isNavigationActiveInBackground,
   isScheduledPoolActive,
   waitTime,
   progressValue,
@@ -55,6 +56,8 @@ export default function DriverHomeScreenContent({
   requestModalMode,
   requestModalRequests,
   driverLocation,
+  activeTripPickupLocation,
+  activeTripDropoffLocation,
   loading,
   error,
   onCloseRequestModal,
@@ -81,6 +84,11 @@ export default function DriverHomeScreenContent({
   driverAvailabilityComingSoonMessage,
 }) {
   const showGeoRestrictedBanner = isDriverGeoRestricted && !isOnline && !hasActiveTrip;
+  const shouldShowTopNotices = (
+    !showIncomingModal &&
+    !isMinimized &&
+    (showOnboardingRequiredBanner || showGeoRestrictedBanner)
+  );
 
   return (
     <View style={styles.container}>
@@ -100,6 +108,8 @@ export default function DriverHomeScreenContent({
         onRequestMarkerPress={onRequestMarkerPress}
         incomingRoute={incomingRoute}
         incomingMarkers={incomingMarkers}
+        activeTripPickupLocation={activeTripPickupLocation}
+        activeTripDropoffLocation={activeTripDropoffLocation}
         insetsTop={insetsTop}
         mapRef={mapRef}
         cameraRef={cameraRef}
@@ -116,6 +126,7 @@ export default function DriverHomeScreenContent({
           activeJobDestinationAddress={activeJobDestinationAddress}
           activeJobSecondaryLabel={activeJobSecondaryLabel}
           onResumeTrip={onResumeTrip}
+          isNavigationActiveInBackground={isNavigationActiveInBackground}
           isOnline={isOnline}
           isScheduledPoolActive={isScheduledPoolActive}
           waitTime={waitTime}
@@ -130,7 +141,7 @@ export default function DriverHomeScreenContent({
         />
       )}
 
-      {showOnboardingRequiredBanner || showGeoRestrictedBanner ? (
+      {shouldShowTopNotices ? (
         <View style={[styles.topNoticeStack, { top: insetsTop + 40 }]}>
           {showOnboardingRequiredBanner ? (
             <TouchableOpacity

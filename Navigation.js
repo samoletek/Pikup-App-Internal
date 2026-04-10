@@ -39,9 +39,7 @@ import DriverPreferencesScreen from "./screens/driver/DriverPreferencesScreen";
 import DriverEarningsScreen from "./screens/driver/DriverEarningsScreen";
 import RouteConfirmationScreen from "./screens/driver/RouteConfirmationScreen";
 import EnRouteToPickupScreen from "./screens/driver/EnRouteToPickupScreen";
-import GpsNavigationScreen from "./screens/driver/GpsNavigationScreen";
 import PickupConfirmationScreen from "./screens/driver/PickupConfirmationScreen";
-import DeliveryNavigationScreen from "./screens/driver/DeliveryNavigationScreen";
 import DeliveryConfirmationScreen from "./screens/driver/DeliveryConfirmationScreen";
 import DriverOnboardingScreen from "./screens/driver/DriverOnboardingScreen";
 import DriverOnboardingCompleteScreen from "./screens/driver/DriverOnboardingCompleteScreen";
@@ -108,9 +106,7 @@ const DriverStack = () => (
     {/* Trip Execution Flow */}
     <Stack.Screen name="RouteConfirmationScreen" component={RouteConfirmationScreen} />
     <Stack.Screen name="EnRouteToPickupScreen" component={EnRouteToPickupScreen} />
-    <Stack.Screen name="GpsNavigationScreen" component={GpsNavigationScreen} />
     <Stack.Screen name="PickupConfirmationScreen" component={PickupConfirmationScreen} />
-    <Stack.Screen name="DeliveryNavigationScreen" component={DeliveryNavigationScreen} />
     <Stack.Screen name="DeliveryConfirmationScreen" component={DeliveryConfirmationScreen} />
     <Stack.Screen name="DriverRequestDetailsScreen" component={DriverRequestDetailsScreen} />
     <Stack.Screen name="DriverRecentTripsScreen" component={DriverRecentTripsScreen} />
