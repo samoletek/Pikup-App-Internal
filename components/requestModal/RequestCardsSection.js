@@ -57,34 +57,49 @@ export default function RequestCardsSection({
           </TouchableOpacity>
         </View>
       ) : requests.length > 0 ? (
-        <FlatList
-          key={`request-list-${mode}`}
-          ref={flatListRef}
-          data={requests}
-          horizontal={!isVerticalList}
-          pagingEnabled={!isVerticalList}
-          showsHorizontalScrollIndicator={!isVerticalList}
-          showsVerticalScrollIndicator={isVerticalList}
-          snapToInterval={isVerticalList ? undefined : CARD_WIDTH + spacing.lg}
-          snapToAlignment={isVerticalList ? undefined : "center"}
-          decelerationRate={isVerticalList ? "normal" : "fast"}
-          directionalLockEnabled={!isVerticalList}
-          scrollEnabled={isVerticalList ? true : requests.length > 1}
-          bounces={!isVerticalList}
-          alwaysBounceHorizontal={!isVerticalList}
-          alwaysBounceVertical={false}
-          overScrollMode={isVerticalList ? 'never' : 'always'}
-          nestedScrollEnabled={isVerticalList}
-          contentContainerStyle={
-            isVerticalList
-              ? [styles.cardsListVertical, styles.cardsListVerticalScrollable]
-              : styles.cardsList
-          }
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderRequestCard}
-          onScroll={isVerticalList ? undefined : onScroll}
-          scrollEventThrottle={16}
-        />
+        isVerticalList ? (
+          <FlatList
+            key={`request-list-${mode}`}
+            ref={flatListRef}
+            style={styles.cardsListVerticalScroll}
+            data={requests}
+            showsVerticalScrollIndicator
+            bounces
+            alwaysBounceVertical={false}
+            scrollEnabled
+            nestedScrollEnabled
+            overScrollMode="never"
+            contentContainerStyle={[styles.cardsListVertical, styles.cardsListVerticalScrollable]}
+            keyExtractor={(item, index) => String(item?.id || `request-${index}`)}
+            renderItem={({ item, index }) => (
+              <View>
+                {renderRequestCard({ item, index })}
+              </View>
+            )}
+            ListFooterComponent={<View style={styles.cardsListVerticalFooterSpacer} />}
+          />
+        ) : (
+          <FlatList
+            key={`request-list-${mode}`}
+            ref={flatListRef}
+            data={requests}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator
+            snapToInterval={CARD_WIDTH + spacing.lg}
+            snapToAlignment="center"
+            decelerationRate="fast"
+            directionalLockEnabled
+            scrollEnabled={requests.length > 1}
+            bounces
+            alwaysBounceHorizontal
+            contentContainerStyle={styles.cardsList}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderRequestCard}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+          />
+        )
       ) : (
         <View style={styles.emptyState}>
           <Ionicons name="location-outline" size={64} color={colors.text.subtle} />

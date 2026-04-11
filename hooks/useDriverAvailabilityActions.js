@@ -96,7 +96,14 @@ export default function useDriverAvailabilityActions({
   }, [currentUserId]);
 
   const confirmGoOnline = useCallback(async (mode, requestPool = REQUEST_POOLS.ASAP) => {
-    if (isOnline || !currentUserId) return;
+    if (isOnline) return;
+    if (!currentUserId) {
+      Alert.alert(
+        'Session Required',
+        'Your session is not ready. Please sign in again and retry.'
+      );
+      return;
+    }
 
     try {
       setLoading(true);
@@ -153,6 +160,10 @@ export default function useDriverAvailabilityActions({
           return;
         }
 
+        Alert.alert(
+          'Account Check Failed',
+          'We could not verify your driver profile. Please reopen the app and try again.'
+        );
         return;
       }
 
@@ -204,11 +215,13 @@ export default function useDriverAvailabilityActions({
           'Service Availability',
           SERVICE_AREA_UNRESOLVED_MESSAGE
         );
+        setLoading(false);
         return;
       }
 
       if (!isSupportedOrderStateCode(driverStateCode, SUPPORTED_ORDER_STATE_CODES)) {
         Alert.alert(DRIVER_GEO_RESTRICTED_TITLE, DRIVER_GEO_RESTRICTED_MESSAGE);
+        setLoading(false);
         return;
       }
 
@@ -259,6 +272,14 @@ export default function useDriverAvailabilityActions({
       return;
     }
 
+    if (!currentUserId) {
+      Alert.alert(
+        'Session Required',
+        'Your session is not ready. Please sign in again and retry.'
+      );
+      return;
+    }
+
     if (isOnline) {
       if (activeRequestPool !== targetPool) {
         setActiveRequestPool(targetPool);
@@ -285,6 +306,7 @@ export default function useDriverAvailabilityActions({
     activeJob,
     activeRequestPool,
     confirmGoOnline,
+    currentUserId,
     hasActiveTrip,
     isDriverGeoRestricted,
     isOnline,

@@ -54,13 +54,17 @@ export default function useRequestOfferTimer({ incomingRequest, offerTimeoutRef 
 
     const offerPresentationKey = resolveOfferPresentationKey(incomingRequest);
     const scheduledRequest = isScheduledRequest(incomingRequest);
+    const requestExpiresAtMs = resolveRequestOfferExpiry(incomingRequest);
+    const hasServerExpiry = Number.isFinite(requestExpiresAtMs);
     const hasNewOfferPresentation = (
       offerPresentationKey &&
       offerPresentationKey !== activeOfferKeyRef.current
     );
 
     if (!scheduledRequest) {
-      if (hasNewOfferPresentation || !Number.isFinite(localOfferDeadlineRef.current)) {
+      if (hasServerExpiry) {
+        localOfferDeadlineRef.current = Number.NaN;
+      } else if (hasNewOfferPresentation || !Number.isFinite(localOfferDeadlineRef.current)) {
         localOfferDeadlineRef.current = Date.now() + (DEFAULT_REQUEST_TIMER_SECONDS * 1000);
       }
     } else {
@@ -68,11 +72,12 @@ export default function useRequestOfferTimer({ incomingRequest, offerTimeoutRef 
     }
     activeOfferKeyRef.current = offerPresentationKey;
 
-    const requestExpiresAtMs = resolveRequestOfferExpiry(incomingRequest);
     const hasEffectiveLocalExpiry = Number.isFinite(localOfferDeadlineRef.current);
-    const effectiveExpiryMs = hasEffectiveLocalExpiry
-      ? localOfferDeadlineRef.current
-      : requestExpiresAtMs;
+    const effectiveExpiryMs = hasServerExpiry
+      ? requestExpiresAtMs
+      : hasEffectiveLocalExpiry
+        ? localOfferDeadlineRef.current
+        : Number.NaN;
     const hasEffectiveExpiry = Number.isFinite(effectiveExpiryMs);
     const initialRemainingSeconds = hasEffectiveExpiry
       ? Math.max(0, Math.ceil((effectiveExpiryMs - Date.now()) / 1000))

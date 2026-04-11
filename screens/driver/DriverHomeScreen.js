@@ -807,7 +807,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     driverLocation,
     getAvailableRequests,
     hasActiveTrip,
-    incomingRequestIdRef,
     isOnline,
     setIncomingRequest,
     setIsMinimized,

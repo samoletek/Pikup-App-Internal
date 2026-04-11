@@ -32,6 +32,8 @@ const styles = StyleSheet.create({
   modalContainerRequestList: {
     minHeight: height * 0.58,
     maxHeight: height * 0.92,
+    height: height * 0.82,
+    overflow: 'hidden',
   },
   modalHandle: {
     width: 40,
@@ -88,8 +90,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   cardsContainerVertical: {
-    minHeight: height * 0.42,
-    flexGrow: 1,
+    flex: 1,
+    minHeight: 0,
   },
   cardsList: {
     paddingHorizontal: spacing.lg,
@@ -98,8 +100,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.base,
   },
+  cardsListVerticalScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
   cardsListVerticalScrollable: {
-    paddingBottom: spacing.xxxl * 3,
+    paddingBottom: spacing.xxxl,
+  },
+  cardsListVerticalFooterSpacer: {
+    height: spacing.xxxl + spacing.xl,
   },
   card: {
     width: CARD_WIDTH,

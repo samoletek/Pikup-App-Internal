@@ -49,7 +49,6 @@ export default function useDriverRequestsFeed({
   driverLocation,
   getAvailableRequests,
   hasActiveTrip,
-  incomingRequestIdRef,
   isOnline,
   setIncomingRequest,
   setIsMinimized,
@@ -119,18 +118,6 @@ export default function useDriverRequestsFeed({
           });
         }
 
-        const visibleRequestIds = new Set(
-          poolScopedRequests.map((item) => String(item?.id || '')).filter(Boolean)
-        );
-        const currentIncomingId = String(incomingRequestIdRef.current || '').trim();
-
-        if (currentIncomingId && !visibleRequestIds.has(currentIncomingId)) {
-          setShowIncomingModal(false);
-          setIsMinimized(false);
-          setIncomingRequest(null);
-          clearIncomingRoute();
-        }
-
         if (effectiveRequestPool === REQUEST_POOLS.SCHEDULED) {
           setShowIncomingModal(false);
           setIsMinimized(false);
@@ -157,10 +144,8 @@ export default function useDriverRequestsFeed({
     },
     [
       activeRequestPool,
-      clearIncomingRoute,
       getAvailableRequests,
       hasActiveTrip,
-      incomingRequestIdRef,
       setIncomingRequest,
       setIsMinimized,
       setShowAllRequests,

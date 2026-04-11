@@ -71,7 +71,11 @@ export default function useDriverRequestPoolRealtime({
           const tripId = row?.trip_id;
           const offerStatus = String(row?.status || '').trim().toLowerCase();
           if (!tripId) return;
-          if (offerStatus && offerStatus !== 'offered') {
+          const isOfferFinalizedForDriver = (
+            offerStatus === 'accepted' ||
+            offerStatus === 'declined'
+          );
+          if (isOfferFinalizedForDriver) {
             removeRequestFromPool(tripId);
           }
         }

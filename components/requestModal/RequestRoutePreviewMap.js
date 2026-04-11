@@ -171,7 +171,7 @@ export default function RequestRoutePreviewMap({ request, styles }) {
   }
 
   return (
-    <View style={styles.routePreviewContainer}>
+    <View style={styles.routePreviewContainer} pointerEvents="none">
       <MapboxMap
         style={styles.routePreviewMap}
         centerCoordinate={centerCoordinate}
@@ -179,7 +179,7 @@ export default function RequestRoutePreviewMap({ request, styles }) {
         animationDuration={0}
         customMapStyle={Mapbox.StyleURL.Dark}
         scrollEnabled={false}
-        zoomEnabled
+        zoomEnabled={false}
         pitchEnabled={false}
         rotateEnabled={false}
         attributionEnabled={false}

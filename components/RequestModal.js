@@ -99,7 +99,7 @@ export default function RequestModal({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) =>
         gestureState.dy > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx),
       onPanResponderMove: (_, gestureState) => {
@@ -222,6 +222,7 @@ export default function RequestModal({
       onViewDetails={onViewDetails}
     />
   );
+  const headerPanHandlers = isAvailableMode ? panResponder.panHandlers : undefined;
 
   if (!visible) {
     return null;
@@ -249,7 +250,7 @@ export default function RequestModal({
           countLabel={countLabel}
           requestsCount={requestList.length}
           onClose={onClose}
-          panHandlers={panResponder.panHandlers}
+          panHandlers={headerPanHandlers}
           styles={styles}
         />
 
