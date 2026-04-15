@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
+  BackHandler,
   View,
   Text,
   TouchableOpacity,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthIdentity, useProfileActions, useTripActions } from '../../contexts/AuthContext';
@@ -88,12 +90,30 @@ export default function DeliveryConfirmationScreen({ route, navigation }) {
   });
   const customerName = customerDisplay.name;
   const driverPayoutLabel = resolveDriverPayoutLabel(request);
+  useFocusEffect(
+    useCallback(() => {
+      const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => {
+        backSubscription.remove();
+      };
+    }, [])
+  );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      const actionType = event?.data?.action?.type;
+      if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+        event.preventDefault();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   return (
     <View style={styles.container}>
       <ScreenHeader
         title="Complete Delivery"
-        onBack={() => navigation.goBack()}
+        showBack={false}
         topInset={insets.top}
       />
 

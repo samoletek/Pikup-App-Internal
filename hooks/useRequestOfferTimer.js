@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { getTripScheduledAtMs } from '../constants/tripStatus';
 import {
   DEFAULT_REQUEST_TIMER_SECONDS,
-  resolveRequestOfferExpiry,
 } from '../screens/driver/DriverHomeScreen.utils';
 
 const normalizeRequestId = (value) => String(value || '').trim();
@@ -29,7 +27,41 @@ const resolveOfferPresentationKey = (request) => {
   return requestId;
 };
 
-const isScheduledRequest = (request) => Number.isFinite(getTripScheduledAtMs(request));
+const resolveOfferTtlSeconds = (request) => {
+  const candidates = [
+    request?.dispatchOffer?.ttlSeconds,
+    request?.dispatchOffer?.ttl_seconds,
+    request?.ttlSeconds,
+    request?.ttl_seconds,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.round(parsed);
+    }
+  }
+
+  return DEFAULT_REQUEST_TIMER_SECONDS;
+};
+
+const resolveOfferExpiryMs = (request) => {
+  const candidates = [
+    request?.expiresAt,
+    request?.expires_at,
+    request?.dispatchOffer?.expiresAt,
+    request?.dispatchOffer?.expires_at,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = new Date(candidate || '').getTime();
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return Number.NaN;
+};
 
 export default function useRequestOfferTimer({ incomingRequest, offerTimeoutRef }) {
   const requestTimerRef = useRef(null);
@@ -53,42 +85,36 @@ export default function useRequestOfferTimer({ incomingRequest, offerTimeoutRef 
     }
 
     const offerPresentationKey = resolveOfferPresentationKey(incomingRequest);
-    const scheduledRequest = isScheduledRequest(incomingRequest);
-    const requestExpiresAtMs = resolveRequestOfferExpiry(incomingRequest);
-    const hasServerExpiry = Number.isFinite(requestExpiresAtMs);
+    const offerTtlSeconds = resolveOfferTtlSeconds(incomingRequest);
     const hasNewOfferPresentation = (
       offerPresentationKey &&
       offerPresentationKey !== activeOfferKeyRef.current
     );
-
-    if (!scheduledRequest) {
-      if (hasServerExpiry) {
-        localOfferDeadlineRef.current = Number.NaN;
-      } else if (hasNewOfferPresentation || !Number.isFinite(localOfferDeadlineRef.current)) {
-        localOfferDeadlineRef.current = Date.now() + (DEFAULT_REQUEST_TIMER_SECONDS * 1000);
-      }
-    } else {
-      localOfferDeadlineRef.current = Number.NaN;
-    }
     activeOfferKeyRef.current = offerPresentationKey;
 
-    const hasEffectiveLocalExpiry = Number.isFinite(localOfferDeadlineRef.current);
-    const effectiveExpiryMs = hasServerExpiry
-      ? requestExpiresAtMs
-      : hasEffectiveLocalExpiry
-        ? localOfferDeadlineRef.current
-        : Number.NaN;
-    const hasEffectiveExpiry = Number.isFinite(effectiveExpiryMs);
-    const initialRemainingSeconds = hasEffectiveExpiry
+    const backendExpiryMs = resolveOfferExpiryMs(incomingRequest);
+    if (Number.isFinite(backendExpiryMs)) {
+      localOfferDeadlineRef.current = backendExpiryMs;
+    } else if (
+      hasNewOfferPresentation ||
+      !Number.isFinite(localOfferDeadlineRef.current)
+    ) {
+      localOfferDeadlineRef.current = Date.now() + (offerTtlSeconds * 1000);
+    }
+
+    if (!Number.isFinite(localOfferDeadlineRef.current)) {
+      localOfferDeadlineRef.current = Number.NaN;
+    }
+
+    const effectiveExpiryMs = Number.isFinite(localOfferDeadlineRef.current)
+      ? localOfferDeadlineRef.current
+      : Number.NaN;
+    const initialRemainingSeconds = Number.isFinite(effectiveExpiryMs)
       ? Math.max(0, Math.ceil((effectiveExpiryMs - Date.now()) / 1000))
-      : DEFAULT_REQUEST_TIMER_SECONDS;
+      : offerTtlSeconds;
 
     setRequestTimeRemaining(initialRemainingSeconds);
-    setRequestTimerTotal(
-      hasEffectiveExpiry
-        ? Math.max(initialRemainingSeconds, 1)
-        : DEFAULT_REQUEST_TIMER_SECONDS
-    );
+    setRequestTimerTotal(offerTtlSeconds);
 
     if (initialRemainingSeconds <= 0) {
       localOfferDeadlineRef.current = Number.NaN;
@@ -98,7 +124,7 @@ export default function useRequestOfferTimer({ incomingRequest, offerTimeoutRef 
 
     requestTimerRef.current = setInterval(() => {
       setRequestTimeRemaining((prev) => {
-        const nextRemaining = hasEffectiveExpiry
+        const nextRemaining = Number.isFinite(effectiveExpiryMs)
           ? Math.max(0, Math.ceil((effectiveExpiryMs - Date.now()) / 1000))
           : Math.max(0, prev - 1);
 

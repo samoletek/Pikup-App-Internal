@@ -116,22 +116,63 @@ export const readEnvNumber = (
   return fallback
 }
 
+export const readEnvNumberList = (
+  names: string[],
+  fallback: number[] = [],
+  { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}
+) => {
+  for (const name of names) {
+    const raw = Deno.env.get(name)
+    if (!raw) continue
+
+    const parsed = raw
+      .split(",")
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value))
+      .map((value) => Math.round(value))
+      .filter((value) => value >= min && value <= max)
+
+    if (parsed.length > 0) {
+      const deduped = Array.from(new Set(parsed))
+      if (deduped.length > 0) {
+        return deduped
+      }
+    }
+  }
+
+  return fallback
+}
+
+const DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES = Object.freeze([20, 40, 80, 100])
+export const ASAP_DISPATCH_BATCH_RADII_MILES = Object.freeze(
+  readEnvNumberList(
+    ["DISPATCH_ASAP_BATCH_RADII_MILES", "EXPO_PUBLIC_DISPATCH_ASAP_BATCH_RADII_MILES"],
+    [...DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES],
+    { min: 1, max: 1000 }
+  )
+)
+export const ASAP_DISPATCH_BATCH_INTERVAL_SECONDS = readEnvNumber(
+  ["DISPATCH_ASAP_BATCH_INTERVAL_SECONDS", "EXPO_PUBLIC_DISPATCH_ASAP_BATCH_INTERVAL_SECONDS"],
+  60,
+  { min: 15, max: 3600 }
+)
+export const DISPATCH_REQUEST_SEARCH_MAX_HOURS = readEnvNumber(
+  ["DISPATCH_REQUEST_SEARCH_MAX_HOURS", "EXPO_PUBLIC_DISPATCH_REQUEST_SEARCH_MAX_HOURS"],
+  10,
+  { min: 1, max: 24 * 30 }
+)
+
+const resolveAsapDispatchMaxDistanceMiles = (): number => (
+  ASAP_DISPATCH_BATCH_RADII_MILES[ASAP_DISPATCH_BATCH_RADII_MILES.length - 1] ||
+  DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES[
+    DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES.length - 1
+  ]
+)
+
 export const MAX_REQUEST_DISTANCE_BY_POOL_MILES = Object.freeze({
-  [REQUEST_POOLS.ASAP]: readEnvNumber(
-    ["DISPATCH_MAX_DISTANCE_ASAP_MILES", "EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES"],
-    15,
-    { min: 1, max: 500 }
-  ),
-  [REQUEST_POOLS.SCHEDULED]: readEnvNumber(
-    ["DISPATCH_MAX_DISTANCE_SCHEDULED_MILES", "EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES"],
-    35,
-    { min: 1, max: 1000 }
-  ),
-  [REQUEST_POOLS.ALL]: readEnvNumber(
-    ["DISPATCH_MAX_DISTANCE_SCHEDULED_MILES", "EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES"],
-    35,
-    { min: 1, max: 1000 }
-  ),
+  [REQUEST_POOLS.ASAP]: resolveAsapDispatchMaxDistanceMiles(),
+  [REQUEST_POOLS.SCHEDULED]: resolveAsapDispatchMaxDistanceMiles(),
+  [REQUEST_POOLS.ALL]: resolveAsapDispatchMaxDistanceMiles(),
 })
 export const SCHEDULED_LOOKAHEAD_HOURS = readEnvNumber(
   ["DISPATCH_SCHEDULED_LOOKAHEAD_HOURS", "EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS"],
@@ -146,7 +187,7 @@ export const SCHEDULED_PAST_GRACE_MINUTES = readEnvNumber(
 export const DRIVER_REQUEST_OFFER_TTL_SECONDS = readEnvNumber(
   ["DISPATCH_REQUEST_OFFER_TTL_SECONDS", "EXPO_PUBLIC_DISPATCH_REQUEST_OFFER_TTL_SECONDS"],
   180,
-  { min: 10, max: 600 }
+  { min: 30, max: 900 }
 )
 
 export const OFFER_ACTIONS = Object.freeze({
@@ -1069,13 +1110,49 @@ export const hasTripScheduleConflict = (
   })
 }
 
-export const getRequestDistanceLimitMiles = (requestPool: string, scheduleType: string) => {
-  if (requestPool === REQUEST_POOLS.ASAP || requestPool === REQUEST_POOLS.SCHEDULED) {
-    return MAX_REQUEST_DISTANCE_BY_POOL_MILES[requestPool as keyof typeof MAX_REQUEST_DISTANCE_BY_POOL_MILES]
+const resolveTripCreatedAtMs = (trip: AnyRecord = {}) => {
+  const candidates = [
+    trip?.createdAt,
+    trip?.created_at,
+    trip?.originalData?.createdAt,
+    trip?.originalData?.created_at,
+  ]
+
+  for (const candidate of candidates) {
+    const parsed = new Date(String(candidate || "")).getTime()
+    if (Number.isFinite(parsed)) {
+      return parsed
+    }
   }
-  return scheduleType === REQUEST_POOLS.SCHEDULED
-    ? MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED]
-    : MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP]
+
+  return Number.NaN
+}
+
+export const getAsapDispatchWaveIndex = (trip: AnyRecord = {}, nowDate = new Date()) => {
+  const createdAtMs = resolveTripCreatedAtMs(trip)
+  if (!Number.isFinite(createdAtMs)) {
+    return 0
+  }
+
+  const elapsedMs = Math.max(0, nowDate.getTime() - createdAtMs)
+  const index = Math.floor(elapsedMs / (ASAP_DISPATCH_BATCH_INTERVAL_SECONDS * 1000))
+  return Math.min(Math.max(index, 0), ASAP_DISPATCH_BATCH_RADII_MILES.length - 1)
+}
+
+export const getAsapDispatchRadiusMiles = (trip: AnyRecord = {}, nowDate = new Date()) => {
+  const waveIndex = getAsapDispatchWaveIndex(trip, nowDate)
+  return ASAP_DISPATCH_BATCH_RADII_MILES[waveIndex] ?? MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP]
+}
+
+const getRequestSearchLifetimeLimitMs = () => DISPATCH_REQUEST_SEARCH_MAX_HOURS * 60 * 60 * 1000
+
+export const isTripOutsideSearchLifetime = (trip: AnyRecord = {}, nowDate = new Date()) => {
+  const createdAtMs = resolveTripCreatedAtMs(trip)
+  if (!Number.isFinite(createdAtMs)) {
+    return false
+  }
+
+  return (nowDate.getTime() - createdAtMs) > getRequestSearchLifetimeLimitMs()
 }
 
 export const isTripOutsideScheduledWindow = (requirements: AnyRecord, nowDate = new Date()) => {
@@ -1096,14 +1173,12 @@ export const isTripOutsideScheduledWindow = (requirements: AnyRecord, nowDate = 
 
 export const isTripOutsideDistanceWindow = ({
   trip,
-  requirements,
-  requestPool,
   driverLocation,
+  nowDate = new Date(),
 }: {
   trip: AnyRecord
-  requirements: AnyRecord
-  requestPool: string
   driverLocation: { latitude: number; longitude: number } | null
+  nowDate?: Date
 }) => {
   if (!driverLocation) {
     return false
@@ -1115,7 +1190,7 @@ export const isTripOutsideDistanceWindow = ({
     return false
   }
 
-  const maxDistanceMiles = getRequestDistanceLimitMiles(requestPool, requirements?.scheduleType)
+  const maxDistanceMiles = getAsapDispatchRadiusMiles(trip, nowDate)
   return distanceMiles > maxDistanceMiles
 }
 

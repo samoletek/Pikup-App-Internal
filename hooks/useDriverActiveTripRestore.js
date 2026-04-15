@@ -8,6 +8,7 @@ import {
 import { logger } from '../services/logger';
 
 const ACTIVE_TRIP_RESTORE_INTERVAL_MS = 60 * 1000;
+const AUTH_CONTEXT_GAP_GRACE_MS = 1500;
 
 export default function useDriverActiveTripRestore({
   currentUserId,
@@ -25,6 +26,7 @@ export default function useDriverActiveTripRestore({
   const [isRestoringActiveTrip, setIsRestoringActiveTrip] = useState(true);
   const restoreInFlightRef = useRef(false);
   const restoredForUserIdRef = useRef(null);
+  const authLossResetTimerRef = useRef(null);
 
   const restoreActiveTrip = useCallback(async ({ initialLoad = false } = {}) => {
     if (!currentUserId || userType !== 'driver' || typeof getUserPickupRequests !== 'function') {
@@ -128,12 +130,29 @@ export default function useDriverActiveTripRestore({
 
   useEffect(() => {
     if (!currentUserId || userType !== 'driver') {
-      restoredForUserIdRef.current = null;
-      setAcceptedRequestId(null);
-      setActiveJob(null);
-      setIsOnline(false);
-      setIsRestoringActiveTrip(false);
-      return;
+      if (authLossResetTimerRef.current) {
+        clearTimeout(authLossResetTimerRef.current);
+      }
+
+      authLossResetTimerRef.current = setTimeout(() => {
+        restoredForUserIdRef.current = null;
+        setAcceptedRequestId(null);
+        setActiveJob(null);
+        setIsOnline(false);
+        setIsRestoringActiveTrip(false);
+      }, AUTH_CONTEXT_GAP_GRACE_MS);
+
+      return () => {
+        if (authLossResetTimerRef.current) {
+          clearTimeout(authLossResetTimerRef.current);
+          authLossResetTimerRef.current = null;
+        }
+      };
+    }
+
+    if (authLossResetTimerRef.current) {
+      clearTimeout(authLossResetTimerRef.current);
+      authLossResetTimerRef.current = null;
     }
 
     if (restoredForUserIdRef.current === currentUserId) {
@@ -150,6 +169,14 @@ export default function useDriverActiveTripRestore({
     setIsOnline,
     userType,
   ]);
+
+  useEffect(() => {
+    return () => {
+      if (authLossResetTimerRef.current) {
+        clearTimeout(authLossResetTimerRef.current);
+      }
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

@@ -50,6 +50,7 @@ export default function useDriverRequestsFeed({
   getAvailableRequests,
   hasActiveTrip,
   isOnline,
+  shouldSuppressRequest,
   setIncomingRequest,
   setIsMinimized,
   setShowAllRequests,
@@ -98,8 +99,11 @@ export default function useDriverRequestsFeed({
         const normalizedRequests = Array.isArray(requests) ? requests : [];
         const dedupedRequests = dedupeRequestsById(normalizedRequests);
         const poolScopedRequests = filterRequestsByPool(dedupedRequests, effectiveRequestPool);
+        const filteredRequests = typeof shouldSuppressRequest === 'function'
+          ? poolScopedRequests.filter((request) => !shouldSuppressRequest(request))
+          : poolScopedRequests;
 
-        setAvailableRequests(poolScopedRequests);
+        setAvailableRequests(filteredRequests);
 
         if (dedupedRequests.length !== normalizedRequests.length) {
           logger.warn('DriverRequestsFeed', 'Removed duplicate requests from feed payload', {
@@ -118,6 +122,15 @@ export default function useDriverRequestsFeed({
           });
         }
 
+        if (filteredRequests.length !== poolScopedRequests.length) {
+          logger.info('DriverRequestsFeed', 'Suppressed recently handled requests from feed payload', {
+            requestPool: effectiveRequestPool,
+            originalCount: poolScopedRequests.length,
+            filteredCount: filteredRequests.length,
+            suppressedCount: poolScopedRequests.length - filteredRequests.length,
+          });
+        }
+
         if (effectiveRequestPool === REQUEST_POOLS.SCHEDULED) {
           setShowIncomingModal(false);
           setIsMinimized(false);
@@ -126,7 +139,7 @@ export default function useDriverRequestsFeed({
           setShowAllRequests(false);
         }
         logger.info('DriverRequestsFeed', 'Loaded requests from backend', {
-          count: poolScopedRequests.length,
+          count: filteredRequests.length,
           requestPool: effectiveRequestPool,
         });
       } catch (loadError) {
@@ -146,6 +159,7 @@ export default function useDriverRequestsFeed({
       activeRequestPool,
       getAvailableRequests,
       hasActiveTrip,
+      shouldSuppressRequest,
       setIncomingRequest,
       setIsMinimized,
       setShowAllRequests,

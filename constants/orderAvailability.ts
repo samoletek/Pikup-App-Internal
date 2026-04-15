@@ -13,8 +13,6 @@ export const SUPPORTED_ORDER_COUNTRY_CODES = Object.freeze([
 ]);
 export const SUPPORTED_ORDER_COUNTRY_QUERY = SUPPORTED_ORDER_COUNTRY_CODES.join(",");
 
-export const DEFAULT_MANPOWER_SALES_TAX_RATE = 0.08;
-
 export const COMING_SOON_UNSUPPORTED_STATE_MESSAGE =
   "Pikup is currently available only in Georgia, USA. We are expanding to new areas soon.";
 

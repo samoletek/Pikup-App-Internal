@@ -20,6 +20,39 @@ const parseEnvNumber = (value, fallback, { min = null, max = null } = {}) => {
     return parsed;
 };
 
+const parseEnvNumberList = (
+  value,
+  fallback = [],
+  { min = null, max = null } = {}
+) => {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const parsed = value
+    .split(',')
+    .map((part) => Number(part.trim()))
+    .filter((number) => Number.isFinite(number))
+    .map((number) => Math.round(number))
+    .filter((number) => (
+      (typeof min !== 'number' || number >= min) &&
+      (typeof max !== 'number' || number <= max)
+    ));
+
+  if (parsed.length === 0) {
+    return fallback;
+  }
+
+  const deduped = [];
+  parsed.forEach((number) => {
+    if (!deduped.includes(number)) {
+      deduped.push(number);
+    }
+  });
+
+  return deduped.length > 0 ? deduped : fallback;
+};
+
 export const REQUEST_POOLS = Object.freeze({
     ALL: 'all',
     ASAP: 'asap',
@@ -28,22 +61,39 @@ export const REQUEST_POOLS = Object.freeze({
 
 export const DRIVER_REQUEST_POOL_FUNCTION = 'get-driver-request-pool';
 
+const DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES = Object.freeze([20, 40, 80, 100]);
+
+export const ASAP_DISPATCH_BATCH_RADII_MILES = Object.freeze(
+  parseEnvNumberList(
+    appConfig.dispatch.asapBatchRadiiMiles,
+    [...DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES],
+    { min: 1, max: 1000 }
+  )
+);
+
+export const ASAP_DISPATCH_BATCH_INTERVAL_SECONDS = parseEnvNumber(
+  appConfig.dispatch.asapBatchIntervalSeconds,
+  60,
+  { min: 15, max: 3600 }
+);
+
+export const DISPATCH_REQUEST_SEARCH_MAX_HOURS = parseEnvNumber(
+  appConfig.dispatch.requestSearchMaxHours,
+  10,
+  { min: 1, max: 24 * 30 }
+);
+
+const resolveAsapDispatchMaxDistanceMiles = () => (
+  ASAP_DISPATCH_BATCH_RADII_MILES[ASAP_DISPATCH_BATCH_RADII_MILES.length - 1] ||
+  DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES[
+    DEFAULT_ASAP_DISPATCH_BATCH_RADII_MILES.length - 1
+  ]
+);
+
 const MAX_REQUEST_DISTANCE_BY_POOL_MILES = Object.freeze({
-    [REQUEST_POOLS.ASAP]: parseEnvNumber(
-        appConfig.dispatch.maxDistanceAsapMiles,
-        15,
-        { min: 1, max: 500 }
-    ),
-    [REQUEST_POOLS.SCHEDULED]: parseEnvNumber(
-        appConfig.dispatch.maxDistanceScheduledMiles,
-        35,
-        { min: 1, max: 1000 }
-    ),
-    [REQUEST_POOLS.ALL]: parseEnvNumber(
-        appConfig.dispatch.maxDistanceScheduledMiles,
-        35,
-        { min: 1, max: 1000 }
-    ),
+    [REQUEST_POOLS.ASAP]: resolveAsapDispatchMaxDistanceMiles(),
+    [REQUEST_POOLS.SCHEDULED]: resolveAsapDispatchMaxDistanceMiles(),
+    [REQUEST_POOLS.ALL]: resolveAsapDispatchMaxDistanceMiles(),
 });
 
 const SCHEDULED_LOOKAHEAD_HOURS = parseEnvNumber(
@@ -212,13 +262,56 @@ const toTimestampOrInfinity = (value) => {
     return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 };
 
-const getRequestDistanceLimitMiles = (requestPool, scheduleType) => {
-    if (requestPool === REQUEST_POOLS.ASAP || requestPool === REQUEST_POOLS.SCHEDULED) {
-        return MAX_REQUEST_DISTANCE_BY_POOL_MILES[requestPool];
+const getTripSearchLifetimeLimitMs = () => DISPATCH_REQUEST_SEARCH_MAX_HOURS * 60 * 60 * 1000;
+
+const resolveTripCreatedAtMs = (trip = {}) => {
+  const candidates = [
+    trip?.createdAt,
+    trip?.created_at,
+    trip?.originalData?.createdAt,
+    trip?.originalData?.created_at,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = new Date(candidate || '').getTime();
+    if (Number.isFinite(parsed)) {
+      return parsed;
     }
-    return scheduleType === REQUEST_POOLS.SCHEDULED
-        ? MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED]
-        : MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP];
+  }
+
+  return Number.NaN;
+};
+
+export const getAsapDispatchWaveIndex = (trip = {}, nowDate = new Date()) => {
+  const createdAtMs = resolveTripCreatedAtMs(trip);
+  if (!Number.isFinite(createdAtMs)) {
+    return 0;
+  }
+
+  const elapsedMs = Math.max(0, nowDate.getTime() - createdAtMs);
+  const index = Math.floor(elapsedMs / (ASAP_DISPATCH_BATCH_INTERVAL_SECONDS * 1000));
+  return Math.min(Math.max(index, 0), ASAP_DISPATCH_BATCH_RADII_MILES.length - 1);
+};
+
+export const getAsapDispatchRadiusMiles = (trip = {}, nowDate = new Date()) => {
+  const waveIndex = getAsapDispatchWaveIndex(trip, nowDate);
+  return ASAP_DISPATCH_BATCH_RADII_MILES[waveIndex] || MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP];
+};
+
+const getRequestDistanceLimitMiles = ({
+  trip,
+  nowDate,
+}) => {
+  return getAsapDispatchRadiusMiles(trip, nowDate);
+};
+
+export const isTripOutsideSearchLifetime = (trip = {}, nowDate = new Date()) => {
+  const createdAtMs = resolveTripCreatedAtMs(trip);
+  if (!Number.isFinite(createdAtMs)) {
+    return false;
+  }
+
+  return (nowDate.getTime() - createdAtMs) > getTripSearchLifetimeLimitMs();
 };
 
 export const isTripOutsideScheduledWindow = (requirements, nowDate = new Date()) => {
@@ -239,9 +332,8 @@ export const isTripOutsideScheduledWindow = (requirements, nowDate = new Date())
 
 export const isTripOutsideDistanceWindow = ({
   trip,
-  requirements,
-  requestPool,
   driverLocation,
+  nowDate = new Date(),
 }) => {
     if (!hasValidCoordinatePair(driverLocation)) {
         return false;
@@ -253,7 +345,10 @@ export const isTripOutsideDistanceWindow = ({
         return false;
     }
 
-  const maxDistanceMiles = getRequestDistanceLimitMiles(requestPool, requirements?.scheduleType);
+  const maxDistanceMiles = getRequestDistanceLimitMiles({
+    trip,
+    nowDate,
+  });
   return distanceMiles > maxDistanceMiles;
 };
 

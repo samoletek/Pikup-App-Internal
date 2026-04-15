@@ -6,12 +6,53 @@ import {
   detectUserTypeForSession,
   fetchUserProfileByRole,
   getCurrentAuthSession,
+  refreshCurrentAuthSession,
   subscribeToAuthStateChanges,
 } from '../services/authSessionService';
 
 const isNoRowsError = (error) => error?.code === 'PGRST116';
 const SESSION_END_VERIFICATION_RETRY_DELAY_MS = 350;
 const waitFor = (timeoutMs) => new Promise((resolve) => setTimeout(resolve, timeoutMs));
+
+const isTransientSessionCheckError = (error) => {
+  if (!error) {
+    return false;
+  }
+
+  const statusCode = Number(error?.status || error?.context?.status || 0);
+  if ([408, 429, 500, 502, 503, 504].includes(statusCode)) {
+    return true;
+  }
+
+  const text = String(error?.message || error?.details || '').trim().toLowerCase();
+  return (
+    text.includes('network request failed') ||
+    text.includes('failed to fetch') ||
+    text.includes('fetch failed') ||
+    text.includes('timeout') ||
+    text.includes('timed out') ||
+    text.includes('request failed') ||
+    text.includes('gateway') ||
+    text.includes('temporarily unavailable') ||
+    text.includes('aborted')
+  );
+};
+
+const mapSessionToAuthUser = ({ session, detectedUserType, profileData = null }) => {
+  const metadata = session?.user?.user_metadata || {};
+  const baseUser = {
+    ...session.user,
+    id: session.user.id,
+    email: session.user.email,
+    first_name: metadata.firstName || metadata.first_name || '',
+    last_name: metadata.lastName || metadata.last_name || '',
+    phone_number: metadata.phoneNumber || metadata.phone_number || '',
+    accessToken: session.access_token,
+    user_type: detectedUserType,
+  };
+
+  return profileData ? { ...baseUser, ...profileData } : baseUser;
+};
 
 /**
  * Handles auth hydration and Supabase auth state subscription bootstrap.
@@ -53,6 +94,32 @@ export default function useAuthSessionBootstrap({
         }
 
         if (!latestSessionError) {
+          const { data: refreshedSessionData, error: refreshError } = await refreshCurrentAuthSession();
+          const refreshedSession = refreshedSessionData?.session || null;
+
+          if (refreshedSession?.user?.id) {
+            return {
+              ended: false,
+              userId: refreshedSession.user.id,
+              error: null,
+            };
+          }
+
+          if (refreshError) {
+            if (isTransientSessionCheckError(refreshError)) {
+              return {
+                ended: false,
+                userId: null,
+                error: refreshError,
+              };
+            }
+
+            logger.info('AuthContext', 'Session refresh check after auth event did not recover session', {
+              code: refreshError?.code || null,
+              message: refreshError?.message || null,
+            });
+          }
+
           return {
             ended: true,
             userId: null,
@@ -86,7 +153,6 @@ export default function useAuthSessionBootstrap({
           setCurrentUser(stored.user);
           setUserType(stored.userType);
           lastKnownUserTypeRef.current = stored.userType || null;
-          markInitialized();
           return true;
         }
 
@@ -100,11 +166,119 @@ export default function useAuthSessionBootstrap({
     hydrateFromStorage();
 
     authTimeout = setTimeout(() => {
-      if (mounted) {
-        logger.warn('AuthContext', 'Auth timeout - unblocking UI');
-        setIsInitializing(false);
-      }
+      void (async () => {
+        if (!mounted) {
+          return;
+        }
+
+        logger.warn('AuthContext', 'Auth timeout reached. Running final session check before unblocking UI');
+
+        try {
+          const { data: latestSessionData, error: latestSessionError } = await getCurrentAuthSession();
+          const latestSession = latestSessionData?.session || null;
+
+          if (latestSession?.user?.id) {
+            await resolveSessionReadyState(latestSession);
+            return;
+          }
+
+          const { data: refreshedSessionData, error: refreshError } = await refreshCurrentAuthSession();
+          const refreshedSession = refreshedSessionData?.session || null;
+
+          if (refreshedSession?.user?.id) {
+            await resolveSessionReadyState(refreshedSession);
+            return;
+          }
+
+          if (
+            isTransientSessionCheckError(latestSessionError) ||
+            isTransientSessionCheckError(refreshError)
+          ) {
+            logger.warn('AuthContext', 'Auth timeout session check hit transient error; preserving hydrated user state');
+            markInitialized();
+            return;
+          }
+
+          setCurrentUser(null);
+          setUserType(null);
+          lastKnownUserTypeRef.current = null;
+          markInitialized();
+        } catch (finalCheckError) {
+          logger.error('AuthContext', 'Final auth timeout session check failed', finalCheckError);
+          markInitialized();
+        }
+      })();
     }, 3000);
+
+    const resolveSessionReadyState = async (session) => {
+      if (!session) {
+        return;
+      }
+
+      const detectedUserType = await detectUserTypeForSession({
+        userId: session.user.id,
+        metadataUserType: session.user?.user_metadata?.user_type,
+        preferredUserType: lastKnownUserTypeRef.current,
+      });
+
+      let profileData = null;
+      try {
+        profileData = await fetchUserProfileByRole({
+          userId: session.user.id,
+          userType: detectedUserType,
+        });
+      } catch (profileError) {
+        if (!isNoRowsError(profileError)) {
+          logger.warn('AuthContext', 'Failed to fetch profile during auth bootstrap', profileError);
+        }
+      }
+
+      const fullUser = mapSessionToAuthUser({
+        session,
+        detectedUserType,
+        profileData,
+      });
+
+      setCurrentUser(fullUser);
+      setUserType(detectedUserType);
+      lastKnownUserTypeRef.current = detectedUserType;
+
+      void persistAuthUser({ user: fullUser, userType: detectedUserType }).catch((persistError) => {
+        logger.warn('AuthContext', 'Failed to persist auth snapshot', persistError);
+      });
+
+      markInitialized();
+    };
+
+    const resolveSessionEndedState = async ({ event, session }) => {
+      const sessionEndVerification = await verifySessionEnded();
+
+      if (!sessionEndVerification.ended) {
+        if (sessionEndVerification.userId) {
+          logger.warn('AuthContext', `Ignoring transient ${event} event while session is still active`, {
+            userId: sessionEndVerification.userId,
+          });
+        } else if (sessionEndVerification.error) {
+          logger.warn('AuthContext', `Ignoring ${event} due transient session verification error`, {
+            code: sessionEndVerification.error?.code || null,
+            message: sessionEndVerification.error?.message || String(sessionEndVerification.error),
+          });
+        } else {
+          logger.warn('AuthContext', `Ignoring ambiguous ${event} event while session verification is inconclusive`);
+        }
+        markInitialized();
+        return;
+      }
+
+      logger.warn('AuthContext', 'Auth session ended', {
+        event,
+        hadSession: Boolean(session),
+      });
+      setCurrentUser(null);
+      setUserType(null);
+      lastKnownUserTypeRef.current = null;
+      markInitialized();
+    };
 
     const unsubscribeAuth = subscribeToAuthStateChanges(async (event, session) => {
       if (!mounted) return;
@@ -122,93 +296,11 @@ export default function useAuthSessionBootstrap({
         }
 
         if (isSessionReadyEvent) {
-          if (!session) return;
-
-          const metadata = session.user.user_metadata || {};
-          const detectedUserType = await detectUserTypeForSession({
-            userId: session.user.id,
-            metadataUserType: metadata.user_type,
-            preferredUserType: lastKnownUserTypeRef.current,
-          });
-
-          const fullUser = {
-            ...session.user,
-            id: session.user.id,
-            email: session.user.email,
-            first_name: metadata.firstName || metadata.first_name || '',
-            last_name: metadata.lastName || metadata.last_name || '',
-            phone_number: metadata.phoneNumber || metadata.phone_number || '',
-            accessToken: session.access_token,
-            user_type: detectedUserType,
-          };
-
-          setCurrentUser(fullUser);
-          setUserType(detectedUserType);
-          lastKnownUserTypeRef.current = detectedUserType;
-          void persistAuthUser({ user: fullUser, userType: detectedUserType }).catch((persistError) => {
-            logger.warn('AuthContext', 'Failed to persist auth snapshot', persistError);
-          });
-          markInitialized();
-
-          fetchUserProfileByRole({ userId: session.user.id, userType: detectedUserType })
-            .then((data) => {
-              if (data && mounted) {
-                setCurrentUser((prev) => {
-                  const mergedUser = prev ? { ...prev, ...data } : data;
-                  void persistAuthUser({ user: mergedUser, userType: detectedUserType }).catch((persistError) => {
-                    logger.warn('AuthContext', 'Failed to persist merged auth profile', persistError);
-                  });
-                  return mergedUser;
-                });
-              }
-            })
-            .catch((error) => {
-              if (isNoRowsError(error)) {
-                logger.info('AuthContext', 'Profile row is not created yet during auth state change', {
-                  userId: session.user.id,
-                  userType: detectedUserType,
-                });
-                return;
-              }
-              logger.warn('AuthContext', 'Failed to fetch profile during auth state change', error);
-            });
+          await resolveSessionReadyState(session);
         } else if (event === 'SIGNED_OUT') {
-          const sessionEndVerification = await verifySessionEnded();
-
-          if (!sessionEndVerification.ended) {
-            if (sessionEndVerification.userId) {
-              logger.warn('AuthContext', 'Ignoring transient SIGNED_OUT event while session is still active', {
-                userId: sessionEndVerification.userId,
-              });
-            } else if (sessionEndVerification.error) {
-              logger.warn('AuthContext', 'Ignoring SIGNED_OUT due transient session verification error', {
-                code: sessionEndVerification.error?.code || null,
-                message: sessionEndVerification.error?.message || String(sessionEndVerification.error),
-              });
-            } else {
-              logger.warn('AuthContext', 'Ignoring ambiguous SIGNED_OUT event while session verification is inconclusive');
-            }
-            markInitialized();
-            return;
-          }
-
-          logger.warn('AuthContext', 'Auth session ended', {
-            event,
-            hadSession: Boolean(session),
-          });
-          setCurrentUser(null);
-          setUserType(null);
-          lastKnownUserTypeRef.current = null;
-          markInitialized();
+          await resolveSessionEndedState({ event, session });
         } else if (event === 'INITIAL_SESSION' && !session) {
-          logger.warn('AuthContext', 'Auth session ended', {
-            event,
-            hadSession: Boolean(session),
-          });
-          setCurrentUser(null);
-          setUserType(null);
-          lastKnownUserTypeRef.current = null;
-          markInitialized();
+          await resolveSessionEndedState({ event, session });
         }
       } catch (error) {
         logger.error('AuthContext', 'Error in auth state change', error);

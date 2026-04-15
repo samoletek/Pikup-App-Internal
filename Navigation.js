@@ -1,9 +1,9 @@
 import React from "react";
-import { View, Image, StyleSheet } from "react-native";
+import { View, Image, StyleSheet, ActivityIndicator, Text } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "./contexts/AuthContext";
 import { logger } from "./services/logger";
-import { colors } from "./styles/theme";
+import { colors, spacing } from "./styles/theme";
 import { stackScreenOptions } from "./navigation/navigationTheme";
 
 // Shared screens
@@ -106,8 +106,16 @@ const DriverStack = () => (
     {/* Trip Execution Flow */}
     <Stack.Screen name="RouteConfirmationScreen" component={RouteConfirmationScreen} />
     <Stack.Screen name="EnRouteToPickupScreen" component={EnRouteToPickupScreen} />
-    <Stack.Screen name="PickupConfirmationScreen" component={PickupConfirmationScreen} />
-    <Stack.Screen name="DeliveryConfirmationScreen" component={DeliveryConfirmationScreen} />
+    <Stack.Screen
+      name="PickupConfirmationScreen"
+      component={PickupConfirmationScreen}
+      options={{ gestureEnabled: false }}
+    />
+    <Stack.Screen
+      name="DeliveryConfirmationScreen"
+      component={DeliveryConfirmationScreen}
+      options={{ gestureEnabled: false }}
+    />
     <Stack.Screen name="DriverRequestDetailsScreen" component={DriverRequestDetailsScreen} />
     <Stack.Screen name="DriverRecentTripsScreen" component={DriverRecentTripsScreen} />
 
@@ -134,6 +142,10 @@ export default function Navigation() {
     return (
       <View style={styles.loadingContainer}>
         <Image source={require("./assets/pikup-logo.png")} style={styles.loadingLogo} />
+        <View style={styles.loadingIndicatorRow}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={styles.loadingLabel}>Loading your account...</Text>
+        </View>
       </View>
     );
   }
@@ -162,5 +174,15 @@ const styles = StyleSheet.create({
     width: "80%",
     height: 250,
     resizeMode: "contain",
+  },
+  loadingIndicatorRow: {
+    marginTop: spacing.base,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+  },
+  loadingLabel: {
+    color: colors.text.secondary,
+    fontSize: 14,
   },
 });

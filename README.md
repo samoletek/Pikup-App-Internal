@@ -39,7 +39,7 @@ See [CHECKLIST.md](./CHECKLIST.md) for detailed task breakdown.
 7. **Gamification** - weekly milestones and bonuses
 
 ### Key Algorithms
-- **Order Matching:** Find drivers within 5-10 miles, prioritize by preferences and experience
+- **Order Matching:** Wave-based radius expansion (`20→40→80→100` miles), 3-minute per-driver offer TTL, preference-aware filtering
 - **Dynamic Pricing:** Based on distance, item type, time, and demand
 - **Insurance Logic:** Auto-apply to new items only, require receipt verification
 
@@ -116,8 +116,13 @@ REDKIK_CLIENT_ID=your-redkik-client-id
 REDKIK_CLIENT_SECRET=your-redkik-client-secret
 
 # Optional: Dispatch tuning (driver request pool)
-EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES=15
-EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES=35
+# Wave expansion for pending requests (ASAP + Scheduled)
+EXPO_PUBLIC_DISPATCH_ASAP_BATCH_RADII_MILES=20,40,80,100
+EXPO_PUBLIC_DISPATCH_ASAP_BATCH_INTERVAL_SECONDS=60
+EXPO_PUBLIC_DISPATCH_REQUEST_OFFER_TTL_SECONDS=180
+EXPO_PUBLIC_DISPATCH_REQUEST_SEARCH_MAX_HOURS=10
+
+# Additional scheduled constraints
 EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS=72
 EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES=5
 ```

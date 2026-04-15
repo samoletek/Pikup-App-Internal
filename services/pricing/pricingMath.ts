@@ -90,7 +90,6 @@ export const resolveSplitBaseAmount = (pricing: Record<string, any> = {}): numbe
   }
 
   const total = toFiniteAmount(pricing.total ?? pricing.price, 0)
-  const tax = toFiniteAmount(pricing.tax, 0)
   const insuranceAmount = toFiniteAmount(
     pricing.mandatoryInsurance ?? pricing.insurancePremium ?? pricing.insurance_premium,
     0,
@@ -102,7 +101,7 @@ export const resolveSplitBaseAmount = (pricing: Record<string, any> = {}): numbe
     return roundPricingAmount(
       Math.max(
         0,
-        total - tax - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0),
+        total - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0),
       ),
     )
   }
@@ -119,20 +118,20 @@ export const refreshPricingSnapshot = (
     ...pricing,
   })
   const splitBaseAmount = resolveSplitBaseAmount(pricing)
-  const tax = roundPricingAmount(toFiniteAmount(pricing.tax, 0))
   const mandatoryInsurance = roundPricingAmount(
     toFiniteAmount(pricing.mandatoryInsurance, 0),
   )
+  const { tax: _tax, taxRate: _taxRate, taxableLaborAmount: _taxableLaborAmount, ...pricingWithoutTax } = pricing
   const platformShare = roundPricingAmount(
     splitBaseAmount * percentages.platformSharePercent,
   )
   const driverPayout = roundPricingAmount(
     splitBaseAmount * percentages.driverPayoutPercent,
   )
-  const total = roundPricingAmount(splitBaseAmount + tax + mandatoryInsurance)
+  const total = roundPricingAmount(splitBaseAmount + mandatoryInsurance)
 
   return {
-    ...pricing,
+    ...pricingWithoutTax,
     splitBaseAmount,
     fareAfterSurge: splitBaseAmount,
     serviceFee: platformShare,
@@ -141,7 +140,7 @@ export const refreshPricingSnapshot = (
     driverPayout,
     driverPayoutPercent: percentages.driverPayoutPercent,
     platformSharePercent: percentages.platformSharePercent,
-    platformRetainedTotal: roundPricingAmount(platformShare + mandatoryInsurance + tax),
+    platformRetainedTotal: roundPricingAmount(platformShare + mandatoryInsurance),
     total,
   }
 }
@@ -198,9 +197,6 @@ export const recalculatePricingWithLabor = (
   const surgeFee = roundPricingAmount(
     peakSurcharge + trafficSurcharge + weatherSurcharge,
   )
-  const taxRate = toFiniteAmount(pricing.taxRate, 0)
-  const taxableLaborAmount = laborFee > 0 ? laborFee : 0
-  const tax = roundPricingAmount(taxableLaborAmount * taxRate)
 
   return refreshPricingSnapshot(
     {
@@ -215,8 +211,6 @@ export const recalculatePricingWithLabor = (
       laborFee,
       laborMinutes: normalizedLaborMinutes,
       laborBillableMinutes: billableMinutes,
-      taxableLaborAmount,
-      tax,
       splitBaseAmount: roundPricingAmount(grossFare + surgeFee),
       fareAfterSurge: roundPricingAmount(grossFare + surgeFee),
     },

@@ -21,6 +21,9 @@ import {
   showOpenLocationSettingsAlert,
 } from '../utils/locationPermissions';
 
+const READINESS_RETRY_DELAY_MS = 400;
+const waitFor = (timeoutMs) => new Promise((resolve) => setTimeout(resolve, timeoutMs));
+
 export default function useDriverAvailabilityActions({
   currentUser,
   currentUserId,
@@ -108,9 +111,35 @@ export default function useDriverAvailabilityActions({
     try {
       setLoading(true);
 
-      const { ready, issues } = await checkDriverReadiness();
+      const initialReadiness = await checkDriverReadiness();
+      const initialIssues = Array.isArray(initialReadiness?.issues) ? initialReadiness.issues : [];
+      const shouldRetryReadiness = !initialReadiness?.ready && initialIssues.includes('Could not load profile');
+      const finalReadiness = shouldRetryReadiness
+        ? await (async () => {
+          await waitFor(READINESS_RETRY_DELAY_MS);
+          return checkDriverReadiness();
+        })()
+        : initialReadiness;
+      const ready = Boolean(finalReadiness?.ready);
+      const issues = Array.isArray(finalReadiness?.issues) ? finalReadiness.issues : [];
       if (!ready) {
         setLoading(false);
+
+        if (issues.includes('Not authenticated')) {
+          Alert.alert(
+            'Session Required',
+            'Your session is not ready. Please sign in again and retry.'
+          );
+          return;
+        }
+
+        if (issues.includes('Could not load profile')) {
+          Alert.alert(
+            'Account Check Pending',
+            'We could not load your driver checks right now. Please try going online again in a moment.'
+          );
+          return;
+        }
 
         if (issues.includes('phone')) {
           Alert.alert(

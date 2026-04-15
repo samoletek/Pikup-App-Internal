@@ -111,10 +111,15 @@ describe('CustomerOrderSubmissionService', () => {
     expect(dependencies.confirmPayment).not.toHaveBeenCalled();
     expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        pricing: expect.objectContaining({ total: 17 }),
+        pricing: expect.objectContaining({
+          total: 17,
+          mandatoryInsurance: 0,
+          insuranceApplied: false,
+        }),
         insurance: expect.objectContaining({
           status: 'amendments_blocked',
           quoteId: 'offer_blocked',
+          premium: null,
         }),
         selectedPaymentMethodId: 'pm_test_123',
       })
@@ -150,11 +155,93 @@ describe('CustomerOrderSubmissionService', () => {
     expect(dependencies.confirmPayment).not.toHaveBeenCalled();
     expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
       expect.objectContaining({
+        pricing: expect.objectContaining({
+          mandatoryInsurance: 0,
+          insuranceApplied: false,
+        }),
         insurance: expect.objectContaining({
           status: 'purchase_failed',
           quoteId: 'offer_retry',
+          premium: null,
         }),
         selectedPaymentMethodId: 'pm_test_123',
+      })
+    );
+  });
+
+  test('blocks insured order submission when offerId is missing', async () => {
+    const orderData = createBaseOrderData({
+      insuranceQuote: null,
+      items: [
+        {
+          id: 'item_1',
+          name: 'TV',
+          condition: 'new',
+          hasInsurance: true,
+          value: '750',
+          photos: ['https://cdn.example.com/tv.jpg'],
+          invoicePhoto: 'https://cdn.example.com/tv-invoice.jpg',
+        },
+      ],
+    });
+    const dependencies = createDependencies();
+
+    const result = await submitCustomerOrder({
+      orderData,
+      ...dependencies,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Insurance quote is still loading. Please wait a moment and try again.');
+    expect(dependencies.createPickupRequest).not.toHaveBeenCalled();
+    expect(dependencies.purchaseInsurance).not.toHaveBeenCalled();
+  });
+
+  test('creates insured-item order without insurance when customer explicitly opts in', async () => {
+    const orderData = createBaseOrderData({
+      pricing: {
+        total: 16.75,
+        distance: 4.4,
+        mandatoryInsurance: 0,
+        insuranceApplied: false,
+      },
+      insuranceQuote: null,
+      insuranceQuoteFallbackOptIn: true,
+      items: [
+        {
+          id: 'item_1',
+          name: 'Monitor',
+          condition: 'new',
+          hasInsurance: true,
+          value: '520',
+          photos: ['https://cdn.example.com/monitor.jpg'],
+          invoicePhoto: 'https://cdn.example.com/monitor-invoice.jpg',
+        },
+      ],
+    });
+    const dependencies = createDependencies();
+
+    const result = await submitCustomerOrder({
+      orderData,
+      ...dependencies,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.notices).toEqual([]);
+    expect(dependencies.purchaseInsurance).not.toHaveBeenCalled();
+    expect(dependencies.createPickupRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pricing: expect.objectContaining({
+          total: 16.75,
+          mandatoryInsurance: 0,
+          insuranceApplied: false,
+        }),
+        insurance: expect.objectContaining({
+          status: 'quote_unavailable_opt_in',
+          bookingId: null,
+          quoteId: null,
+          premium: null,
+        }),
       })
     );
   });

@@ -222,10 +222,6 @@ export default function OrderSummaryScreen({ navigation, route }) {
                 <Text style={styles.priceLabel}>Mileage</Text>
                 <Text style={styles.priceValue}>${pricing.mileageFee.toFixed(2)}</Text>
               </View>
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>Tax</Text>
-                <Text style={styles.priceValue}>${pricing.tax.toFixed(2)}</Text>
-              </View>
               {pricing.insurance > 0 && (
                 <View style={styles.priceRow}>
                   <Text style={styles.priceLabel}>Insurance</Text>

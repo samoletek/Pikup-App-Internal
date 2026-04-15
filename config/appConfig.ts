@@ -116,6 +116,10 @@ export const appConfig = {
   dispatch: {
     maxDistanceAsapMiles: readEnv("EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_ASAP_MILES", "15"),
     maxDistanceScheduledMiles: readEnv("EXPO_PUBLIC_DISPATCH_MAX_DISTANCE_SCHEDULED_MILES", "35"),
+    asapBatchRadiiMiles: readEnv("EXPO_PUBLIC_DISPATCH_ASAP_BATCH_RADII_MILES", "20,40,80,100"),
+    asapBatchIntervalSeconds: readEnv("EXPO_PUBLIC_DISPATCH_ASAP_BATCH_INTERVAL_SECONDS", "60"),
+    requestOfferTtlSeconds: readEnv("EXPO_PUBLIC_DISPATCH_REQUEST_OFFER_TTL_SECONDS", "180"),
+    requestSearchMaxHours: readEnv("EXPO_PUBLIC_DISPATCH_REQUEST_SEARCH_MAX_HOURS", "10"),
     scheduledLookaheadHours: readEnv("EXPO_PUBLIC_DISPATCH_SCHEDULED_LOOKAHEAD_HOURS", "72"),
     scheduledPastGraceMinutes: readEnv("EXPO_PUBLIC_DISPATCH_SCHEDULED_PAST_GRACE_MINUTES", "5"),
     overlapMinDurationMinutes: readEnv("EXPO_PUBLIC_DISPATCH_OVERLAP_MIN_DURATION_MINUTES", "25"),

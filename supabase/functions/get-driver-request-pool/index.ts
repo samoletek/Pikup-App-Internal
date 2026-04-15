@@ -1,14 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import {
+  ASAP_DISPATCH_BATCH_INTERVAL_SECONDS,
+  ASAP_DISPATCH_BATCH_RADII_MILES,
   corsHeaders,
+  DISPATCH_REQUEST_SEARCH_MAX_HOURS,
   DRIVER_REQUEST_OFFER_TTL_SECONDS,
   DRIVER_PREFERENCE_FILTER_SELECT_COLUMNS,
   extractDriverPreferencesFromDriverRow,
   evaluateTripForDriverPreferences,
   hasTripScheduleConflict,
-  isScheduledDispatchTrip,
   isTripOutsideDistanceWindow,
+  isTripOutsideSearchLifetime,
   isTripOutsideScheduledWindow,
   jsonResponse,
   mapTripFromDb,
@@ -76,7 +79,6 @@ const resolveSplitBaseAmount = (pricing: AnyRecord): number => {
   }
 
   const totalAmount = toAmount(pricing?.total)
-  const taxAmount = toAmount(pricing?.tax)
   const insuranceAmount = toAmount(pricing?.mandatoryInsurance)
   const platformShare = toAmount(pricing?.platformShare ?? pricing?.serviceFee)
   const serviceFeeIncludedInTotal = pricing?.serviceFeeIncludedInTotal !== false
@@ -85,7 +87,7 @@ const resolveSplitBaseAmount = (pricing: AnyRecord): number => {
     return round2(
       Math.max(
         0,
-        totalAmount - taxAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0)
+        totalAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0)
       )
     )
   }
@@ -354,6 +356,7 @@ serve(async (req: Request) => {
           returnedCount: 0,
           filteredByPool: 0,
           filteredByDistance: 0,
+          filteredBySearchLifetime: 0,
           filteredByTimeWindow: 0,
           filteredByPreference: 0,
           filteredByOfferDeclined: 0,
@@ -366,6 +369,9 @@ serve(async (req: Request) => {
           supportedOrderStateCodes: SUPPORTED_ORDER_STATE_CODES,
           dispatchPolicy: {
             asapMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP],
+            asapBatchRadiiMiles: ASAP_DISPATCH_BATCH_RADII_MILES,
+            asapBatchIntervalSeconds: ASAP_DISPATCH_BATCH_INTERVAL_SECONDS,
+            requestSearchMaxHours: DISPATCH_REQUEST_SEARCH_MAX_HOURS,
             scheduledMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED],
             scheduledLookaheadHours: SCHEDULED_LOOKAHEAD_HOURS,
             scheduledPastGraceMinutes: SCHEDULED_PAST_GRACE_MINUTES,
@@ -403,10 +409,14 @@ serve(async (req: Request) => {
     const acceptedDriverTrips = (acceptedDriverTripRows || [])
       .map((row: AnyRecord) => mapTripFromDb(row as AnyRecord))
 
+    const now = new Date()
+    const nowIso = now.toISOString()
+    const nowMs = now.getTime()
     const hiddenReasonCounts: Record<string, number> = {}
     const filteredTrips: AnyRecord[] = []
     let filteredByPool = 0
     let filteredByDistance = 0
+    let filteredBySearchLifetime = 0
     let filteredByTimeWindow = 0
     let filteredByPreference = 0
     let filteredByScheduleConflict = 0
@@ -422,6 +432,11 @@ serve(async (req: Request) => {
       const stateCoverage = isTripWithinSupportedStates(normalizedTrip, SUPPORTED_ORDER_STATE_CODES)
       if (!stateCoverage.supported) {
         filteredByState += 1
+        return
+      }
+
+      if (isTripOutsideSearchLifetime(normalizedTrip, now)) {
+        filteredBySearchLifetime += 1
         return
       }
 
@@ -452,8 +467,6 @@ serve(async (req: Request) => {
       if (
         isTripOutsideDistanceWindow({
           trip: normalizedTrip,
-          requirements: normalizedRequirements,
-          requestPool,
           driverLocation,
         })
       ) {
@@ -519,9 +532,6 @@ serve(async (req: Request) => {
       })
     }
 
-    const now = new Date()
-    const nowIso = now.toISOString()
-    const nowMs = now.getTime()
     const lifecycleFilteredTrips: AnyRecord[] = []
     const tripIdsToExpire: string[] = []
     const newOfferRows: AnyRecord[] = []
@@ -531,10 +541,7 @@ serve(async (req: Request) => {
     filteredTrips.forEach((trip) => {
       const tripId = String(trip.id || "").trim()
       if (!tripId) return
-      const isScheduledTrip = isScheduledDispatchTrip(trip)
-      const nextExpiresAt = isScheduledTrip
-        ? null
-        : new Date(nowMs + DRIVER_REQUEST_OFFER_TTL_SECONDS * 1000).toISOString()
+      const nextExpiresAt = new Date(nowMs + DRIVER_REQUEST_OFFER_TTL_SECONDS * 1000).toISOString()
 
       const existingOffer = existingOffersByTripId.get(tripId)
       if (!existingOffer) {
@@ -555,7 +562,7 @@ serve(async (req: Request) => {
             status: OFFER_STATUSES.OFFERED,
             expiresAt: nextExpiresAt,
             offeredAt: nowIso,
-            ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
+            ttlSeconds: DRIVER_REQUEST_OFFER_TTL_SECONDS,
           },
         })
         return
@@ -567,26 +574,7 @@ serve(async (req: Request) => {
         return
       }
       if (offerStatus === OFFER_STATUSES.EXPIRED) {
-        newOfferRows.push({
-          trip_id: tripId,
-          driver_id: user.id,
-          request_pool: requestPool,
-          status: OFFER_STATUSES.OFFERED,
-          offered_at: nowIso,
-          expires_at: nextExpiresAt,
-          responded_at: null,
-          response_source: "offer_reissued_after_expired",
-          updated_at: nowIso,
-        })
-        lifecycleFilteredTrips.push({
-          ...trip,
-          dispatchOffer: {
-            status: OFFER_STATUSES.OFFERED,
-            offeredAt: nowIso,
-            expiresAt: nextExpiresAt,
-            ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
-          },
-        })
+        filteredByOfferExpired += 1
         return
       }
       if (offerStatus === OFFER_STATUSES.ACCEPTED) {
@@ -594,33 +582,25 @@ serve(async (req: Request) => {
         return
       }
 
+      const offeredAtMs = existingOffer?.offered_at
+        ? new Date(existingOffer.offered_at as string | number).getTime()
+        : Number.NaN
       const offerExpiresAt = existingOffer.expires_at
-      const offerExpiresAtMs = offerExpiresAt ? new Date(offerExpiresAt as string | number).getTime() : Number.NaN
-      const hasExpired =
-        !isScheduledTrip && Number.isFinite(offerExpiresAtMs) && offerExpiresAtMs <= nowMs
+      const offerExpiresAtMs = offerExpiresAt
+        ? new Date(offerExpiresAt as string | number).getTime()
+        : Number.NaN
+      const effectiveExpiresAtMs = Number.isFinite(offerExpiresAtMs)
+        ? offerExpiresAtMs
+        : (
+            Number.isFinite(offeredAtMs)
+              ? offeredAtMs + DRIVER_REQUEST_OFFER_TTL_SECONDS * 1000
+              : Number.NaN
+          )
+      const hasExpired = Number.isFinite(effectiveExpiresAtMs) && effectiveExpiresAtMs <= nowMs
 
       if (hasExpired) {
         tripIdsToExpire.push(tripId)
-        newOfferRows.push({
-          trip_id: tripId,
-          driver_id: user.id,
-          request_pool: requestPool,
-          status: OFFER_STATUSES.OFFERED,
-          offered_at: nowIso,
-          expires_at: nextExpiresAt,
-          responded_at: null,
-          response_source: "offer_reissued_after_ttl",
-          updated_at: nowIso,
-        })
-        lifecycleFilteredTrips.push({
-          ...trip,
-          dispatchOffer: {
-            status: OFFER_STATUSES.OFFERED,
-            offeredAt: nowIso,
-            expiresAt: nextExpiresAt,
-            ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
-          },
-        })
+        filteredByOfferExpired += 1
         return
       }
 
@@ -629,8 +609,10 @@ serve(async (req: Request) => {
         dispatchOffer: {
           status: OFFER_STATUSES.OFFERED,
           offeredAt: existingOffer.offered_at || nowIso,
-          expiresAt: isScheduledTrip ? null : offerExpiresAt || nextExpiresAt,
-          ttlSeconds: isScheduledTrip ? null : DRIVER_REQUEST_OFFER_TTL_SECONDS,
+          expiresAt: Number.isFinite(effectiveExpiresAtMs)
+            ? new Date(effectiveExpiresAtMs).toISOString()
+            : nextExpiresAt,
+          ttlSeconds: DRIVER_REQUEST_OFFER_TTL_SECONDS,
         },
       })
     })
@@ -756,6 +738,7 @@ serve(async (req: Request) => {
         returnedCount: requests.length,
         filteredByPool,
         filteredByDistance,
+        filteredBySearchLifetime,
         filteredByTimeWindow,
         filteredByPreference,
         filteredByScheduleConflict,
@@ -768,6 +751,9 @@ serve(async (req: Request) => {
         supportedOrderStateCodes: SUPPORTED_ORDER_STATE_CODES,
         dispatchPolicy: {
           asapMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.ASAP],
+          asapBatchRadiiMiles: ASAP_DISPATCH_BATCH_RADII_MILES,
+          asapBatchIntervalSeconds: ASAP_DISPATCH_BATCH_INTERVAL_SECONDS,
+          requestSearchMaxHours: DISPATCH_REQUEST_SEARCH_MAX_HOURS,
           scheduledMaxDistanceMiles: MAX_REQUEST_DISTANCE_BY_POOL_MILES[REQUEST_POOLS.SCHEDULED],
           scheduledLookaheadHours: SCHEDULED_LOOKAHEAD_HOURS,
           scheduledPastGraceMinutes: SCHEDULED_PAST_GRACE_MINUTES,

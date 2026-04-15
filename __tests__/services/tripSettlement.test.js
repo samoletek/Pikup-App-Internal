@@ -14,7 +14,6 @@ describe('tripSettlement', () => {
           baseFare: 20,
           mileageFee: 30,
           laborFee: 20,
-          tax: 0,
           peakMultiplier: 1.5,
           peakSurcharge: 10,
           trafficMultiplier: 1.3,
@@ -44,7 +43,6 @@ describe('tripSettlement', () => {
         pricing: {
           total: 50,
           splitBaseAmount: 40,
-          tax: 0,
           mandatoryInsurance: 10,
           driverPayoutPercent: 0.75,
           platformSharePercent: 0.25,

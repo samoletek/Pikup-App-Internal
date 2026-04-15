@@ -14,10 +14,45 @@ import { resolveFinalPricing } from './utils/finalPricingResolver';
 import useConfirmCountdown from './useConfirmCountdown';
 
 const COUNTDOWN_SECONDS = 5;
+const QUOTE_MAX_AGE_MS = 10 * 60 * 1000;
 const createVehicleFitGateDefaults = () => ({
   requestFingerprint: null,
   requestToken: null,
 });
+
+const confirmProceedWithoutInsurance = () => (
+  new Promise((resolve) => {
+    let resolved = false;
+    const settle = (value) => {
+      if (resolved) {
+        return;
+      }
+      resolved = true;
+      resolve(value);
+    };
+
+    Alert.alert(
+      'Insurance Unavailable',
+      'Due to a technical issue, we could not apply insurance to this trip. Do you want to create the trip without insurance?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => settle(false),
+        },
+        {
+          text: 'Create Without Insurance',
+          style: 'destructive',
+          onPress: () => settle(true),
+        },
+      ],
+      {
+        cancelable: true,
+        onDismiss: () => settle(false),
+      }
+    );
+  })
+);
 
 function getInsuredItems(items = []) {
   return (items || []).filter(
@@ -73,6 +108,15 @@ export default function useOrderCheckoutFlow({
       (aiRecommendation.status === 'success' && !selectedVehicleFitsExactly)
     )
   );
+  const clearInsuranceQuote = useCallback(() => {
+    quoteRequestIdRef.current += 1;
+    setInsuranceQuote(null);
+    setInsuranceLoading(false);
+    setInsuranceError(false);
+  }, []);
+  const isQuoteStale = useCallback((quote) => (
+    Boolean(quote?.fetchedAt && Date.now() - quote.fetchedAt > QUOTE_MAX_AGE_MS)
+  ), []);
 
   useEffect(() => {
     if (!vehicleFitGate.requestToken || !gateMatchesCurrentAi) {
@@ -134,11 +178,14 @@ export default function useOrderCheckoutFlow({
     });
   }, [orderData]);
 
-  const fetchInsuranceQuote = useCallback(async (insuredItems) => {
+  const fetchInsuranceQuote = useCallback(async (insuredItems, options = {}) => {
+    const { resetQuote = true } = options;
     const requestId = ++quoteRequestIdRef.current;
     setInsuranceLoading(true);
     setInsuranceError(false);
-    setInsuranceQuote(null);
+    if (resetQuote) {
+      setInsuranceQuote(null);
+    }
 
     try {
       const quote = await RedkikService.getQuote({
@@ -152,22 +199,27 @@ export default function useOrderCheckoutFlow({
       });
 
       if (quoteRequestIdRef.current !== requestId) {
-        return;
+        return null;
       }
 
-      setInsuranceQuote(quote ? { ...quote, fetchedAt: Date.now() } : null);
+      const nextQuote = quote ? { ...quote, fetchedAt: Date.now() } : null;
+      setInsuranceQuote(nextQuote);
       setInsuranceLoading(false);
       if (!quote) {
         setInsuranceError(true);
       }
+      return nextQuote;
     } catch (_error) {
       if (quoteRequestIdRef.current !== requestId) {
-        return;
+        return null;
       }
 
-      setInsuranceQuote(null);
+      if (resetQuote) {
+        setInsuranceQuote(null);
+      }
       setInsuranceLoading(false);
       setInsuranceError(true);
+      return null;
     }
   }, [customerEmail, customerName, orderData]);
 
@@ -285,30 +337,61 @@ export default function useOrderCheckoutFlow({
       return;
     }
 
+    const insuredItems = getInsuredItems(orderData.items);
+    const hasInsuredItems = insuredItems.length > 0;
+
     if (currentStep === 2) {
       const itemsSnapshot = [...orderData.items];
       triggerVehicleRecommendation(itemsSnapshot);
+      if (hasInsuredItems) {
+        void fetchInsuranceQuote(insuredItems, { resetQuote: !insuranceQuote?.offerId });
+      } else {
+        clearInsuranceQuote();
+      }
       goToStep(currentStep + 1, 'forward');
       return;
     }
 
     if (currentStep < 6) {
+      if (hasInsuredItems && currentStep >= 3 && currentStep <= 4 && (!insuranceQuote?.offerId || insuranceError)) {
+        void fetchInsuranceQuote(insuredItems, { resetQuote: !insuranceQuote?.offerId });
+      }
+
       if (currentStep === 5) {
         calculatePricing().then((pricing) => setPreviewPricing(pricing));
 
-        const insuredItems = getInsuredItems(orderData.items);
-        if (insuredItems.length > 0) {
-          await fetchInsuranceQuote(insuredItems);
+        if (hasInsuredItems) {
+          const quoteMissing = !insuranceQuote?.offerId;
+          const quoteExpired = isQuoteStale(insuranceQuote);
+          if (quoteMissing || quoteExpired || insuranceError) {
+            await fetchInsuranceQuote(insuredItems, { resetQuote: quoteMissing });
+          }
         } else {
-          quoteRequestIdRef.current += 1;
-          setInsuranceQuote(null);
-          setInsuranceLoading(false);
-          setInsuranceError(false);
+          clearInsuranceQuote();
         }
       }
 
       goToStep(currentStep + 1, 'forward');
       return;
+    }
+
+    let effectiveInsuranceQuote = insuranceQuote;
+    let proceedWithoutInsurance = false;
+
+    if (hasInsuredItems && (!insuranceQuote?.offerId || insuranceError)) {
+      const recoveredQuote = await fetchInsuranceQuote(insuredItems, {
+        resetQuote: !insuranceQuote?.offerId,
+      });
+      if (!recoveredQuote?.offerId) {
+        const allowUninsuredTrip = await confirmProceedWithoutInsurance();
+        if (!allowUninsuredTrip) {
+          return;
+        }
+        proceedWithoutInsurance = true;
+        effectiveInsuranceQuote = null;
+      } else {
+        effectiveInsuranceQuote = recoveredQuote;
+      }
     }
 
     const selectedPaymentMethod =
@@ -318,7 +401,7 @@ export default function useOrderCheckoutFlow({
       calculatePricing,
       customerEmail,
       customerName,
-      insuranceQuote,
+      insuranceQuote: effectiveInsuranceQuote,
       laborAdjustment,
       orderData,
       previewPricing,
@@ -326,12 +409,29 @@ export default function useOrderCheckoutFlow({
       getInsuredItems,
     });
 
+    const effectiveFinalPricing = proceedWithoutInsurance && finalPricing
+      ? refreshPricingSnapshot({
+        ...finalPricing,
+        mandatoryInsurance: 0,
+        insuranceApplied: false,
+      })
+      : finalPricing;
+
     const finalOrder = {
       ...orderData,
-      pricing: finalPricing,
+      pricing: effectiveFinalPricing,
       selectedPaymentMethod,
-      insuranceQuote: activeInsuranceQuote,
+      insuranceQuote: proceedWithoutInsurance ? null : activeInsuranceQuote,
+      insuranceQuoteFallbackOptIn: proceedWithoutInsurance,
     };
+
+    if (hasInsuredItems && !proceedWithoutInsurance && !finalOrder.insuranceQuote?.offerId) {
+      Alert.alert(
+        'Insurance Quote Required',
+        'Insurance is selected for at least one item. Please wait until the quote is ready.'
+      );
+      return;
+    }
 
     const wasCancelled = await startCountdown(COUNTDOWN_SECONDS);
 
@@ -358,9 +458,11 @@ export default function useOrderCheckoutFlow({
     fetchInsuranceQuote,
     goToStep,
     isSubmitting,
+    isQuoteStale,
     onConfirm,
     orderData,
     paymentMethods,
+    clearInsuranceQuote,
     insuranceQuote,
     laborAdjustment,
     customerEmail,
@@ -374,16 +476,13 @@ export default function useOrderCheckoutFlow({
   ]);
 
   const resetCheckoutState = useCallback(() => {
-    quoteRequestIdRef.current += 1;
+    clearInsuranceQuote();
     resetCountdown();
     setIsSubmitting(false);
     setPreviewPricing(null);
-    setInsuranceQuote(null);
-    setInsuranceLoading(false);
-    setInsuranceError(false);
     setLaborAdjustment(null);
     setVehicleFitGate(createVehicleFitGateDefaults());
-  }, [resetCountdown]);
+  }, [clearInsuranceQuote, resetCountdown]);
 
   return {
     isSubmitting,

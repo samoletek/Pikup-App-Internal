@@ -57,7 +57,6 @@ const resolveSplitBaseAmount = (pricing: Record<string, unknown>, totalAmount: n
     return round2(grossFare + surgeFee)
   }
 
-  const taxAmount = toNumber(pricing.tax, 0)
   const insuranceAmount = toNumber(pricing.mandatoryInsurance, 0)
   const platformShare = toNumber(pricing.platformShare ?? pricing.serviceFee, 0)
   const serviceFeeIncludedInTotal = pricing.serviceFeeIncludedInTotal !== false
@@ -65,15 +64,20 @@ const resolveSplitBaseAmount = (pricing: Record<string, unknown>, totalAmount: n
   return round2(
     Math.max(
       0,
-      totalAmount - taxAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0),
+      totalAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0),
     ),
   )
 }
 
 const buildCapturedTripPricing = (trip: Record<string, unknown>) => {
   const pricing = resolveTripPricing(trip)
+  const {
+    tax: _legacyTax,
+    taxRate: _legacyTaxRate,
+    taxableLaborAmount: _legacyTaxableLaborAmount,
+    ...pricingWithoutTax
+  } = pricing
   const totalAmount = toNumber(trip.price ?? pricing.total, 0)
-  const taxAmount = round2(toNumber(pricing.tax, 0))
   const insuranceAmount = round2(
     toNumber(trip.insurance_premium ?? pricing.mandatoryInsurance, 0),
   )
@@ -91,10 +95,10 @@ const buildCapturedTripPricing = (trip: Record<string, unknown>) => {
   const driverPayoutPercent = toPercent(pricing.driverPayoutPercent, 1 - platformSharePercent)
   const platformShare = round2(splitBaseAmount * platformSharePercent)
   const driverPayout = round2(splitBaseAmount * driverPayoutPercent)
-  const normalizedTotal = round2(splitBaseAmount + taxAmount + insuranceAmount)
+  const normalizedTotal = round2(splitBaseAmount + insuranceAmount)
 
   return {
-    ...pricing,
+    ...pricingWithoutTax,
     splitBaseAmount,
     fareAfterSurge: splitBaseAmount,
     total: normalizedTotal,
@@ -106,7 +110,7 @@ const buildCapturedTripPricing = (trip: Record<string, unknown>) => {
     platformSharePercent,
     driverPayout,
     driverPayoutPercent,
-    platformRetainedTotal: round2(platformShare + insuranceAmount + taxAmount),
+    platformRetainedTotal: round2(platformShare + insuranceAmount),
     paymentCapturedAt: new Date().toISOString(),
   }
 }

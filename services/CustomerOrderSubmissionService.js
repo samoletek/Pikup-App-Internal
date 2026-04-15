@@ -14,6 +14,12 @@ import {
 
 const DEFAULT_INSURANCE_RETRY_DELAY_MS = 1500;
 const REMOTE_URL_REGEX = /^https?:\/\//i;
+const INSURANCE_STATUS = Object.freeze({
+  PURCHASED: 'purchased',
+  AMENDMENTS_BLOCKED: 'amendments_blocked',
+  PURCHASE_FAILED: 'purchase_failed',
+  QUOTE_UNAVAILABLE_OPT_IN: 'quote_unavailable_opt_in',
+});
 const MEDIA_UPLOAD_FALLBACK_NOTICE = Object.freeze({
   title: 'Photos not attached',
   message:
@@ -73,11 +79,24 @@ const removeInsuranceFromTotal = (totalAmount, insuranceQuote) => {
   return toRoundedAmount(totalAmount - getInsurancePremiumAmount(insuranceQuote));
 };
 
+const isInsuredNewItem = (item = {}) =>
+  String(item?.condition || '').toLowerCase() === 'new' && item?.hasInsurance === true;
+
+const hasInsuredNewItems = (items = []) =>
+  Array.isArray(items) && items.some((item) => isInsuredNewItem(item));
+
 const toInsurancePurchaseData = ({ offerId, premium, bookingId }) => ({
   bookingId,
   quoteId: offerId,
   premium,
-  status: 'purchased',
+  status: INSURANCE_STATUS.PURCHASED,
+});
+
+const toQuoteUnavailableOptInInsuranceData = () => ({
+  bookingId: null,
+  quoteId: null,
+  premium: null,
+  status: INSURANCE_STATUS.QUOTE_UNAVAILABLE_OPT_IN,
 });
 
 const attemptInsurancePurchase = async ({ offerId, premium, purchaseInsurance }) => {
@@ -112,8 +131,8 @@ const resolveInsuranceForOrder = async ({
     insuranceData = {
       quoteId: offerId,
       bookingId: null,
-      premium: insuranceQuote?.premium,
-      status: 'amendments_blocked',
+      premium: null,
+      status: INSURANCE_STATUS.AMENDMENTS_BLOCKED,
     };
     finalAmount = removeInsuranceFromTotal(totalAmount, insuranceQuote);
     notices.push({
@@ -147,8 +166,8 @@ const resolveInsuranceForOrder = async ({
     insuranceData = {
       quoteId: offerId,
       bookingId: null,
-      premium: insuranceQuote?.premium,
-      status: 'purchase_failed',
+      premium: null,
+      status: INSURANCE_STATUS.PURCHASE_FAILED,
     };
     notices.push({
       title: 'Insurance Notice',
@@ -168,9 +187,19 @@ export const submitCustomerOrder = async ({
   purchaseInsurance,
   insuranceRetryDelayMs = DEFAULT_INSURANCE_RETRY_DELAY_MS,
 }) => {
+  const hasInsuredItems = hasInsuredNewItems(orderData?.items || []);
+  const hasInsuranceOfferId = Boolean(orderData?.insuranceQuote?.offerId);
+  const allowUninsuredInsuranceFallback = (
+    hasInsuredItems &&
+    !hasInsuranceOfferId &&
+    orderData?.insuranceQuoteFallbackOptIn === true
+  );
+
   const flowContext = startFlowContext('trip.submitOrder', {
     userId: currentUserId || null,
-    hasInsuranceQuote: Boolean(orderData?.insuranceQuote?.offerId),
+    hasInsuranceQuote: hasInsuranceOfferId,
+    hasInsuredItems,
+    allowUninsuredInsuranceFallback,
   });
 
   const selectedPaymentMethod = orderData?.selectedPaymentMethod;
@@ -217,8 +246,29 @@ export const submitCustomerOrder = async ({
     });
   }
 
+  if (hasInsuredItems && !hasInsuranceOfferId && !allowUninsuredInsuranceFallback) {
+    return failureResult(
+      'Insurance quote is still loading. Please wait a moment and try again.',
+      null,
+      {
+        notices: [],
+        correlationId: flowContext.correlationId,
+      }
+    );
+  }
+
   try {
     logFlowInfo('CustomerOrderSubmission', 'order submission started', flowContext);
+    const fallbackInsuranceData = allowUninsuredInsuranceFallback
+      ? toQuoteUnavailableOptInInsuranceData()
+      : null;
+    if (fallbackInsuranceData) {
+      logFlowInfo(
+        'CustomerOrderSubmission',
+        'creating order without insurance after customer fallback opt-in',
+        flowContext
+      );
+    }
     const needsInsurancePurchase = Boolean(orderData?.insuranceQuote?.offerId);
     let purchaseInsuranceFn = purchaseInsurance;
 
@@ -234,7 +284,7 @@ export const submitCustomerOrder = async ({
     }
 
     const {
-      insuranceData,
+      insuranceData: resolvedInsuranceData,
       finalAmount,
       notices,
     } = await resolveInsuranceForOrder({
@@ -243,6 +293,7 @@ export const submitCustomerOrder = async ({
       purchaseInsurance: purchaseInsuranceFn,
       insuranceRetryDelayMs,
     });
+    const insuranceData = resolvedInsuranceData || fallbackInsuranceData;
 
     if (finalAmount <= 0) {
       return failureResult('Invalid order total. Please review your order and try again.', null, {
@@ -282,23 +333,32 @@ export const submitCustomerOrder = async ({
       toPositiveInteger(orderData?.pricing?.duration) ??
       null;
 
+    const shouldPersistInsurancePricing = insuranceData?.status === INSURANCE_STATUS.PURCHASED;
+    const normalizedPricing = {
+      ...(orderData?.pricing || {}),
+      total: finalAmount,
+      distance: normalizedDistanceMiles,
+      ...(normalizedDurationMinutes !== null
+        ? {
+          duration: normalizedDurationMinutes,
+          durationMinutes: normalizedDurationMinutes,
+        }
+        : {}),
+      ...(shouldPersistInsurancePricing
+        ? {}
+        : {
+          mandatoryInsurance: 0,
+          insuranceApplied: false,
+        }),
+    };
+
     const createdRequest = await createPickupRequest({
       pickup: orderData?.pickup,
       dropoff: orderData?.dropoff,
       pickupDetails: orderData?.pickupDetails || {},
       dropoffDetails: orderData?.dropoffDetails || {},
       vehicle: orderData?.selectedVehicle,
-      pricing: {
-        ...(orderData?.pricing || {}),
-        total: finalAmount,
-        distance: normalizedDistanceMiles,
-        ...(normalizedDurationMinutes !== null
-          ? {
-            duration: normalizedDurationMinutes,
-            durationMinutes: normalizedDurationMinutes,
-          }
-          : {}),
-      },
+      pricing: normalizedPricing,
       items: persistedItems,
       scheduledTime:
         orderData?.scheduleType === 'scheduled'

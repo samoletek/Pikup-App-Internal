@@ -59,13 +59,6 @@ const ReviewPriceBreakdownCard = ({
       </View>
     )}
 
-    {pricing?.tax > 0 && (
-      <View style={styles.priceRow}>
-        <Text style={styles.priceLabel}>Sales Tax (Labor)</Text>
-        <Text style={styles.priceValue}>${pricing.tax.toFixed(2)}</Text>
-      </View>
-    )}
-
     {(pricing?.insuranceApplied || pricing?.mandatoryInsurance > 0) && (
       <View>
         <View style={styles.priceRow}>
@@ -82,7 +75,7 @@ const ReviewPriceBreakdownCard = ({
 
         {insuranceError && (
           <Text style={localStyles.insuranceWarning}>
-            Could not verify insurance rate. A default rate will apply.
+            Could not verify insurance yet. We will retry before payment and ask you before creating an uninsured trip.
           </Text>
         )}
       </View>

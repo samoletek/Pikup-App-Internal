@@ -346,6 +346,96 @@ class MapboxNavigationService {
     });
   }
 
+  acknowledgeNavigationAction(actionToken) {
+    return new Promise((resolve, reject) => {
+      const nativeModule = this.getNativeModule();
+      if (!isCallableNativeMethod(nativeModule, 'acknowledgeNavigationAction')) {
+        resolve({
+          acknowledged: false,
+          active: !!nativeModule,
+          reason: 'unsupported',
+        });
+        return;
+      }
+
+      const normalizedToken = String(actionToken || '').trim();
+      if (!normalizedToken) {
+        resolve({
+          acknowledged: false,
+          active: !!nativeModule,
+          reason: 'missing_token',
+        });
+        return;
+      }
+
+      const invocationResult = invokeNativeMethod(
+        nativeModule,
+        'acknowledgeNavigationAction',
+        [normalizedToken]
+      );
+      if (invocationResult == null) {
+        resolve({
+          acknowledged: false,
+          active: !!nativeModule,
+          reason: 'native_ack_method_missing',
+        });
+        return;
+      }
+
+      Promise.resolve(invocationResult)
+        .then(resolve)
+        .catch((error) => {
+          const normalized = normalizeError(error, 'Failed to acknowledge navigation action');
+          reject(new Error(normalized.message || 'Failed to acknowledge navigation action'));
+        });
+    });
+  }
+
+  completeNavigationAction(actionToken, success = true) {
+    return new Promise((resolve, reject) => {
+      const nativeModule = this.getNativeModule();
+      if (!isCallableNativeMethod(nativeModule, 'completeNavigationAction')) {
+        resolve({
+          completed: false,
+          active: !!nativeModule,
+          reason: 'unsupported',
+        });
+        return;
+      }
+
+      const normalizedToken = String(actionToken || '').trim();
+      if (!normalizedToken) {
+        resolve({
+          completed: false,
+          active: !!nativeModule,
+          reason: 'missing_token',
+        });
+        return;
+      }
+
+      const invocationResult = invokeNativeMethod(
+        nativeModule,
+        'completeNavigationAction',
+        [normalizedToken, Boolean(success)]
+      );
+      if (invocationResult == null) {
+        resolve({
+          completed: false,
+          active: !!nativeModule,
+          reason: 'native_complete_method_missing',
+        });
+        return;
+      }
+
+      Promise.resolve(invocationResult)
+        .then(resolve)
+        .catch((error) => {
+          const normalized = normalizeError(error, 'Failed to complete navigation action');
+          reject(new Error(normalized.message || 'Failed to complete navigation action'));
+        });
+    });
+  }
+
   addListener(eventName, callback) {
     const emitter = this.ensureEventEmitter();
     if (!emitter) return null;

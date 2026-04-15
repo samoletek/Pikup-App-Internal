@@ -23,6 +23,7 @@ export default function useDriverIncomingRequestHandlers({
   isOnline,
   isScheduledPoolActive,
   loadRequests,
+  markRequestHandled,
   onTripAccepted,
   setAcceptedRequestId,
   setActiveJob,
@@ -37,6 +38,7 @@ export default function useDriverIncomingRequestHandlers({
 
   const handleIncomingRequestTimeout = useCallback(() => {
     const currentRequestId = normalizeRequestId(incomingRequest?.id);
+    markRequestHandled?.(currentRequestId);
     const declineOnTimeoutPromise = currentRequestId && typeof declineRequestOffer === 'function'
       ? declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
         .catch((declineError) => {
@@ -70,6 +72,7 @@ export default function useDriverIncomingRequestHandlers({
     isOnline,
     isScheduledPoolActive,
     loadRequests,
+    markRequestHandled,
     setAvailableRequests,
     setIncomingRequest,
     setIsMinimized,
@@ -125,6 +128,7 @@ export default function useDriverIncomingRequestHandlers({
       const normalizedLower = normalizedMessage.toLowerCase();
 
       if (isUnavailableAcceptError(error)) {
+        markRequestHandled?.(request?.id);
         setAvailableRequests((prevRequests) =>
           prevRequests.filter((item) => item.id !== request.id)
         );
@@ -153,6 +157,7 @@ export default function useDriverIncomingRequestHandlers({
     isAcceptingRequestRef,
     loadRequests,
     onTripAccepted,
+    markRequestHandled,
     setAcceptedRequestId,
     setActiveJob,
     setAvailableRequests,
@@ -164,6 +169,7 @@ export default function useDriverIncomingRequestHandlers({
 
   const handleIncomingRequestDecline = useCallback(() => {
     const currentRequestId = normalizeRequestId(incomingRequest?.id);
+    markRequestHandled?.(currentRequestId);
     const declinePromise = currentRequestId && typeof declineRequestOffer === 'function'
       ? declineRequestOffer(currentRequestId, { requestPool: activeRequestPool })
       : Promise.resolve();
@@ -202,6 +208,7 @@ export default function useDriverIncomingRequestHandlers({
     isOnline,
     isScheduledPoolActive,
     loadRequests,
+    markRequestHandled,
     setAvailableRequests,
     setIncomingRequest,
     setIsMinimized,

@@ -136,6 +136,16 @@ const firstNonEmptyText = (...candidates) => {
   return '';
 };
 
+const RECENTLY_HANDLED_REQUEST_TTL_MS = 2 * 60 * 1000;
+const resolveNativeActionToken = (payload) => {
+  const token = payload?.actionToken ?? payload?.actionId;
+  if (typeof token !== 'string') {
+    return null;
+  }
+  const normalized = token.trim();
+  return normalized || null;
+};
+
 const resolveTripAddress = (trip, pointName) => {
   if (!trip || typeof trip !== 'object') {
     return '';
@@ -237,6 +247,7 @@ export default function DriverHomeScreen({ navigation, route }) {
   const handleOfferTimeoutRef = useRef(null);
   const isAcceptingRequestRef = useRef(false);
   const incomingRequestIdRef = useRef(null);
+  const recentlyHandledRequestIdsRef = useRef(new Map());
   const reopenRequestModalOnFocusRef = useRef(false);
   const reopenRequestModalModeRef = useRef('all');
   const resumeNativeNavigationOnFocusRef = useRef(false);
@@ -244,6 +255,32 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [acceptedRequestId, setAcceptedRequestId] = useState(null);
   const [navigationAttempted, setNavigationAttempted] = useState(false);
   const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
+  const markRequestHandled = useCallback((requestId) => {
+    const normalizedId = String(requestId || '').trim();
+    if (!normalizedId) {
+      return;
+    }
+    recentlyHandledRequestIdsRef.current.set(normalizedId, Date.now());
+  }, []);
+  const shouldSuppressRequest = useCallback((request) => {
+    const requestId = String(request?.id || '').trim();
+    if (!requestId) {
+      return false;
+    }
+
+    const handledAtMs = Number(recentlyHandledRequestIdsRef.current.get(requestId));
+    if (!Number.isFinite(handledAtMs)) {
+      return false;
+    }
+
+    const ageMs = Date.now() - handledAtMs;
+    if (ageMs >= RECENTLY_HANDLED_REQUEST_TTL_MS) {
+      recentlyHandledRequestIdsRef.current.delete(requestId);
+      return false;
+    }
+
+    return true;
+  }, []);
 
   const mapRef = useRef(null);
   const { showOnboardingRequiredBanner } = resolveDriverOnboardingUiState(currentUser);
@@ -405,12 +442,15 @@ export default function DriverHomeScreen({ navigation, route }) {
   const chatActionRef = useRef(async () => {});
   const cancelActionRef = useRef(async () => {});
   const nativeCancellationInFlightRef = useRef(false);
+  const nativeChatActionInFlightRef = useRef(false);
   const handledStageTransitionKeyRef = useRef(null);
   const pickupProgressSyncInFlightRef = useRef(false);
   const {
     startNavigation,
     stopNavigation,
     updateNavigationOptions,
+    acknowledgeNavigationAction,
+    completeNavigationAction,
     isNavigating,
     isSupported: isNativeNavigationSupported,
   } = useMapboxNavigation({
@@ -434,14 +474,14 @@ export default function DriverHomeScreen({ navigation, route }) {
         payload: payload || null,
       });
     },
-    onPrimaryAction: () => {
-      void primaryActionRef.current();
+    onPrimaryAction: (payload) => {
+      void primaryActionRef.current(payload);
     },
     onSecondaryAction: (payload) => {
       void secondaryActionRef.current(payload);
     },
-    onChatAction: () => {
-      void chatActionRef.current();
+    onChatAction: (payload) => {
+      void chatActionRef.current(payload);
     },
     onCancel: (payload) => {
       logger.info('DriverHomeScreen', 'Native navigation cancelled by user', payload || {});
@@ -451,6 +491,49 @@ export default function DriverHomeScreen({ navigation, route }) {
   const stopNativeNavigationSilently = useCallback(async () => {
     await stopNavigation({ showAlert: false });
   }, [stopNavigation]);
+  const acknowledgeNativeAction = useCallback(async (actionToken) => {
+    const normalizedToken = String(actionToken || '').trim();
+    if (!normalizedToken) {
+      return;
+    }
+    try {
+      await acknowledgeNavigationAction(normalizedToken);
+    } catch (error) {
+      logger.warn('DriverHomeScreen', 'Failed to acknowledge native action', error);
+    }
+  }, [acknowledgeNavigationAction]);
+  const completeNativeAction = useCallback(async (actionToken, success) => {
+    const normalizedToken = String(actionToken || '').trim();
+    if (!normalizedToken) {
+      return;
+    }
+    try {
+      await completeNavigationAction(normalizedToken, Boolean(success));
+    } catch (error) {
+      logger.warn('DriverHomeScreen', 'Failed to complete native action', error);
+    }
+  }, [completeNavigationAction]);
+  const setNativeActionButtonsEnabled = useCallback(async ({
+    primaryEnabled,
+    chatEnabled,
+  } = {}) => {
+    const actionCard = {};
+    if (typeof primaryEnabled === 'boolean') {
+      actionCard.primaryActionEnabled = primaryEnabled;
+    }
+    if (typeof chatEnabled === 'boolean') {
+      actionCard.chatActionEnabled = chatEnabled;
+    }
+    if (Object.keys(actionCard).length === 0) {
+      return;
+    }
+
+    try {
+      await updateNavigationOptions({ actionCard });
+    } catch (error) {
+      logger.warn('DriverHomeScreen', 'Failed to update native action button state', error);
+    }
+  }, [updateNavigationOptions]);
   const cancelActiveTrip = useCallback(async (requestId) => {
     if (!requestId) {
       return;
@@ -482,8 +565,12 @@ export default function DriverHomeScreen({ navigation, route }) {
       nativeCancellationInFlightRef.current = false;
     }
   }, [cancelOrder, stopNativeNavigationSilently]);
-  const handleNativePrimaryAction = useCallback(async () => {
+  const handleNativePrimaryAction = useCallback(async (payload) => {
+    const actionToken = resolveNativeActionToken(payload);
+    await acknowledgeNativeAction(actionToken);
+
     if (nativeActionInFlightRef.current || !activeJob?.id) {
+      await completeNativeAction(actionToken, false);
       return;
     }
 
@@ -493,6 +580,8 @@ export default function DriverHomeScreen({ navigation, route }) {
     }
 
     nativeActionInFlightRef.current = true;
+    void setNativeActionButtonsEnabled({ primaryEnabled: false, chatEnabled: false });
+    let didCompleteTransition = false;
     try {
       const requestId = activeJob.id;
       const currentLocation = navigationOrigin || driverLocation || parseTripDriverLocation(activeJob);
@@ -509,6 +598,7 @@ export default function DriverHomeScreen({ navigation, route }) {
           status: TRIP_STATUS.ARRIVED_AT_DROPOFF,
         });
         await stopNativeNavigationSilently();
+        didCompleteTransition = true;
         navigation.navigate('DeliveryConfirmationScreen', {
           request: resolvedDropoffTrip,
           pickupPhotos: resolvedDropoffTrip?.pickupPhotos || resolvedDropoffTrip?.pickup_photos || [],
@@ -528,6 +618,7 @@ export default function DriverHomeScreen({ navigation, route }) {
         status: TRIP_STATUS.ARRIVED_AT_PICKUP,
       });
       await stopNativeNavigationSilently();
+      didCompleteTransition = true;
       navigation.navigate('PickupConfirmationScreen', {
         request: resolvedPickupTrip,
         driverLocation: currentLocation,
@@ -536,6 +627,10 @@ export default function DriverHomeScreen({ navigation, route }) {
       logger.error('DriverHomeScreen', 'Failed to handle native primary action', error);
       Alert.alert('Error', 'Could not complete this action. Please try again.');
     } finally {
+      await completeNativeAction(actionToken, didCompleteTransition);
+      if (!didCompleteTransition) {
+        void setNativeActionButtonsEnabled({ primaryEnabled: true, chatEnabled: true });
+      }
       nativeActionInFlightRef.current = false;
     }
   }, [
@@ -546,6 +641,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     driverLocation,
     navigation,
     navigationOrigin,
+    acknowledgeNativeAction,
+    completeNativeAction,
+    setNativeActionButtonsEnabled,
     stopNativeNavigationSilently,
   ]);
   const handleNativeSecondaryAction = useCallback((payload) => {
@@ -570,21 +668,49 @@ export default function DriverHomeScreen({ navigation, route }) {
 
     void cancelActiveTrip(activeJob.id);
   }, [activeJob?.id, activeNavigationStage, cancelActiveTrip]);
-  const handleNativeChatAction = useCallback(async () => {
+  const handleNativeChatAction = useCallback(async (payload) => {
+    const actionToken = resolveNativeActionToken(payload);
+    await acknowledgeNativeAction(actionToken);
+
+    if (nativeChatActionInFlightRef.current) {
+      await completeNativeAction(actionToken, false);
+      return;
+    }
+
+    nativeChatActionInFlightRef.current = true;
+    void setNativeActionButtonsEnabled({ chatEnabled: false });
+    let didOpenChat = false;
     try {
       await stopNativeNavigationSilently();
     } catch (error) {
       logger.warn('DriverHomeScreen', 'Failed to stop native navigation before opening chat', error);
     }
 
-    const didOpenChat = await openChat();
-    if (didOpenChat) {
-      resumeNativeNavigationOnFocusRef.current = true;
-      return;
-    }
+    try {
+      didOpenChat = await openChat();
+      if (didOpenChat) {
+        resumeNativeNavigationOnFocusRef.current = true;
+        await completeNativeAction(actionToken, true);
+        return;
+      }
 
-    setNavigationAttempted(false);
-  }, [openChat, stopNativeNavigationSilently]);
+      setNavigationAttempted(false);
+    } finally {
+      if (!didOpenChat) {
+        await completeNativeAction(actionToken, false);
+      }
+      if (!didOpenChat) {
+        void setNativeActionButtonsEnabled({ chatEnabled: true });
+      }
+      nativeChatActionInFlightRef.current = false;
+    }
+  }, [
+    acknowledgeNativeAction,
+    completeNativeAction,
+    openChat,
+    setNativeActionButtonsEnabled,
+    stopNativeNavigationSilently,
+  ]);
   useEffect(() => {
     primaryActionRef.current = handleNativePrimaryAction;
     secondaryActionRef.current = handleNativeSecondaryAction;
@@ -808,6 +934,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     getAvailableRequests,
     hasActiveTrip,
     isOnline,
+    shouldSuppressRequest,
     setIncomingRequest,
     setIsMinimized,
     setShowAllRequests,
@@ -1022,6 +1149,7 @@ export default function DriverHomeScreen({ navigation, route }) {
     isOnline,
     isScheduledPoolActive,
     loadRequests,
+    markRequestHandled,
     onTripAccepted: (trip) => {
       if (!trip?.id) {
         return;

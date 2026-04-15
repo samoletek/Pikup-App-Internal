@@ -14,7 +14,6 @@ describe('pricingMath', () => {
         peakMultiplier: 1.5,
         trafficMultiplier: 1.3,
         weatherSurcharge: 7.5,
-        taxRate: 0,
         mandatoryInsurance: 12.99,
       },
       10,

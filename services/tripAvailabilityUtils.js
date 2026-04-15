@@ -3,6 +3,7 @@ import {
     hasScheduledTripConflict,
     REQUEST_POOLS,
     isTripOutsideDistanceWindow,
+    isTripOutsideSearchLifetime,
     isTripOutsideScheduledWindow,
     sortTripsForPool,
 } from './tripDispatchUtils';
@@ -98,7 +99,6 @@ const resolveSplitBaseAmount = (pricing = {}) => {
     }
 
     const totalAmount = toAmount(pricing?.total);
-    const taxAmount = toAmount(pricing?.tax);
     const insuranceAmount = toAmount(pricing?.mandatoryInsurance);
     const platformShare = toAmount(pricing?.platformShare ?? pricing?.serviceFee);
     const serviceFeeIncludedInTotal = pricing?.serviceFeeIncludedInTotal !== false;
@@ -107,7 +107,7 @@ const resolveSplitBaseAmount = (pricing = {}) => {
         return round2(
             Math.max(
                 0,
-                totalAmount - taxAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0)
+                totalAmount - insuranceAmount - (serviceFeeIncludedInTotal ? platformShare : 0)
             )
         );
     }
@@ -154,6 +154,7 @@ export const filterTripsForAvailability = ({
     const filteredTrips = [];
     let filteredByPoolCount = 0;
     let filteredByDistanceCount = 0;
+    let filteredBySearchLifetimeCount = 0;
     let filteredByTimeWindowCount = 0;
     let filteredByAssignedDriverCount = 0;
     let filteredByPreferenceCount = 0;
@@ -171,6 +172,7 @@ export const filterTripsForAvailability = ({
             stats: {
                 filteredByPoolCount,
                 filteredByDistanceCount,
+                filteredBySearchLifetimeCount,
                 filteredByTimeWindowCount,
                 filteredByAssignedDriverCount,
                 filteredByPreferenceCount,
@@ -212,6 +214,13 @@ export const filterTripsForAvailability = ({
             normalizedRequirements.scheduleType !== REQUEST_POOLS.ASAP
         ) {
             filteredByPoolCount += 1;
+            return;
+        }
+
+        if (
+            isTripOutsideSearchLifetime(normalizedTrip)
+        ) {
+            filteredBySearchLifetimeCount += 1;
             return;
         }
 
@@ -275,6 +284,7 @@ export const filterTripsForAvailability = ({
         stats: {
             filteredByPoolCount,
             filteredByDistanceCount,
+            filteredBySearchLifetimeCount,
             filteredByTimeWindowCount,
             filteredByAssignedDriverCount,
             filteredByPreferenceCount,

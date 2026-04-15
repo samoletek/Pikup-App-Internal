@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import MapboxNavigationService from '../../services/MapboxNavigationService';
 import { logger } from '../../services/logger';
@@ -17,37 +17,66 @@ const useMapboxNavigation = ({
 }) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const nativeNavigationAvailable = MapboxNavigationService.isAvailable();
+  const callbacksRef = useRef({
+    onRouteProgress,
+    onArrival,
+    onCancel,
+    onReroute,
+    onPrimaryAction,
+    onSecondaryAction,
+    onChatAction,
+  });
 
   useEffect(() => {
-    // Set up event listeners
+    callbacksRef.current = {
+      onRouteProgress,
+      onArrival,
+      onCancel,
+      onReroute,
+      onPrimaryAction,
+      onSecondaryAction,
+      onChatAction,
+    };
+  }, [
+    onRouteProgress,
+    onArrival,
+    onCancel,
+    onReroute,
+    onPrimaryAction,
+    onSecondaryAction,
+    onChatAction,
+  ]);
+
+  useEffect(() => {
+    // Register native listeners once and delegate to latest callbacks via refs.
     const progressListener = MapboxNavigationService.addListener('onRouteProgress', (data) => {
-      if (onRouteProgress) onRouteProgress(data);
+      callbacksRef.current.onRouteProgress?.(data);
     });
 
     const arrivalListener = MapboxNavigationService.addListener('onArrival', (data) => {
-      if (onArrival) onArrival(data);
+      callbacksRef.current.onArrival?.(data);
       setIsNavigating(false);
     });
 
     const cancelListener = MapboxNavigationService.addListener('onCancel', (data) => {
-      if (onCancel) onCancel(data);
+      callbacksRef.current.onCancel?.(data);
       setIsNavigating(false);
     });
 
     const rerouteListener = MapboxNavigationService.addListener('onReroute', (data) => {
-      if (onReroute) onReroute(data);
+      callbacksRef.current.onReroute?.(data);
     });
 
     const primaryActionListener = MapboxNavigationService.addListener('onPrimaryAction', (data) => {
-      if (onPrimaryAction) onPrimaryAction(data);
+      callbacksRef.current.onPrimaryAction?.(data);
     });
 
     const secondaryActionListener = MapboxNavigationService.addListener('onSecondaryAction', (data) => {
-      if (onSecondaryAction) onSecondaryAction(data);
+      callbacksRef.current.onSecondaryAction?.(data);
     });
 
     const chatActionListener = MapboxNavigationService.addListener('onChatAction', (data) => {
-      if (onChatAction) onChatAction(data);
+      callbacksRef.current.onChatAction?.(data);
     });
 
     return () => {
@@ -59,16 +88,7 @@ const useMapboxNavigation = ({
       secondaryActionListener?.remove();
       chatActionListener?.remove();
     };
-  }, [
-    nativeNavigationAvailable,
-    onRouteProgress,
-    onArrival,
-    onCancel,
-    onReroute,
-    onPrimaryAction,
-    onSecondaryAction,
-    onChatAction,
-  ]);
+  }, [nativeNavigationAvailable]);
 
   const startNavigation = async ({ showAlert = true, options } = {}) => {
     const supportsNativeNavigation = MapboxNavigationService.isAvailable();
@@ -149,10 +169,30 @@ const useMapboxNavigation = ({
     }
   };
 
+  const acknowledgeNavigationAction = async (actionToken) => {
+    try {
+      return await MapboxNavigationService.acknowledgeNavigationAction(actionToken);
+    } catch (error) {
+      logger.warn('MapboxNavigationHook', 'Failed to acknowledge navigation action', error);
+      return { acknowledged: false, reason: 'ack_failed' };
+    }
+  };
+
+  const completeNavigationAction = async (actionToken, success = true) => {
+    try {
+      return await MapboxNavigationService.completeNavigationAction(actionToken, success);
+    } catch (error) {
+      logger.warn('MapboxNavigationHook', 'Failed to complete navigation action', error);
+      return { completed: false, reason: 'complete_failed' };
+    }
+  };
+
   return {
     startNavigation,
     stopNavigation,
     updateNavigationOptions,
+    acknowledgeNavigationAction,
+    completeNavigationAction,
     isNavigating,
     isSupported: nativeNavigationAvailable
   };

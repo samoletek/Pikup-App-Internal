@@ -4,7 +4,6 @@ export const getPricingData = (selectedVehicle) => {
     return {
       baseFare: Number(vehiclePricing.baseFare || 0),
       mileageFee: Number(vehiclePricing.mileageFee || vehiclePricing.mileageCharge || 0),
-      tax: Number(vehiclePricing.tax || 0),
       insurance: Number(vehiclePricing.mandatoryInsurance || 0),
       total: vehiclePricing.total.toFixed(2),
     };
@@ -15,7 +14,6 @@ export const getPricingData = (selectedVehicle) => {
   return {
     baseFare,
     mileageFee: 0,
-    tax: 0,
     insurance: 0,
     total: baseFare.toFixed(2),
   };

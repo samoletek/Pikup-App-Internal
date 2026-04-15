@@ -1,5 +1,6 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
+  BackHandler,
   View,
   Text,
   TouchableOpacity,
@@ -9,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   useAuthIdentity,
   useMessagingActions,
@@ -70,6 +72,24 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     currentScreen: 'PickupConfirmationScreen',
     enabled: !!request?.id
   });
+  useFocusEffect(
+    useCallback(() => {
+      const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => {
+        backSubscription.remove();
+      };
+    }, [])
+  );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      const actionType = event?.data?.action?.type;
+      if (actionType === 'GO_BACK' || actionType === 'POP' || actionType === 'POP_TO_TOP') {
+        event.preventDefault();
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const {
     customerAvatarUrl,
@@ -115,7 +135,7 @@ export default function PickupConfirmationScreen({ route, navigation }) {
     <View style={styles.container}>
       <ScreenHeader
         title="Pickup Confirmation"
-        onBack={() => navigation.goBack()}
+        showBack={false}
         topInset={insets.top}
       />
 

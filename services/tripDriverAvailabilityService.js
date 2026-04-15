@@ -69,6 +69,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
   const {
     filteredByPoolCount,
     filteredByDistanceCount,
+    filteredBySearchLifetimeCount,
     filteredByTimeWindowCount,
     filteredByAssignedDriverCount,
     filteredByPreferenceCount,
@@ -88,6 +89,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
   if (
     filteredByPoolCount > 0 ||
     filteredByDistanceCount > 0 ||
+    filteredBySearchLifetimeCount > 0 ||
     filteredByTimeWindowCount > 0 ||
     filteredByAssignedDriverCount > 0 ||
     filteredByScheduleConflictCount > 0 ||
@@ -97,6 +99,7 @@ const logFilterStats = ({ mergedPreferences, hiddenReasonCounts, stats }) => {
     logger.info('TripDriverAvailability', 'Filtered requests by dispatch windows', {
       filteredByPoolCount,
       filteredByDistanceCount,
+      filteredBySearchLifetimeCount,
       filteredByTimeWindowCount,
       filteredByAssignedDriverCount,
       filteredByScheduleConflictCount,

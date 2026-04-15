@@ -2,11 +2,38 @@ import { normalizeDriverBadgeStats } from './driverProfileUtils';
 import { logger } from './logger';
 import { normalizeError } from './errorService';
 import { fetchDriverRowById } from './repositories/paymentRepository';
+import { refreshAuthenticatedSession } from './repositories/authRepository';
 import { extractDriverPreferencesFromDriverProfile } from './driverPreferencesColumns';
 import {
   createRealtimeChannel,
   removeRealtimeChannel,
 } from './repositories/messagingRepository';
+
+const DRIVER_READINESS_COLUMNS = 'phone_verified, onboarding_complete, can_receive_payments, identity_verified, metadata';
+
+const isAuthOrSessionError = (error) => {
+  if (!error) {
+    return false;
+  }
+
+  const statusCode = Number(error?.status || error?.code || 0);
+  if (statusCode === 401) {
+    return true;
+  }
+
+  const normalizedCode = String(error?.code || '').trim().toUpperCase();
+  if (normalizedCode === 'PGRST301' || normalizedCode === '42501') {
+    return true;
+  }
+
+  const normalizedText = String(error?.message || error?.details || '').trim().toLowerCase();
+  return (
+    normalizedText.includes('jwt') ||
+    normalizedText.includes('token') ||
+    normalizedText.includes('auth') ||
+    normalizedText.includes('permission denied')
+  );
+};
 
 export const getDriverProfile = async (driverId) => {
   try {
@@ -73,11 +100,24 @@ export const getDriverReadinessProfile = async (driverId) => {
   }
 
   try {
-    const { data: profile, error } = await fetchDriverRowById(
+    let { data: profile, error } = await fetchDriverRowById(
       driverId,
-      'phone_verified, onboarding_complete, can_receive_payments, identity_verified, metadata',
+      DRIVER_READINESS_COLUMNS,
       true
     );
+
+    if (error && isAuthOrSessionError(error)) {
+      const { data: refreshedSessionData, error: refreshError } = await refreshAuthenticatedSession();
+      if (!refreshError && refreshedSessionData?.session?.access_token) {
+        const retryResult = await fetchDriverRowById(
+          driverId,
+          DRIVER_READINESS_COLUMNS,
+          true
+        );
+        profile = retryResult?.data || null;
+        error = retryResult?.error || null;
+      }
+    }
 
     if (error || !profile) {
       return { ready: false, issues: ['Could not load profile'], profile: null };

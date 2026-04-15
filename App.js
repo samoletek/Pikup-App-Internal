@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { Linking, LogBox, StyleSheet, TextInput, View, useColorScheme } from 'react-native';
+import { AppState, Linking, LogBox, StyleSheet, TextInput, View, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './contexts/AuthContext';
 import { PaymentProvider } from './contexts/PaymentContext';
@@ -10,6 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { appNavigationTheme } from './navigation/navigationTheme';
 import { colors } from './styles/theme';
 import { appConfig } from './config/appConfig';
+import { supabase } from './config/supabase';
 import { ensureMapboxConfigured } from './config/mapbox';
 import { logger } from './services/logger';
 
@@ -84,6 +85,23 @@ export default function App() {
       keyboardAppearance,
     };
   }, [keyboardAppearance]);
+
+  React.useEffect(() => {
+    supabase.auth.startAutoRefresh();
+
+    const appStateSubscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
+    return () => {
+      appStateSubscription.remove();
+      supabase.auth.stopAutoRefresh();
+    };
+  }, []);
 
   return (
     <SafeAreaProvider>

@@ -2,10 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from './logger';
 import { fetchPricingConfigRows } from './repositories/pricingRepository';
 import { normalizeError } from './errorService';
-import {
-    DEFAULT_MANPOWER_SALES_TAX_RATE,
-    SUPPORTED_ORDER_STATE_CODES,
-} from '../constants/orderAvailability';
+import { SUPPORTED_ORDER_STATE_CODES } from '../constants/orderAvailability';
 import {
     evaluateOrderStateCoverage,
     normalizeStateCode,
@@ -318,24 +315,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         orderStateCoverage.dropoffStateCode
     );
 
-    const stateTaxRateConfig = (
-        platformFees.stateSalesTaxRates ||
-        platformFees.salesTaxRates ||
-        platformFees.salesTaxByState ||
-        {}
-    );
-    const fallbackTaxRate = Number(platformFees.defaultSalesTaxRate);
-    const defaultSalesTaxRate = Number.isFinite(fallbackTaxRate)
-        ? fallbackTaxRate
-        : DEFAULT_MANPOWER_SALES_TAX_RATE;
-    const dropoffSalesTaxRate = dropoffStateCode
-        ? Number(stateTaxRateConfig[dropoffStateCode] ?? defaultSalesTaxRate)
-        : 0;
-    const taxableLaborAmount = laborFee > 0 ? laborFee : 0;
-    const tax = taxableLaborAmount > 0
-        ? taxableLaborAmount * (Number.isFinite(dropoffSalesTaxRate) ? dropoffSalesTaxRate : defaultSalesTaxRate)
-        : 0;
-
     // Platform fees
     const pricingItems = Array.isArray(options.items)
         ? options.items
@@ -366,9 +345,6 @@ export const calculatePrice = async (vehicleRate, distance, duration, options = 
         trafficMultiplier: trafficMultiplier > 1 ? trafficMultiplier : undefined,
         trafficSurcharge: roundPricingAmount(trafficSurcharge),
         weatherSurcharge: roundPricingAmount(weatherSurcharge),
-        tax: roundPricingAmount(tax),
-        taxRate: Number.isFinite(dropoffSalesTaxRate) ? dropoffSalesTaxRate : defaultSalesTaxRate,
-        taxableLaborAmount: roundPricingAmount(taxableLaborAmount),
         dropoffStateCode,
         mandatoryInsurance: roundPricingAmount(mandatoryInsurance),
         insuranceApplied: hasInsuredNewItem,
