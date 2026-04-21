@@ -164,7 +164,7 @@ const hasIdentityPrefill = (formData: Record<string, unknown> | null | undefined
 
   const firstName = String(formData.firstName || "").trim()
   const lastName = String(formData.lastName || "").trim()
-  return Boolean(firstName || lastName)
+  return Boolean(firstName && lastName)
 }
 
 const pickString = (...values: unknown[]) => {

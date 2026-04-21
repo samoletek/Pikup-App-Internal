@@ -28,7 +28,22 @@ const hasIdentityPrefill = (formData) => {
 
   const firstName = String(formData.firstName || '').trim();
   const lastName = String(formData.lastName || '').trim();
-  return Boolean(firstName || lastName);
+  return Boolean(firstName && lastName);
+};
+
+const hasCompletedIdentityPrefill = (draft) => {
+  if (!draft || typeof draft !== 'object') {
+    return false;
+  }
+
+  const normalizedVerificationStatus = normalizeVerificationStatus(
+    draft.verificationStatus
+  );
+  if (normalizedVerificationStatus !== 'completed') {
+    return false;
+  }
+
+  return hasIdentityPrefill(draft.formData);
 };
 
 const buildDraftSnapshot = ({
@@ -107,7 +122,16 @@ export default function useOnboardingDraftPersistence({
         }
 
         const remoteDraft = remoteDraftResult || null;
-        const latestDraft = pickLatestDraft(localDraft, remoteDraft);
+        let latestDraft = pickLatestDraft(localDraft, remoteDraft);
+
+        const shouldForceRemoteDraft = (
+          Boolean(remoteDraft) &&
+          hasCompletedIdentityPrefill(remoteDraft) &&
+          !hasCompletedIdentityPrefill(latestDraft)
+        );
+        if (shouldForceRemoteDraft) {
+          latestDraft = remoteDraft;
+        }
 
         if (!latestDraft || !isMounted) {
           return;
@@ -129,10 +153,8 @@ export default function useOnboardingDraftPersistence({
         setVerificationStatus(restoredVerificationStatus);
         setFormData(restoredFormData);
 
-        if (latestDraft.verificationDataPopulated && hasIdentityPrefill(restoredFormData)) {
+        if (hasIdentityPrefill(restoredFormData)) {
           setVerificationDataPopulated(true);
-        } else {
-          setVerificationDataPopulated(false);
         }
 
         if (
@@ -164,7 +186,7 @@ export default function useOnboardingDraftPersistence({
           verificationStatus: restoredVerificationStatus,
           formData: restoredFormData,
         });
-        lastRemoteSyncSignatureRef.current = `${restoredStep}:${restoredVerificationStatus}`;
+        lastRemoteSyncSignatureRef.current = `${restoredStep}:${restoredVerificationStatus}:${Boolean(hasIdentityPrefill(restoredFormData))}`;
       } catch (error) {
         logger.error('OnboardingDraftPersistence', 'Failed to hydrate onboarding draft', error);
       } finally {
@@ -233,12 +255,19 @@ export default function useOnboardingDraftPersistence({
         logger.error('OnboardingDraftPersistence', 'Failed to persist onboarding draft locally', error);
       }
 
-      const remoteSyncSignature = `${draftSnapshot.currentStep}:${draftSnapshot.verificationStatus}`;
+      const remoteSyncSignature = `${draftSnapshot.currentStep}:${draftSnapshot.verificationStatus}:${Boolean(draftSnapshot.verificationDataPopulated)}`;
       if (remoteSyncSignature === lastRemoteSyncSignatureRef.current) {
         return;
       }
 
       if (isRemoteSyncBlockedRef.current) {
+        return;
+      }
+
+      if (
+        draftSnapshot.verificationStatus === 'completed' &&
+        !hasIdentityPrefill(draftSnapshot.formData)
+      ) {
         return;
       }
 

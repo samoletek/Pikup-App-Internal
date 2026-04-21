@@ -22,6 +22,7 @@ const PersonalInfoStep = ({
     formData.lastName.length > 0 && formData.lastName.length < 2
       ? "Min 2 characters"
       : "";
+  const isIdentityNameLocked = verificationDataPopulated && !isLoadingVerificationData;
 
   return (
     <View style={styles.formContent}>
@@ -34,7 +35,7 @@ const PersonalInfoStep = ({
       {verificationDataPopulated && !isLoadingVerificationData && (
         <View style={styles.autoFilledBanner}>
           <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-          <Text style={styles.autoFilledText}>Pre-filled from your ID verification. Review and edit if needed.</Text>
+          <Text style={styles.autoFilledText}>Name fields were pre-filled from Stripe verification and are locked.</Text>
         </View>
       )}
       <View style={styles.inputRow}>
@@ -43,11 +44,14 @@ const PersonalInfoStep = ({
           label="First Name *"
           value={formData.firstName}
           onChangeText={(value) => updateFormData("firstName", formatName(value))}
+          editable={!isIdentityNameLocked}
+          selectTextOnFocus={!isIdentityNameLocked}
           placeholder="John"
           autoCapitalize="words"
           maxLength={30}
           inputStyle={[
             styles.textInput,
+            isIdentityNameLocked && styles.lockedInput,
             firstNameError && styles.textInputError,
           ]}
           error={firstNameError}
@@ -57,11 +61,14 @@ const PersonalInfoStep = ({
           label="Last Name *"
           value={formData.lastName}
           onChangeText={(value) => updateFormData("lastName", formatName(value))}
+          editable={!isIdentityNameLocked}
+          selectTextOnFocus={!isIdentityNameLocked}
           placeholder="Doe"
           autoCapitalize="words"
           maxLength={30}
           inputStyle={[
             styles.textInput,
+            isIdentityNameLocked && styles.lockedInput,
             lastNameError && styles.textInputError,
           ]}
           error={lastNameError}

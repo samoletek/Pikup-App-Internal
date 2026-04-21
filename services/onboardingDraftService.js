@@ -9,7 +9,7 @@ const hasIdentityPrefill = (formData) => {
 
   const firstName = String(formData.firstName || '').trim();
   const lastName = String(formData.lastName || '').trim();
-  return Boolean(firstName || lastName);
+  return Boolean(firstName && lastName);
 };
 
 export const fetchRemoteOnboardingDraft = async (userId) => {
@@ -19,7 +19,7 @@ export const fetchRemoteOnboardingDraft = async (userId) => {
 
   try {
     const { data, error } = await fetchProfileByTableAndUserId('drivers', userId, {
-      columns: 'metadata, identity_verified',
+      columns: 'metadata, identity_verified, first_name, last_name',
       maybeSingle: true,
     });
 
@@ -51,13 +51,24 @@ export const fetchRemoteOnboardingDraft = async (userId) => {
       const draft = {
         ...metadata.onboardingDraft,
       };
-      const hasPrefill = hasIdentityPrefill(draft.formData);
+      const draftFormData = draft?.formData && typeof draft.formData === 'object'
+        ? { ...draft.formData }
+        : {};
+      const profileFirstName = String(data?.first_name || '').trim();
+      const profileLastName = String(data?.last_name || '').trim();
+      if (!String(draftFormData.firstName || '').trim() && profileFirstName) {
+        draftFormData.firstName = profileFirstName;
+      }
+      if (!String(draftFormData.lastName || '').trim() && profileLastName) {
+        draftFormData.lastName = profileLastName;
+      }
+      draft.formData = draftFormData;
+
+      const hasPrefill = hasIdentityPrefill(draftFormData);
 
       if (identityVerified) {
         draft.verificationStatus = 'completed';
-        draft.verificationDataPopulated = Boolean(
-          draft.verificationDataPopulated && hasPrefill
-        );
+        draft.verificationDataPopulated = Boolean(hasPrefill);
       } else if (identityProcessing) {
         draft.verificationStatus = 'processing';
       }

@@ -139,6 +139,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       state: String(draftAddress.state || '').trim(),
       postalCode: String(draftAddress.postalCode || '').trim(),
     };
+    const hasIdentityNamePrefill = Boolean(fallbackFirstName && fallbackLastName);
 
     setFormData((prev) => {
       const previous = prev || {};
@@ -164,6 +165,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
           reason,
           hasFirstName: Boolean(fallbackFirstName),
           hasLastName: Boolean(fallbackLastName),
+          hasIdentityNamePrefill,
           hasDateOfBirth: Boolean(fallbackDateOfBirth),
           hasAddress: Boolean(
             fallbackAddress.line1 ||
@@ -173,7 +175,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
           ),
         });
       }
-      return true;
+      return previouslyPopulated || hasIdentityNamePrefill;
     });
   };
 
@@ -415,11 +417,32 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
         return { verified: false, status: 'error' };
       }
 
+      const payloadFirstName = String(data.firstName || '').trim();
+      const payloadLastName = String(data.lastName || '').trim();
+      const metadata = asRecord(currentUser?.metadata);
+      const onboardingDraft = asRecord(metadata.onboardingDraft);
+      const draftFormData = asRecord(onboardingDraft.formData);
+      const fallbackFirstName = String(
+        payloadFirstName ||
+        draftFormData.firstName ||
+        currentUser?.first_name ||
+        currentUser?.firstName ||
+        ''
+      ).trim();
+      const fallbackLastName = String(
+        payloadLastName ||
+        draftFormData.lastName ||
+        currentUser?.last_name ||
+        currentUser?.lastName ||
+        ''
+      ).trim();
+      const hasIdentityNamePrefill = Boolean(fallbackFirstName && fallbackLastName);
+
       setFormData((prev) => {
         const updated = { ...prev };
 
-        if (data.firstName && !prev.firstName) updated.firstName = data.firstName;
-        if (data.lastName && !prev.lastName) updated.lastName = data.lastName;
+        if (fallbackFirstName && !prev.firstName) updated.firstName = fallbackFirstName;
+        if (fallbackLastName && !prev.lastName) updated.lastName = fallbackLastName;
         if (data.address) {
           updated.address = {
             ...prev.address,
@@ -433,7 +456,9 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
         return updated;
       });
 
-      setVerificationDataPopulated(true);
+      setVerificationDataPopulated((previouslyPopulated) => (
+        previouslyPopulated || hasIdentityNamePrefill
+      ));
       setLoader(false);
       return { verified: true, status: 'verified' };
     } catch (error) {
