@@ -134,11 +134,12 @@ export function AuthProvider({ children }) {
 
   const refreshProfile = useCallback(async () => {
     const uid = currentUser?.id || currentUser?.uid;
-    if (!uid || !userType) return;
+    if (!uid || !userType) return null;
     const data = await fetchUserProfileByRole({ userId: uid, userType });
     if (data) {
       setCurrentUser((prev) => (prev ? { ...prev, ...data } : data));
     }
+    return data || null;
   }, [currentUser?.id, currentUser?.uid, userType]);
 
   const authActions = useMemo(() => {

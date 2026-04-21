@@ -90,7 +90,12 @@ const useMapboxNavigation = ({
     };
   }, [nativeNavigationAvailable]);
 
-  const startNavigation = async ({ showAlert = true, options } = {}) => {
+  const startNavigation = async ({
+    showAlert = true,
+    options,
+    origin: originOverride = null,
+    destination: destinationOverride = null,
+  } = {}) => {
     const supportsNativeNavigation = MapboxNavigationService.isAvailable();
     if (!supportsNativeNavigation) {
       logger.warn(
@@ -99,7 +104,10 @@ const useMapboxNavigation = ({
       );
     }
 
-    if (!origin || !destination) {
+    const resolvedOrigin = originOverride || origin;
+    const resolvedDestination = destinationOverride || destination;
+
+    if (!resolvedOrigin || !resolvedDestination) {
       logger.warn('MapboxNavigationHook', 'Cannot start navigation without origin and destination');
       if (showAlert) {
         Alert.alert('Navigation Error', 'Unable to start navigation without route coordinates.');
@@ -111,8 +119,8 @@ const useMapboxNavigation = ({
       setIsNavigating(true);
       const resolvedOptions = options || navigationOptions || {};
       const executeStart = () => MapboxNavigationService.startNavigation(
-        origin,
-        destination,
+        resolvedOrigin,
+        resolvedDestination,
         resolvedOptions
       );
 

@@ -9,7 +9,7 @@ import {
   removeRealtimeChannel,
 } from './repositories/messagingRepository';
 
-const DRIVER_READINESS_COLUMNS = 'phone_verified, onboarding_complete, can_receive_payments, identity_verified, metadata';
+const DRIVER_READINESS_COLUMNS = 'onboarding_complete, can_receive_payments, identity_verified, metadata';
 
 const isAuthOrSessionError = (error) => {
   if (!error) {
@@ -145,10 +145,7 @@ export const getDriverReadinessProfile = async (driverId) => {
       metadata?.canReceivePayments ??
       false
     );
-    const phoneVerified = Boolean(profile?.phone_verified ?? false);
-
     const issues = [];
-    if (!phoneVerified) issues.push('phone');
     if (!onboardingComplete) issues.push('vehicle');
     if (!identityVerified) issues.push('identity');
     if (!canReceivePayments) issues.push('payment');
@@ -162,7 +159,6 @@ export const getDriverReadinessProfile = async (driverId) => {
         onboarding_complete: onboardingComplete,
         can_receive_payments: canReceivePayments,
         identity_verified: identityVerified,
-        phone_verified: phoneVerified,
       },
     };
   } catch (error) {

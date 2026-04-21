@@ -8,7 +8,7 @@ import OfflineDashboardBody from './OfflineDashboardBody';
 import { styles, SCREEN_HEIGHT } from './styles';
 import { colors } from '../../styles/theme';
 
-export const COLLAPSED_HEIGHT = 200;
+export const COLLAPSED_HEIGHT = 252;
 const EXPANDED_HEIGHT = SCREEN_HEIGHT * 0.75;
 
 export default function OfflineDashboard({

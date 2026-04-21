@@ -38,6 +38,40 @@ export {
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let suppressNextAuthBootstrapFromRecovery = false;
 const normalizeAuthEmail = (value) => String(value || '').trim().toLowerCase();
+const normalizeLoginErrorMessage = (message) => {
+  const normalized = String(message || '').trim();
+  const lowered = normalized.toLowerCase();
+
+  if (
+    lowered.includes('invalid login credentials') ||
+    lowered.includes('email not confirmed') ||
+    lowered.includes('email or password')
+  ) {
+    return 'Incorrect email or password.';
+  }
+
+  if (
+    lowered.includes('status":502') ||
+    lowered.includes('http_response_incomplete') ||
+    lowered.includes('cloudflare') ||
+    lowered.includes('token.html') ||
+    lowered.includes('<html') ||
+    lowered.includes('bad gateway')
+  ) {
+    return 'Authentication service is temporarily unavailable. Please try again in a minute.';
+  }
+
+  if (
+    lowered.includes('network request failed') ||
+    lowered.includes('failed to fetch') ||
+    lowered.includes('fetch failed') ||
+    lowered.includes('timeout')
+  ) {
+    return 'Network connection issue. Please check your internet and try again.';
+  }
+
+  return normalized || 'Login failed';
+};
 
 export const consumeRecoveryBootstrapSuppression = () => {
   if (!suppressNextAuthBootstrapFromRecovery) {
@@ -229,8 +263,12 @@ export const login = async (email, password, expectedRole) => {
     return { user: fullUser, userType: resolvedRole };
   } catch (error) {
     const normalized = normalizeError(error, 'Login failed');
-    logger.error('AuthService', 'Login error', normalized, error);
-    throw new Error(normalized.message);
+    const userMessage = normalizeLoginErrorMessage(normalized.message);
+    logger.warn('AuthService', 'Login failed', {
+      message: userMessage,
+      code: normalized.code || null,
+    });
+    throw new Error(userMessage);
   }
 };
 

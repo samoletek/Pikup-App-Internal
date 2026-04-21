@@ -13,7 +13,6 @@ export default function useDriverHomeRequestActions({
   navigation,
   onTripAccepted,
   refreshAcceptedScheduledRequests,
-  refreshProfile,
   reopenRequestModalModeRef,
   reopenRequestModalOnFocusRef,
   setAcceptedRequestId,
@@ -21,7 +20,6 @@ export default function useDriverHomeRequestActions({
   setAvailableRequests,
   setIncomingRequest,
   setIsMinimized,
-  setPhoneVerifyVisible,
   setSelectedRequest,
   setShowAllRequests,
   setShowIncomingModal,
@@ -196,21 +194,10 @@ export default function useDriverHomeRequestActions({
     setRequestModalMode?.('available');
   }, [setRequestModalMode, setSelectedRequest, setShowAllRequests, setShowRequestModal]);
 
-  const handleClosePhoneVerify = useCallback(() => {
-    setPhoneVerifyVisible(false);
-  }, [setPhoneVerifyVisible]);
-
-  const handlePhoneVerified = useCallback(async () => {
-    setPhoneVerifyVisible(false);
-    await refreshProfile();
-  }, [refreshProfile, setPhoneVerifyVisible]);
-
   return {
     handleAcceptRequest,
-    handleClosePhoneVerify,
     handleCloseRequestModal,
     handleMessageCustomer,
-    handlePhoneVerified,
     handleRequestMarkerPress,
     handleViewRequestDetails,
   };

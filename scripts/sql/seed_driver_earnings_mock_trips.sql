@@ -17,7 +17,7 @@ create temp table seed_driver_earnings_ctx (
 
 do $seed$
 declare
-  v_driver_email text := 'drew@architeq.io';
+  v_driver_email text := null;
   v_driver_id uuid := null;
 
   v_customer_email text := null;

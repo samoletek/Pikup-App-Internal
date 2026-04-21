@@ -10,7 +10,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Mapbox from "@rnmapbox/maps";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 import {
   useAuthIdentity,
@@ -34,7 +33,6 @@ import useCustomerHomeFlow, { CUSTOMER_LOCATION_GATE_STATUS } from "./useCustome
 export default function CustomerHomeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const tabBarHeight = useBottomTabBarHeight();
   const { currentUser, refreshProfile } = useAuthIdentity();
   const { getUserPickupRequests, createPickupRequest, cancelOrder } = useTripActions();
   const { uploadToSupabase } = useStorageActions();
@@ -185,7 +183,7 @@ export default function CustomerHomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <MapboxMap
-        style={[styles.map, { bottom: -tabBarHeight }]}
+        style={styles.map}
         centerCoordinate={mapCenterCoordinate}
         zoomLevel={14}
       >

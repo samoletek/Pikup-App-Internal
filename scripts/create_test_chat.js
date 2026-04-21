@@ -15,9 +15,21 @@ const envConfig = dotenv.parse(fs.readFileSync(envPath));
 
 const SUPABASE_URL = envConfig.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = envConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const TEST_CHAT_CUSTOMER_EMAIL = String(
+    envConfig.TEST_CHAT_CUSTOMER_EMAIL || process.env.TEST_CHAT_CUSTOMER_EMAIL || ''
+).trim();
+const TEST_CHAT_DRIVER_EMAIL = String(
+    envConfig.TEST_CHAT_DRIVER_EMAIL || process.env.TEST_CHAT_DRIVER_EMAIL || ''
+).trim();
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error("❌ Missing Supabase credentials in .env.local");
+    process.exit(1);
+}
+
+if (!TEST_CHAT_CUSTOMER_EMAIL || !TEST_CHAT_DRIVER_EMAIL) {
+    console.error("❌ Missing test chat emails.");
+    console.error("Set TEST_CHAT_CUSTOMER_EMAIL and TEST_CHAT_DRIVER_EMAIL in .env.local or shell env.");
     process.exit(1);
 }
 
@@ -30,11 +42,11 @@ async function main() {
     const { data: customers, error: customerError } = await supabase
         .from('customers')
         .select('id, email, first_name')
-        .eq('email', 'drewc@architeq.io')
+        .eq('email', TEST_CHAT_CUSTOMER_EMAIL)
         .single();
 
     if (customerError || !customers) {
-        console.error("❌ Customer 'drewc@architeq.io' not found.");
+        console.error(`❌ Customer '${TEST_CHAT_CUSTOMER_EMAIL}' not found.`);
         return;
     }
     const customer = customers;
@@ -45,21 +57,21 @@ async function main() {
     const { data: drivers, error: driverError } = await supabase
         .from('drivers')
         .select('id, email, first_name')
-        .eq('email', 'drew@architeq.io')
+        .eq('email', TEST_CHAT_DRIVER_EMAIL)
         .single();
 
     if (driverError || !drivers) {
-        console.log("⚠️ Driver 'drew@architeq.io' not found in drivers view. Checking users table...");
+        console.log(`⚠️ Driver '${TEST_CHAT_DRIVER_EMAIL}' not found in drivers view. Checking users table...`);
         const { data: userDriver } = await supabase
             .from('users')
             .select('id, email')
-            .eq('email', 'drew@architeq.io')
+            .eq('email', TEST_CHAT_DRIVER_EMAIL)
             .single();
 
         if (userDriver) {
-            driver = { ...userDriver, first_name: 'Drew' };
+            driver = { ...userDriver, first_name: 'Driver' };
         } else {
-            console.error("❌ Driver 'drew@architeq.io' not found anywhere.");
+            console.error(`❌ Driver '${TEST_CHAT_DRIVER_EMAIL}' not found anywhere.`);
             return;
         }
     } else {

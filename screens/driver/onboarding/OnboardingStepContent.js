@@ -18,8 +18,10 @@ export default function OnboardingStepContent({
   openSupport,
   openWebsite,
   identityLoading,
+  isCheckingVerificationStatus,
   verificationStatus,
   present,
+  checkVerificationStatusNow,
   isLoadingVerificationData,
   verificationDataPopulated,
   formData,
@@ -73,8 +75,10 @@ export default function OnboardingStepContent({
           openSupport={openSupport}
           openWebsite={openWebsite}
           identityLoading={identityLoading}
+          isCheckingVerificationStatus={isCheckingVerificationStatus}
           verificationStatus={verificationStatus}
           onStartVerification={() => present()}
+          onCheckVerificationStatus={() => checkVerificationStatusNow({ showAlert: false })}
         />
       );
 

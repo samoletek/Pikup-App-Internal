@@ -245,29 +245,7 @@ export default function CustomerProfileScreen({ navigation }) {
 
           <View style={styles.rowDivider} />
 
-          {/* Claims */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => navigation.navigate("CustomerClaimsScreen")}
-          >
-            <View style={styles.menuIcon}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color={colors.primary}
-              />
-            </View>
-            <View style={styles.menuTextCol}>
-              <Text style={styles.menuTitle}>Claims</Text>
-            </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.text.tertiary}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
+          {/* Claims are temporarily hidden in customer UI. */}
 
           {/* About */}
           <TouchableOpacity

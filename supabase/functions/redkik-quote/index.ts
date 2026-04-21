@@ -8,8 +8,10 @@ const REDKIK_CLIENT_ID = Deno.env.get("REDKIK_CLIENT_ID") ?? ""
 const REDKIK_CLIENT_SECRET = Deno.env.get("REDKIK_CLIENT_SECRET") ?? ""
 // Optional fallback customer id when setup API returns no registered customers.
 const REDKIK_ORG_ID = Deno.env.get("REDKIK_ORG_ID") ?? ""
-// Environment flag: "production" uses standard policy, anything else uses "PU Test" alias.
+// Environment flag used for policy selection.
 const REDKIK_ENV = Deno.env.get("REDKIK_ENV") ?? ""
+const REDKIK_PRODUCTION_POLICY_ALIAS = Deno.env.get("REDKIK_PRODUCTION_POLICY_ALIAS")?.trim() || "Cargo"
+const REDKIK_TEST_POLICY_ALIAS = Deno.env.get("REDKIK_TEST_POLICY_ALIAS")?.trim() || "PU Test"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -302,6 +304,45 @@ function findPolicyByAlias(setup: SetupData, alias: string): string | null {
   return policy?.id || null
 }
 
+function isProductionEnvironment(): boolean {
+  if (REDKIK_ENV.toLowerCase() === "production") {
+    return true
+  }
+
+  try {
+    const hostname = new URL(REDKIK_BASE_URL).hostname.toLowerCase()
+    return hostname === "app.redkik.com"
+  } catch {
+    return false
+  }
+}
+
+function resolvePolicyId(setup: SetupData): string {
+  const production = isProductionEnvironment()
+  const preferredAlias = production ? REDKIK_PRODUCTION_POLICY_ALIAS : REDKIK_TEST_POLICY_ALIAS
+  const preferredPolicyId = preferredAlias ? findPolicyByAlias(setup, preferredAlias) : null
+
+  if (preferredPolicyId) {
+    return preferredPolicyId
+  }
+
+  if (production) {
+    const availablePolicies = setup.policies.map((policy) => policy.alias || policy.id).join(", ") || "none"
+    throw new Error(
+      `Redkik production policy alias '${REDKIK_PRODUCTION_POLICY_ALIAS}' not found. Available: ${availablePolicies}`
+    )
+  }
+
+  if (setup.policies.length > 0) {
+    console.warn(
+      `[Redkik] Preferred test policy alias '${REDKIK_TEST_POLICY_ALIAS}' not found; falling back to first policy`
+    )
+    return setup.policies[0].id
+  }
+
+  throw new Error("Redkik setup returned no policies — cannot build quote payload")
+}
+
 function calculateServiceFee(redkikPremium: number): number {
   if (redkikPremium <= REDKIK_MINIMUM_PREMIUM) {
     return SERVICE_FEE_MINIMUM
@@ -483,14 +524,8 @@ function buildQuotePayload(params: QuoteParams, setup: SetupData) {
     payload.customerId = REDKIK_ORG_ID
   }
 
-  // Policy selection: prefer "PU Test" in test/dev environments, otherwise first available.
-  const isProductionEnv = REDKIK_ENV === "production" || REDKIK_BASE_URL.includes("sales.app.redkik.com")
-  const testPolicyId = !isProductionEnv ? findPolicyByAlias(setup, "PU Test") : null
-  if (testPolicyId) {
-    payload.policyId = testPolicyId
-  } else if (setup.policies.length > 0) {
-    payload.policyId = setup.policies[0].id
-  }
+  // Policy selection: production is pinned to the configured production alias (default: Cargo).
+  payload.policyId = resolvePolicyId(setup)
 
   return payload
 }
@@ -549,7 +584,7 @@ async function completeBooking(token: string, bookingId: string) {
   console.log("[Redkik] Complete booking:", bookingId)
 
   const res = await fetch(completeUrl, {
-    method: "POST",
+    method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
@@ -572,7 +607,7 @@ async function cancelBooking(token: string, bookingId: string) {
   console.log("[Redkik] Cancel booking:", bookingId)
 
   const res = await fetch(cancelUrl, {
-    method: "POST",
+    method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,

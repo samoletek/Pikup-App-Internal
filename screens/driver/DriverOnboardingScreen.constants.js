@@ -95,7 +95,7 @@ export const US_STATES = [
 
 export const ONBOARDING_VIDEO_WATCHED_KEY = 'driver_onboarding_video_watched';
 export const ONBOARDING_DRAFT_STORAGE_PREFIX = 'driver_onboarding_draft_v1';
-export const VALID_VERIFICATION_STATUSES = ['pending', 'completed', 'failed', 'canceled'];
+export const VALID_VERIFICATION_STATUSES = ['pending', 'processing', 'completed', 'failed', 'canceled'];
 export const WEBSITE_URL = links.website;
 
 export const initialFormData = {

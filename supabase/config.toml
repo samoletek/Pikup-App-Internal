@@ -134,6 +134,11 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/check-driver-onboarding-status/index.ts"
 
+[functions.verify-vehicle]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/verify-vehicle/index.ts"
+
 [functions.authorize-trip-payment]
 enabled = true
 verify_jwt = false
@@ -163,3 +168,8 @@ entrypoint = "./functions/stripe-webhook/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/run-monthly-payouts/index.ts"
+
+[functions.redkik-quote]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/redkik-quote/index.ts"

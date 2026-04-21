@@ -27,6 +27,25 @@ const SENSITIVE_PAYMENT_FIELDS = new Set([
   'detailsSubmitted',
 ]);
 
+const isPermissionPolicyError = (error) => {
+  if (!error) {
+    return false;
+  }
+
+  const normalizedCode = String(error?.code || '').trim().toUpperCase();
+  if (normalizedCode === '42501') {
+    return true;
+  }
+
+  const normalizedText = String(error?.message || error?.details || '')
+    .trim()
+    .toLowerCase();
+  return (
+    normalizedText.includes('row-level security policy') ||
+    normalizedText.includes('permission denied')
+  );
+};
+
 /**
  * Update driver payment profile metadata.
  */
@@ -135,11 +154,25 @@ export const updateDriverPaymentProfile = async (driverId, updates = {}, options
 
     const { data: upsertedData, error: upsertError } = await upsertDriverRowWithSelect(upsertPayload);
 
-    if (upsertError) throw upsertError;
+    if (upsertError) {
+      if (isPermissionPolicyError(upsertError)) {
+        logger.warn('PaymentService', 'Skipping driver profile upsert due RLS policy', {
+          driverId,
+          code: upsertError?.code || null,
+          message: upsertError?.message || null,
+        });
+        return upsertPayload;
+      }
+      throw upsertError;
+    }
     return upsertedData || upsertPayload;
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to update driver payment profile');
-    logger.error('PaymentService', 'updateDriverPaymentProfile failed', normalized, error);
+    if (isPermissionPolicyError(normalized) || isPermissionPolicyError(error)) {
+      logger.warn('PaymentService', 'updateDriverPaymentProfile blocked by RLS policy', normalized);
+    } else {
+      logger.error('PaymentService', 'updateDriverPaymentProfile failed', normalized, error);
+    }
     throw new Error(normalized.message);
   }
 };

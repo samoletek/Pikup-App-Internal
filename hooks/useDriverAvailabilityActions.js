@@ -3,7 +3,6 @@ import { Alert } from 'react-native';
 import { getDriverReadinessProfile } from '../services/DriverService';
 import MapboxLocationService from '../services/MapboxLocationService';
 import { logger } from '../services/logger';
-import { isDriverPhoneVerificationBypassEnabled } from '../config/appConfig';
 import {
   REQUEST_POOLS,
   shouldBypassDriverReadiness,
@@ -35,7 +34,6 @@ export default function useDriverAvailabilityActions({
   openActiveTrip,
   loadRequests,
   setLoading,
-  setPhoneVerifyVisible,
   setDriverOnline,
   setDriverOffline,
   setDriverLocation,
@@ -71,31 +69,7 @@ export default function useDriverAvailabilityActions({
     }
 
     const readiness = await getDriverReadinessProfile(driverId);
-    if (!isDriverPhoneVerificationBypassEnabled(currentUserRef.current)) {
-      return readiness;
-    }
-
-    const issues = Array.isArray(readiness?.issues) ? readiness.issues : [];
-    if (!issues.includes('phone')) {
-      return readiness;
-    }
-
-    const nextIssues = issues.filter((issue) => issue !== 'phone');
-    logger.info('DriverAvailability', 'Applied phone verification bypass for driver', {
-      driverId,
-      email: currentUserRef.current?.email || null,
-    });
-
-    return {
-      ...readiness,
-      ready: nextIssues.length === 0,
-      issues: nextIssues,
-      profile: {
-        ...(readiness?.profile || {}),
-        phone_verified: true,
-        phoneVerificationBypass: true,
-      },
-    };
+    return readiness;
   }, [currentUserId]);
 
   const confirmGoOnline = useCallback(async (mode, requestPool = REQUEST_POOLS.ASAP) => {
@@ -137,18 +111,6 @@ export default function useDriverAvailabilityActions({
           Alert.alert(
             'Account Check Pending',
             'We could not load your driver checks right now. Please try going online again in a moment.'
-          );
-          return;
-        }
-
-        if (issues.includes('phone')) {
-          Alert.alert(
-            'Phone Verification Required',
-            'You must verify your phone number before going online.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Verify Now', onPress: () => setPhoneVerifyVisible(true) },
-            ]
           );
           return;
         }
@@ -284,7 +246,6 @@ export default function useDriverAvailabilityActions({
     setDriverOnline,
     setIsOnline,
     setLoading,
-    setPhoneVerifyVisible,
     setSelectedRequest,
     setShowAllRequests,
     setShowRequestModal,

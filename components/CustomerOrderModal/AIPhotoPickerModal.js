@@ -9,9 +9,11 @@ import {
     Alert,
     ActivityIndicator,
     StyleSheet,
+    Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { borderRadius, colors, spacing, typography } from '../../styles/theme';
 import { aiPhotoStyles as s, SCREEN_HEIGHT } from './styles';
 import BaseModal from '../BaseModal';
@@ -39,6 +41,96 @@ const normalizePhotos = (photos = [], options = {}) => (
         .map((photo) => createPhotoEntry(photo, options))
         .filter(Boolean)
 );
+
+const resolvePreferredAssetRepresentationMode = () => {
+    const modes = ImagePicker?.UIImagePickerPreferredAssetRepresentationMode;
+    return (
+        modes?.Automatic ||
+        modes?.automatic ||
+        modes?.Compatible ||
+        modes?.compatible ||
+        modes?.Current ||
+        modes?.current ||
+        undefined
+    );
+};
+
+const launchGalleryImages = async (selectionLimit) => {
+    const preferredAssetRepresentationMode = resolvePreferredAssetRepresentationMode();
+    const normalizedSelectionLimit = Math.max(1, Number(selectionLimit) || 1);
+    const baseOptions = {
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        exif: false,
+        quality: 0.5,
+        base64: false,
+    };
+    const buildOptions = (options = {}) => ({
+        ...baseOptions,
+        ...(preferredAssetRepresentationMode ? { preferredAssetRepresentationMode } : {}),
+        ...options,
+    });
+    const shouldTryMultiSelect = normalizedSelectionLimit > 1;
+
+    if (shouldTryMultiSelect) {
+        try {
+            return await ImagePicker.launchImageLibraryAsync(
+                buildOptions({
+                    allowsMultipleSelection: true,
+                    selectionLimit: normalizedSelectionLimit,
+                    ...(Platform.OS === 'ios' ? { orderedSelection: true } : {}),
+                })
+            );
+        } catch (error) {
+            logger.warn(
+                'AIPhotoPickerModal',
+                'Multi-select photo picker failed, retrying with single-select mode',
+                error
+            );
+        }
+    }
+
+    try {
+        return await ImagePicker.launchImageLibraryAsync(
+            buildOptions({
+                allowsMultipleSelection: false,
+                selectionLimit: 1,
+            })
+        );
+    } catch (singleSelectError) {
+        if (!preferredAssetRepresentationMode) {
+            throw singleSelectError;
+        }
+
+        logger.warn(
+            'AIPhotoPickerModal',
+            'Single-select photo picker failed with preferred representation mode, retrying without it',
+            singleSelectError
+        );
+
+        return ImagePicker.launchImageLibraryAsync({
+            ...baseOptions,
+            allowsMultipleSelection: false,
+            selectionLimit: 1,
+        });
+    }
+};
+
+const pickImagesWithDocumentPicker = async (limit) => {
+    const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+        multiple: Number(limit || 1) > 1,
+    });
+
+    if (result?.canceled) {
+        return [];
+    }
+
+    return (Array.isArray(result?.assets) ? result.assets : [])
+        .filter((asset) => Boolean(asset?.uri))
+        .slice(0, Math.max(1, Number(limit) || 1));
+};
 
 const AIPhotoPickerModal = ({
     visible,
@@ -119,8 +211,9 @@ const AIPhotoPickerModal = ({
     };
 
     const pickFromLibrary = async () => {
+        let remaining = 0;
         try {
-            const remaining = photoLimit - photos.length;
+            remaining = photoLimit - photos.length;
             if (remaining <= 0) {
                 Alert.alert('Limit reached', `You can add up to ${photoLimit} photos.`);
                 return;
@@ -130,22 +223,28 @@ const AIPhotoPickerModal = ({
                 Alert.alert('Permission needed', 'Please grant photo library permissions.');
                 return;
             }
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: 'images',
-                allowsMultipleSelection: true,
-                selectionLimit: remaining,
-                allowsEditing: false,
-                quality: 0.5,
-                base64: false,
-            });
+            const result = await launchGalleryImages(remaining);
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const newEntries = normalizePhotos(result.assets, { isLoading: true });
                 setPhotos(prev => [...prev, ...newEntries].slice(0, photoLimit));
+                return;
             }
         } catch (error) {
-            logger.error('AIPhotoPickerModal', 'Library picker error', error);
-            Alert.alert('Error', 'Failed to pick photos.');
+            logger.warn('AIPhotoPickerModal', 'Library picker failed, trying document picker fallback', error);
         }
+
+        try {
+            const fallbackAssets = await pickImagesWithDocumentPicker(remaining > 0 ? remaining : 1);
+            if (fallbackAssets.length > 0) {
+                const newEntries = normalizePhotos(fallbackAssets, { isLoading: true });
+                setPhotos(prev => [...prev, ...newEntries].slice(0, photoLimit));
+                return;
+            }
+        } catch (fallbackError) {
+            logger.error('AIPhotoPickerModal', 'Document picker fallback error', fallbackError);
+        }
+
+        Alert.alert('Error', 'Failed to pick photos.');
     };
 
     const handleRemovePhoto = (photoId) => {

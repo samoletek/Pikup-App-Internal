@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, useWindowDimensions } from 'react-native';
+import { Alert } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import {
   useAuthIdentity,
   useDriverActions,
-  useMessagingActions,
   useProfileActions,
   useTripActions,
 } from '../../contexts/AuthContext';
@@ -20,9 +19,6 @@ import useDriverIncomingRequestHandlers from '../../hooks/useDriverIncomingReque
 import useDriverActiveTripRestore from '../../hooks/useDriverActiveTripRestore';
 import useDriverRequestsFeed from '../../hooks/useDriverRequestsFeed';
 import useDriverHomeLocationTracking from '../../hooks/useDriverHomeLocationTracking';
-import useDriverTripChat from '../../hooks/useDriverTripChat';
-import useTripConversationUnread from '../../hooks/useTripConversationUnread';
-import useAutoMapboxNavigationStart from '../../hooks/useAutoMapboxNavigationStart';
 import useMapboxNavigation from '../../components/mapbox/useMapboxNavigation';
 import useDriverHomeRequestActions from './useDriverHomeRequestActions';
 import useAcceptedScheduledRequests from './useAcceptedScheduledRequests';
@@ -47,6 +43,7 @@ import {
   ARRIVAL_UNLOCK_RADIUS_METERS,
   DROPOFF_ARRIVAL_UNLOCK_RADIUS_METERS,
   formatDistance,
+  getDistanceFromLatLonInKm,
 } from './navigationMath.utils';
 import {
   DROPOFF_PHASE_STATUSES,
@@ -59,7 +56,10 @@ import {
   isSupportedOrderStateCode,
 } from '../../utils/locationState';
 import { logger } from '../../services/logger';
-import { resolveRequestCustomerId } from './requestConversationContext.utils';
+import {
+  getDriverReadinessProfile,
+  subscribeToDriverProfileUpdates,
+} from '../../services/DriverService';
 
 const parseTripPoint = (trip, pointName) => {
   if (!trip || typeof trip !== 'object') {
@@ -68,20 +68,24 @@ const parseTripPoint = (trip, pointName) => {
 
   const points = pointName === 'pickup'
     ? [
+      trip?.pickup,
       trip?.pickup?.coordinates,
       trip?.pickupCoordinates,
       trip?.pickup_location?.coordinates,
       trip?.pickup_location,
+      trip?.originalData?.pickup,
       trip?.originalData?.pickup?.coordinates,
       trip?.originalData?.pickupCoordinates,
       trip?.originalData?.pickup_location?.coordinates,
       trip?.originalData?.pickup_location,
     ]
     : [
+      trip?.dropoff,
       trip?.dropoff?.coordinates,
       trip?.dropoffCoordinates,
       trip?.dropoff_location?.coordinates,
       trip?.dropoff_location,
+      trip?.originalData?.dropoff,
       trip?.originalData?.dropoff?.coordinates,
       trip?.originalData?.dropoffCoordinates,
       trip?.originalData?.dropoff_location?.coordinates,
@@ -97,13 +101,27 @@ const parseTripPoint = (trip, pointName) => {
 
   const latitude = Number(
     pointName === 'pickup'
-      ? (trip?.pickupLat ?? trip?.pickup_lat)
-      : (trip?.dropoffLat ?? trip?.dropoff_lat)
+      ? (trip?.pickupLat ?? trip?.pickup_lat ?? trip?.originalData?.pickupLat ?? trip?.originalData?.pickup_lat)
+      : (trip?.dropoffLat ?? trip?.dropoff_lat ?? trip?.originalData?.dropoffLat ?? trip?.originalData?.dropoff_lat)
   );
   const longitude = Number(
     pointName === 'pickup'
-      ? (trip?.pickupLng ?? trip?.pickup_lon ?? trip?.pickup_lng)
-      : (trip?.dropoffLng ?? trip?.dropoff_lon ?? trip?.dropoff_lng)
+      ? (
+        trip?.pickupLng ??
+        trip?.pickup_lon ??
+        trip?.pickup_lng ??
+        trip?.originalData?.pickupLng ??
+        trip?.originalData?.pickup_lon ??
+        trip?.originalData?.pickup_lng
+      )
+      : (
+        trip?.dropoffLng ??
+        trip?.dropoff_lon ??
+        trip?.dropoff_lng ??
+        trip?.originalData?.dropoffLng ??
+        trip?.originalData?.dropoff_lon ??
+        trip?.originalData?.dropoff_lng
+      )
   );
 
   if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
@@ -121,87 +139,169 @@ const parseTripDriverLocation = (trip) => (
   || null
 );
 
-const firstNonEmptyText = (...candidates) => {
-  for (const candidate of candidates) {
-    if (typeof candidate !== 'string') {
-      continue;
-    }
+const mergeCoordinatesIntoTripPoint = (pointValue, coordinates) => {
+  if (!coordinates) {
+    return pointValue;
+  }
 
-    const trimmed = candidate.trim();
-    if (trimmed) {
-      return trimmed;
+  const normalizedCoordinates = [coordinates.longitude, coordinates.latitude];
+  if (pointValue && typeof pointValue === 'object' && !Array.isArray(pointValue)) {
+    return {
+      ...pointValue,
+      coordinates: normalizedCoordinates,
+      latitude: Number.isFinite(Number(pointValue.latitude)) ? pointValue.latitude : coordinates.latitude,
+      longitude: Number.isFinite(Number(pointValue.longitude)) ? pointValue.longitude : coordinates.longitude,
+    };
+  }
+
+  return {
+    coordinates: normalizedCoordinates,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
+  };
+};
+
+const NAVIGATION_DESTINATION_HYDRATION_ATTEMPTS = 3;
+const NAVIGATION_DESTINATION_HYDRATION_DELAY_MS = 450;
+const MIN_ROUTE_PROGRESS_LOCATION_DELTA_METERS = 3;
+const wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+
+const resolveNavigationStageFromTrip = (trip, preferredStage = 'pickup') => {
+  const normalizedStatus = normalizeTripStatus(trip?.status);
+  if (DROPOFF_PHASE_STATUSES.includes(normalizedStatus)) {
+    return 'dropoff';
+  }
+
+  if (PICKUP_PHASE_STATUSES.includes(normalizedStatus)) {
+    return 'pickup';
+  }
+
+  return preferredStage === 'dropoff' ? 'dropoff' : 'pickup';
+};
+
+const resolveTripDestinationByStage = (trip, preferredStage = 'pickup') => {
+  const stageByStatus = resolveNavigationStageFromTrip(trip, preferredStage);
+  const alternateStage = stageByStatus === 'dropoff' ? 'pickup' : 'dropoff';
+  const candidateStages = [
+    stageByStatus,
+    preferredStage,
+    alternateStage,
+  ].filter((stage, index, list) => list.indexOf(stage) === index);
+
+  for (const stage of candidateStages) {
+    const destination = parseTripPoint(trip, stage);
+    if (destination) {
+      return { stage, destination };
     }
   }
 
-  return '';
+  return {
+    stage: stageByStatus,
+    destination: null,
+  };
+};
+
+const resolvePickupToDropoffFallbackRoute = (trip) => {
+  const pickup = parseTripPoint(trip, 'pickup');
+  const dropoff = parseTripPoint(trip, 'dropoff');
+  if (!pickup || !dropoff) {
+    return null;
+  }
+
+  return {
+    origin: pickup,
+    destination: dropoff,
+  };
+};
+
+const applyTripPointFallback = (trip, pointName, fallbackCoordinates) => {
+  if (!trip || !fallbackCoordinates) {
+    return;
+  }
+
+  if (pointName === 'pickup') {
+    trip.pickup = mergeCoordinatesIntoTripPoint(trip.pickup, fallbackCoordinates);
+    trip.pickup_location = mergeCoordinatesIntoTripPoint(trip.pickup_location, fallbackCoordinates);
+    return;
+  }
+
+  trip.dropoff = mergeCoordinatesIntoTripPoint(trip.dropoff, fallbackCoordinates);
+  trip.dropoff_location = mergeCoordinatesIntoTripPoint(trip.dropoff_location, fallbackCoordinates);
+};
+
+const mergeTripForNavigation = ({ previousTrip, updatedTrip, fallbackStatus = null, fallbackDriverLocation = null }) => {
+  const safePreviousTrip = previousTrip && typeof previousTrip === 'object' ? previousTrip : {};
+  const safeUpdatedTrip = updatedTrip && typeof updatedTrip === 'object' ? updatedTrip : {};
+
+  const mergedTrip = {
+    ...safePreviousTrip,
+    ...safeUpdatedTrip,
+  };
+
+  if (!mergedTrip.status && fallbackStatus) {
+    mergedTrip.status = fallbackStatus;
+  }
+
+  if (!mergedTrip.pickup) {
+    mergedTrip.pickup = safeUpdatedTrip.pickup_location || safePreviousTrip.pickup || safePreviousTrip.pickup_location || null;
+  }
+
+  if (!mergedTrip.dropoff) {
+    mergedTrip.dropoff = safeUpdatedTrip.dropoff_location || safePreviousTrip.dropoff || safePreviousTrip.dropoff_location || null;
+  }
+
+  if (!mergedTrip.pickup_location) {
+    mergedTrip.pickup_location = safeUpdatedTrip.pickup || safePreviousTrip.pickup_location || safePreviousTrip.pickup || null;
+  }
+
+  if (!mergedTrip.dropoff_location) {
+    mergedTrip.dropoff_location = safeUpdatedTrip.dropoff || safePreviousTrip.dropoff_location || safePreviousTrip.dropoff || null;
+  }
+
+  if (!mergedTrip.driverLocation && fallbackDriverLocation) {
+    mergedTrip.driverLocation = fallbackDriverLocation;
+  }
+
+  if (!mergedTrip.driver_location && fallbackDriverLocation) {
+    mergedTrip.driver_location = fallbackDriverLocation;
+  }
+
+  if (!mergedTrip.originalData && safePreviousTrip?.originalData) {
+    mergedTrip.originalData = safePreviousTrip.originalData;
+  }
+
+  if (!mergedTrip.originalData && safePreviousTrip && Object.keys(safePreviousTrip).length > 0) {
+    mergedTrip.originalData = safePreviousTrip;
+  }
+
+  const fallbackPickupCoordinates = (
+    parseTripPoint(safeUpdatedTrip, 'pickup')
+    || parseTripPoint(safePreviousTrip, 'pickup')
+  );
+  const fallbackDropoffCoordinates = (
+    parseTripPoint(safeUpdatedTrip, 'dropoff')
+    || parseTripPoint(safePreviousTrip, 'dropoff')
+  );
+  applyTripPointFallback(mergedTrip, 'pickup', fallbackPickupCoordinates);
+  applyTripPointFallback(mergedTrip, 'dropoff', fallbackDropoffCoordinates);
+
+  return mergedTrip;
 };
 
 const RECENTLY_HANDLED_REQUEST_TTL_MS = 2 * 60 * 1000;
-const resolveNativeActionToken = (payload) => {
-  const token = payload?.actionToken ?? payload?.actionId;
-  if (typeof token !== 'string') {
-    return null;
-  }
-  const normalized = token.trim();
-  return normalized || null;
-};
-
-const resolveTripAddress = (trip, pointName) => {
-  if (!trip || typeof trip !== 'object') {
-    return '';
-  }
-
-  if (pointName === 'dropoff') {
-    return firstNonEmptyText(
-      trip?.dropoff?.address,
-      trip?.dropoff?.formatted_address,
-      trip?.dropoff_location?.address,
-      trip?.dropoff_location?.formatted_address,
-      trip?.dropoffAddress,
-      trip?.dropoff_address,
-      trip?.originalData?.dropoff?.address,
-      trip?.originalData?.dropoff?.formatted_address,
-      trip?.originalData?.dropoff_location?.address,
-      trip?.originalData?.dropoff_location?.formatted_address,
-      trip?.originalData?.dropoffAddress,
-      trip?.originalData?.dropoff_address,
-    );
-  }
-
-  return firstNonEmptyText(
-    trip?.pickup?.address,
-    trip?.pickup?.formatted_address,
-    trip?.pickup_location?.address,
-    trip?.pickup_location?.formatted_address,
-    trip?.pickupAddress,
-    trip?.pickup_address,
-    trip?.originalData?.pickup?.address,
-    trip?.originalData?.pickup?.formatted_address,
-    trip?.originalData?.pickup_location?.address,
-    trip?.originalData?.pickup_location?.formatted_address,
-    trip?.originalData?.pickupAddress,
-    trip?.originalData?.pickup_address,
-  );
-};
 
 export default function DriverHomeScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
-  const { width } = useWindowDimensions();
-  const isCompact = width < 370;
   const tabBarHeight = useBottomTabBarHeight();
-  const { userType, currentUser, refreshProfile } = useAuthIdentity();
-  const {
-    createConversation,
-    getConversations,
-    subscribeToConversations,
-  } = useMessagingActions();
+  const { userType, currentUser } = useAuthIdentity();
   const { getUserProfile } = useProfileActions();
   const {
     getUserPickupRequests,
     getAvailableRequests,
     declineRequestOffer,
     acceptRequest,
+    getRequestById,
     startDriving,
     arriveAtPickup,
     arriveAtDropoff,
@@ -209,7 +309,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     cancelOrder,
     confirmScheduledTripCheckin,
     declineScheduledTripCheckin,
-    getRequestById,
     updateDriverLocation,
   } = useTripActions();
   const {
@@ -233,9 +332,6 @@ export default function DriverHomeScreen({ navigation, route }) {
   const [showIncomingModal, setShowIncomingModal] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState(null);
 
-  // Phone verification modal
-  const [phoneVerifyVisible, setPhoneVerifyVisible] = useState(false);
-
   // Offline dashboard expansion state
   const [, setDashboardExpanded] = useState(false);
 
@@ -250,10 +346,15 @@ export default function DriverHomeScreen({ navigation, route }) {
   const recentlyHandledRequestIdsRef = useRef(new Map());
   const reopenRequestModalOnFocusRef = useRef(false);
   const reopenRequestModalModeRef = useRef('all');
-  const resumeNativeNavigationOnFocusRef = useRef(false);
-  const nativeActionInFlightRef = useRef(false);
   const [acceptedRequestId, setAcceptedRequestId] = useState(null);
-  const [navigationAttempted, setNavigationAttempted] = useState(false);
+  const [isArriveActionLoading, setIsArriveActionLoading] = useState(false);
+  const [isCancelActiveTripLoading, setIsCancelActiveTripLoading] = useState(false);
+  const [driverReadinessState, setDriverReadinessState] = useState({
+    checked: false,
+    loading: true,
+    ready: false,
+    issues: [],
+  });
   const hasActiveTrip = Boolean(acceptedRequestId && activeJob?.id);
   const markRequestHandled = useCallback((requestId) => {
     const normalizedId = String(requestId || '').trim();
@@ -283,7 +384,96 @@ export default function DriverHomeScreen({ navigation, route }) {
   }, []);
 
   const mapRef = useRef(null);
-  const { showOnboardingRequiredBanner } = resolveDriverOnboardingUiState(currentUser);
+  const refreshDriverReadiness = useCallback(async () => {
+    if (!currentUserId) {
+      setDriverReadinessState({
+        checked: false,
+        loading: false,
+        ready: false,
+        issues: ['Not authenticated'],
+      });
+      return;
+    }
+
+    setDriverReadinessState((previous) => ({
+      ...previous,
+      loading: true,
+    }));
+
+    try {
+      const readiness = await getDriverReadinessProfile(currentUserId);
+      const issues = Array.isArray(readiness?.issues) ? readiness.issues : [];
+      setDriverReadinessState({
+        checked: true,
+        loading: false,
+        ready: Boolean(readiness?.ready),
+        issues,
+      });
+    } catch (error) {
+      logger.warn('DriverHomeScreen', 'Failed to refresh driver readiness state', error);
+      setDriverReadinessState({
+        checked: true,
+        loading: false,
+        ready: false,
+        issues: ['Could not load profile'],
+      });
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    void refreshDriverReadiness();
+  }, [refreshDriverReadiness]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      return;
+    }
+
+    void refreshDriverReadiness();
+  }, [isFocused, refreshDriverReadiness]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    return subscribeToDriverProfileUpdates(currentUserId, () => {
+      void refreshDriverReadiness();
+    });
+  }, [currentUserId, refreshDriverReadiness]);
+
+  const { showOnboardingRequiredBanner: showOnboardingRequiredBannerFromProfile } =
+    resolveDriverOnboardingUiState(currentUser);
+  const hasReadinessBlockingIssue = useMemo(() => {
+    if (!driverReadinessState.checked) {
+      return false;
+    }
+
+    const issues = Array.isArray(driverReadinessState.issues)
+      ? driverReadinessState.issues
+      : [];
+    return issues.some((issue) => (
+      issue === 'vehicle' ||
+      issue === 'identity' ||
+      issue === 'payment' ||
+      issue === 'Could not load profile' ||
+      issue === 'Not authenticated'
+    ));
+  }, [driverReadinessState.checked, driverReadinessState.issues]);
+  const showOnboardingRequiredBanner = (
+    showOnboardingRequiredBannerFromProfile ||
+    hasReadinessBlockingIssue
+  );
+  const shouldLockAvailabilityForReadinessCheck = (
+    !hasActiveTrip &&
+    !isOnline &&
+    !driverReadinessState.checked &&
+    driverReadinessState.loading
+  );
+  const isAvailabilityLocked = (
+    showOnboardingRequiredBanner ||
+    shouldLockAvailabilityForReadinessCheck
+  );
   const {
     driverLocation,
     driverLocationStateCode,
@@ -293,7 +483,6 @@ export default function DriverHomeScreen({ navigation, route }) {
   } = useDriverHomeLocationTracking({
     currentUser,
     isOnline,
-    hasActiveTrip,
     activeJobId: activeJob?.id,
     updateDriverHeartbeat,
     updateDriverLocation,
@@ -308,22 +497,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     () => normalizeTripStatus(activeJob?.status),
     [activeJob?.status]
   );
-  const activeRequestCustomerId = useMemo(
-    () => resolveRequestCustomerId({ requestData: activeJob, routeRequest: activeJob }),
-    [activeJob]
-  );
-  const {
-    hasUnreadChat: hasUnreadActiveTripChat,
-    setHasUnreadChat: setHasUnreadActiveTripChat,
-  } = useTripConversationUnread({
-    currentUserId,
-    getConversations,
-    subscribeToConversations,
-    conversationUserType: 'driver',
-    activeRequestId: activeJob?.id || null,
-    activeRequestCustomerId,
-    activeRequestDriverId: currentUserId,
-  });
   const isPickupNavigationStage = useMemo(
     () => PICKUP_PHASE_STATUSES.includes(activeJobStatus),
     [activeJobStatus]
@@ -356,108 +529,60 @@ export default function DriverHomeScreen({ navigation, route }) {
     isPickupNavigationStage,
     pickupLocation,
   ]);
-  const pickupAddressLabel = useMemo(
-    () => resolveTripAddress(activeJob, 'pickup') || 'Pickup location',
-    [activeJob]
-  );
-  const dropoffAddressLabel = useMemo(
-    () => resolveTripAddress(activeJob, 'dropoff') || 'Dropoff location',
-    [activeJob]
-  );
   const activeNavigationStage = isDropoffNavigationStage ? 'dropoff' : 'pickup';
   const isFutureScheduledActiveJob = useMemo(
     () => isFutureScheduledTrip(activeJob),
     [activeJob]
   );
-  const shouldUseNativeNavigator = Boolean(
-    hasActiveTrip &&
-    navigationOrigin &&
-    navigationDestination &&
-    (isPickupNavigationStage || isDropoffNavigationStage)
-  );
   const activeTripNavigationOptions = useMemo(() => {
     if (!hasActiveTrip) {
       return {};
     }
-
-    if (activeNavigationStage === 'dropoff') {
-      return {
-        simulate: appConfig.navigation.mapboxSimulationEnabled,
-        allowSystemCancel: false,
-        actionCard: {
-          enabled: true,
-          title: 'Dropoff Location',
-          subtitle: dropoffAddressLabel,
-          primaryActionLabel: "I've Arrived at Dropoff",
-          chatActionLabel: hasUnreadActiveTripChat ? 'Chat •' : 'Chat',
-          chatHasUnread: hasUnreadActiveTripChat,
-          unlockDistanceMeters: DROPOFF_ARRIVAL_UNLOCK_RADIUS_METERS,
-          payload: {
-            stage: 'dropoff',
-            requestId: activeJob?.id || null,
-          },
-        },
-      };
-    }
-
     return {
       simulate: appConfig.navigation.mapboxSimulationEnabled,
-      allowSystemCancel: false,
+      allowSystemCancel: true,
       actionCard: {
-        enabled: true,
-        title: 'Pickup Location',
-        subtitle: pickupAddressLabel,
-        primaryActionLabel: "I've Arrived",
-        chatActionLabel: hasUnreadActiveTripChat ? 'Chat •' : 'Chat',
-        chatHasUnread: hasUnreadActiveTripChat,
-        secondaryActionLabel: 'Cancel Trip',
-        unlockDistanceMeters: ARRIVAL_UNLOCK_RADIUS_METERS,
-        payload: {
-          stage: 'pickup',
-          requestId: activeJob?.id || null,
-        },
+        enabled: false,
       },
     };
   }, [
-    activeJob,
-    activeNavigationStage,
-    dropoffAddressLabel,
-    hasUnreadActiveTripChat,
     hasActiveTrip,
-    pickupAddressLabel,
   ]);
-  const { openChat } = useDriverTripChat({
-    requestData: activeJob,
-    routeRequest: activeJob,
-    getRequestById,
-    getUserProfile,
-    currentUserId,
-    createConversation,
-    navigation,
-    clearUnread: () => setHasUnreadActiveTripChat(false),
-    errorMessage: 'Could not open chat right now. Please try again.',
-  });
-  const primaryActionRef = useRef(async () => {});
-  const secondaryActionRef = useRef(async () => {});
-  const chatActionRef = useRef(async () => {});
-  const cancelActionRef = useRef(async () => {});
-  const nativeCancellationInFlightRef = useRef(false);
-  const nativeChatActionInFlightRef = useRef(false);
-  const handledStageTransitionKeyRef = useRef(null);
   const pickupProgressSyncInFlightRef = useRef(false);
+  const destinationHydrationInFlightRef = useRef(false);
+  const destinationHydrationAttemptRef = useRef(null);
   const {
     startNavigation,
     stopNavigation,
-    updateNavigationOptions,
-    acknowledgeNavigationAction,
-    completeNavigationAction,
     isNavigating,
-    isSupported: isNativeNavigationSupported,
   } = useMapboxNavigation({
     origin: navigationOrigin,
     destination: navigationDestination,
     navigationOptions: activeTripNavigationOptions,
     onRouteProgress: (progress) => {
+      const progressLocation = parseCoordinates(progress?.location || progress?.rawLocation);
+      if (progressLocation) {
+        setDriverLocation((previousLocation) => {
+          if (previousLocation) {
+            const distanceMeters = getDistanceFromLatLonInKm(
+              previousLocation.latitude,
+              previousLocation.longitude,
+              progressLocation.latitude,
+              progressLocation.longitude
+            ) * 1000;
+            if (Number.isFinite(distanceMeters) && distanceMeters < MIN_ROUTE_PROGRESS_LOCATION_DELTA_METERS) {
+              return previousLocation;
+            }
+          }
+
+          return {
+            latitude: progressLocation.latitude,
+            longitude: progressLocation.longitude,
+            stateCode: previousLocation?.stateCode || null,
+          };
+        });
+      }
+
       if (Number.isFinite(progress?.distanceRemaining)) {
         logger.info('DriverHomeScreen', 'Native navigation progress', {
           requestId: activeJob?.id,
@@ -474,131 +599,212 @@ export default function DriverHomeScreen({ navigation, route }) {
         payload: payload || null,
       });
     },
-    onPrimaryAction: (payload) => {
-      void primaryActionRef.current(payload);
-    },
-    onSecondaryAction: (payload) => {
-      void secondaryActionRef.current(payload);
-    },
-    onChatAction: (payload) => {
-      void chatActionRef.current(payload);
-    },
     onCancel: (payload) => {
       logger.info('DriverHomeScreen', 'Native navigation cancelled by user', payload || {});
-      void cancelActionRef.current(payload);
     },
   });
   const stopNativeNavigationSilently = useCallback(async () => {
     await stopNavigation({ showAlert: false });
   }, [stopNavigation]);
-  const acknowledgeNativeAction = useCallback(async (actionToken) => {
-    const normalizedToken = String(actionToken || '').trim();
-    if (!normalizedToken) {
-      return;
-    }
-    try {
-      await acknowledgeNavigationAction(normalizedToken);
-    } catch (error) {
-      logger.warn('DriverHomeScreen', 'Failed to acknowledge native action', error);
-    }
-  }, [acknowledgeNavigationAction]);
-  const completeNativeAction = useCallback(async (actionToken, success) => {
-    const normalizedToken = String(actionToken || '').trim();
-    if (!normalizedToken) {
-      return;
-    }
-    try {
-      await completeNavigationAction(normalizedToken, Boolean(success));
-    } catch (error) {
-      logger.warn('DriverHomeScreen', 'Failed to complete native action', error);
-    }
-  }, [completeNavigationAction]);
-  const setNativeActionButtonsEnabled = useCallback(async ({
-    primaryEnabled,
-    chatEnabled,
-  } = {}) => {
-    const actionCard = {};
-    if (typeof primaryEnabled === 'boolean') {
-      actionCard.primaryActionEnabled = primaryEnabled;
-    }
-    if (typeof chatEnabled === 'boolean') {
-      actionCard.chatActionEnabled = chatEnabled;
-    }
-    if (Object.keys(actionCard).length === 0) {
-      return;
+  const activeTripArrivalUnlockDistanceMeters = (
+    activeNavigationStage === 'dropoff'
+      ? DROPOFF_ARRIVAL_UNLOCK_RADIUS_METERS
+      : ARRIVAL_UNLOCK_RADIUS_METERS
+  );
+  const activeTripDistanceToDestinationMeters = useMemo(() => {
+    if (!driverLocation || !navigationDestination) {
+      return null;
     }
 
-    try {
-      await updateNavigationOptions({ actionCard });
-    } catch (error) {
-      logger.warn('DriverHomeScreen', 'Failed to update native action button state', error);
-    }
-  }, [updateNavigationOptions]);
-  const cancelActiveTrip = useCallback(async (requestId) => {
-    if (!requestId) {
-      return;
-    }
-
-    if (nativeCancellationInFlightRef.current) {
-      return;
-    }
-    nativeCancellationInFlightRef.current = true;
-
-    try {
-      await stopNativeNavigationSilently();
-    } catch (stopError) {
-      logger.warn('DriverHomeScreen', 'Failed to stop native navigation before cancellation', stopError);
+    const distanceKm = getDistanceFromLatLonInKm(
+      driverLocation.latitude,
+      driverLocation.longitude,
+      navigationDestination.latitude,
+      navigationDestination.longitude
+    );
+    const distanceMeters = distanceKm * 1000;
+    return Number.isFinite(distanceMeters) ? distanceMeters : null;
+  }, [driverLocation, navigationDestination]);
+  const isArriveActionEnabled = useMemo(() => {
+    if (!hasActiveTrip || !driverLocation || !navigationDestination) {
+      return false;
     }
 
-    try {
-      const result = await cancelOrder(requestId, 'driver_request');
-      if (!result?.success) {
-        throw new Error(result?.error || 'Please try again in a moment.');
+    if (!Number.isFinite(activeTripDistanceToDestinationMeters)) {
+      return false;
+    }
+
+    return activeTripDistanceToDestinationMeters <= activeTripArrivalUnlockDistanceMeters;
+  }, [
+    activeTripArrivalUnlockDistanceMeters,
+    activeTripDistanceToDestinationMeters,
+    driverLocation,
+    hasActiveTrip,
+    navigationDestination,
+  ]);
+  const arriveActionLabel = (
+    activeNavigationStage === 'dropoff'
+      ? "I've Arrived at Dropoff"
+      : "I've Arrived"
+  );
+  const arriveActionHint = useMemo(() => {
+    if (!hasActiveTrip) {
+      return '';
+    }
+
+    if (!Number.isFinite(activeTripDistanceToDestinationMeters)) {
+      return 'Waiting for live location to enable arrival.';
+    }
+
+    if (isArriveActionEnabled) {
+      return `You are ${formatDistance(activeTripDistanceToDestinationMeters)} away from the stop.`;
+    }
+
+    return (
+      `Arrival unlocks within ${formatDistance(activeTripArrivalUnlockDistanceMeters)} `
+      + `(currently ${formatDistance(activeTripDistanceToDestinationMeters)} away).`
+    );
+  }, [
+    activeTripArrivalUnlockDistanceMeters,
+    activeTripDistanceToDestinationMeters,
+    hasActiveTrip,
+    isArriveActionEnabled,
+  ]);
+  const openNativeNavigationFromHome = useCallback((trip) => {
+    const openNavigation = async () => {
+      const mergedCandidateTrip = mergeTripForNavigation({
+        previousTrip: activeJob,
+        updatedTrip: trip,
+        fallbackDriverLocation: navigationOrigin || driverLocation || null,
+      });
+
+      if (!mergedCandidateTrip?.id) {
+        return false;
       }
 
-      setAcceptedRequestId(null);
-      setActiveJob(null);
-    } catch (error) {
-      logger.error('DriverHomeScreen', 'Unable to cancel active trip from native action', error);
-      Alert.alert('Unable to cancel', error?.message || 'Please try again in a moment.');
-    } finally {
-      nativeCancellationInFlightRef.current = false;
-    }
-  }, [cancelOrder, stopNativeNavigationSilently]);
-  const handleNativePrimaryAction = useCallback(async (payload) => {
-    const actionToken = resolveNativeActionToken(payload);
-    await acknowledgeNativeAction(actionToken);
+      const preferredNavigationStage = activeNavigationStage === 'dropoff' ? 'dropoff' : 'pickup';
 
-    if (nativeActionInFlightRef.current || !activeJob?.id) {
-      await completeNativeAction(actionToken, false);
+      let resolvedTrip = mergedCandidateTrip;
+      let resolvedOrigin = (
+        parseTripDriverLocation(mergedCandidateTrip)
+        || navigationOrigin
+        || driverLocation
+        || null
+      );
+      let { stage: resolvedNavigationStage, destination: resolvedDestination } = resolveTripDestinationByStage(
+        mergedCandidateTrip,
+        preferredNavigationStage
+      );
+
+      if (!resolvedDestination && typeof getRequestById === 'function') {
+        for (let attempt = 0; attempt < NAVIGATION_DESTINATION_HYDRATION_ATTEMPTS; attempt += 1) {
+          try {
+            const refreshedTrip = await getRequestById(mergedCandidateTrip.id);
+            if (refreshedTrip?.id === mergedCandidateTrip.id) {
+              resolvedTrip = mergeTripForNavigation({
+                previousTrip: resolvedTrip,
+                updatedTrip: refreshedTrip,
+                fallbackDriverLocation: resolvedOrigin,
+              });
+              resolvedOrigin = resolvedOrigin || parseTripDriverLocation(resolvedTrip);
+              const resolvedStageResult = resolveTripDestinationByStage(
+                resolvedTrip,
+                preferredNavigationStage
+              );
+              resolvedNavigationStage = resolvedStageResult.stage;
+              resolvedDestination = resolvedStageResult.destination;
+              if (resolvedDestination) {
+                break;
+              }
+            }
+          } catch (error) {
+            logger.warn('DriverHomeScreen', 'Failed to refresh trip before opening navigation', {
+              requestId: mergedCandidateTrip.id,
+              stage: preferredNavigationStage,
+              attempt: attempt + 1,
+              error,
+            });
+          }
+
+          if (attempt < NAVIGATION_DESTINATION_HYDRATION_ATTEMPTS - 1) {
+            await wait(NAVIGATION_DESTINATION_HYDRATION_DELAY_MS);
+          }
+        }
+      }
+
+      if (!resolvedOrigin || !resolvedDestination) {
+        if (resolvedNavigationStage === 'dropoff') {
+          const pickupToDropoffFallbackRoute = resolvePickupToDropoffFallbackRoute(resolvedTrip);
+          if (pickupToDropoffFallbackRoute) {
+            resolvedOrigin = resolvedOrigin || pickupToDropoffFallbackRoute.origin;
+            resolvedDestination = resolvedDestination || pickupToDropoffFallbackRoute.destination;
+            logger.warn('DriverHomeScreen', 'Using pickup-to-dropoff fallback route for native navigation', {
+              requestId: resolvedTrip?.id || mergedCandidateTrip.id,
+              preferredStage: preferredNavigationStage,
+            });
+          }
+        }
+      }
+
+      if (!resolvedOrigin || !resolvedDestination) {
+        logger.warn('DriverHomeScreen', 'Cannot open navigation because route coordinates are missing', {
+          requestId: resolvedTrip?.id || mergedCandidateTrip.id,
+          stage: resolvedNavigationStage,
+          preferredStage: preferredNavigationStage,
+          hasOrigin: Boolean(resolvedOrigin),
+          hasDestination: Boolean(resolvedDestination),
+        });
+        Alert.alert(
+          'Navigation Error',
+          'Route is still loading. Please try again in a moment.'
+        );
+        return false;
+      }
+
+      setAcceptedRequestId(resolvedTrip.id);
+      setActiveJob((previousTrip) => mergeTripForNavigation({
+        previousTrip,
+        updatedTrip: resolvedTrip,
+        fallbackDriverLocation: resolvedOrigin,
+      }));
+
+      return startNavigation({
+        showAlert: true,
+        origin: resolvedOrigin,
+        destination: resolvedDestination,
+      });
+    };
+
+    void openNavigation();
+    return true;
+  }, [activeJob, activeNavigationStage, driverLocation, getRequestById, navigationOrigin, startNavigation]);
+  const handleArriveAtStopFromHome = useCallback(async () => {
+    if (!activeJob?.id || isArriveActionLoading) {
       return;
     }
 
-    const transitionKey = `${activeJob.id}:${activeNavigationStage}`;
-    if (handledStageTransitionKeyRef.current === transitionKey) {
+    if (!isArriveActionEnabled) {
+      Alert.alert(
+        'Too far from stop',
+        'Move closer to the stop and try again.'
+      );
       return;
     }
 
-    nativeActionInFlightRef.current = true;
-    void setNativeActionButtonsEnabled({ primaryEnabled: false, chatEnabled: false });
-    let didCompleteTransition = false;
+    setIsArriveActionLoading(true);
     try {
       const requestId = activeJob.id;
       const currentLocation = navigationOrigin || driverLocation || parseTripDriverLocation(activeJob);
 
       if (activeNavigationStage === 'dropoff') {
         const updatedTrip = await arriveAtDropoff(requestId, currentLocation);
-        const resolvedDropoffTrip = updatedTrip || {
-          ...(activeJob || {}),
-          status: TRIP_STATUS.ARRIVED_AT_DROPOFF,
-        };
-        handledStageTransitionKeyRef.current = transitionKey;
-        setActiveJob(updatedTrip || {
-          ...(activeJob || {}),
-          status: TRIP_STATUS.ARRIVED_AT_DROPOFF,
+        const resolvedDropoffTrip = mergeTripForNavigation({
+          previousTrip: activeJob,
+          updatedTrip,
+          fallbackStatus: TRIP_STATUS.ARRIVED_AT_DROPOFF,
+          fallbackDriverLocation: currentLocation,
         });
-        await stopNativeNavigationSilently();
-        didCompleteTransition = true;
+        setActiveJob(resolvedDropoffTrip);
         navigation.navigate('DeliveryConfirmationScreen', {
           request: resolvedDropoffTrip,
           pickupPhotos: resolvedDropoffTrip?.pickupPhotos || resolvedDropoffTrip?.pickup_photos || [],
@@ -608,30 +814,22 @@ export default function DriverHomeScreen({ navigation, route }) {
       }
 
       const updatedTrip = await arriveAtPickup(requestId, currentLocation);
-      const resolvedPickupTrip = updatedTrip || {
-        ...(activeJob || {}),
-        status: TRIP_STATUS.ARRIVED_AT_PICKUP,
-      };
-      handledStageTransitionKeyRef.current = transitionKey;
-      setActiveJob(updatedTrip || {
-        ...(activeJob || {}),
-        status: TRIP_STATUS.ARRIVED_AT_PICKUP,
+      const resolvedPickupTrip = mergeTripForNavigation({
+        previousTrip: activeJob,
+        updatedTrip,
+        fallbackStatus: TRIP_STATUS.ARRIVED_AT_PICKUP,
+        fallbackDriverLocation: currentLocation,
       });
-      await stopNativeNavigationSilently();
-      didCompleteTransition = true;
+      setActiveJob(resolvedPickupTrip);
       navigation.navigate('PickupConfirmationScreen', {
         request: resolvedPickupTrip,
         driverLocation: currentLocation,
       });
     } catch (error) {
-      logger.error('DriverHomeScreen', 'Failed to handle native primary action', error);
-      Alert.alert('Error', 'Could not complete this action. Please try again.');
+      logger.error('DriverHomeScreen', 'Failed to mark arrival from home controls', error);
+      Alert.alert('Action Failed', 'Could not update trip status. Please try again.');
     } finally {
-      await completeNativeAction(actionToken, didCompleteTransition);
-      if (!didCompleteTransition) {
-        void setNativeActionButtonsEnabled({ primaryEnabled: true, chatEnabled: true });
-      }
-      nativeActionInFlightRef.current = false;
+      setIsArriveActionLoading(false);
     }
   }, [
     activeJob,
@@ -639,108 +837,74 @@ export default function DriverHomeScreen({ navigation, route }) {
     arriveAtDropoff,
     arriveAtPickup,
     driverLocation,
+    isArriveActionEnabled,
+    isArriveActionLoading,
     navigation,
     navigationOrigin,
-    acknowledgeNativeAction,
-    completeNativeAction,
-    setNativeActionButtonsEnabled,
-    stopNativeNavigationSilently,
-  ]);
-  const handleNativeSecondaryAction = useCallback((payload) => {
-    if (activeNavigationStage !== 'pickup' || !activeJob?.id) {
-      return;
-    }
-
-    if (payload && payload.confirmed === false) {
-      return;
-    }
-
-    void cancelActiveTrip(activeJob.id);
-  }, [activeJob?.id, activeNavigationStage, cancelActiveTrip]);
-  const handleNativeCancelEvent = useCallback((payload) => {
-    if (payload?.reason !== 'secondary_action_confirmed') {
-      return;
-    }
-
-    if (activeNavigationStage !== 'pickup' || !activeJob?.id) {
-      return;
-    }
-
-    void cancelActiveTrip(activeJob.id);
-  }, [activeJob?.id, activeNavigationStage, cancelActiveTrip]);
-  const handleNativeChatAction = useCallback(async (payload) => {
-    const actionToken = resolveNativeActionToken(payload);
-    await acknowledgeNativeAction(actionToken);
-
-    if (nativeChatActionInFlightRef.current) {
-      await completeNativeAction(actionToken, false);
-      return;
-    }
-
-    nativeChatActionInFlightRef.current = true;
-    void setNativeActionButtonsEnabled({ chatEnabled: false });
-    let didOpenChat = false;
-    try {
-      await stopNativeNavigationSilently();
-    } catch (error) {
-      logger.warn('DriverHomeScreen', 'Failed to stop native navigation before opening chat', error);
-    }
-
-    try {
-      didOpenChat = await openChat();
-      if (didOpenChat) {
-        resumeNativeNavigationOnFocusRef.current = true;
-        await completeNativeAction(actionToken, true);
-        return;
-      }
-
-      setNavigationAttempted(false);
-    } finally {
-      if (!didOpenChat) {
-        await completeNativeAction(actionToken, false);
-      }
-      if (!didOpenChat) {
-        void setNativeActionButtonsEnabled({ chatEnabled: true });
-      }
-      nativeChatActionInFlightRef.current = false;
-    }
-  }, [
-    acknowledgeNativeAction,
-    completeNativeAction,
-    openChat,
-    setNativeActionButtonsEnabled,
-    stopNativeNavigationSilently,
   ]);
   useEffect(() => {
-    primaryActionRef.current = handleNativePrimaryAction;
-    secondaryActionRef.current = handleNativeSecondaryAction;
-    chatActionRef.current = handleNativeChatAction;
-    cancelActionRef.current = handleNativeCancelEvent;
-  }, [
-    handleNativeCancelEvent,
-    handleNativeChatAction,
-    handleNativePrimaryAction,
-    handleNativeSecondaryAction,
-  ]);
-  useEffect(() => {
-    handledStageTransitionKeyRef.current = null;
-  }, [activeJob?.id, activeNavigationStage]);
-  useEffect(() => {
-    if (!hasActiveTrip || !isNavigating) {
+    if (!hasActiveTrip || !activeJob?.id) {
+      destinationHydrationAttemptRef.current = null;
       return;
     }
 
-    void updateNavigationOptions({
-      actionCard: {
-        chatActionLabel: hasUnreadActiveTripChat ? 'Chat •' : 'Chat',
-        chatHasUnread: hasUnreadActiveTripChat,
-      },
-    });
+    const needsPickupDestination = isPickupNavigationStage && !pickupLocation;
+    const needsDropoffDestination = isDropoffNavigationStage && !dropoffLocation;
+    if (!needsPickupDestination && !needsDropoffDestination) {
+      destinationHydrationAttemptRef.current = null;
+      return;
+    }
+
+    const stageKey = needsDropoffDestination ? 'dropoff' : 'pickup';
+    const hydrationKey = `${activeJob.id}:${stageKey}`;
+    if (destinationHydrationInFlightRef.current || destinationHydrationAttemptRef.current === hydrationKey) {
+      return;
+    }
+
+    destinationHydrationAttemptRef.current = hydrationKey;
+    destinationHydrationInFlightRef.current = true;
+
+    let isDisposed = false;
+    const hydrateMissingDestination = async () => {
+      try {
+        const refreshedTrip = await getRequestById(activeJob.id);
+        if (isDisposed || !refreshedTrip?.id || refreshedTrip.id !== activeJob.id) {
+          return;
+        }
+
+        setActiveJob((previousTrip) => {
+          if (!previousTrip || previousTrip.id !== refreshedTrip.id) {
+            return previousTrip;
+          }
+          return mergeTripForNavigation({
+            previousTrip,
+            updatedTrip: refreshedTrip,
+          });
+        });
+      } catch (error) {
+        logger.warn('DriverHomeScreen', 'Failed to hydrate trip destination for navigation', {
+          requestId: activeJob.id,
+          stage: stageKey,
+          error,
+        });
+      } finally {
+        destinationHydrationInFlightRef.current = false;
+      }
+    };
+
+    void hydrateMissingDestination();
+
+    return () => {
+      isDisposed = true;
+    };
   }, [
+    activeJob?.id,
+    dropoffLocation,
+    getRequestById,
     hasActiveTrip,
-    hasUnreadActiveTripChat,
-    isNavigating,
-    updateNavigationOptions,
+    isDropoffNavigationStage,
+    isPickupNavigationStage,
+    pickupLocation,
   ]);
   useEffect(() => {
     const activeRequestId = activeJob?.id || null;
@@ -770,10 +934,12 @@ export default function DriverHomeScreen({ navigation, route }) {
           if (!previousTrip || previousTrip.id !== updatedTrip.id) {
             return previousTrip;
           }
-          return {
-            ...previousTrip,
-            ...updatedTrip,
-          };
+          return mergeTripForNavigation({
+            previousTrip,
+            updatedTrip,
+            fallbackStatus: TRIP_STATUS.IN_PROGRESS,
+            fallbackDriverLocation: currentLocation || null,
+          });
         });
       } catch (error) {
         logger.warn('DriverHomeScreen', 'Failed to mark accepted trip as in progress', error);
@@ -801,59 +967,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     navigationOrigin,
     startDriving,
   ]);
-  const activeNavigationKey = useMemo(() => {
-    if (!shouldUseNativeNavigator) {
-      return null;
-    }
-    return [
-      activeJob?.id || 'none',
-      activeNavigationStage,
-      navigationOrigin?.latitude || '',
-      navigationOrigin?.longitude || '',
-      navigationDestination?.latitude || '',
-      navigationDestination?.longitude || '',
-    ].join(':');
-  }, [
-    activeJob?.id,
-    activeNavigationStage,
-    navigationDestination?.latitude,
-    navigationDestination?.longitude,
-    navigationOrigin?.latitude,
-    navigationOrigin?.longitude,
-    shouldUseNativeNavigator,
-  ]);
-  const lastNavigationKeyRef = useRef(null);
-  useEffect(() => {
-    if (!activeNavigationKey) {
-      lastNavigationKeyRef.current = null;
-      setNavigationAttempted(false);
-      return;
-    }
-
-    if (lastNavigationKeyRef.current !== activeNavigationKey) {
-      lastNavigationKeyRef.current = activeNavigationKey;
-      setNavigationAttempted(false);
-    }
-  }, [activeNavigationKey]);
-  useEffect(() => {
-    if (!isFocused || !resumeNativeNavigationOnFocusRef.current) {
-      return;
-    }
-    resumeNativeNavigationOnFocusRef.current = false;
-    setNavigationAttempted(false);
-  }, [isFocused]);
-  useAutoMapboxNavigationStart({
-    enabled: Boolean(isFocused && shouldUseNativeNavigator),
-    isSupported: isNativeNavigationSupported,
-    isNavigating,
-    navigationAttempted,
-    setNavigationAttempted,
-    startNavigation,
-    logScope: 'DriverHomeScreen',
-    fallbackLogMessage: 'Mapbox navigation unavailable on home',
-    maxRetries: 2,
-    retryDelayMs: 1200,
-  });
   useEffect(() => {
     const activatedTripFromRoute = route?.params?.activatedTrip;
     if (!activatedTripFromRoute || typeof activatedTripFromRoute !== 'object') {
@@ -875,12 +988,11 @@ export default function DriverHomeScreen({ navigation, route }) {
       if (!previousTrip || previousTrip.id !== activatedTripId) {
         return activatedTripFromRoute;
       }
-      return {
-        ...previousTrip,
-        ...activatedTripFromRoute,
-      };
+      return mergeTripForNavigation({
+        previousTrip,
+        updatedTrip: activatedTripFromRoute,
+      });
     });
-    setNavigationAttempted(false);
 
     if (typeof navigation?.setParams === 'function') {
       navigation.setParams({
@@ -888,17 +1000,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       });
     }
   }, [navigation, route?.params?.activatedTrip]);
-  const openNativeNavigationFromHome = useCallback((trip) => {
-    if (trip?.id && trip.id !== activeJob?.id) {
-      setAcceptedRequestId(trip.id);
-      setActiveJob(trip);
-      return true;
-    }
-
-    setNavigationAttempted(false);
-    void startNavigation({ showAlert: true });
-    return true;
-  }, [activeJob?.id, startNavigation]);
 
   const {
     incomingRoute,
@@ -940,6 +1041,53 @@ export default function DriverHomeScreen({ navigation, route }) {
     setShowAllRequests,
     setShowIncomingModal,
   });
+  const handleCancelActiveTripFromHome = useCallback(() => {
+    if (!activeJob?.id || activeNavigationStage !== 'pickup' || isCancelActiveTripLoading) {
+      return;
+    }
+
+    Alert.alert(
+      'Cancel trip?',
+      'This will cancel the trip for both you and the customer.',
+      [
+        { text: 'Keep trip', style: 'cancel' },
+        {
+          text: 'Cancel trip',
+          style: 'destructive',
+          onPress: async () => {
+            if (!activeJob?.id) {
+              return;
+            }
+
+            setIsCancelActiveTripLoading(true);
+            try {
+              const result = await cancelOrder(activeJob.id, 'driver_request');
+              if (!result?.success) {
+                throw new Error(result?.error || 'Please try again in a moment.');
+              }
+
+              await stopNativeNavigationSilently();
+              setAcceptedRequestId(null);
+              setActiveJob(null);
+              void loadRequests(false);
+            } catch (error) {
+              logger.error('DriverHomeScreen', 'Unable to cancel active trip from home controls', error);
+              Alert.alert('Unable to cancel', error?.message || 'Please try again in a moment.');
+            } finally {
+              setIsCancelActiveTripLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [
+    activeJob?.id,
+    activeNavigationStage,
+    cancelOrder,
+    isCancelActiveTripLoading,
+    loadRequests,
+    stopNativeNavigationSilently,
+  ]);
   const {
     acceptedScheduledRequests,
     acceptedScheduledLoading,
@@ -965,7 +1113,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       }
       setAcceptedRequestId(trip.id);
       setActiveJob(trip);
-      setNavigationAttempted(false);
     },
   });
 
@@ -1068,7 +1215,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     openActiveTrip,
     loadRequests,
     setLoading,
-    setPhoneVerifyVisible,
     setDriverOnline,
     setDriverOffline,
     setDriverLocation,
@@ -1085,10 +1231,8 @@ export default function DriverHomeScreen({ navigation, route }) {
 
   const {
     handleAcceptRequest,
-    handleClosePhoneVerify,
     handleCloseRequestModal,
     handleMessageCustomer,
-    handlePhoneVerified,
     handleRequestMarkerPress,
     handleViewRequestDetails,
   } = useDriverHomeRequestActions({
@@ -1105,10 +1249,8 @@ export default function DriverHomeScreen({ navigation, route }) {
       }
       setAcceptedRequestId(trip.id);
       setActiveJob(trip);
-      setNavigationAttempted(false);
     },
     refreshAcceptedScheduledRequests,
-    refreshProfile,
     reopenRequestModalModeRef,
     reopenRequestModalOnFocusRef,
     setAcceptedRequestId,
@@ -1116,7 +1258,6 @@ export default function DriverHomeScreen({ navigation, route }) {
     setAvailableRequests,
     setIncomingRequest,
     setIsMinimized,
-    setPhoneVerifyVisible,
     setSelectedRequest,
     setShowAllRequests,
     setShowIncomingModal,
@@ -1156,7 +1297,6 @@ export default function DriverHomeScreen({ navigation, route }) {
       }
       setAcceptedRequestId(trip.id);
       setActiveJob(trip);
-      setNavigationAttempted(false);
     },
     setAcceptedRequestId,
     setActiveJob,
@@ -1181,18 +1321,27 @@ export default function DriverHomeScreen({ navigation, route }) {
     styles, region, tabBarHeight, shouldShowOnlineDriverMarker, onlineDriverMarkerCoordinate,
     onlineDriverPulseOpacity, onlineDriverPulseSize, isOnline, hasActiveTrip, showIncomingModal,
     isMinimized, availableRequests, selectedRequest, incomingRoute, incomingMarkers, mapRef,
-    cameraRef, isCompact, isRestoringActiveTrip, activeJob, activeJobStatusLabel,
+    cameraRef, isRestoringActiveTrip, activeJob, activeJobStatusLabel,
     activeJobDestinationAddress, activeJobSecondaryLabel, isScheduledPoolActive, waitTime,
     progressValue, incomingRequest, requestTimeRemaining, miniBarPulse, formatRequestTime,
     requestModalMode, requestModalRequests,
     driverLocation, loading: requestModalLoading, error: requestModalError, requestTimerTotal, navigation,
+    activeTripOriginLocation: navigationOrigin,
+    activeTripDestinationLocation: navigationDestination,
     activeTripPickupLocation: pickupLocation,
     activeTripDropoffLocation: dropoffLocation,
-    phoneVerifyVisible,
     isNavigationActiveInBackground: Boolean(hasActiveTrip && isNavigating),
     insetsTop: insets.top,
     onRequestMarkerPress: handleRequestMarkerPress,
-    onResumeTrip: () => openActiveTrip(activeJob),
+    onOpenNavigator: () => openActiveTrip(activeJob),
+    onArriveAtStop: handleArriveAtStopFromHome,
+    arriveActionLabel,
+    isArriveActionEnabled,
+    isArriveActionLoading,
+    arriveActionHint,
+    onCancelActiveTrip: handleCancelActiveTripFromHome,
+    showCancelActiveTripAction: activeNavigationStage === 'pickup',
+    isCancelActiveTripLoading,
     onGoOffline: handleGoOffline,
     onGoOnline: handleGoOnline,
     onGoOnlineScheduled: handleGoOnlineScheduled,
@@ -1221,12 +1370,9 @@ export default function DriverHomeScreen({ navigation, route }) {
     onIncomingRequestMinimize: handleIncomingRequestMinimize,
     onIncomingSnapChange: handleIncomingSnapChange,
     onDashboardExpandedChange: setDashboardExpanded,
-    onClosePhoneVerify: handleClosePhoneVerify,
-    onPhoneVerified: handlePhoneVerified,
-    phoneVerifyUserId: currentUser?.uid || currentUser?.id,
     showOnboardingRequiredBanner,
     onOpenOnboarding: handleOpenOnboarding,
-    isAvailabilityLocked: showOnboardingRequiredBanner,
+    isAvailabilityLocked,
     isDriverGeoRestricted,
     driverAvailabilityComingSoonTitle: DRIVER_AVAILABILITY_COMING_SOON_TITLE,
     driverAvailabilityComingSoonMessage: DRIVER_AVAILABILITY_COMING_SOON_MESSAGE,

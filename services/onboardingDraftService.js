@@ -2,6 +2,17 @@ import { logger } from './logger';
 import { fetchProfileByTableAndUserId } from './repositories/authRepository';
 import { normalizeError } from './errorService';
 
+const hasIdentityPrefill = (formData) => {
+  if (!formData || typeof formData !== 'object') {
+    return false;
+  }
+
+  const firstName = String(formData.firstName || '').trim();
+  const lastName = String(formData.lastName || '').trim();
+  const dateOfBirth = String(formData.dateOfBirth || '').trim();
+  return Boolean(firstName || lastName || dateOfBirth);
+};
+
 export const fetchRemoteOnboardingDraft = async (userId) => {
   if (!userId) {
     return null;
@@ -24,8 +35,35 @@ export const fetchRemoteOnboardingDraft = async (userId) => {
         ? data.metadata
         : {};
 
-    if (metadata?.onboardingDraft) {
-      return metadata.onboardingDraft;
+    const metadataIdentityStatus = String(metadata?.identityVerificationStatus || '')
+      .trim()
+      .toLowerCase();
+    const identityVerified = Boolean(
+      data?.identity_verified ||
+      metadataIdentityStatus === 'completed' ||
+      metadata?.documentsVerified
+    );
+    const identityProcessing = (
+      metadataIdentityStatus === 'processing' ||
+      metadataIdentityStatus === 'under_review'
+    );
+
+    if (metadata?.onboardingDraft && typeof metadata.onboardingDraft === 'object') {
+      const draft = {
+        ...metadata.onboardingDraft,
+      };
+      const hasPrefill = hasIdentityPrefill(draft.formData);
+
+      if (identityVerified) {
+        draft.verificationStatus = 'completed';
+        draft.verificationDataPopulated = Boolean(
+          draft.verificationDataPopulated && hasPrefill
+        );
+      } else if (identityProcessing) {
+        draft.verificationStatus = 'processing';
+      }
+
+      return draft;
     }
 
     const fallbackStep = Number(metadata?.onboardingStep);
@@ -33,16 +71,10 @@ export const fetchRemoteOnboardingDraft = async (userId) => {
       return null;
     }
 
-    const identityVerified = Boolean(
-      data?.identity_verified ||
-      metadata?.identityVerificationStatus === 'completed' ||
-      metadata?.documentsVerified
-    );
-
     return {
       currentStep: Math.max(0, Math.floor(fallbackStep)),
-      verificationStatus: identityVerified ? 'completed' : 'pending',
-      verificationDataPopulated: identityVerified,
+      verificationStatus: identityVerified ? 'completed' : (identityProcessing ? 'processing' : 'pending'),
+      verificationDataPopulated: false,
       formData: null,
       updatedAt: metadata?.onboardingLastSavedAt || null,
     };

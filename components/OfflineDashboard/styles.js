@@ -46,7 +46,7 @@ export const styles = StyleSheet.create({
     // ============================================
     collapsedContainer: {
         flex: 1,
-        paddingBottom: 146, // Space for stacked online buttons
+        paddingBottom: 168, // Space for stacked online buttons in collapsed mode
     },
     peekContent: {
         paddingHorizontal: 20,
@@ -327,13 +327,13 @@ export const styles = StyleSheet.create({
     },
     buttonStack: {
         width: "100%",
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: spacing.sm,
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
+        alignItems: 'stretch',
+        gap: spacing.md,
     },
     goOnlineBtn: {
-        flex: 1,
+        width: '100%',
         alignItems: "center",
         justifyContent: 'center',
         paddingVertical: 16,

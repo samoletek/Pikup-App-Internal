@@ -3,6 +3,7 @@ import { Alert, Keyboard } from 'react-native';
 import { calculatePrice, getVehicleRates, refreshPricingSnapshot } from '../../services/PricingService';
 import { recommendVehicleForItems } from '../../services/AIService';
 import RedkikService from '../../services/RedkikService';
+import { logger } from '../../services/logger';
 import {
   createAiVehicleRecommendationDefaults,
 } from './constants';
@@ -59,6 +60,17 @@ function getInsuredItems(items = []) {
     (item) => String(item.condition || '').toLowerCase() === 'new' && item.hasInsurance === true
   );
 }
+
+const toInsuranceQuoteLogSnapshot = (quote) => ({
+  hasQuote: Boolean(quote),
+  offerId: quote?.offerId || null,
+  premium: Number(quote?.premium || 0),
+  redkikPremium: Number(quote?.redkikPremium || 0),
+  serviceFee: Number(quote?.serviceFee || 0),
+  canPurchase: quote?.canPurchase !== false,
+  amendmentsCount: Array.isArray(quote?.amendments) ? quote.amendments.length : 0,
+  fetchedAt: quote?.fetchedAt || null,
+});
 
 export default function useOrderCheckoutFlow({
   currentStep,
@@ -181,6 +193,15 @@ export default function useOrderCheckoutFlow({
   const fetchInsuranceQuote = useCallback(async (insuredItems, options = {}) => {
     const { resetQuote = true } = options;
     const requestId = ++quoteRequestIdRef.current;
+    logger.info('CustomerOrderCheckout', 'Insurance quote request started', {
+      requestId,
+      currentStep,
+      insuredItemsCount: Array.isArray(insuredItems) ? insuredItems.length : 0,
+      resetQuote,
+      hasExistingOfferId: Boolean(insuranceQuote?.offerId),
+      scheduleType: orderData?.scheduleType || null,
+      hasScheduledTime: Boolean(orderData?.scheduledDateTime),
+    });
     setInsuranceLoading(true);
     setInsuranceError(false);
     if (resetQuote) {
@@ -207,6 +228,17 @@ export default function useOrderCheckoutFlow({
       setInsuranceLoading(false);
       if (!quote) {
         setInsuranceError(true);
+        logger.warn('CustomerOrderCheckout', 'Insurance quote request returned null', {
+          requestId,
+          currentStep,
+          insuredItemsCount: Array.isArray(insuredItems) ? insuredItems.length : 0,
+        });
+      } else {
+        logger.info('CustomerOrderCheckout', 'Insurance quote request succeeded', {
+          requestId,
+          currentStep,
+          ...toInsuranceQuoteLogSnapshot(nextQuote),
+        });
       }
       return nextQuote;
     } catch (_error) {
@@ -219,9 +251,15 @@ export default function useOrderCheckoutFlow({
       }
       setInsuranceLoading(false);
       setInsuranceError(true);
+      logger.warn('CustomerOrderCheckout', 'Insurance quote request failed', {
+        requestId,
+        currentStep,
+        insuredItemsCount: Array.isArray(insuredItems) ? insuredItems.length : 0,
+        message: _error?.message || 'Unknown insurance quote error',
+      });
       return null;
     }
-  }, [customerEmail, customerName, orderData]);
+  }, [currentStep, customerEmail, customerName, insuranceQuote?.offerId, orderData]);
 
   const triggerVehicleRecommendation = useCallback(async (itemsSnapshot) => {
     const validItems = (itemsSnapshot || []).filter((item) => item?.name?.trim());
@@ -344,6 +382,10 @@ export default function useOrderCheckoutFlow({
       const itemsSnapshot = [...orderData.items];
       triggerVehicleRecommendation(itemsSnapshot);
       if (hasInsuredItems) {
+        logger.debug('CustomerOrderCheckout', 'Prefetching insurance quote after Items step', {
+          currentStep,
+          insuredItemsCount: insuredItems.length,
+        });
         void fetchInsuranceQuote(insuredItems, { resetQuote: !insuranceQuote?.offerId });
       } else {
         clearInsuranceQuote();
@@ -354,6 +396,11 @@ export default function useOrderCheckoutFlow({
 
     if (currentStep < 6) {
       if (hasInsuredItems && currentStep >= 3 && currentStep <= 4 && (!insuranceQuote?.offerId || insuranceError)) {
+        logger.debug('CustomerOrderCheckout', 'Retrying insurance quote during intermediate step', {
+          currentStep,
+          hasOfferId: Boolean(insuranceQuote?.offerId),
+          insuranceError,
+        });
         void fetchInsuranceQuote(insuredItems, { resetQuote: !insuranceQuote?.offerId });
       }
 
@@ -364,6 +411,13 @@ export default function useOrderCheckoutFlow({
           const quoteMissing = !insuranceQuote?.offerId;
           const quoteExpired = isQuoteStale(insuranceQuote);
           if (quoteMissing || quoteExpired || insuranceError) {
+            logger.info('CustomerOrderCheckout', 'Refreshing insurance quote before review', {
+              currentStep,
+              quoteMissing,
+              quoteExpired,
+              insuranceError,
+              ...toInsuranceQuoteLogSnapshot(insuranceQuote),
+            });
             await fetchInsuranceQuote(insuredItems, { resetQuote: quoteMissing });
           }
         } else {
@@ -383,12 +437,20 @@ export default function useOrderCheckoutFlow({
         resetQuote: !insuranceQuote?.offerId,
       });
       if (!recoveredQuote?.offerId) {
+        logger.warn('CustomerOrderCheckout', 'Insurance quote unavailable at confirm stage', {
+          currentStep,
+          insuranceError,
+          hasOriginalOfferId: Boolean(insuranceQuote?.offerId),
+          recoveredHasOfferId: Boolean(recoveredQuote?.offerId),
+        });
         const allowUninsuredTrip = await confirmProceedWithoutInsurance();
         if (!allowUninsuredTrip) {
+          logger.info('CustomerOrderCheckout', 'Customer cancelled checkout after uninsured warning');
           return;
         }
         proceedWithoutInsurance = true;
         effectiveInsuranceQuote = null;
+        logger.warn('CustomerOrderCheckout', 'Customer opted to create trip without insurance');
       } else {
         effectiveInsuranceQuote = recoveredQuote;
       }
@@ -426,6 +488,12 @@ export default function useOrderCheckoutFlow({
     };
 
     if (hasInsuredItems && !proceedWithoutInsurance && !finalOrder.insuranceQuote?.offerId) {
+      logger.warn('CustomerOrderCheckout', 'Blocking confirm because insured trip has no offerId', {
+        currentStep,
+        proceedWithoutInsurance,
+        insuranceError,
+        ...toInsuranceQuoteLogSnapshot(finalOrder.insuranceQuote),
+      });
       Alert.alert(
         'Insurance Quote Required',
         'Insurance is selected for at least one item. Please wait until the quote is ready.'
@@ -463,6 +531,7 @@ export default function useOrderCheckoutFlow({
     orderData,
     paymentMethods,
     clearInsuranceQuote,
+    insuranceError,
     insuranceQuote,
     laborAdjustment,
     customerEmail,
@@ -483,6 +552,17 @@ export default function useOrderCheckoutFlow({
     setLaborAdjustment(null);
     setVehicleFitGate(createVehicleFitGateDefaults());
   }, [clearInsuranceQuote, resetCountdown]);
+
+  useEffect(() => {
+    if (!insuranceError) {
+      return;
+    }
+
+    logger.warn('CustomerOrderCheckout', 'Insurance quote currently unavailable', {
+      currentStep,
+      ...toInsuranceQuoteLogSnapshot(insuranceQuote),
+    });
+  }, [currentStep, insuranceError, insuranceQuote]);
 
   return {
     isSubmitting,

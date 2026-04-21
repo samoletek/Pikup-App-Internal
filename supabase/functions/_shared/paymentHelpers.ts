@@ -156,6 +156,20 @@ export const resolveProfileName = (
   return fallback
 }
 
+const isMissingStripeCustomerError = (error: unknown) => {
+  const normalizedMessage =
+    typeof error === "object" && error && "message" in error
+      ? String((error as { message?: unknown }).message || "").trim().toLowerCase()
+      : ""
+
+  const normalizedCode =
+    typeof error === "object" && error && "code" in error
+      ? String((error as { code?: unknown }).code || "").trim().toLowerCase()
+      : ""
+
+  return normalizedCode === "resource_missing" || normalizedMessage.includes("no such customer")
+}
+
 export const resolveStripeCustomerIdForCustomer = async ({
   adminClient,
   stripe,
@@ -183,7 +197,22 @@ export const resolveStripeCustomerIdForCustomer = async ({
 
   const existingStripeCustomerId = String(customerProfile.stripe_customer_id || "").trim()
   if (existingStripeCustomerId) {
-    return existingStripeCustomerId
+    try {
+      const existingCustomer = await stripe.customers.retrieve(existingStripeCustomerId)
+      const isDeleted =
+        typeof existingCustomer === "object" &&
+        existingCustomer !== null &&
+        "deleted" in existingCustomer &&
+        Boolean((existingCustomer as { deleted?: unknown }).deleted)
+
+      if (!isDeleted) {
+        return existingStripeCustomerId
+      }
+    } catch (retrieveError) {
+      if (!isMissingStripeCustomerError(retrieveError)) {
+        throw retrieveError
+      }
+    }
   }
 
   const createdCustomer = await stripe.customers.create({

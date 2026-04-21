@@ -1,10 +1,11 @@
 // Driver Home Map Layer component: renders its UI and handles related interactions.
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Image, Platform, Text, TouchableOpacity, View } from "react-native";
 import Mapbox from "@rnmapbox/maps";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../styles/theme";
 import { logger } from "../../services/logger";
+import MapboxLocationService from "../../services/MapboxLocationService";
 
 const dedupeRequestsById = (list = []) => {
   const seen = new Set();
@@ -53,6 +54,8 @@ const DriverHomeMapLayer = ({
   onRequestMarkerPress,
   incomingRoute,
   incomingMarkers,
+  activeTripOriginLocation,
+  activeTripDestinationLocation,
   activeTripPickupLocation,
   activeTripDropoffLocation,
   insetsTop,
@@ -61,6 +64,7 @@ const DriverHomeMapLayer = ({
   styles,
 }) => {
   const activeTripFitKeyRef = useRef(null);
+  const [activeTripRouteGeoJson, setActiveTripRouteGeoJson] = useState(null);
   const visibleRequests = dedupeRequestsById(availableRequests);
   const hasRegionCenter = Number.isFinite(region?.longitude) && Number.isFinite(region?.latitude);
   const hasMarkerFallback = (
@@ -72,10 +76,24 @@ const DriverHomeMapLayer = ({
     ? [region.longitude, region.latitude]
     : (hasMarkerFallback ? onlineDriverMarkerCoordinate : [-84.388, 33.749]);
   const shouldFollowUser = hasRegionCenter && isOnline && !incomingRoute && !hasActiveTrip;
-  const activeTripPickupCoordinate = toLngLat(activeTripPickupLocation);
-  const activeTripDropoffCoordinate = toLngLat(activeTripDropoffLocation);
-  const activeTripLineGeoJson = useMemo(() => {
-    if (!activeTripPickupCoordinate || !activeTripDropoffCoordinate) {
+  const activeTripOriginCoordinate = useMemo(
+    () => toLngLat(activeTripOriginLocation),
+    [activeTripOriginLocation]
+  );
+  const activeTripDestinationCoordinate = useMemo(
+    () => toLngLat(activeTripDestinationLocation),
+    [activeTripDestinationLocation]
+  );
+  const activeTripPickupCoordinate = useMemo(
+    () => toLngLat(activeTripPickupLocation),
+    [activeTripPickupLocation]
+  );
+  const activeTripDropoffCoordinate = useMemo(
+    () => toLngLat(activeTripDropoffLocation),
+    [activeTripDropoffLocation]
+  );
+  const activeTripFallbackLineGeoJson = useMemo(() => {
+    if (!activeTripOriginCoordinate || !activeTripDestinationCoordinate) {
       return null;
     }
 
@@ -87,31 +105,97 @@ const DriverHomeMapLayer = ({
           properties: {},
           geometry: {
             type: "LineString",
-            coordinates: [activeTripPickupCoordinate, activeTripDropoffCoordinate],
+            coordinates: [activeTripOriginCoordinate, activeTripDestinationCoordinate],
           },
         },
       ],
     };
-  }, [activeTripDropoffCoordinate, activeTripPickupCoordinate]);
+  }, [activeTripDestinationCoordinate, activeTripOriginCoordinate]);
+  useEffect(() => {
+    if (!hasActiveTrip || !activeTripOriginCoordinate || !activeTripDestinationCoordinate) {
+      setActiveTripRouteGeoJson(null);
+      return undefined;
+    }
+
+    let isDisposed = false;
+
+    const origin = {
+      latitude: activeTripOriginCoordinate[1],
+      longitude: activeTripOriginCoordinate[0],
+    };
+    const destination = {
+      latitude: activeTripDestinationCoordinate[1],
+      longitude: activeTripDestinationCoordinate[0],
+    };
+
+    const loadActiveTripRoute = async () => {
+      try {
+        const route = await MapboxLocationService.getRoute(origin, destination);
+        if (isDisposed) {
+          return;
+        }
+
+        const routeCoordinates = Array.isArray(route?.coordinates)
+          ? route.coordinates
+            .map((coordinate) => toLngLat(coordinate))
+            .filter(Boolean)
+          : [];
+
+        if (routeCoordinates.length < 2) {
+          setActiveTripRouteGeoJson(null);
+          return;
+        }
+
+        setActiveTripRouteGeoJson({
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "LineString",
+                coordinates: routeCoordinates,
+              },
+            },
+          ],
+        });
+      } catch (error) {
+        if (!isDisposed) {
+          logger.warn("DriverHomeMapLayer", "Failed to load active trip route", error);
+          setActiveTripRouteGeoJson(null);
+        }
+      }
+    };
+
+    void loadActiveTripRoute();
+
+    return () => {
+      isDisposed = true;
+    };
+  }, [
+    activeTripDestinationCoordinate,
+    activeTripOriginCoordinate,
+    hasActiveTrip,
+  ]);
   const activeTripBoundsPoints = useMemo(() => {
     if (!hasActiveTrip) {
       return [];
     }
 
     const points = [];
-    if (activeTripPickupCoordinate) {
-      points.push(activeTripPickupCoordinate);
+    if (activeTripOriginCoordinate) {
+      points.push(activeTripOriginCoordinate);
     }
-    if (activeTripDropoffCoordinate) {
-      points.push(activeTripDropoffCoordinate);
+    if (activeTripDestinationCoordinate) {
+      points.push(activeTripDestinationCoordinate);
     }
     if (hasRegionCenter) {
       points.push([region.longitude, region.latitude]);
     }
     return points;
   }, [
-    activeTripDropoffCoordinate,
-    activeTripPickupCoordinate,
+    activeTripDestinationCoordinate,
+    activeTripOriginCoordinate,
     hasActiveTrip,
     hasRegionCenter,
     region?.latitude,
@@ -155,7 +239,7 @@ const DriverHomeMapLayer = ({
     <>
       <Mapbox.MapView
         ref={mapRef}
-        style={[styles.map, { bottom: -tabBarHeight }]}
+        style={styles.map}
         styleURL={Mapbox.StyleURL.Dark}
         scaleBarEnabled={false}
         {...(Platform.OS === "android" ? { surfaceView: false } : {})}
@@ -253,8 +337,11 @@ const DriverHomeMapLayer = ({
           </Mapbox.ShapeSource>
         )}
 
-        {hasActiveTrip && activeTripLineGeoJson && (
-          <Mapbox.ShapeSource id="active-trip-route-source" shape={activeTripLineGeoJson}>
+        {hasActiveTrip && (activeTripRouteGeoJson || activeTripFallbackLineGeoJson) && (
+          <Mapbox.ShapeSource
+            id="active-trip-route-source"
+            shape={activeTripRouteGeoJson || activeTripFallbackLineGeoJson}
+          >
             <Mapbox.LineLayer
               id="active-trip-route-line"
               style={{

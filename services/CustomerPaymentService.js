@@ -57,8 +57,17 @@ export const fetchCustomerPaymentMethods = async () => {
 
     const { data, error } = await invokeGetPaymentMethods();
     if (error) {
-      const normalized = normalizeError(error, 'Failed to load payment methods');
-      logger.error('CustomerPaymentService', 'fetchCustomerPaymentMethods failed', normalized, error);
+      const edgePayload = await parseEdgeFunctionErrorPayload(error);
+      const normalized = normalizeError(
+        edgePayload?.message
+          ? { ...(error || {}), message: edgePayload.message, code: edgePayload.code || undefined }
+          : error,
+        'Failed to load payment methods'
+      );
+      logger.warn('CustomerPaymentService', 'fetchCustomerPaymentMethods failed', normalized, {
+        rawError: error,
+        edgePayload,
+      });
       return failureResult(normalized.message, normalized.code || null, {
         paymentMethods: [],
       });
@@ -69,7 +78,7 @@ export const fetchCustomerPaymentMethods = async () => {
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to load payment methods');
-    logger.error('CustomerPaymentService', 'fetchCustomerPaymentMethods failed', normalized, error);
+    logger.warn('CustomerPaymentService', 'fetchCustomerPaymentMethods failed', normalized, error);
     return failureResult(normalized.message, normalized.code || null, {
       paymentMethods: [],
     });

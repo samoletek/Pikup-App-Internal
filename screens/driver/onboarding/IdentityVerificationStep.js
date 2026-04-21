@@ -10,20 +10,27 @@ const IdentityVerificationStep = ({
   openSupport,
   openWebsite,
   identityLoading,
+  isCheckingVerificationStatus,
   verificationStatus,
   onStartVerification,
+  onCheckVerificationStatus,
 }) => {
   const isCompleted = verificationStatus === "completed";
-  const isDisabled = isCompleted || verificationStatus === "failed" || identityLoading;
+  const isProcessing = verificationStatus === "processing";
+  const isDisabled = isCompleted || isProcessing || verificationStatus === "failed" || identityLoading;
   const buttonTitle = identityLoading
     ? "Preparing verification..."
     : isCompleted
       ? "Identity verified successfully!"
+      : isProcessing
+        ? "Verification In Review"
       : "Start Verification";
   const buttonIcon = identityLoading ? (
     <ActivityIndicator size="small" color={colors.white} />
   ) : isCompleted ? (
     <Ionicons name="checkmark-circle" size={20} color={colors.white} />
+  ) : isProcessing ? (
+    <Ionicons name="time-outline" size={20} color={colors.white} />
   ) : null;
 
   if (isIdentityVerificationRejected) {
@@ -102,6 +109,32 @@ const IdentityVerificationStep = ({
         labelStyle={styles.verifyButtonText}
         leftIcon={buttonIcon}
       />
+
+      {isProcessing ? (
+        <View style={styles.verificationFeatures}>
+          <View style={styles.verificationItem}>
+            <View style={styles.verificationIcon}>
+              <Ionicons name="time-outline" size={24} color={colors.warning} />
+            </View>
+            <View style={styles.verificationContent}>
+              <Text style={styles.verificationTitle}>Submitted to Stripe</Text>
+              <Text style={styles.verificationText}>
+                Your ID check is under review. This step will unlock automatically after approval.
+              </Text>
+            </View>
+          </View>
+
+          <AppButton
+            title={isCheckingVerificationStatus ? 'Checking Status...' : 'Check Status'}
+            onPress={onCheckVerificationStatus}
+            disabled={Boolean(isCheckingVerificationStatus || identityLoading)}
+            loading={Boolean(isCheckingVerificationStatus)}
+            variant="secondary"
+            style={styles.verifyStatusButton}
+            labelStyle={styles.verifyStatusButtonText}
+          />
+        </View>
+      ) : null}
     </View>
   );
 };

@@ -17,6 +17,7 @@ export default function useDriverOnboardingScreenFlow({
   navigation,
   route,
   currentUser,
+  refreshProfile,
   updateDriverPaymentProfile,
   createDriverConnectAccount,
   getDriverOnboardingLink,
@@ -39,13 +40,16 @@ export default function useDriverOnboardingScreenFlow({
     verificationStatus,
     setVerificationStatus,
     isLoadingVerificationData,
+    isCheckingVerificationStatus,
     verificationDataPopulated,
     setVerificationDataPopulated,
     present,
+    checkVerificationStatusNow,
     identityLoading,
   } = useDriverIdentityVerification({
     currentUser,
     setFormData,
+    refreshProfile,
   });
 
   const updateFormData = useCallback((field, value) => {
@@ -196,22 +200,37 @@ export default function useDriverOnboardingScreenFlow({
   }, [navigation]);
 
   useEffect(() => {
-    if (currentStep > 1 && verificationStatus !== "completed") {
+    if (
+      currentStep > 1 &&
+      (verificationStatus !== "completed" || !verificationDataPopulated)
+    ) {
       setCurrentStep(1);
       progressAnim.setValue(1 / (steps.length - 1));
     }
-  }, [currentStep, progressAnim, verificationStatus]);
+  }, [currentStep, progressAnim, verificationDataPopulated, verificationStatus]);
 
   useEffect(() => {
     if (forceIdentityStep || !isDraftHydrated) {
       return;
     }
 
-    if (currentStep === 1 && verificationStatus === "completed") {
+    if (
+      currentStep === 1 &&
+      verificationStatus === "completed" &&
+      verificationDataPopulated
+    ) {
       setCurrentStep(2);
       progressAnim.setValue(2 / (steps.length - 1));
     }
-  }, [currentStep, forceIdentityStep, isDraftHydrated, progressAnim, setCurrentStep, verificationStatus]);
+  }, [
+    currentStep,
+    forceIdentityStep,
+    isDraftHydrated,
+    progressAnim,
+    setCurrentStep,
+    verificationDataPopulated,
+    verificationStatus,
+  ]);
 
   const previousVerificationStatusRef = useRef(verificationStatus);
   useEffect(() => {
@@ -219,7 +238,11 @@ export default function useDriverOnboardingScreenFlow({
     const hasJustCompletedVerification =
       previousStatus !== "completed" && verificationStatus === "completed";
 
-    if (hasJustCompletedVerification && currentStep === 1) {
+    if (
+      hasJustCompletedVerification &&
+      currentStep === 1 &&
+      verificationDataPopulated
+    ) {
       Animated.timing(progressAnim, {
         toValue: 2 / (steps.length - 1),
         duration: 300,
@@ -229,7 +252,7 @@ export default function useDriverOnboardingScreenFlow({
     }
 
     previousVerificationStatusRef.current = verificationStatus;
-  }, [currentStep, progressAnim, setCurrentStep, verificationStatus]);
+  }, [currentStep, progressAnim, setCurrentStep, verificationDataPopulated, verificationStatus]);
 
   const {
     handleNext,
@@ -247,6 +270,7 @@ export default function useDriverOnboardingScreenFlow({
     formData,
     videoWatched,
     verificationStatus,
+    verificationDataPopulated,
     vinPhotoUri,
     carPhotoUris,
     vehicleVerificationStatus,
@@ -271,6 +295,7 @@ export default function useDriverOnboardingScreenFlow({
     isIdentityVerificationRejected,
     isLoadingAddress,
     isLoadingVerificationData,
+    isCheckingVerificationStatus,
     isNextDisabled,
     isVideoPlaying,
     loading,
@@ -278,6 +303,7 @@ export default function useDriverOnboardingScreenFlow({
     openSupport,
     openWebsite,
     present,
+    checkVerificationStatusNow,
     progressAnim,
     resetCarPhoto,
     resetVinPhoto,

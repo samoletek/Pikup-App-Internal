@@ -35,7 +35,11 @@ export default function VehicleVerificationStep({
   const isProcessing = vehicleVerificationStatus === 'uploading' || vehicleVerificationStatus === 'verifying';
   const hasResult = ['approved', 'rejected', 'error'].includes(vehicleVerificationStatus);
   const showFields = hasResult;
-  const isLocked = vehicleVerificationStatus === 'approved';
+  const isApproved = vehicleVerificationStatus === 'approved';
+  const isVinLocked = isApproved && String(formData.vehicleInfo.vin || '').trim().length === 17;
+  const isMakeLocked = isApproved && String(formData.vehicleInfo.make || '').trim().length > 0;
+  const isModelLocked = isApproved && String(formData.vehicleInfo.model || '').trim().length > 0;
+  const isYearLocked = isApproved && String(formData.vehicleInfo.year || '').trim().length === 4;
   const canVerify = vehicleVerificationStatus === 'idle' && vinPhotoUri && hasAnyCarPhoto;
   const licensePlateError =
     formData.vehicleInfo.licensePlate.length > 0 && formData.vehicleInfo.licensePlate.length < 2
@@ -205,7 +209,7 @@ export default function VehicleVerificationStep({
         <>
           <AppInput
             containerStyle={styles.inputContainer}
-            label={`VIN${isLocked ? ' (verified)' : ''}`}
+            label={`VIN${isVinLocked ? ' (verified)' : ''}`}
             value={formData.vehicleInfo.vin}
             onChangeText={(value) =>
               updateFormData(
@@ -216,8 +220,8 @@ export default function VehicleVerificationStep({
             placeholder="17-character VIN"
             autoCapitalize="characters"
             maxLength={17}
-            editable={!isLocked}
-            inputStyle={[styles.textInput, isLocked && styles.lockedInput]}
+            editable={!isVinLocked}
+            inputStyle={[styles.textInput, isVinLocked && styles.lockedInput]}
           />
 
           <View style={styles.inputRow}>
@@ -228,8 +232,8 @@ export default function VehicleVerificationStep({
               onChangeText={(value) => updateFormData('vehicleInfo.make', value)}
               placeholder="Toyota"
               autoCapitalize="words"
-              editable={!isLocked}
-              inputStyle={[styles.textInput, isLocked && styles.lockedInput]}
+              editable={!isMakeLocked}
+              inputStyle={[styles.textInput, isMakeLocked && styles.lockedInput]}
             />
             <AppInput
               containerStyle={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}
@@ -238,8 +242,8 @@ export default function VehicleVerificationStep({
               onChangeText={(value) => updateFormData('vehicleInfo.model', value)}
               placeholder="Camry"
               autoCapitalize="words"
-              editable={!isLocked}
-              inputStyle={[styles.textInput, isLocked && styles.lockedInput]}
+              editable={!isModelLocked}
+              inputStyle={[styles.textInput, isModelLocked && styles.lockedInput]}
             />
           </View>
 
@@ -252,8 +256,8 @@ export default function VehicleVerificationStep({
               placeholder="2020"
               keyboardType="numeric"
               maxLength={4}
-              editable={!isLocked}
-              inputStyle={[styles.textInput, isLocked && styles.lockedInput]}
+              editable={!isYearLocked}
+              inputStyle={[styles.textInput, isYearLocked && styles.lockedInput]}
             />
             <AppInput
               containerStyle={[styles.inputContainer, { flex: 1, marginLeft: spacing.sm }]}

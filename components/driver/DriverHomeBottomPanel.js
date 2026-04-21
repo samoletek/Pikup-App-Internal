@@ -4,15 +4,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { borderRadius, colors, spacing, typography } from '../../styles/theme';
 
 export default function DriverHomeBottomPanel({
-  isCompact,
   isRestoringActiveTrip,
   hasActiveTrip,
   activeJob,
   activeJobStatusLabel,
   activeJobDestinationAddress,
   activeJobSecondaryLabel,
-  onResumeTrip,
+  onOpenNavigator,
   isNavigationActiveInBackground = false,
+  onArriveAtStop,
+  arriveActionLabel,
+  isArriveActionEnabled = false,
+  isArriveActionLoading = false,
+  arriveActionHint = '',
+  onCancelActiveTrip,
+  showCancelActiveTripAction = false,
+  isCancelActiveTripLoading = false,
   isOnline,
   isScheduledPoolActive,
   waitTime,
@@ -54,15 +61,63 @@ export default function DriverHomeBottomPanel({
             </Text>
           ) : null}
 
+          {arriveActionHint ? (
+            <Text style={styles.activeTripActionHint} numberOfLines={2}>
+              {arriveActionHint}
+            </Text>
+          ) : null}
+
           <TouchableOpacity
-            style={styles.activeTripButton}
-            onPress={onResumeTrip}
+            style={[
+              styles.activeTripButton,
+              styles.activeTripButtonPrimary,
+            ]}
+            onPress={onOpenNavigator}
             activeOpacity={0.85}
           >
             <Text style={styles.activeTripButtonText}>
-              {isNavigationActiveInBackground ? 'Return to navigator' : 'Open navigator'}
+              {isNavigationActiveInBackground ? 'Return to navigator' : 'Open Navigator'}
             </Text>
           </TouchableOpacity>
+
+          <View style={styles.activeTripActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.activeTripButton,
+                styles.activeTripButtonSecondary,
+                styles.activeTripArriveButton,
+                (!isArriveActionEnabled || isArriveActionLoading) && styles.activeTripButtonDisabled,
+              ]}
+              onPress={onArriveAtStop}
+              disabled={!isArriveActionEnabled || isArriveActionLoading}
+              activeOpacity={0.85}
+            >
+              {isArriveActionLoading ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <Text style={styles.activeTripButtonText}>{arriveActionLabel || "I've Arrived"}</Text>
+              )}
+            </TouchableOpacity>
+
+            {showCancelActiveTripAction ? (
+              <TouchableOpacity
+                style={[
+                  styles.activeTripCancelButton,
+                  (isCancelActiveTripLoading || isArriveActionLoading) &&
+                  styles.activeTripButtonDisabled,
+                ]}
+                onPress={onCancelActiveTrip}
+                disabled={isCancelActiveTripLoading || isArriveActionLoading}
+                activeOpacity={0.85}
+              >
+                {isCancelActiveTripLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (
+                  <Ionicons name="close" size={24} color={colors.white} />
+                )}
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
       ) : isOnline ? (
         <>
@@ -119,13 +174,12 @@ export default function DriverHomeBottomPanel({
           </TouchableOpacity>
         </>
       ) : (isDriverGeoRestricted || isAvailabilityLocked) ? (
-        <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
+        <View style={styles.offlineActionsStack}>
           <TouchableOpacity
             style={[
               styles.offlineRoleButton,
               styles.offlineRoleButtonMuted,
               styles.offlineRoleButtonDisabled,
-              isCompact && styles.offlineRoleButtonCompact,
             ]}
             disabled
             activeOpacity={1}
@@ -138,7 +192,6 @@ export default function DriverHomeBottomPanel({
               styles.offlineRoleButton,
               styles.offlineRoleButtonMuted,
               styles.offlineRoleButtonDisabled,
-              isCompact && styles.offlineRoleButtonCompact,
             ]}
             disabled
             activeOpacity={1}
@@ -149,9 +202,9 @@ export default function DriverHomeBottomPanel({
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={[styles.offlineActionsStack, isCompact && styles.offlineActionsStackCompact]}>
+        <View style={styles.offlineActionsStack}>
           <TouchableOpacity
-            style={[styles.offlineRoleButton, isCompact && styles.offlineRoleButtonCompact]}
+            style={styles.offlineRoleButton}
             onPress={onGoOnline}
             activeOpacity={0.8}
           >
@@ -162,12 +215,13 @@ export default function DriverHomeBottomPanel({
             style={[
               styles.offlineRoleButton,
               styles.offlineRoleButtonDark,
-              isCompact && styles.offlineRoleButtonCompact,
             ]}
             onPress={onGoOnlineScheduled}
             activeOpacity={0.8}
           >
-            <Text style={styles.offlineRoleButtonText}>Go Online Scheduled</Text>
+            <Text style={styles.offlineRoleButtonText}>
+              Go Online Scheduled
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -244,7 +298,13 @@ const styles = StyleSheet.create({
   activeTripSecondaryLabel: {
     color: colors.text.tertiary,
     fontSize: typography.fontSize.sm,
-    marginBottom: spacing.base,
+    marginBottom: spacing.sm,
+  },
+  activeTripActionHint: {
+    color: colors.text.muted,
+    fontSize: typography.fontSize.xs,
+    lineHeight: 16,
+    marginBottom: spacing.sm,
   },
   activeTripButton: {
     backgroundColor: colors.primary,
@@ -252,12 +312,41 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.sm,
+  },
+  activeTripButtonPrimary: {
+    backgroundColor: colors.primary,
+  },
+  activeTripButtonSecondary: {
+    backgroundColor: colors.success,
+  },
+  activeTripButtonDisabled: {
+    opacity: 0.55,
   },
   activeTripButtonText: {
     color: colors.white,
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.bold,
     letterSpacing: 0.3,
+  },
+  activeTripActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  activeTripArriveButton: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  activeTripCancelButton: {
+    width: 54,
+    height: 54,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.error,
+    borderColor: colors.error,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   waitTimeContainer: {
     marginBottom: spacing.md,
@@ -334,21 +423,20 @@ const styles = StyleSheet.create({
   },
   offlineActionsStack: {
     width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  offlineActionsStackCompact: {
     flexDirection: 'column',
+    alignItems: 'stretch',
     gap: spacing.md,
   },
   offlineRoleButton: {
     backgroundColor: colors.primary,
     paddingVertical: spacing.base,
+    paddingHorizontal: spacing.md,
+    minHeight: 56,
     borderRadius: 30,
-    flex: 1,
+    width: '100%',
+    flex: 0,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -363,10 +451,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.navigation.tabBarBorder,
   },
-  offlineRoleButtonCompact: {
-    width: '100%',
-    flex: 0,
-  },
   offlineRoleButtonDisabled: {
     opacity: 0.78,
     shadowOpacity: 0,
@@ -374,15 +458,20 @@ const styles = StyleSheet.create({
   },
   offlineRoleButtonText: {
     color: colors.text.primary,
-    fontSize: 16,
+    fontSize: typography.fontSize.md,
+    lineHeight: 20,
     fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
   offlineRoleButtonTextDisabled: {
     color: colors.text.muted,
-    fontSize: 14,
+    fontSize: typography.fontSize.md,
+    lineHeight: 20,
     fontWeight: '600',
     textAlign: 'center',
     flexShrink: 1,
+    letterSpacing: 0.2,
   },
   lockedButtonContent: {
     flexDirection: 'row',

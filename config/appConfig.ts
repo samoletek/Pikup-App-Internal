@@ -70,10 +70,8 @@ const mergeCsvSets = (...values: string[]) => {
 
 const isDev = typeof __DEV__ !== "undefined" && __DEV__ === true;
 
-const defaultBypassEmails = isDev ? "drew@architeq.io" : "";
-// Temporary production/build-safe override for driver phone verification gate.
-// TODO(remove on request): drew@architeq.io should no longer bypass phone verification.
-const defaultPhoneVerificationBypassEmails = "drew@architeq.io";
+const defaultBypassEmails = "";
+const defaultPhoneVerificationBypassEmails = "";
 
 export const appConfig = {
   env: {

@@ -38,11 +38,14 @@ yarn-error.*
 
 # Environment files with API keys (CRITICAL SECURITY)
 .env
+.env.*
 .env*.local
 .env.development.local
 .env.test.local
 .env.production.local
 .env
+!.env.example
+!.env.preview.example
 
 # API keys and secrets (CRITICAL SECURITY)
 .env
@@ -50,6 +53,10 @@ yarn-error.*
 .env.development.local
 .env.test.local
 .env.production.local
+.env.preview
+
+# Supabase local CLI artifacts (project refs, local metadata)
+supabase/.temp/
 
 # Firebase keys
 google-services.json

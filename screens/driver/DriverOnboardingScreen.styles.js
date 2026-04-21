@@ -355,6 +355,18 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.semibold,
   },
+  verifyStatusButton: {
+    marginTop: spacing.base,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    backgroundColor: colors.background.elevated,
+  },
+  verifyStatusButtonText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
   verificationSuccess: {
     flexDirection: 'row',
     alignItems: 'center',

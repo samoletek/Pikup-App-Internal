@@ -64,13 +64,35 @@ serve(async (req) => {
         }
 
         // Still processing — client should retry
-        if (session.status === 'processing' || session.status === 'requires_input') {
+        if (session.status === 'processing') {
             return new Response(
                 JSON.stringify({
                     status: session.status,
                     message: 'Verification is still being processed',
                 }),
                 { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+        }
+
+        if (session.status === 'requires_input') {
+            const hasAttemptedVerification = Boolean(
+                session.last_error ||
+                session.last_verification_report
+            );
+
+            return new Response(
+                JSON.stringify({
+                    status: session.status,
+                    hasAttemptedVerification,
+                    lastError: session.last_error
+                        ? {
+                            code: session.last_error.code || null,
+                            reason: session.last_error.reason || null,
+                        }
+                        : null,
+                    lastVerificationReport: session.last_verification_report || null,
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
         }
 
@@ -86,6 +108,7 @@ serve(async (req) => {
 
         const verified = session.verified_outputs;
         const result = {
+            status: 'verified',
             firstName: verified?.first_name || null,
             lastName: verified?.last_name || null,
             dob: verified?.dob ? {

@@ -9,7 +9,6 @@ import DriverHomeMapLayer from './DriverHomeMapLayer';
 import IncomingRequestMiniBar from './IncomingRequestMiniBar';
 import RequestModal from '../RequestModal';
 import IncomingRequestModal from '../IncomingRequestModal';
-import PhoneVerificationModal from '../PhoneVerificationModal';
 
 export default function DriverHomeScreenContent({
   styles,
@@ -31,14 +30,21 @@ export default function DriverHomeScreenContent({
   insetsTop,
   mapRef,
   cameraRef,
-  isCompact,
   isRestoringActiveTrip,
   activeJob,
   activeJobStatusLabel,
   activeJobDestinationAddress,
   activeJobSecondaryLabel,
-  onResumeTrip,
+  onOpenNavigator,
   isNavigationActiveInBackground,
+  onArriveAtStop,
+  arriveActionLabel,
+  isArriveActionEnabled,
+  isArriveActionLoading,
+  arriveActionHint,
+  onCancelActiveTrip,
+  showCancelActiveTripAction,
+  isCancelActiveTripLoading,
   isScheduledPoolActive,
   waitTime,
   progressValue,
@@ -56,6 +62,8 @@ export default function DriverHomeScreenContent({
   requestModalMode,
   requestModalRequests,
   driverLocation,
+  activeTripOriginLocation,
+  activeTripDestinationLocation,
   activeTripPickupLocation,
   activeTripDropoffLocation,
   loading,
@@ -72,10 +80,6 @@ export default function DriverHomeScreenContent({
   onIncomingSnapChange,
   navigation,
   onDashboardExpandedChange,
-  phoneVerifyVisible,
-  onClosePhoneVerify,
-  onPhoneVerified,
-  phoneVerifyUserId,
   showOnboardingRequiredBanner,
   onOpenOnboarding,
   isAvailabilityLocked,
@@ -108,6 +112,8 @@ export default function DriverHomeScreenContent({
         onRequestMarkerPress={onRequestMarkerPress}
         incomingRoute={incomingRoute}
         incomingMarkers={incomingMarkers}
+        activeTripOriginLocation={activeTripOriginLocation}
+        activeTripDestinationLocation={activeTripDestinationLocation}
         activeTripPickupLocation={activeTripPickupLocation}
         activeTripDropoffLocation={activeTripDropoffLocation}
         insetsTop={insetsTop}
@@ -118,15 +124,22 @@ export default function DriverHomeScreenContent({
 
       {!showIncomingModal && !isMinimized && (
         <DriverHomeBottomPanel
-          isCompact={isCompact}
           isRestoringActiveTrip={isRestoringActiveTrip}
           hasActiveTrip={hasActiveTrip}
           activeJob={activeJob}
           activeJobStatusLabel={activeJobStatusLabel}
           activeJobDestinationAddress={activeJobDestinationAddress}
           activeJobSecondaryLabel={activeJobSecondaryLabel}
-          onResumeTrip={onResumeTrip}
+          onOpenNavigator={onOpenNavigator}
           isNavigationActiveInBackground={isNavigationActiveInBackground}
+          onArriveAtStop={onArriveAtStop}
+          arriveActionLabel={arriveActionLabel}
+          isArriveActionEnabled={isArriveActionEnabled}
+          isArriveActionLoading={isArriveActionLoading}
+          arriveActionHint={arriveActionHint}
+          onCancelActiveTrip={onCancelActiveTrip}
+          showCancelActiveTripAction={showCancelActiveTripAction}
+          isCancelActiveTripLoading={isCancelActiveTripLoading}
           isOnline={isOnline}
           isScheduledPoolActive={isScheduledPoolActive}
           waitTime={waitTime}
@@ -216,13 +229,6 @@ export default function DriverHomeScreenContent({
         />
       )}
 
-      <PhoneVerificationModal
-        visible={phoneVerifyVisible}
-        onClose={onClosePhoneVerify}
-        onVerified={onPhoneVerified}
-        userId={phoneVerifyUserId}
-        userTable="drivers"
-      />
     </View>
   );
 }

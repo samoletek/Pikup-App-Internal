@@ -6,16 +6,24 @@ const { createClient } = require('@supabase/supabase-js');
 const envPath = path.resolve(__dirname, '../.env.local');
 const envConfig = dotenv.parse(fs.readFileSync(envPath));
 const supabase = createClient(envConfig.EXPO_PUBLIC_SUPABASE_URL, envConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+const debugEmailDomain = String(
+    envConfig.DEBUG_USER_EMAIL_DOMAIN || process.env.DEBUG_USER_EMAIL_DOMAIN || ''
+).trim().toLowerCase().replace(/^@/, '');
 
 async function main() {
     console.log("🔍 diagnostic: Listing relevant users...");
 
     // Check 'users' table (or auth.users if possible, but usually restricted)
     // We'll check public.users
-    const { data: users, error } = await supabase
+    let usersQuery = supabase
         .from('users')
-        .select('id, email, first_name, last_name')
-        .ilike('email', '%architeq.io%'); // Filter for relevant emails
+        .select('id, email, first_name, last_name');
+
+    if (debugEmailDomain) {
+        usersQuery = usersQuery.ilike('email', `%${debugEmailDomain}%`);
+    }
+
+    const { data: users, error } = await usersQuery;
 
     if (error) {
         console.error("Error fetching users:", error);

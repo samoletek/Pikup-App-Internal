@@ -63,6 +63,7 @@ export default function useAuthSessionBootstrap({
   setIsInitializing,
 }) {
   const lastKnownUserTypeRef = useRef(null);
+  const hasHydratedUserSnapshotRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -153,12 +154,15 @@ export default function useAuthSessionBootstrap({
           setCurrentUser(stored.user);
           setUserType(stored.userType);
           lastKnownUserTypeRef.current = stored.userType || null;
+          hasHydratedUserSnapshotRef.current = true;
           return true;
         }
 
+        hasHydratedUserSnapshotRef.current = false;
         return false;
       } catch (error) {
         logger.error('AuthContext', 'Hydration failed', error);
+        hasHydratedUserSnapshotRef.current = false;
         return false;
       }
     };
@@ -199,9 +203,19 @@ export default function useAuthSessionBootstrap({
             return;
           }
 
+          if (hasHydratedUserSnapshotRef.current) {
+            logger.warn(
+              'AuthContext',
+              'Auth timeout found no live session but hydrated user exists; preserving state to avoid false logout'
+            );
+            markInitialized();
+            return;
+          }
+
           setCurrentUser(null);
           setUserType(null);
           lastKnownUserTypeRef.current = null;
+          hasHydratedUserSnapshotRef.current = false;
           markInitialized();
         } catch (finalCheckError) {
           logger.error('AuthContext', 'Final auth timeout session check failed', finalCheckError);
@@ -242,6 +256,7 @@ export default function useAuthSessionBootstrap({
       setCurrentUser(fullUser);
       setUserType(detectedUserType);
       lastKnownUserTypeRef.current = detectedUserType;
+      hasHydratedUserSnapshotRef.current = true;
 
       void persistAuthUser({ user: fullUser, userType: detectedUserType }).catch((persistError) => {
         logger.warn('AuthContext', 'Failed to persist auth snapshot', persistError);
@@ -277,6 +292,7 @@ export default function useAuthSessionBootstrap({
       setCurrentUser(null);
       setUserType(null);
       lastKnownUserTypeRef.current = null;
+      hasHydratedUserSnapshotRef.current = false;
       markInitialized();
     };
 

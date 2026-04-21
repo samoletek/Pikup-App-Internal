@@ -8,6 +8,7 @@ if (!stripeKey) {
 }
 const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 const stripe = new Stripe(stripeKey ?? '', {
     apiVersion: '2022-11-15',
@@ -17,6 +18,13 @@ const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+    return value as Record<string, unknown>;
+};
 
 serve(async (req) => {
     // Handle CORS preflight requests
@@ -71,6 +79,74 @@ serve(async (req) => {
             { verification_session: verificationSession.id },
             { apiVersion: '2022-11-15' }
         );
+
+        // Persist active session id/status immediately so client can recover
+        // even if Stripe SDK reports canceled before final verification settles.
+        try {
+            const driverUpdateClient = supabaseServiceRoleKey
+                ? createClient(supabaseUrl, supabaseServiceRoleKey)
+                : supabaseClient;
+
+            const { data: existingDriver, error: existingDriverError } = await driverUpdateClient
+                .from('drivers')
+                .select('metadata')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (existingDriverError) {
+                throw existingDriverError;
+            }
+
+            const existingMetadata = asRecord(existingDriver?.metadata);
+            const existingDraft = asRecord(existingMetadata.onboardingDraft);
+            const nextDraft = {
+                ...existingDraft,
+                verificationStatus: 'pending',
+                verificationDataPopulated: false,
+                updatedAt: new Date().toISOString(),
+            };
+
+            const updatePayload = {
+                verification_session_id: verificationSession.id,
+                updated_at: new Date().toISOString(),
+                metadata: {
+                    ...existingMetadata,
+                    identityVerificationStatus: 'pending',
+                    onboardingDraft: nextDraft,
+                    onboardingLastSavedAt: nextDraft.updatedAt,
+                },
+            };
+
+            let updateDriverError = null;
+            if (existingDriver) {
+                const updateResult = await driverUpdateClient
+                    .from('drivers')
+                    .update(updatePayload)
+                    .eq('id', user.id);
+                updateDriverError = updateResult.error;
+            } else {
+                const upsertResult = await driverUpdateClient
+                    .from('drivers')
+                    .upsert({
+                        id: user.id,
+                        email: user.email || null,
+                        first_name: '',
+                        last_name: '',
+                        phone_number: '',
+                        phone_verified: false,
+                        rating: 5.0,
+                        created_at: new Date().toISOString(),
+                        ...updatePayload,
+                    });
+                updateDriverError = upsertResult.error;
+            }
+
+            if (updateDriverError) {
+                throw updateDriverError;
+            }
+        } catch (persistError) {
+            console.error('Failed to persist verification session id:', persistError);
+        }
 
         // Отправляем ссылку обратно в приложение
         return new Response(

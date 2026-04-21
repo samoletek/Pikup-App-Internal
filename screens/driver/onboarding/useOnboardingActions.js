@@ -14,6 +14,7 @@ export default function useOnboardingActions({
   formData,
   videoWatched,
   verificationStatus,
+  verificationDataPopulated,
   vinPhotoUri,
   carPhotoUris,
   vehicleVerificationStatus,
@@ -22,13 +23,25 @@ export default function useOnboardingActions({
   loading,
   setLoading,
 }) {
-  const isIdentityVerificationCompleted = verificationStatus === 'completed';
+  const isIdentityVerificationCompleted =
+    verificationStatus === 'completed' &&
+    verificationDataPopulated;
   const isIdentityVerificationRejected = verificationStatus === 'failed';
 
   const validateStep = useCallback(() => {
+    const normalizedVehicleVin = String(formData.vehicleInfo.vin || '').trim();
+    const normalizedVehicleMake = String(formData.vehicleInfo.make || '').trim();
+    const normalizedVehicleModel = String(formData.vehicleInfo.model || '').trim();
+    const normalizedVehicleYear = String(formData.vehicleInfo.year || '').trim();
+    const normalizedVehiclePlate = String(formData.vehicleInfo.licensePlate || '').trim();
+    const hasVehiclePhotoEvidence =
+      vehicleVerificationStatus === 'approved'
+        ? true
+        : !!vinPhotoUri && carPhotoUris.some(Boolean);
+
     switch (currentStep) {
       case 1:
-        return verificationStatus === 'completed';
+        return isIdentityVerificationCompleted;
       case 2:
         return (
           formData.firstName.length >= 2 &&
@@ -47,13 +60,13 @@ export default function useOnboardingActions({
         return videoWatched;
       case 4:
         return (
-          !!vinPhotoUri &&
-          carPhotoUris.some(Boolean) &&
+          hasVehiclePhotoEvidence &&
           vehicleVerificationStatus === 'approved' &&
-          formData.vehicleInfo.make.length > 2 &&
-          formData.vehicleInfo.model.length > 2 &&
-          formData.vehicleInfo.year.length === 4 &&
-          formData.vehicleInfo.licensePlate.length >= 2
+          normalizedVehicleVin.length === 17 &&
+          normalizedVehicleMake.length >= 1 &&
+          normalizedVehicleModel.length >= 1 &&
+          normalizedVehicleYear.length === 4 &&
+          normalizedVehiclePlate.length >= 2
         );
       default:
         return true;
@@ -62,7 +75,7 @@ export default function useOnboardingActions({
     carPhotoUris,
     currentStep,
     formData,
-    verificationStatus,
+    isIdentityVerificationCompleted,
     vehicleVerificationStatus,
     videoWatched,
     vinPhotoUri,
@@ -132,9 +145,24 @@ export default function useOnboardingActions({
             'Onboarding Declined',
             'Identity verification was not approved. Contact support or visit pikup-app.com.'
           );
+        } else if (verificationStatus === 'completed' && !verificationDataPopulated) {
+          Alert.alert(
+            'Loading Verified Information',
+            'We are still loading your verified details from Stripe. This step unlocks automatically once data is ready.'
+          );
+        } else if (verificationStatus === 'processing') {
+          Alert.alert(
+            'Verification In Review',
+            'Stripe is reviewing your ID submission. This step unlocks automatically after approval.'
+          );
         } else {
           Alert.alert('Identity Verification Required', 'Please complete identity verification to continue.');
         }
+      } else if (currentStep === 4 && vehicleVerificationStatus !== 'approved') {
+        Alert.alert(
+          'Vehicle Verification Required',
+          'Verify your VIN and vehicle photos first. This step unlocks only after successful vehicle verification.'
+        );
       } else {
         Alert.alert('Missing Information', 'Please fill in all required fields correctly.');
       }
@@ -175,7 +203,9 @@ export default function useOnboardingActions({
     setCurrentStep,
     steps.length,
     validateStep,
+    verificationDataPopulated,
     verificationStatus,
+    vehicleVerificationStatus,
   ]);
 
   const handlePrevious = useCallback(() => {
@@ -196,11 +226,21 @@ export default function useOnboardingActions({
   const nextButtonState = useMemo(() => {
     const isIdentityStep = currentStep === 1;
     const isBlockedByIdentity = isIdentityStep && !isIdentityVerificationCompleted;
+    const isIdentityInReview = isIdentityStep && verificationStatus === 'processing';
+    const isIdentityDataHydrating = (
+      isIdentityStep &&
+      verificationStatus === 'completed' &&
+      !verificationDataPopulated
+    );
     const isNextDisabled = loading || (currentStep === 0 && !videoWatched) || isBlockedByIdentity;
     const nextButtonLabel = loading
       ? 'Setting up...'
       : isIdentityStep && isIdentityVerificationRejected
         ? 'Try Again'
+        : isIdentityDataHydrating
+          ? 'Loading Verified Information'
+        : isIdentityInReview
+          ? 'Verification In Review'
         : isBlockedByIdentity
           ? 'Complete Verification'
           : currentStep === steps.length - 1
@@ -219,6 +259,8 @@ export default function useOnboardingActions({
     isIdentityVerificationRejected,
     loading,
     steps.length,
+    verificationDataPopulated,
+    verificationStatus,
     videoWatched,
   ]);
 

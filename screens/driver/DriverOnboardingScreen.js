@@ -34,7 +34,7 @@ import useDriverOnboardingScreenFlow from "./useDriverOnboardingScreenFlow";
 export default function DriverOnboardingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width, height: screenHeight } = useWindowDimensions();
-  const { currentUser } = useAuthIdentity();
+  const { currentUser, refreshProfile } = useAuthIdentity();
   const {
     updateDriverPaymentProfile,
     createDriverConnectAccount,
@@ -62,6 +62,7 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     handleVerifyVehicle,
     handleVideoPlaybackStatus,
     identityLoading,
+    isCheckingVerificationStatus,
     hasForcedIdentityStepApplied,
     hasForcedPaymentSetupStepApplied,
     isIdentityVerificationRejected,
@@ -75,6 +76,7 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     openSupport,
     openWebsite,
     present,
+    checkVerificationStatusNow,
     progressAnim,
     resetCarPhoto,
     resetVinPhoto,
@@ -101,6 +103,7 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     navigation,
     route,
     currentUser,
+    refreshProfile,
     updateDriverPaymentProfile,
     createDriverConnectAccount,
     getDriverOnboardingLink,
@@ -198,8 +201,10 @@ export default function DriverOnboardingScreen({ navigation, route }) {
               openSupport={openSupport}
               openWebsite={openWebsite}
               identityLoading={identityLoading}
+              isCheckingVerificationStatus={isCheckingVerificationStatus}
               verificationStatus={verificationStatus}
               present={present}
+              checkVerificationStatusNow={checkVerificationStatusNow}
               isLoadingVerificationData={isLoadingVerificationData}
               verificationDataPopulated={verificationDataPopulated}
               formData={formData}

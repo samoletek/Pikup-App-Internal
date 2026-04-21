@@ -150,6 +150,140 @@ const uniqueStringList = (values: unknown[] = []) =>
     ),
   )
 
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {}
+  }
+  return value as Record<string, unknown>
+}
+
+const hasIdentityPrefill = (formData: Record<string, unknown> | null | undefined) => {
+  if (!formData || typeof formData !== "object" || Array.isArray(formData)) {
+    return false
+  }
+
+  const firstName = String(formData.firstName || "").trim()
+  const lastName = String(formData.lastName || "").trim()
+  const dateOfBirth = String(formData.dateOfBirth || "").trim()
+  return Boolean(firstName || lastName || dateOfBirth)
+}
+
+const resolveIdentityStatus = (verificationSession: Stripe.Identity.VerificationSession) => {
+  const normalized = String(verificationSession?.status || "").trim().toLowerCase()
+  if (normalized === "verified") {
+    return "completed"
+  }
+  if (normalized === "processing") {
+    return "processing"
+  }
+  if (normalized === "requires_input") {
+    const hasAttemptedVerification = Boolean(
+      verificationSession?.last_error ||
+      verificationSession?.last_verification_report,
+    )
+    return hasAttemptedVerification ? "failed" : "pending"
+  }
+  if (normalized === "canceled") {
+    return "canceled"
+  }
+  return normalized || "pending"
+}
+
+const syncDriverIdentityByVerificationSession = async (
+  adminClient: ReturnType<typeof createClient>,
+  verificationSession: Stripe.Identity.VerificationSession,
+) => {
+  const sessionId = String(verificationSession.id || "").trim()
+  const userId = String(verificationSession.metadata?.user_id || "").trim()
+  if (!sessionId || !userId) {
+    return
+  }
+
+  const nowIso = new Date().toISOString()
+  const rawSessionStatus = String(verificationSession.status || "").trim().toLowerCase()
+  const nextIdentityStatus = resolveIdentityStatus(verificationSession)
+  const isVerified = rawSessionStatus === "verified"
+
+  const { data: driverRow, error: driverFetchError } = await adminClient
+    .from("drivers")
+    .select("id,metadata")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (driverFetchError) {
+    throw driverFetchError
+  }
+
+  if (!driverRow?.id) {
+    const { error: seedError } = await adminClient
+      .from("drivers")
+      .upsert({
+        id: userId,
+        email: String(verificationSession.metadata?.email || "").trim() || null,
+        first_name: "",
+        last_name: "",
+        phone_number: "",
+        phone_verified: false,
+        rating: 5.0,
+        created_at: nowIso,
+        updated_at: nowIso,
+        verification_session_id: sessionId,
+        metadata: {
+          identityVerificationStatus: nextIdentityStatus,
+          onboardingDraft: {
+            verificationStatus: nextIdentityStatus,
+            verificationDataPopulated: false,
+            updatedAt: nowIso,
+          },
+          onboardingLastSavedAt: nowIso,
+        },
+      })
+
+    if (seedError) {
+      throw seedError
+    }
+
+    return
+  }
+
+  const existingMetadata = asRecord(driverRow.metadata)
+  const existingDraft = asRecord(existingMetadata.onboardingDraft)
+  const existingDraftFormData = asRecord(existingDraft.formData)
+  const existingHasPrefill = hasIdentityPrefill(existingDraftFormData)
+  const nextDraft = {
+    ...existingDraft,
+    verificationStatus: isVerified ? "completed" : nextIdentityStatus,
+    verificationDataPopulated: Boolean(existingDraft.verificationDataPopulated && existingHasPrefill),
+    updatedAt: nowIso,
+  }
+
+  const nextMetadata = {
+    ...existingMetadata,
+    identityVerificationStatus: nextIdentityStatus,
+    onboardingDraft: nextDraft,
+    onboardingLastSavedAt: nowIso,
+  }
+
+  const driverUpdates: Record<string, unknown> = {
+    verification_session_id: sessionId,
+    metadata: nextMetadata,
+    updated_at: nowIso,
+  }
+
+  if (isVerified) {
+    driverUpdates.identity_verified = true
+  }
+
+  const { error: updateError } = await adminClient
+    .from("drivers")
+    .update(driverUpdates)
+    .eq("id", userId)
+
+  if (updateError) {
+    throw updateError
+  }
+}
+
 const resolveDriverOnboardingStatus = ({
   canReceivePayments,
   onboardingComplete,
@@ -275,7 +409,7 @@ serve(async (req) => {
     }
 
     const rawBody = await req.text()
-    const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+    const event = await stripe.webhooks.constructEventAsync(rawBody, signature, webhookSecret)
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey)
 
@@ -369,6 +503,17 @@ serve(async (req) => {
     if (event.type === "account.updated") {
       const account = event.data.object as Stripe.Account
       await syncDriverOnboardingByAccount(adminClient, account)
+    }
+
+    if (
+      event.type === "identity.verification_session.created" ||
+      event.type === "identity.verification_session.requires_input" ||
+      event.type === "identity.verification_session.processing" ||
+      event.type === "identity.verification_session.canceled" ||
+      event.type === "identity.verification_session.verified"
+    ) {
+      const verificationSession = event.data.object as Stripe.Identity.VerificationSession
+      await syncDriverIdentityByVerificationSession(adminClient, verificationSession)
     }
 
     return jsonResponse({ received: true })

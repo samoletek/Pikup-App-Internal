@@ -177,6 +177,9 @@ export default function useVehicleVerificationFlow({ currentUser, setFormData })
       setVehicleVerificationError(null);
 
       const driverId = currentUser?.uid || currentUser?.id;
+      if (!driverId) {
+        throw new Error('User not authenticated');
+      }
       const { vinPhotoUrl, carPhotoUrls } = await uploadVehiclePhotos(driverId, vinPhotoUri, carPhotoUris);
 
       setVehicleVerificationStatus('verifying');

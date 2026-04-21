@@ -13,15 +13,130 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { colors, hitSlopDefault } from '../../styles/theme';
 import AIPhotoPickerModal from '../CustomerOrderModal/AIPhotoPickerModal';
 import styles from './OrderItemCard.styles';
+import { logger } from '../../services/logger';
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const MAX_PHOTOS = 3;
+const VALUE_LIMITS = {
+    general: { min: 1, max: 8000 },
+    electronics: { min: 1, max: 4000 },
+};
+
+const ELECTRONICS_KEYWORDS = [
+    'tv', 'television', 'monitor', 'laptop', 'computer', 'desktop', 'tablet',
+    'smartphone', 'iphone', 'ipad', 'macbook', 'chromebook',
+    'smartwatch', 'apple watch', 'airpods', 'earbuds', 'headphones', 'headset',
+    'soundbar', 'home theater', 'streaming device', 'roku', 'fire stick', 'apple tv',
+    'smart thermostat', 'smart doorbell', 'security camera', 'smart speaker', 'echo dot',
+    'google home', 'google nest', 'ring doorbell',
+    'playstation', 'xbox', 'nintendo switch', 'game console', 'vr headset',
+    'gopro', 'drone', 'digital camera', 'action cam',
+];
+
+const ELECTRONICS_CATEGORIES = [
+    'electronics', 'computers', 'phones', 'gaming', 'smart home',
+    'audio', 'photography', 'mobile',
+];
+
+const isElectronicsItem = (draftItem) => {
+    const category = String(draftItem?.category || '').toLowerCase();
+    const name = String(draftItem?.name || '').toLowerCase();
+    const description = String(draftItem?.description || '').toLowerCase();
+    const text = `${name} ${description}`;
+
+    if (ELECTRONICS_CATEGORIES.some((entry) => category.includes(entry))) return true;
+    if (ELECTRONICS_KEYWORDS.some((entry) => text.includes(entry))) return true;
+    return false;
+};
+
+const getItemValueLimits = (draftItem) => (
+    isElectronicsItem(draftItem) ? VALUE_LIMITS.electronics : VALUE_LIMITS.general
+);
+
+const sanitizeValueInput = (rawInput, maxAllowed) => {
+    const sanitized = String(rawInput || '').replace(/[^0-9.]/g, '');
+    if (!sanitized) return '';
+
+    const parts = sanitized.split('.');
+    const integerPart = parts[0] || '0';
+    const fractionalPart = parts.slice(1).join('').slice(0, 2);
+
+    const hasDecimal = parts.length > 1;
+    const normalizedValue = hasDecimal
+        ? `${integerPart}.${fractionalPart}`
+        : integerPart;
+
+    const parsedValue = Number.parseFloat(normalizedValue);
+    if (!Number.isFinite(parsedValue)) return '';
+    if (parsedValue > maxAllowed) return String(maxAllowed);
+
+    if (hasDecimal && fractionalPart.length === 0) {
+        return `${integerPart}.`;
+    }
+
+    return normalizedValue;
+};
+
+const resolvePreferredAssetRepresentationMode = () => {
+    const modes = ImagePicker?.UIImagePickerPreferredAssetRepresentationMode;
+    return (
+        modes?.Current ||
+        modes?.current ||
+        modes?.Compatible ||
+        modes?.compatible ||
+        modes?.Automatic ||
+        modes?.automatic ||
+        undefined
+    );
+};
+
+const launchInvoiceLibrary = async () => {
+    const preferredAssetRepresentationMode = resolvePreferredAssetRepresentationMode();
+    const baseOptions = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        exif: false,
+        quality: 0.8,
+    };
+
+    if (preferredAssetRepresentationMode) {
+        try {
+            return await ImagePicker.launchImageLibraryAsync({
+                ...baseOptions,
+                preferredAssetRepresentationMode,
+            });
+        } catch (error) {
+            logger.warn(
+                'OrderItemCard',
+                'Invoice image picker failed with preferred representation mode, retrying without it',
+                error
+            );
+        }
+    }
+
+    return ImagePicker.launchImageLibraryAsync(baseOptions);
+};
+
+const pickInvoiceFromDocumentPicker = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+        multiple: false,
+    });
+
+    if (result?.canceled) {
+        return null;
+    }
+
+    return result?.assets?.[0]?.uri || null;
+};
 
 const OrderItemCard = ({
     item,
@@ -40,9 +155,31 @@ const OrderItemCard = ({
     const hasEnteredValue = Number.parseFloat(String(item.value || '').trim()) > 0;
     const hasInvoicePhoto = Boolean(item.invoicePhoto);
     const showCoverageInfo = isInsuranceActive && hasEnteredValue && hasInvoicePhoto;
+    const valueLimits = getItemValueLimits(item);
 
     const updateItemDraft = (patch) => {
         onUpdate({ ...item, ...patch });
+    };
+
+    const handleValueChange = (rawText) => {
+        const nextValue = sanitizeValueInput(rawText, valueLimits.max);
+        updateItemDraft({ value: nextValue });
+    };
+
+    const handleValueBlur = () => {
+        const currentValue = String(item.value || '').trim();
+        if (!currentValue) return;
+
+        const parsedValue = Number.parseFloat(currentValue);
+        if (!Number.isFinite(parsedValue)) {
+            updateItemDraft({ value: '' });
+            return;
+        }
+
+        const normalizedValue = Math.min(valueLimits.max, Math.max(valueLimits.min, parsedValue));
+        if (normalizedValue !== parsedValue) {
+            updateItemDraft({ value: String(normalizedValue) });
+        }
     };
 
     const openPhotoPicker = () => {
@@ -69,15 +206,35 @@ const OrderItemCard = ({
     };
 
     const handleAddInvoice = async () => {
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 0.8
-        });
+        let selectedInvoiceUri = null;
 
-        if (!result.canceled && result.assets[0]) {
-            updateItemDraft({ invoicePhoto: result.assets[0].uri });
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'Photo library permission is required to upload invoice images.');
+                return;
+            }
+
+            const result = await launchInvoiceLibrary();
+            selectedInvoiceUri = result?.assets?.[0]?.uri || null;
+        } catch (error) {
+            logger.warn('OrderItemCard', 'Invoice image picker failed', error);
         }
+
+        if (!selectedInvoiceUri) {
+            try {
+                selectedInvoiceUri = await pickInvoiceFromDocumentPicker();
+            } catch (fallbackError) {
+                logger.warn('OrderItemCard', 'Invoice document picker fallback failed', fallbackError);
+            }
+        }
+
+        if (!selectedInvoiceUri) {
+            Alert.alert('Invoice Upload', 'Failed to pick invoice image. Please try again.');
+            return;
+        }
+
+        updateItemDraft({ invoicePhoto: selectedInvoiceUri });
     };
 
     const handleToggleExpand = () => {
@@ -241,10 +398,11 @@ const OrderItemCard = ({
                             <Text style={styles.fieldLabel}>Item Value *</Text>
                             <TextInput
                                 style={[styles.textInput, errors?.value && styles.errorBorder]}
-                                placeholder="Estimated value in dollars"
+                                placeholder={`Estimated value in dollars (${valueLimits.min}-${valueLimits.max})`}
                                 placeholderTextColor={colors.text.placeholder}
                                 value={item.value}
-                                onChangeText={(text) => updateItemDraft({ value: text.replace(/[^0-9.]/g, '') })}
+                                onChangeText={handleValueChange}
+                                onBlur={handleValueBlur}
                                 keyboardType="decimal-pad"
                             />
                         </View>

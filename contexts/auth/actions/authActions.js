@@ -1,5 +1,6 @@
 import * as AuthService from '../../../services/AuthService';
-import { logFlowError, logFlowInfo, startFlowContext } from '../../../services/flowContext';
+import { logFlowError, logFlowInfo, normalizeErrorPayload, startFlowContext } from '../../../services/flowContext';
+import { logger } from '../../../services/logger';
 
 export const createAuthDomainActions = ({
   currentUser,
@@ -36,8 +37,12 @@ export const createAuthDomainActions = ({
       logFlowInfo('AuthDomainActions', 'login succeeded', flowContext);
       return result;
     } catch (error) {
-      logFlowError('AuthDomainActions', 'login failed', error, flowContext, 'Login failed');
-      throw error;
+      const payload = normalizeErrorPayload(error, 'Login failed');
+      logger.warn('AuthDomainActions', 'login failed', {
+        ...flowContext,
+        error: payload,
+      });
+      throw new Error(payload.message);
     } finally {
       setLoading(false);
     }

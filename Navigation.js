@@ -23,7 +23,6 @@ import DriverTabNavigator from "./navigation/DriverTabNavigator";
 // Customer screens
 import CustomerActivityScreen from "./screens/customer/CustomerActivityScreen";
 import CustomerMessagesScreen from "./screens/customer/CustomerMessagesScreen";
-import CustomerClaimsScreen from "./screens/customer/CustomerClaimsScreen";
 import CustomerHelpScreen from "./screens/customer/CustomerHelpScreen";
 import CustomerRewardsScreen from "./screens/customer/CustomerRewardsScreen";
 import CustomerSavedAddressesScreen from "./screens/customer/CustomerSavedAddressesScreen";
@@ -66,7 +65,7 @@ const CustomerStack = () => (
     {/* Customer Specific Screens */}
     <Stack.Screen name="CustomerActivityScreen" component={CustomerActivityScreen} />
     <Stack.Screen name="CustomerMessagesScreen" component={CustomerMessagesScreen} />
-    <Stack.Screen name="CustomerClaimsScreen" component={CustomerClaimsScreen} />
+    {/* Claims are temporarily hidden in customer UI. */}
 
     {/* Customer Profile Screens */}
     <Stack.Screen name="CustomerHelpScreen" component={CustomerHelpScreen} />

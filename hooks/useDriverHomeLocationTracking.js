@@ -17,7 +17,6 @@ const STATE_RESOLUTION_MIN_INTERVAL_MS = 120000;
 export default function useDriverHomeLocationTracking({
   currentUser,
   isOnline,
-  hasActiveTrip,
   activeJobId,
   updateDriverHeartbeat,
   updateDriverLocation,
@@ -240,15 +239,10 @@ export default function useDriverHomeLocationTracking({
   }, [initializeLocation]);
 
   useEffect(() => {
-    if (!hasActiveTrip) {
-      if (!locationSubscription.current) {
-        void startLocationTracking();
-      }
-      return;
+    if (!locationSubscription.current) {
+      void startLocationTracking();
     }
-
-    stopLocationTracking();
-  }, [hasActiveTrip, startLocationTracking, stopLocationTracking]);
+  }, [startLocationTracking]);
 
   return {
     driverLocation,

@@ -11,6 +11,26 @@ import {
 } from '../DriverOnboardingScreen.utils';
 
 const TRANSIENT_VEHICLE_STATUSES = ['uploading', 'verifying'];
+const isRlsPermissionError = (error) => {
+  const normalizedMessage = String(error?.message || '').toLowerCase();
+  const normalizedCode = String(error?.code || '').toUpperCase();
+  return (
+    normalizedCode === '42501' ||
+    normalizedMessage.includes('row-level security policy') ||
+    normalizedMessage.includes('permission denied')
+  );
+};
+
+const hasIdentityPrefill = (formData) => {
+  if (!formData || typeof formData !== 'object') {
+    return false;
+  }
+
+  const firstName = String(formData.firstName || '').trim();
+  const lastName = String(formData.lastName || '').trim();
+  const dateOfBirth = String(formData.dateOfBirth || '').trim();
+  return Boolean(firstName || lastName || dateOfBirth);
+};
 
 const buildDraftSnapshot = ({
   currentStep,
@@ -58,6 +78,7 @@ export default function useOnboardingDraftPersistence({
   const saveTimeoutRef = useRef(null);
   const lastSavedDraftRef = useRef(null);
   const lastRemoteSyncSignatureRef = useRef(null);
+  const isRemoteSyncBlockedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -109,8 +130,10 @@ export default function useOnboardingDraftPersistence({
         setVerificationStatus(restoredVerificationStatus);
         setFormData(restoredFormData);
 
-        if (latestDraft.verificationDataPopulated) {
+        if (latestDraft.verificationDataPopulated && hasIdentityPrefill(restoredFormData)) {
           setVerificationDataPopulated(true);
+        } else {
+          setVerificationDataPopulated(false);
         }
 
         if (
@@ -216,6 +239,10 @@ export default function useOnboardingDraftPersistence({
         return;
       }
 
+      if (isRemoteSyncBlockedRef.current) {
+        return;
+      }
+
       try {
         await updateDriverPaymentProfile?.(userId, {
           onboardingStep: draftSnapshot.currentStep,
@@ -224,6 +251,15 @@ export default function useOnboardingDraftPersistence({
         });
         lastRemoteSyncSignatureRef.current = remoteSyncSignature;
       } catch (error) {
+        if (isRlsPermissionError(error)) {
+          isRemoteSyncBlockedRef.current = true;
+          logger.warn(
+            'OnboardingDraftPersistence',
+            'Remote onboarding draft sync disabled due RLS policy; local draft persistence continues',
+            error
+          );
+          return;
+        }
         logger.error('OnboardingDraftPersistence', 'Failed to sync onboarding draft with Supabase', error);
       }
     }, 800);
