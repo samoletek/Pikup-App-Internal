@@ -164,8 +164,52 @@ const hasIdentityPrefill = (formData: Record<string, unknown> | null | undefined
 
   const firstName = String(formData.firstName || "").trim()
   const lastName = String(formData.lastName || "").trim()
-  const dateOfBirth = String(formData.dateOfBirth || "").trim()
-  return Boolean(firstName || lastName || dateOfBirth)
+  return Boolean(firstName || lastName)
+}
+
+const pickString = (...values: unknown[]) => {
+  for (const value of values) {
+    const normalized = String(value || "").trim()
+    if (normalized) {
+      return normalized
+    }
+  }
+  return null
+}
+
+const resolveIdentityPrefillPayload = (verificationSession: Stripe.Identity.VerificationSession) => {
+  const verifiedOutputs = asRecord(
+    (verificationSession as Stripe.Identity.VerificationSession & { verified_outputs?: unknown }).verified_outputs,
+  )
+  const report = asRecord(
+    (verificationSession as Stripe.Identity.VerificationSession & { last_verification_report?: unknown }).last_verification_report,
+  )
+  const reportDocument = asRecord(report.document)
+  const verifiedAddress = asRecord(verifiedOutputs.address)
+  const reportAddress = asRecord(reportDocument.address)
+
+  const firstName = pickString(verifiedOutputs.first_name, reportDocument.first_name)
+  const lastName = pickString(verifiedOutputs.last_name, reportDocument.last_name)
+
+  const line1 = pickString(verifiedAddress.line1, reportAddress.line1)
+  const city = pickString(verifiedAddress.city, reportAddress.city)
+  const state = pickString(verifiedAddress.state, reportAddress.state)
+  const postalCode = pickString(verifiedAddress.postal_code, reportAddress.postal_code)
+
+  const hasAddress = Boolean(line1 || city || state || postalCode)
+
+  return {
+    firstName,
+    lastName,
+    address: hasAddress
+      ? {
+        line1: line1 || "",
+        city: city || "",
+        state: state || "",
+        postalCode: postalCode || "",
+      }
+      : null,
+  }
 }
 
 const resolveIdentityStatus = (verificationSession: Stripe.Identity.VerificationSession) => {
@@ -206,7 +250,7 @@ const syncDriverIdentityByVerificationSession = async (
 
   const { data: driverRow, error: driverFetchError } = await adminClient
     .from("drivers")
-    .select("id,metadata")
+    .select("id,metadata,first_name,last_name")
     .eq("id", userId)
     .maybeSingle()
 
@@ -250,10 +294,36 @@ const syncDriverIdentityByVerificationSession = async (
   const existingDraft = asRecord(existingMetadata.onboardingDraft)
   const existingDraftFormData = asRecord(existingDraft.formData)
   const existingHasPrefill = hasIdentityPrefill(existingDraftFormData)
+  const identityPrefill = isVerified ? resolveIdentityPrefillPayload(verificationSession) : null
+  const nextDraftAddress = asRecord(existingDraftFormData.address)
+  const mergedDraftFormData = {
+    ...existingDraftFormData,
+  }
+
+  if (identityPrefill?.firstName && !String(existingDraftFormData.firstName || "").trim()) {
+    mergedDraftFormData.firstName = identityPrefill.firstName
+  }
+  if (identityPrefill?.lastName && !String(existingDraftFormData.lastName || "").trim()) {
+    mergedDraftFormData.lastName = identityPrefill.lastName
+  }
+  if (identityPrefill?.address) {
+    mergedDraftFormData.address = {
+      ...nextDraftAddress,
+      line1: String(nextDraftAddress.line1 || "").trim() || identityPrefill.address.line1,
+      city: String(nextDraftAddress.city || "").trim() || identityPrefill.address.city,
+      state: String(nextDraftAddress.state || "").trim() || identityPrefill.address.state,
+      postalCode: String(nextDraftAddress.postalCode || "").trim() || identityPrefill.address.postalCode,
+    }
+  }
+
+  const mergedHasPrefill = hasIdentityPrefill(mergedDraftFormData)
   const nextDraft = {
     ...existingDraft,
     verificationStatus: isVerified ? "completed" : nextIdentityStatus,
-    verificationDataPopulated: Boolean(existingDraft.verificationDataPopulated && existingHasPrefill),
+    verificationDataPopulated: isVerified
+      ? Boolean(mergedHasPrefill || (existingDraft.verificationDataPopulated && existingHasPrefill))
+      : Boolean(existingDraft.verificationDataPopulated && existingHasPrefill),
+    formData: mergedDraftFormData,
     updatedAt: nowIso,
   }
 
@@ -272,6 +342,12 @@ const syncDriverIdentityByVerificationSession = async (
 
   if (isVerified) {
     driverUpdates.identity_verified = true
+    if (identityPrefill?.firstName) {
+      driverUpdates.first_name = identityPrefill.firstName
+    }
+    if (identityPrefill?.lastName) {
+      driverUpdates.last_name = identityPrefill.lastName
+    }
   }
 
   const { error: updateError } = await adminClient
@@ -512,7 +588,22 @@ serve(async (req) => {
       event.type === "identity.verification_session.canceled" ||
       event.type === "identity.verification_session.verified"
     ) {
-      const verificationSession = event.data.object as Stripe.Identity.VerificationSession
+      let verificationSession = event.data.object as Stripe.Identity.VerificationSession
+
+      if (event.type === "identity.verification_session.verified") {
+        try {
+          verificationSession = await stripe.identity.verificationSessions.retrieve(
+            verificationSession.id,
+            { expand: ["verified_outputs", "last_verification_report.document"] },
+          )
+        } catch (sessionFetchError) {
+          console.error("Failed to retrieve expanded verified Stripe session", {
+            sessionId: verificationSession.id,
+            error: sessionFetchError,
+          })
+        }
+      }
+
       await syncDriverIdentityByVerificationSession(adminClient, verificationSession)
     }
 

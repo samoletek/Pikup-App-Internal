@@ -18,6 +18,23 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const asRecord = (value: unknown): Record<string, unknown> => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+    }
+    return value as Record<string, unknown>;
+};
+
+const pickString = (...values: unknown[]) => {
+    for (const value of values) {
+        const normalized = String(value || '').trim();
+        if (normalized) {
+            return normalized;
+        }
+    }
+    return null;
+};
+
 serve(async (req) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -55,7 +72,7 @@ serve(async (req) => {
 
         const session = await stripe.identity.verificationSessions.retrieve(
             sessionId,
-            { expand: ['verified_outputs'] }
+            { expand: ['verified_outputs', 'last_verification_report.document'] }
         );
 
         // Security: ensure this session belongs to the requesting user
@@ -106,22 +123,30 @@ serve(async (req) => {
             );
         }
 
-        const verified = session.verified_outputs;
+        const verified = asRecord(session.verified_outputs);
+        const report = asRecord(session.last_verification_report);
+        const reportDocument = asRecord(report.document);
+        const verifiedAddress = asRecord(verified.address);
+        const reportAddress = asRecord(reportDocument.address);
+
         const result = {
             status: 'verified',
-            firstName: verified?.first_name || null,
-            lastName: verified?.last_name || null,
-            dob: verified?.dob ? {
-                day: verified.dob.day,
-                month: verified.dob.month,
-                year: verified.dob.year,
-            } : null,
-            address: verified?.address ? {
-                line1: verified.address.line1 || '',
-                city: verified.address.city || '',
-                state: verified.address.state || '',
-                postalCode: verified.address.postal_code || '',
-            } : null,
+            firstName: pickString(verified.first_name, reportDocument.first_name),
+            lastName: pickString(verified.last_name, reportDocument.last_name),
+            address: (() => {
+                const line1 = pickString(verifiedAddress.line1, reportAddress.line1) || '';
+                const city = pickString(verifiedAddress.city, reportAddress.city) || '';
+                const state = pickString(verifiedAddress.state, reportAddress.state) || '';
+                const postalCode = pickString(verifiedAddress.postal_code, reportAddress.postal_code) || '';
+                return (line1 || city || state || postalCode)
+                    ? {
+                        line1,
+                        city,
+                        state,
+                        postalCode,
+                    }
+                    : null;
+            })(),
         };
 
         return new Response(

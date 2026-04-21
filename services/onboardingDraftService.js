@@ -9,8 +9,7 @@ const hasIdentityPrefill = (formData) => {
 
   const firstName = String(formData.firstName || '').trim();
   const lastName = String(formData.lastName || '').trim();
-  const dateOfBirth = String(formData.dateOfBirth || '').trim();
-  return Boolean(firstName || lastName || dateOfBirth);
+  return Boolean(firstName || lastName);
 };
 
 export const fetchRemoteOnboardingDraft = async (userId) => {

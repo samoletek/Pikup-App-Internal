@@ -50,6 +50,13 @@ const extractResponsePayload = async (response) => {
 };
 
 export default function useDriverIdentityVerification({ currentUser, setFormData, refreshProfile }) {
+  const asRecord = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    return value;
+  };
+
   const resolvePersistedSessionId = () => String(currentUser?.verification_session_id || '').trim();
   const hasPersistedSessionId = () => Boolean(resolvePersistedSessionId());
   const resolveMetadataIdentityStatus = () => {
@@ -96,6 +103,79 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
   const [isCheckingVerificationStatus, setIsCheckingVerificationStatus] = useState(false);
+
+  const resolveHasPersistedCompletion = () => {
+    const metadataStatus = resolveMetadataIdentityStatus();
+    return Boolean(currentUser?.identity_verified || metadataStatus === 'completed');
+  };
+
+  const applyPersistedIdentityFallback = (reason = 'unknown') => {
+    const metadata = asRecord(currentUser?.metadata);
+    const onboardingDraft = asRecord(metadata.onboardingDraft);
+    const draftFormData = asRecord(onboardingDraft.formData);
+    const draftAddress = asRecord(draftFormData.address);
+
+    const fallbackFirstName = String(
+      draftFormData.firstName ||
+      currentUser?.first_name ||
+      currentUser?.firstName ||
+      ''
+    ).trim();
+    const fallbackLastName = String(
+      draftFormData.lastName ||
+      currentUser?.last_name ||
+      currentUser?.lastName ||
+      ''
+    ).trim();
+    const fallbackDateOfBirth = String(
+      draftFormData.dateOfBirth ||
+      currentUser?.date_of_birth ||
+      currentUser?.dateOfBirth ||
+      ''
+    ).trim();
+    const fallbackAddress = {
+      line1: String(draftAddress.line1 || '').trim(),
+      city: String(draftAddress.city || '').trim(),
+      state: String(draftAddress.state || '').trim(),
+      postalCode: String(draftAddress.postalCode || '').trim(),
+    };
+
+    setFormData((prev) => {
+      const previous = prev || {};
+      const previousAddress = previous.address || {};
+      return {
+        ...previous,
+        firstName: previous.firstName || fallbackFirstName,
+        lastName: previous.lastName || fallbackLastName,
+        dateOfBirth: previous.dateOfBirth || fallbackDateOfBirth,
+        address: {
+          ...previousAddress,
+          line1: previousAddress.line1 || fallbackAddress.line1,
+          city: previousAddress.city || fallbackAddress.city,
+          state: previousAddress.state || fallbackAddress.state,
+          postalCode: previousAddress.postalCode || fallbackAddress.postalCode,
+        },
+      };
+    });
+
+    setVerificationDataPopulated((previouslyPopulated) => {
+      if (!previouslyPopulated) {
+        logger.warn('DriverIdentityVerification', 'Identity verification fallback unlocked onboarding step', {
+          reason,
+          hasFirstName: Boolean(fallbackFirstName),
+          hasLastName: Boolean(fallbackLastName),
+          hasDateOfBirth: Boolean(fallbackDateOfBirth),
+          hasAddress: Boolean(
+            fallbackAddress.line1 ||
+            fallbackAddress.city ||
+            fallbackAddress.state ||
+            fallbackAddress.postalCode
+          ),
+        });
+      }
+      return true;
+    });
+  };
 
   useEffect(() => {
     const persistedSessionId = String(currentUser?.verification_session_id || '').trim();
@@ -340,13 +420,6 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
         if (data.firstName && !prev.firstName) updated.firstName = data.firstName;
         if (data.lastName && !prev.lastName) updated.lastName = data.lastName;
-        if (data.dob && !prev.dateOfBirth) {
-          const month = String(data.dob.month).padStart(2, '0');
-          const day = String(data.dob.day).padStart(2, '0');
-          const year = String(data.dob.year);
-          updated.dateOfBirth = `${month}/${day}/${year}`;
-        }
-
         if (data.address) {
           updated.address = {
             ...prev.address,
@@ -413,6 +486,15 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
     if (!activeSessionId || !currentUser) {
       const persistedIdentityStatus = resolveMetadataIdentityStatus();
+      if (persistedIdentityStatus === 'completed' || currentUser?.identity_verified) {
+        setVerificationStatus('completed');
+        applyPersistedIdentityFallback('manual-status-check-missing-session');
+        if (showAlert) {
+          Alert.alert('Verification Complete', 'Your identity is verified. You can continue onboarding.');
+        }
+        return { verified: true, status: 'verified' };
+      }
+
       if (persistedIdentityStatus === 'failed') {
         setVerificationStatus('failed');
         if (showAlert) {
@@ -548,7 +630,14 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       verificationSessionId ||
       String(currentUser?.verification_session_id || '').trim() ||
       null;
-    if (!activeSessionId || !currentUser) {
+    if (!currentUser) {
+      return undefined;
+    }
+
+    if (!activeSessionId) {
+      if (resolveHasPersistedCompletion()) {
+        applyPersistedIdentityFallback('completed-hydration-missing-session');
+      }
       return undefined;
     }
 
@@ -575,6 +664,11 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       }
 
       const resultStatus = String(result?.status || '').trim().toLowerCase();
+      if (resolveHasPersistedCompletion()) {
+        applyPersistedIdentityFallback(`completed-hydration-${resultStatus || 'unknown'}`);
+        return;
+      }
+
       if (RETRYABLE_VERIFICATION_STATUSES.has(resultStatus) || resultStatus === 'error') {
         completedHydrationSessionRef.current = null;
         setVerificationStatus('processing');
