@@ -26,7 +26,7 @@ const PersonalInfoStep = ({
 
   return (
     <View style={styles.formContent}>
-      {isLoadingVerificationData && (
+      {isLoadingVerificationData && !verificationDataPopulated && (
         <View style={styles.autoFilledBanner}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.autoFilledText}>Loading verified information...</Text>

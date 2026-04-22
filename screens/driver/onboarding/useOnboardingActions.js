@@ -15,6 +15,7 @@ export default function useOnboardingActions({
   videoWatched,
   verificationStatus,
   verificationDataPopulated,
+  hydrateVerifiedIdentityFromProfile,
   vinPhotoUri,
   carPhotoUris,
   vehicleVerificationStatus,
@@ -24,8 +25,7 @@ export default function useOnboardingActions({
   setLoading,
 }) {
   const isIdentityVerificationCompleted =
-    verificationStatus === 'completed' &&
-    verificationDataPopulated;
+    verificationStatus === 'completed';
   const isIdentityVerificationRejected = verificationStatus === 'failed';
 
   const validateStep = useCallback(() => {
@@ -145,11 +145,6 @@ export default function useOnboardingActions({
             'Onboarding Declined',
             'Identity verification was not approved. Contact support or visit pikup-app.com.'
           );
-        } else if (verificationStatus === 'completed' && !verificationDataPopulated) {
-          Alert.alert(
-            'Loading Verified Information',
-            'We are still loading your verified details from Stripe. This step unlocks automatically once data is ready.'
-          );
         } else if (verificationStatus === 'processing') {
           Alert.alert(
             'Verification In Review',
@@ -167,6 +162,26 @@ export default function useOnboardingActions({
         Alert.alert('Missing Information', 'Please fill in all required fields correctly.');
       }
       return;
+    }
+
+    if (
+      currentStep === 1 &&
+      verificationStatus === 'completed' &&
+      !verificationDataPopulated
+    ) {
+      setLoading(true);
+      try {
+        const hydrationResult = await hydrateVerifiedIdentityFromProfile?.();
+        if (!hydrationResult?.success) {
+          Alert.alert(
+            'Verified Data Not Ready',
+            'Verification is complete, but your name data is not available yet. Please tap Continue again in a moment.'
+          );
+          return;
+        }
+      } finally {
+        setLoading(false);
+      }
     }
 
     if (currentStep === 4) {
@@ -199,8 +214,10 @@ export default function useOnboardingActions({
     formData.vehicleInfo.color,
     formData.vehicleInfo.licensePlate,
     handleCreateConnectAccount,
+    hydrateVerifiedIdentityFromProfile,
     progressAnim,
     setCurrentStep,
+    setLoading,
     steps.length,
     validateStep,
     verificationDataPopulated,
@@ -227,18 +244,16 @@ export default function useOnboardingActions({
     const isIdentityStep = currentStep === 1;
     const isBlockedByIdentity = isIdentityStep && !isIdentityVerificationCompleted;
     const isIdentityInReview = isIdentityStep && verificationStatus === 'processing';
-    const isIdentityDataHydrating = (
+    const isIdentityContinueLoading = (
       isIdentityStep &&
       verificationStatus === 'completed' &&
-      !verificationDataPopulated
+      loading
     );
     const isNextDisabled = loading || (currentStep === 0 && !videoWatched) || isBlockedByIdentity;
     const nextButtonLabel = loading
-      ? 'Setting up...'
+      ? (isIdentityContinueLoading ? 'Loading Verified Information...' : 'Setting up...')
       : isIdentityStep && isIdentityVerificationRejected
         ? 'Try Again'
-        : isIdentityDataHydrating
-          ? 'Loading Verified Information'
         : isIdentityInReview
           ? 'Verification In Review'
         : isBlockedByIdentity
@@ -259,7 +274,6 @@ export default function useOnboardingActions({
     isIdentityVerificationRejected,
     loading,
     steps.length,
-    verificationDataPopulated,
     verificationStatus,
     videoWatched,
   ]);

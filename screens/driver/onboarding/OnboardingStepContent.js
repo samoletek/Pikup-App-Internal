@@ -29,6 +29,8 @@ export default function OnboardingStepContent({
   formatName,
   formatPhoneNumber,
   formatDateOfBirth,
+  handleNext,
+  loading,
   isLoadingAddress,
   addressSuggestions,
   searchAddress,
@@ -141,7 +143,13 @@ export default function OnboardingStepContent({
       );
 
     case 5:
-      return <PaymentSetupStep styles={styles} />;
+      return (
+        <PaymentSetupStep
+          styles={styles}
+          onConnectStripe={handleNext}
+          isConnecting={loading}
+        />
+      );
 
     default:
       return null;

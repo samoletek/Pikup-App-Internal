@@ -44,6 +44,7 @@ export default function useDriverOnboardingScreenFlow({
     verificationDataPopulated,
     setVerificationDataPopulated,
     present,
+    hydrateVerifiedIdentityFromProfile,
     checkVerificationStatusNow,
     identityLoading,
   } = useDriverIdentityVerification({
@@ -202,57 +203,12 @@ export default function useDriverOnboardingScreenFlow({
   useEffect(() => {
     if (
       currentStep > 1 &&
-      (verificationStatus !== "completed" || !verificationDataPopulated)
+      verificationStatus !== "completed"
     ) {
       setCurrentStep(1);
       progressAnim.setValue(1 / (steps.length - 1));
     }
-  }, [currentStep, progressAnim, verificationDataPopulated, verificationStatus]);
-
-  useEffect(() => {
-    if (forceIdentityStep || !isDraftHydrated) {
-      return;
-    }
-
-    if (
-      currentStep === 1 &&
-      verificationStatus === "completed" &&
-      verificationDataPopulated
-    ) {
-      setCurrentStep(2);
-      progressAnim.setValue(2 / (steps.length - 1));
-    }
-  }, [
-    currentStep,
-    forceIdentityStep,
-    isDraftHydrated,
-    progressAnim,
-    setCurrentStep,
-    verificationDataPopulated,
-    verificationStatus,
-  ]);
-
-  const previousVerificationStatusRef = useRef(verificationStatus);
-  useEffect(() => {
-    const previousStatus = previousVerificationStatusRef.current;
-    const hasJustCompletedVerification =
-      previousStatus !== "completed" && verificationStatus === "completed";
-
-    if (
-      hasJustCompletedVerification &&
-      currentStep === 1 &&
-      verificationDataPopulated
-    ) {
-      Animated.timing(progressAnim, {
-        toValue: 2 / (steps.length - 1),
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-      setCurrentStep(2);
-    }
-
-    previousVerificationStatusRef.current = verificationStatus;
-  }, [currentStep, progressAnim, setCurrentStep, verificationDataPopulated, verificationStatus]);
+  }, [currentStep, progressAnim, verificationStatus]);
 
   const {
     handleNext,
@@ -271,6 +227,7 @@ export default function useDriverOnboardingScreenFlow({
     videoWatched,
     verificationStatus,
     verificationDataPopulated,
+    hydrateVerifiedIdentityFromProfile,
     vinPhotoUri,
     carPhotoUris,
     vehicleVerificationStatus,

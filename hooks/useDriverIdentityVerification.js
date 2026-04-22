@@ -98,48 +98,67 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
   const handledFlowCompletedSessionRef = useRef(null);
   const handledFlowCanceledSessionRef = useRef(null);
   const handledFlowFailedSessionRef = useRef(null);
-  const completedHydrationSessionRef = useRef(null);
   const [verificationStatus, setVerificationStatus] = useState(resolveInitialVerificationStatus);
   const [isLoadingVerificationData, setIsLoadingVerificationData] = useState(false);
   const [verificationDataPopulated, setVerificationDataPopulated] = useState(false);
   const [isCheckingVerificationStatus, setIsCheckingVerificationStatus] = useState(false);
 
-  const resolveHasPersistedCompletion = () => {
-    const metadataStatus = resolveMetadataIdentityStatus();
-    return Boolean(currentUser?.identity_verified || metadataStatus === 'completed');
-  };
-
-  const applyPersistedIdentityFallback = (reason = 'unknown') => {
-    const metadata = asRecord(currentUser?.metadata);
+  const resolveIdentityPrefillFromUser = (sourceUser = currentUser) => {
+    const metadata = asRecord(sourceUser?.metadata);
     const onboardingDraft = asRecord(metadata.onboardingDraft);
     const draftFormData = asRecord(onboardingDraft.formData);
     const draftAddress = asRecord(draftFormData.address);
 
-    const fallbackFirstName = String(
+    const firstName = String(
       draftFormData.firstName ||
-      currentUser?.first_name ||
-      currentUser?.firstName ||
+      sourceUser?.first_name ||
+      sourceUser?.firstName ||
       ''
     ).trim();
-    const fallbackLastName = String(
+    const lastName = String(
       draftFormData.lastName ||
-      currentUser?.last_name ||
-      currentUser?.lastName ||
+      sourceUser?.last_name ||
+      sourceUser?.lastName ||
       ''
     ).trim();
-    const fallbackDateOfBirth = String(
+    const dateOfBirth = String(
       draftFormData.dateOfBirth ||
-      currentUser?.date_of_birth ||
-      currentUser?.dateOfBirth ||
+      sourceUser?.date_of_birth ||
+      sourceUser?.dateOfBirth ||
       ''
     ).trim();
-    const fallbackAddress = {
+    const address = {
       line1: String(draftAddress.line1 || '').trim(),
       city: String(draftAddress.city || '').trim(),
       state: String(draftAddress.state || '').trim(),
       postalCode: String(draftAddress.postalCode || '').trim(),
     };
-    const hasIdentityNamePrefill = Boolean(fallbackFirstName && fallbackLastName);
+    const hasIdentityNamePrefill = Boolean(firstName && lastName);
+
+    return {
+      firstName,
+      lastName,
+      dateOfBirth,
+      address,
+      hasIdentityNamePrefill,
+    };
+  };
+
+  const applyIdentityPrefill = (prefill, reason = 'unknown') => {
+    if (!prefill || typeof prefill !== 'object') {
+      return false;
+    }
+
+    const fallbackFirstName = String(prefill.firstName || '').trim();
+    const fallbackLastName = String(prefill.lastName || '').trim();
+    const fallbackDateOfBirth = String(prefill.dateOfBirth || '').trim();
+    const fallbackAddress = {
+      line1: String(prefill.address?.line1 || '').trim(),
+      city: String(prefill.address?.city || '').trim(),
+      state: String(prefill.address?.state || '').trim(),
+      postalCode: String(prefill.address?.postalCode || '').trim(),
+    };
+    const hasIdentityNamePrefill = Boolean(prefill.hasIdentityNamePrefill);
 
     setFormData((prev) => {
       const previous = prev || {};
@@ -177,6 +196,13 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
       }
       return previouslyPopulated || hasIdentityNamePrefill;
     });
+
+    return hasIdentityNamePrefill;
+  };
+
+  const applyPersistedIdentityFallback = (reason = 'unknown') => {
+    const prefill = resolveIdentityPrefillFromUser(currentUser);
+    return applyIdentityPrefill(prefill, reason);
   };
 
   useEffect(() => {
@@ -191,7 +217,6 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
 
     verificationSessionIdRef.current = persistedSessionId;
     setVerificationSessionId(persistedSessionId);
-    completedHydrationSessionRef.current = null;
   }, [currentUser?.verification_session_id]);
 
   const resolveIdentityBrandLogo = () => {
@@ -488,6 +513,50 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     }
   };
 
+  const hydrateVerifiedIdentityFromProfile = async ({
+    maxAttempts = 4,
+    retryDelayMs = 1200,
+  } = {}) => {
+    if (!currentUser) {
+      return { success: false, reason: 'unauthenticated' };
+    }
+
+    setIsLoadingVerificationData(true);
+    try {
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        let profileCandidate = currentUser;
+        if (typeof refreshProfile === 'function') {
+          try {
+            const refreshedProfile = await refreshProfile();
+            if (refreshedProfile) {
+              profileCandidate = refreshedProfile;
+            }
+          } catch (refreshError) {
+            logger.warn('DriverIdentityVerification', 'Failed to refresh profile while hydrating verified identity data', {
+              attempt: attempt + 1,
+              maxAttempts,
+              error: refreshError,
+            });
+          }
+        }
+
+        const prefill = resolveIdentityPrefillFromUser(profileCandidate || currentUser);
+        const hasPrefill = applyIdentityPrefill(prefill, 'continue-button');
+        if (hasPrefill) {
+          return { success: true };
+        }
+
+        if (attempt < maxAttempts - 1) {
+          await wait(retryDelayMs);
+        }
+      }
+
+      return { success: false, reason: 'missing_prefill' };
+    } finally {
+      setIsLoadingVerificationData(false);
+    }
+  };
+
   const checkVerificationStatusNow = async ({ showAlert = true } = {}) => {
     let activeSessionId = (
       verificationSessionIdRef.current ||
@@ -644,70 +713,6 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     currentUser?.metadata?.onboardingDraft?.verificationStatus,
     currentUser?.verification_session_id,
   ]);
-
-  useEffect(() => {
-    if (verificationStatus !== 'completed' || verificationDataPopulated) {
-      return undefined;
-    }
-
-    const activeSessionId =
-      verificationSessionIdRef.current ||
-      verificationSessionId ||
-      String(currentUser?.verification_session_id || '').trim() ||
-      null;
-    if (!currentUser) {
-      return undefined;
-    }
-
-    if (!activeSessionId) {
-      if (resolveHasPersistedCompletion()) {
-        applyPersistedIdentityFallback('completed-hydration-missing-session');
-      }
-      return undefined;
-    }
-
-    if (completedHydrationSessionRef.current === activeSessionId) {
-      return undefined;
-    }
-    completedHydrationSessionRef.current = activeSessionId;
-
-    let isUnmounted = false;
-    const hydrateVerificationData = async () => {
-      const result = await fetchVerificationData(activeSessionId, 0, {
-        maxRetries: 8,
-        retryDelayMs: 3000,
-        origin: 'completed-hydration',
-      });
-
-      if (isUnmounted) {
-        return;
-      }
-
-      if (result?.verified) {
-        await persistVerifiedIdentity(activeSessionId, 'completed-hydration');
-        return;
-      }
-
-      const resultStatus = String(result?.status || '').trim().toLowerCase();
-      if (resolveHasPersistedCompletion()) {
-        applyPersistedIdentityFallback(`completed-hydration-${resultStatus || 'unknown'}`);
-        return;
-      }
-
-      if (RETRYABLE_VERIFICATION_STATUSES.has(resultStatus) || resultStatus === 'error') {
-        completedHydrationSessionRef.current = null;
-        setVerificationStatus('processing');
-      }
-    };
-
-    void hydrateVerificationData();
-
-    return () => {
-      isUnmounted = true;
-    };
-    // fetchVerificationData remains non-memoized to preserve recursive retry behavior.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, verificationDataPopulated, verificationSessionId, verificationStatus, refreshProfile]);
 
   useEffect(() => {
     logger.info('DriverIdentityVerification', 'Stripe Identity status changed', { status });
@@ -979,6 +984,7 @@ export default function useDriverIdentityVerification({ currentUser, setFormData
     verificationDataPopulated,
     setVerificationDataPopulated,
     present: startIdentityVerification,
+    hydrateVerifiedIdentityFromProfile,
     checkVerificationStatusNow,
     identityLoading,
   };

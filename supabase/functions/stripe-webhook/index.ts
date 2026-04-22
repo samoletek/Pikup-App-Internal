@@ -247,6 +247,8 @@ const syncDriverIdentityByVerificationSession = async (
   const rawSessionStatus = String(verificationSession.status || "").trim().toLowerCase()
   const nextIdentityStatus = resolveIdentityStatus(verificationSession)
   const isVerified = rawSessionStatus === "verified"
+  const identityPrefill = isVerified ? resolveIdentityPrefillPayload(verificationSession) : null
+  const hasVerifiedNamePrefill = Boolean(identityPrefill?.firstName && identityPrefill?.lastName)
 
   const { data: driverRow, error: driverFetchError } = await adminClient
     .from("drivers")
@@ -259,24 +261,42 @@ const syncDriverIdentityByVerificationSession = async (
   }
 
   if (!driverRow?.id) {
+    const seedDraftFormData: Record<string, unknown> = {}
+    if (identityPrefill?.firstName) {
+      seedDraftFormData.firstName = identityPrefill.firstName
+    }
+    if (identityPrefill?.lastName) {
+      seedDraftFormData.lastName = identityPrefill.lastName
+    }
+    if (identityPrefill?.address) {
+      seedDraftFormData.address = {
+        line1: identityPrefill.address.line1,
+        city: identityPrefill.address.city,
+        state: identityPrefill.address.state,
+        postalCode: identityPrefill.address.postalCode,
+      }
+    }
+
     const { error: seedError } = await adminClient
       .from("drivers")
       .upsert({
         id: userId,
         email: String(verificationSession.metadata?.email || "").trim() || null,
-        first_name: "",
-        last_name: "",
+        first_name: identityPrefill?.firstName || "",
+        last_name: identityPrefill?.lastName || "",
         phone_number: "",
         phone_verified: false,
         rating: 5.0,
         created_at: nowIso,
         updated_at: nowIso,
         verification_session_id: sessionId,
+        identity_verified: isVerified,
         metadata: {
           identityVerificationStatus: nextIdentityStatus,
           onboardingDraft: {
             verificationStatus: nextIdentityStatus,
-            verificationDataPopulated: false,
+            verificationDataPopulated: isVerified ? hasVerifiedNamePrefill : false,
+            formData: seedDraftFormData,
             updatedAt: nowIso,
           },
           onboardingLastSavedAt: nowIso,
@@ -294,16 +314,15 @@ const syncDriverIdentityByVerificationSession = async (
   const existingDraft = asRecord(existingMetadata.onboardingDraft)
   const existingDraftFormData = asRecord(existingDraft.formData)
   const existingHasPrefill = hasIdentityPrefill(existingDraftFormData)
-  const identityPrefill = isVerified ? resolveIdentityPrefillPayload(verificationSession) : null
   const nextDraftAddress = asRecord(existingDraftFormData.address)
   const mergedDraftFormData = {
     ...existingDraftFormData,
   }
 
-  if (identityPrefill?.firstName && !String(existingDraftFormData.firstName || "").trim()) {
+  if (identityPrefill?.firstName) {
     mergedDraftFormData.firstName = identityPrefill.firstName
   }
-  if (identityPrefill?.lastName && !String(existingDraftFormData.lastName || "").trim()) {
+  if (identityPrefill?.lastName) {
     mergedDraftFormData.lastName = identityPrefill.lastName
   }
   if (identityPrefill?.address) {

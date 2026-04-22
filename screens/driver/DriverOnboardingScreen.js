@@ -109,6 +109,7 @@ export default function DriverOnboardingScreen({ navigation, route }) {
     getDriverOnboardingLink,
   });
   const isIdentityStepDeclined = currentStep === 1 && isIdentityVerificationRejected;
+  const isPaymentSetupStep = currentStep === screenSteps.length - 1;
   const isHydratingDraft =
     !isDraftHydrated ||
     !hasForcedIdentityStepApplied ||
@@ -212,6 +213,8 @@ export default function DriverOnboardingScreen({ navigation, route }) {
               formatName={formatName}
               formatPhoneNumber={formatPhoneNumber}
               formatDateOfBirth={formatDateOfBirth}
+              handleNext={handleNext}
+              loading={loading}
               isLoadingAddress={isLoadingAddress}
               addressSuggestions={addressSuggestions}
               searchAddress={searchAddress}
@@ -263,20 +266,22 @@ export default function DriverOnboardingScreen({ navigation, route }) {
             />
           ) : null}
 
-          <AppButton
-            title={nextButtonLabel}
-            variant={isIdentityStepDeclined ? "danger" : "primary"}
-            style={[
-              styles.nextButton,
-              (currentStep === 0 || isIdentityStepDeclined) && styles.nextButtonFull,
-              isIdentityStepDeclined && styles.nextButtonDeclined,
-              !isIdentityStepDeclined && isNextDisabled && styles.nextButtonDisabled,
-            ]}
-            onPress={isIdentityStepDeclined ? handleVerifyAgain : handleNext}
-            disabled={isIdentityStepDeclined ? identityLoading : isNextDisabled}
-            loading={isIdentityStepDeclined ? identityLoading : loading}
-            labelStyle={styles.nextButtonText}
-          />
+          {!isPaymentSetupStep ? (
+            <AppButton
+              title={nextButtonLabel}
+              variant={isIdentityStepDeclined ? "danger" : "primary"}
+              style={[
+                styles.nextButton,
+                (currentStep === 0 || isIdentityStepDeclined) && styles.nextButtonFull,
+                isIdentityStepDeclined && styles.nextButtonDeclined,
+                !isIdentityStepDeclined && isNextDisabled && styles.nextButtonDisabled,
+              ]}
+              onPress={isIdentityStepDeclined ? handleVerifyAgain : handleNext}
+              disabled={isIdentityStepDeclined ? identityLoading : isNextDisabled}
+              loading={isIdentityStepDeclined ? identityLoading : loading}
+              labelStyle={styles.nextButtonText}
+            />
+          ) : null}
         </View>
       ) : null}
     </KeyboardAvoidingView>

@@ -2,8 +2,9 @@ import React from "react";
 import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../../styles/theme";
+import AppButton from "../../../components/ui/AppButton";
 
-const PaymentSetupStep = ({ styles }) => {
+const PaymentSetupStep = ({ styles, onConnectStripe, isConnecting }) => {
   return (
     <View style={styles.finalContent}>
       <View style={styles.securityFeatures}>
@@ -26,6 +27,15 @@ const PaymentSetupStep = ({ styles }) => {
           You'll be redirected to complete a quick verification process. This usually takes 2-3 minutes.
         </Text>
       </View>
+
+      <AppButton
+        title={isConnecting ? "Opening Stripe..." : "Connect with Stripe"}
+        onPress={onConnectStripe}
+        loading={Boolean(isConnecting)}
+        disabled={Boolean(isConnecting)}
+        style={styles.verifyButton}
+        labelStyle={styles.verifyButtonText}
+      />
     </View>
   );
 };
