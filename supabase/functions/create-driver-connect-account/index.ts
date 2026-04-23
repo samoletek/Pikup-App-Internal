@@ -132,16 +132,24 @@ const resolveApiErrorPayload = (error: unknown) => {
   };
 };
 
-const ensureTransfersCapabilityRequested = async (accountId: string) => {
+const ensureRequiredCapabilitiesRequested = async (accountId: string) => {
   const account = await stripe.accounts.retrieve(accountId);
   const transfersCapability = String(account.capabilities?.transfers || "").trim().toLowerCase();
-  if (transfersCapability === "active" || transfersCapability === "pending") {
+  const cardPaymentsCapability = String(account.capabilities?.card_payments || "")
+    .trim()
+    .toLowerCase();
+  const isTransfersRequested = transfersCapability === "active" || transfersCapability === "pending";
+  const isCardPaymentsRequested =
+    cardPaymentsCapability === "active" || cardPaymentsCapability === "pending";
+
+  if (isTransfersRequested && isCardPaymentsRequested) {
     return;
   }
 
   await stripe.accounts.update(accountId, {
     capabilities: {
       transfers: { requested: true },
+      card_payments: { requested: true },
     },
   });
 };
@@ -217,6 +225,7 @@ serve(async (req) => {
         email: email || driverRow?.email || undefined,
         capabilities: {
           transfers: { requested: true },
+          card_payments: { requested: true },
         },
         metadata: {
           driver_id: driverId,
@@ -225,7 +234,7 @@ serve(async (req) => {
       accountId = account.id;
     }
 
-    await ensureTransfersCapabilityRequested(accountId);
+    await ensureRequiredCapabilitiesRequested(accountId);
 
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
