@@ -4,6 +4,19 @@ import { animation } from '../../../styles/theme';
 import { saveVehicleData } from '../../../services/VehicleVerificationService';
 import { logger } from '../../../services/logger';
 
+const STRIPE_PLATFORM_PROFILE_URL = 'https://dashboard.stripe.com/settings/connect/platform-profile';
+
+const isStripePlatformProfileErrorMessage = (message = '') => {
+  const normalized = String(message || '').toLowerCase();
+  return (
+    normalized.includes('managing losses') ||
+    normalized.includes('collecting requirements') ||
+    normalized.includes('platform-profile') ||
+    normalized.includes('platform profile') ||
+    normalized.includes('stripe connect live setup is incomplete')
+  );
+};
+
 export default function useOnboardingActions({
   currentStep,
   setCurrentStep,
@@ -118,9 +131,30 @@ export default function useOnboardingActions({
       });
     } catch (error) {
       logger.error('OnboardingActions', 'Error in onboarding', error);
+      const errorMessage = String(error?.message || '').trim();
+
+      if (isStripePlatformProfileErrorMessage(errorMessage)) {
+        Alert.alert(
+          'Stripe Connect Setup Required',
+          'Stripe Connect live setup is incomplete. Complete Connect Platform Profile responsibilities in Stripe, then retry.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Stripe',
+              onPress: () => {
+                Linking.openURL(STRIPE_PLATFORM_PROFILE_URL).catch((linkError) => {
+                  logger.error('OnboardingActions', 'Failed to open Stripe platform profile URL', linkError);
+                });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
       Alert.alert(
         'Onboarding Error',
-        error?.message || 'Failed to start Stripe onboarding. Please try again.'
+        errorMessage || 'Failed to start Stripe onboarding. Please try again.'
       );
     } finally {
       setLoading(false);

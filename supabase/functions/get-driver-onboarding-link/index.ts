@@ -20,6 +20,10 @@ const DEFAULT_REFRESH_URL = "https://pikup-app.com";
 const DEFAULT_RETURN_URL = "https://pikup-app.com";
 const APP_SCHEME = "pikup:";
 const DEFAULT_HTTPS_REDIRECT_HOSTS = ["pikup-app.com", "www.pikup-app.com"];
+const STRIPE_PLATFORM_PROFILE_URL = "https://dashboard.stripe.com/settings/connect/platform-profile";
+const STRIPE_PLATFORM_PROFILE_ERROR_CODE = "stripe_platform_profile_incomplete";
+const STRIPE_PLATFORM_PROFILE_MESSAGE =
+  "Stripe Connect live setup is incomplete. In Stripe Dashboard, open Connect > Platform profile and acknowledge managing losses responsibilities, then retry onboarding.";
 
 const parseAllowedHttpsHosts = () => {
   const configured = String(
@@ -69,6 +73,64 @@ const normalizeMetadata = (value: unknown) =>
   value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+
+const extractErrorMessage = (error: unknown) => {
+  if (error instanceof Error && typeof error.message === "string" && error.message.trim()) {
+    return error.message.trim();
+  }
+
+  if (error && typeof error === "object") {
+    const maybeError = error as Record<string, unknown>;
+    const directMessage = maybeError.message;
+    if (typeof directMessage === "string" && directMessage.trim()) {
+      return directMessage.trim();
+    }
+
+    const rawError = maybeError.raw;
+    if (rawError && typeof rawError === "object") {
+      const rawMessage = (rawError as Record<string, unknown>).message;
+      if (typeof rawMessage === "string" && rawMessage.trim()) {
+        return rawMessage.trim();
+      }
+    }
+  }
+
+  return "Unexpected error";
+};
+
+const isStripePlatformProfileError = (message: string) => {
+  const normalized = String(message || "").toLowerCase();
+  return (
+    normalized.includes("managing losses") ||
+    normalized.includes("collecting requirements") ||
+    normalized.includes("platform-profile") ||
+    normalized.includes("platform profile")
+  );
+};
+
+const resolveApiErrorPayload = (error: unknown) => {
+  const rawMessage = extractErrorMessage(error);
+
+  if (isStripePlatformProfileError(rawMessage)) {
+    return {
+      status: 400,
+      body: {
+        success: false,
+        code: STRIPE_PLATFORM_PROFILE_ERROR_CODE,
+        error: STRIPE_PLATFORM_PROFILE_MESSAGE,
+        actionUrl: STRIPE_PLATFORM_PROFILE_URL,
+      },
+    };
+  }
+
+  return {
+    status: 400,
+    body: {
+      success: false,
+      error: rawMessage,
+    },
+  };
+};
 
 const ensureTransfersCapabilityRequested = async (accountId: string) => {
   const account = await stripe.accounts.retrieve(accountId);
@@ -191,7 +253,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("get-driver-onboarding-link error:", error);
-    const message = error instanceof Error ? error.message : "Unexpected error";
-    return jsonResponse({ success: false, error: message }, 400);
+    const resolvedError = resolveApiErrorPayload(error);
+    return jsonResponse(resolvedError.body, resolvedError.status);
   }
 });
