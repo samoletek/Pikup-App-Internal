@@ -13,8 +13,7 @@ const callPayment = (methodName, ...args) => {
 export const createDriverConnectAccount = (...args) =>
   callPayment('createDriverConnectAccount', ...args);
 
-export const getDriverOnboardingLink = (...args) =>
-  callPayment('getDriverOnboardingLink', ...args);
+export const getDriverOnboardingLink = (...args) => callPayment('getDriverOnboardingLink', ...args);
 
 export const checkDriverOnboardingStatus = (...args) =>
   callPayment('checkDriverOnboardingStatus', ...args);
@@ -25,17 +24,16 @@ export const updateDriverPaymentProfile = (...args) =>
 export const getDriverEarningsHistory = (...args) =>
   callPayment('getDriverEarningsHistory', ...args);
 
+export const getDriverPayoutAvailability = (...args) =>
+  callPayment('getDriverPayoutAvailability', ...args);
+
 export const getDriverPayouts = (...args) => callPayment('getDriverPayouts', ...args);
 
 export const processTripPayout = (...args) => callPayment('processTripPayout', ...args);
 
-export const requestInstantPayout = (...args) =>
-  callPayment('requestInstantPayout', ...args);
+export const requestInstantPayout = (...args) => callPayment('requestInstantPayout', ...args);
 
 export const createVerificationSession = (...args) =>
   callPayment('createVerificationSession', ...args);
 
-export {
-  resetPaymentProviderAdapter,
-  setPaymentProviderAdapter,
-};
+export { resetPaymentProviderAdapter, setPaymentProviderAdapter };

@@ -1,5 +1,6 @@
 jest.mock('../../services/repositories/paymentRepository', () => ({
   fetchCompletedDriverTrips: jest.fn(),
+  invokeDriverPayoutAvailability: jest.fn(),
   invokeProcessPayout: jest.fn(),
 }));
 
@@ -26,8 +27,10 @@ jest.mock('../../services/PricingService', () => ({
 
 const { requestInstantPayout } = require('../../services/payment/payouts');
 const { getDriverProfileRow } = require('../../services/payment/common');
-const { updateDriverPaymentProfile } = require('../../services/payment/profile');
-const { invokeProcessPayout } = require('../../services/repositories/paymentRepository');
+const {
+  invokeDriverPayoutAvailability,
+  invokeProcessPayout,
+} = require('../../services/repositories/paymentRepository');
 const { getDriverStats } = require('../../services/driverEarningsService');
 
 describe('payment/payouts.requestInstantPayout', () => {
@@ -46,6 +49,15 @@ describe('payment/payouts.requestInstantPayout', () => {
       availableBalance: 30,
       totalPayouts: 10,
     });
+    invokeDriverPayoutAvailability.mockResolvedValue({
+      data: {
+        success: true,
+        balanceAmount: 30,
+        availableNowAmount: 30,
+        pendingAmount: 0,
+      },
+      error: null,
+    });
     invokeProcessPayout.mockResolvedValue({
       data: {
         success: true,
@@ -55,7 +67,6 @@ describe('payment/payouts.requestInstantPayout', () => {
       },
       error: null,
     });
-    updateDriverPaymentProfile.mockResolvedValue({});
   });
 
   test('uses recalculated driver stats balance instead of stale metadata balance', async () => {
@@ -68,11 +79,10 @@ describe('payment/payouts.requestInstantPayout', () => {
       })
     );
     expect(getDriverStats).toHaveBeenCalledWith('driver-1');
-    expect(updateDriverPaymentProfile).toHaveBeenCalledWith(
-      'driver-1',
+    expect(invokeProcessPayout).toHaveBeenCalledWith(
       expect.objectContaining({
-        totalPayouts: 30,
-        availableBalance: 10,
+        amount: 20,
+        driverId: 'driver-1',
       })
     );
   });
@@ -98,5 +108,28 @@ describe('payment/payouts.requestInstantPayout', () => {
         transferGroup: 'instant_payout:driver-1:2000',
       })
     );
+  });
+
+  test('blocks payout when earned funds are still on Stripe hold', async () => {
+    invokeDriverPayoutAvailability.mockResolvedValue({
+      data: {
+        success: true,
+        balanceAmount: 30,
+        availableNowAmount: 0,
+        pendingAmount: 30,
+        pendingUntil: '2026-04-29T00:00:00.000Z',
+      },
+      error: null,
+    });
+
+    const result = await requestInstantPayout('driver-1', 20);
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('Stripe hold'),
+      })
+    );
+    expect(invokeProcessPayout).not.toHaveBeenCalled();
   });
 });

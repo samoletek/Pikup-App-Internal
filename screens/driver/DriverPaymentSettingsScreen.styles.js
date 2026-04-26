@@ -1,10 +1,5 @@
 import { StyleSheet } from 'react-native';
-import {
-  borderRadius,
-  colors,
-  spacing,
-  typography,
-} from '../../styles/theme';
+import { borderRadius, colors, spacing, typography } from '../../styles/theme';
 
 const styles = StyleSheet.create({
   container: {
@@ -88,6 +83,17 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
     fontSize: typography.fontSize.xxl,
     fontWeight: typography.fontWeight.bold,
+  },
+  pendingPayoutNote: {
+    marginTop: spacing.xs,
+    color: colors.warning,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  earnedBalanceNote: {
+    marginTop: spacing.xs,
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.sm,
   },
   noteText: {
     marginTop: spacing.sm,
@@ -183,6 +189,11 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.semibold,
+    textAlign: 'right',
+    flexShrink: 1,
+  },
+  payoutStatusPending: {
+    color: colors.warning,
   },
 });
 

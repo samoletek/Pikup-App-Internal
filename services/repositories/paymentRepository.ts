@@ -17,6 +17,8 @@ import type {
   DriverOnboardingLinkResponse,
   DriverOnboardingStatusRequest,
   DriverOnboardingStatusResponse,
+  DriverPayoutAvailabilityRequest,
+  DriverPayoutAvailabilityResponse,
   AttachPaymentMethodRequest,
   AttachPaymentMethodResponse,
   DetachPaymentMethodRequest,
@@ -42,7 +44,9 @@ type PaymentMethodsResponse = GetPaymentMethodsResponse & {
 };
 
 const isInvalidJwtEdgeError = async (error: unknown) => {
-  const maybeError = error as { context?: { status?: number; clone?: () => { json: () => Promise<unknown> } } } | null;
+  const maybeError = error as {
+    context?: { status?: number; clone?: () => { json: () => Promise<unknown> } };
+  } | null;
   const statusCode = Number(maybeError?.context?.status || 0);
   if (statusCode === 401) {
     return true;
@@ -50,10 +54,18 @@ const isInvalidJwtEdgeError = async (error: unknown) => {
 
   try {
     const payload = await maybeError?.context?.clone?.().json?.();
-    const message = String((payload as { error?: unknown; message?: unknown } | null)?.error || (payload as { message?: unknown } | null)?.message || '')
+    const message = String(
+      (payload as { error?: unknown; message?: unknown } | null)?.error ||
+        (payload as { message?: unknown } | null)?.message ||
+        ''
+    )
       .trim()
       .toLowerCase();
-    const code = String((payload as { code?: unknown; errorCode?: unknown } | null)?.code || (payload as { errorCode?: unknown } | null)?.errorCode || '')
+    const code = String(
+      (payload as { code?: unknown; errorCode?: unknown } | null)?.code ||
+        (payload as { errorCode?: unknown } | null)?.errorCode ||
+        ''
+    )
       .trim()
       .toLowerCase();
     return message.includes('invalid jwt') || code === '401' || code === 'invalid_jwt';
@@ -69,7 +81,7 @@ const invokeEdgeFunction = async <T>(functionName: string, payload?: Record<stri
 const invokeWithAuthRetry = async <T>(
   functionName: string,
   payload?: Record<string, unknown>,
-  _accessTokenHint?: string | null,
+  _accessTokenHint?: string | null
 ) => {
   let result = await invokeEdgeFunction<T>(functionName, payload);
 
@@ -123,7 +135,10 @@ export const invokeDetachPaymentMethod = async (payload: DetachPaymentMethodRequ
 };
 
 export const invokeSetDefaultPaymentMethod = async (payload: SetDefaultPaymentMethodRequest) => {
-  return invokeWithAuthRetry<SetDefaultPaymentMethodResponse>('set-default-payment-method', payload);
+  return invokeWithAuthRetry<SetDefaultPaymentMethodResponse>(
+    'set-default-payment-method',
+    payload
+  );
 };
 
 export const invokeCreatePaymentIntent = async (payload: CreatePaymentIntentRequest) => {
@@ -156,7 +171,9 @@ export const invokeCreateTipPayment = async (payload: CreateTipPaymentRequest) =
   });
 };
 
-export const invokeTripPriceEstimate = async (rideDetails: TripPriceEstimateRequest["rideDetails"]) => {
+export const invokeTripPriceEstimate = async (
+  rideDetails: TripPriceEstimateRequest['rideDetails']
+) => {
   return supabase.functions.invoke<TripPriceEstimateResponse>('calculate-trip-price', {
     body: { rideDetails },
   });
@@ -164,62 +181,67 @@ export const invokeTripPriceEstimate = async (rideDetails: TripPriceEstimateRequ
 
 export const invokeCreateDriverConnectAccount = async (
   payload: CreateDriverConnectAccountRequest,
-  accessTokenHint?: string | null,
+  accessTokenHint?: string | null
 ) => {
   return invokeWithAuthRetry<CreateDriverConnectAccountResponse>(
     'create-driver-connect-account',
     payload,
-    accessTokenHint,
+    accessTokenHint
   );
 };
 
 export const invokeDriverOnboardingLink = async (
   payload: DriverOnboardingLinkRequest,
-  accessTokenHint?: string | null,
+  accessTokenHint?: string | null
 ) => {
   return invokeWithAuthRetry<DriverOnboardingLinkResponse>(
     'get-driver-onboarding-link',
     payload,
-    accessTokenHint,
+    accessTokenHint
   );
 };
 
 export const invokeDriverOnboardingStatus = async (
   payload: DriverOnboardingStatusRequest,
-  accessTokenHint?: string | null,
+  accessTokenHint?: string | null
 ) => {
   return invokeWithAuthRetry<DriverOnboardingStatusResponse>(
     'check-driver-onboarding-status',
     payload,
-    accessTokenHint,
+    accessTokenHint
   );
 };
 
 export const invokeProcessPayout = async (payload: ProcessPayoutRequest) => {
-  return supabase.functions.invoke<ProcessPayoutResponse>('process-payout', {
-    body: payload,
-  });
+  return invokeWithAuthRetry<ProcessPayoutResponse>('process-payout', payload);
+};
+
+export const invokeDriverPayoutAvailability = async (payload: DriverPayoutAvailabilityRequest) => {
+  return invokeWithAuthRetry<DriverPayoutAvailabilityResponse>(
+    'get-driver-payout-availability',
+    payload
+  );
 };
 
 export const invokeCreateVerificationSession = async (
   payload: CreateVerificationSessionRequest,
-  accessTokenHint?: string | null,
+  accessTokenHint?: string | null
 ) => {
   return invokeWithAuthRetry<CreateVerificationSessionResponse>(
     'create-verification-session',
     payload,
-    accessTokenHint,
+    accessTokenHint
   );
 };
 
 export const invokeGetVerificationData = async (
   payload: GetVerificationDataRequest,
-  accessTokenHint?: string | null,
+  accessTokenHint?: string | null
 ) => {
   return invokeWithAuthRetry<GetVerificationDataResponse>(
     'get-verification-data',
     payload,
-    accessTokenHint,
+    accessTokenHint
   );
 };
 
@@ -229,52 +251,28 @@ export const invokeVerifyVehicle = async (payload: VerifyVehicleRequest) => {
   });
 };
 
-export const fetchDriverRowById = async (
-  driverId: string,
-  columns = '*',
-  maybeSingle = true,
-) => {
+export const fetchDriverRowById = async (driverId: string, columns = '*', maybeSingle = true) => {
   if (maybeSingle) {
-    return supabase
-      .from('drivers')
-      .select(columns)
-      .eq('id', driverId)
-      .maybeSingle();
+    return supabase.from('drivers').select(columns).eq('id', driverId).maybeSingle();
   }
 
-  return supabase
-    .from('drivers')
-    .select(columns)
-    .eq('id', driverId)
-    .single();
+  return supabase.from('drivers').select(columns).eq('id', driverId).single();
 };
 
 export const updateDriverRowById = async (
   driverId: string,
   updates: Record<string, unknown>,
-  withSelect = false,
+  withSelect = false
 ) => {
   if (withSelect) {
-    return supabase
-      .from('drivers')
-      .update(updates)
-      .eq('id', driverId)
-      .select('*')
-      .maybeSingle();
+    return supabase.from('drivers').update(updates).eq('id', driverId).select('*').maybeSingle();
   }
 
-  return supabase
-    .from('drivers')
-    .update(updates)
-    .eq('id', driverId);
+  return supabase.from('drivers').update(updates).eq('id', driverId);
 };
 
 export const upsertDriverRowWithSelect = async (payload: Record<string, unknown>) => {
-  return supabase
-    .from('drivers')
-    .upsert(payload)
-    .select('*')
-    .maybeSingle();
+  return supabase.from('drivers').upsert(payload).select('*').maybeSingle();
 };
 
 export const getAuthenticatedUser = async () => {
@@ -284,7 +282,9 @@ export const getAuthenticatedUser = async () => {
 export const fetchCompletedDriverTrips = async (driverId: string, fromIso: string) => {
   return supabase
     .from('trips')
-    .select('id, price, created_at, completed_at, distance_miles, actual_duration_minutes, status, pickup_location, insurance_premium')
+    .select(
+      'id, price, created_at, completed_at, distance_miles, actual_duration_minutes, status, pickup_location, insurance_premium'
+    )
     .eq('driver_id', driverId)
     .eq('status', 'completed')
     .gte('completed_at', fromIso)

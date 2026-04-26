@@ -10,7 +10,18 @@ const buildPayoutIdempotencyKey = ({ driverId, amountCents }) => {
   return `instant_payout:${normalizedDriverId}:${amountCents}:${Date.now()}:${randomToken}`;
 };
 
-const resolveInstantPayoutTitle = (driverProfile = {}) => {
+const toDisplayDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const resolveInstantPayoutTitle = (driverProfile = {}, driverStats = {}) => {
   if (!driverProfile?.connectAccountId) {
     return 'Setup Required';
   }
@@ -19,6 +30,13 @@ const resolveInstantPayoutTitle = (driverProfile = {}) => {
     return driverProfile?.onboardingStatus === 'action_required'
       ? 'Complete Setup'
       : 'Under Review';
+  }
+
+  if (
+    Number(driverStats.availableBalance || 0) <= 0 &&
+    Number(driverStats.pendingBalance || 0) > 0
+  ) {
+    return 'Funds On Hold';
   }
 
   return 'Payout Now';
@@ -40,36 +58,38 @@ export default function useDriverEarningsPayoutActions({
     navigation.navigate('DriverPaymentSettingsScreen');
   }, [navigation]);
 
-  const resolvePayoutIdempotencyKey = useCallback((grossAmount) => {
-    const amountCents = Math.round(Number(grossAmount || 0) * 100);
-    const now = Date.now();
-    const previousAttempt = payoutAttemptRef.current;
-    const canReuseAttemptKey = (
-      previousAttempt?.key &&
-      previousAttempt?.amountCents === amountCents &&
-      (now - Number(previousAttempt?.createdAt || 0)) < PAYOUT_IDEMPOTENCY_TTL_MS
-    );
+  const resolvePayoutIdempotencyKey = useCallback(
+    (grossAmount) => {
+      const amountCents = Math.round(Number(grossAmount || 0) * 100);
+      const now = Date.now();
+      const previousAttempt = payoutAttemptRef.current;
+      const canReuseAttemptKey =
+        previousAttempt?.key &&
+        previousAttempt?.amountCents === amountCents &&
+        now - Number(previousAttempt?.createdAt || 0) < PAYOUT_IDEMPOTENCY_TTL_MS;
 
-    if (canReuseAttemptKey) {
-      return previousAttempt.key;
-    }
+      if (canReuseAttemptKey) {
+        return previousAttempt.key;
+      }
 
-    const nextKey = buildPayoutIdempotencyKey({ driverId: currentUserId, amountCents });
-    payoutAttemptRef.current = {
-      key: nextKey,
-      amountCents,
-      createdAt: now,
-    };
-    return nextKey;
-  }, [currentUserId]);
+      const nextKey = buildPayoutIdempotencyKey({ driverId: currentUserId, amountCents });
+      payoutAttemptRef.current = {
+        key: nextKey,
+        amountCents,
+        createdAt: now,
+      };
+      return nextKey;
+    },
+    [currentUserId]
+  );
 
   const resetPayoutAttempt = useCallback(() => {
     payoutAttemptRef.current = { key: null, amountCents: null, createdAt: 0 };
   }, []);
 
   const instantPayoutTitle = useMemo(
-    () => resolveInstantPayoutTitle(driverProfile),
-    [driverProfile]
+    () => resolveInstantPayoutTitle(driverProfile, driverStats),
+    [driverProfile, driverStats]
   );
 
   const handleInstantPayout = useCallback(async () => {
@@ -108,14 +128,10 @@ export default function useDriverEarningsPayoutActions({
     }
 
     if (driverStats.availableBalance <= 0) {
-      Alert.alert(
-        'No Balance',
-        "You don't have any available balance to cash out yet.",
-        [
-          { text: 'OK', style: 'cancel' },
-          { text: 'View Payout Settings', onPress: openPayoutSettings },
-        ]
-      );
+      Alert.alert('Funds On Hold', "You don't have any settled funds available to cash out yet.", [
+        { text: 'OK', style: 'cancel' },
+        { text: 'View Payout Settings', onPress: openPayoutSettings },
+      ]);
       return;
     }
 
@@ -143,9 +159,14 @@ export default function useDriverEarningsPayoutActions({
                     ? Number(result.netAmount)
                     : driverStats.availableBalance - feeAmount
                 );
+                const availabilityLabel = toDisplayDate(result?.availableOn);
+                const statusLine =
+                  result?.status === 'pending' && availabilityLabel
+                    ? `\nStripe may show this payout as pending until ${availabilityLabel}.`
+                    : '';
                 Alert.alert(
-                  'Success',
-                  `Payout processed.\nGross: $${driverStats.availableBalance.toFixed(2)}\nFee: $${feeAmount.toFixed(2)}\nNet: $${Math.max(0, netAmount).toFixed(2)}`
+                  'Payout Submitted',
+                  `Gross: $${driverStats.availableBalance.toFixed(2)}\nFee: $${feeAmount.toFixed(2)}\nNet: $${Math.max(0, netAmount).toFixed(2)}${statusLine}`
                 );
                 await loadDriverData();
                 resetPayoutAttempt();

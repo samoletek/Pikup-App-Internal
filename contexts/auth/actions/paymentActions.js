@@ -1,9 +1,7 @@
 import * as PaymentService from '../../../services/PaymentService';
 import { logger } from '../../../services/logger';
 
-export const createPaymentDomainActions = ({
-  currentUser,
-}) => {
+export const createPaymentDomainActions = ({ currentUser }) => {
   const createDriverConnectAccount = (driverInfo = {}) =>
     PaymentService.createDriverConnectAccount(driverInfo, currentUser);
 
@@ -36,6 +34,7 @@ export const createPaymentDomainActions = ({
     updateDriverPaymentProfile: PaymentService.updateDriverPaymentProfile,
     checkDriverOnboardingStatus,
     getDriverEarningsHistory: PaymentService.getDriverEarningsHistory,
+    getDriverPayoutAvailability: PaymentService.getDriverPayoutAvailability,
     getDriverPayouts: PaymentService.getDriverPayouts,
     requestInstantPayout,
     processInstantPayout: requestInstantPayout,

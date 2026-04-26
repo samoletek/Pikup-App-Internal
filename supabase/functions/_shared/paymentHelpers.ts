@@ -128,12 +128,33 @@ export const mapUnexpectedError = (error: unknown) => {
     return error
   }
 
+  const stripeLikeError = error as {
+    code?: unknown
+    statusCode?: unknown
+    status?: unknown
+    type?: unknown
+    message?: unknown
+    raw?: {
+      code?: unknown
+      statusCode?: unknown
+      status?: unknown
+      type?: unknown
+      message?: unknown
+    }
+  }
+
   const message =
     typeof error === "object" && error && "message" in error
       ? String((error as { message?: string }).message || "Unexpected error")
       : "Unexpected error"
+  const rawStatus = Number(stripeLikeError?.statusCode || stripeLikeError?.raw?.statusCode || stripeLikeError?.status || stripeLikeError?.raw?.status)
+  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus < 600
+    ? rawStatus
+    : 400
+  const code = String(stripeLikeError?.code || stripeLikeError?.raw?.code || stripeLikeError?.type || stripeLikeError?.raw?.type || "")
+    .trim() || null
 
-  return new HttpError(message, 400)
+  return new HttpError(message, status, code)
 }
 
 export const resolveProfileName = (

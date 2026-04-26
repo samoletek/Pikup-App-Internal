@@ -8,7 +8,7 @@ import {
   jsonResponse,
   mapUnexpectedError,
 } from "../_shared/paymentHelpers.ts"
-import { processDriverPayout } from "../_shared/payoutHelpers.ts"
+import { processDriverPayout, resolveDriverPayoutAvailability } from "../_shared/payoutHelpers.ts"
 
 const resolveString = (value: unknown) => String(value || "").trim()
 const PERIOD_KEY_REGEX = /^\d{4}-\d{2}$/
@@ -184,6 +184,17 @@ serve(async (req) => {
         continue
       }
 
+      const payoutAvailability = await resolveDriverPayoutAvailability({
+        adminClient,
+        stripe,
+        driverId,
+      })
+      const withdrawableNow = Number((payoutAvailability.availableNowCents / 100).toFixed(2))
+      if (withdrawableNow <= 0) {
+        skippedCount += 1
+        continue
+      }
+
       const idempotencyKey = `monthly_payout:${periodKey}:${driverId}`
       const transferGroup = `monthly_payout:${periodKey}:${driverId}`
 
@@ -192,7 +203,7 @@ serve(async (req) => {
           adminClient,
           stripe,
           driverId,
-          amount: availableBalance,
+          amount: withdrawableNow,
           currency: "usd",
           transferGroup,
           mode: "scheduled",

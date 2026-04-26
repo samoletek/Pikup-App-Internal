@@ -6,6 +6,7 @@ import {
 import { updateDriverPaymentProfile } from '../payment/profile';
 import {
   getDriverEarningsHistory,
+  getDriverPayoutAvailability,
   getDriverPayouts,
   processTripPayout,
   requestInstantPayout,
@@ -18,6 +19,7 @@ export type PaymentProviderAdapter = {
   checkDriverOnboardingStatus: typeof checkDriverOnboardingStatus;
   updateDriverPaymentProfile: typeof updateDriverPaymentProfile;
   getDriverEarningsHistory: typeof getDriverEarningsHistory;
+  getDriverPayoutAvailability: typeof getDriverPayoutAvailability;
   getDriverPayouts: typeof getDriverPayouts;
   processTripPayout: typeof processTripPayout;
   requestInstantPayout: typeof requestInstantPayout;
@@ -30,6 +32,7 @@ const defaultPaymentProviderAdapter: PaymentProviderAdapter = {
   checkDriverOnboardingStatus,
   updateDriverPaymentProfile,
   getDriverEarningsHistory,
+  getDriverPayoutAvailability,
   getDriverPayouts,
   processTripPayout,
   requestInstantPayout,
@@ -38,8 +41,7 @@ const defaultPaymentProviderAdapter: PaymentProviderAdapter = {
 
 let activePaymentProviderAdapter: PaymentProviderAdapter = defaultPaymentProviderAdapter;
 
-export const getPaymentProviderAdapter = (): PaymentProviderAdapter =>
-  activePaymentProviderAdapter;
+export const getPaymentProviderAdapter = (): PaymentProviderAdapter => activePaymentProviderAdapter;
 
 export const setPaymentProviderAdapter = (nextAdapter: PaymentProviderAdapter) => {
   activePaymentProviderAdapter = nextAdapter || defaultPaymentProviderAdapter;

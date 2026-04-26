@@ -24,6 +24,15 @@ const STRIPE_PLATFORM_PROFILE_URL = "https://dashboard.stripe.com/settings/conne
 const STRIPE_PLATFORM_PROFILE_ERROR_CODE = "stripe_platform_profile_incomplete";
 const STRIPE_PLATFORM_PROFILE_MESSAGE =
   "Stripe Connect live setup is incomplete. In Stripe Dashboard, open Connect > Platform profile and acknowledge managing losses responsibilities, then retry onboarding.";
+const DEFAULT_CONNECT_BUSINESS_PROFILE_URL = "https://pikup-app.com";
+const CONNECT_BUSINESS_PROFILE_URL =
+  String(Deno.env.get("STRIPE_CONNECT_BUSINESS_PROFILE_URL") || "").trim() ||
+  DEFAULT_CONNECT_BUSINESS_PROFILE_URL;
+const CONNECT_BUSINESS_MCC =
+  String(Deno.env.get("STRIPE_CONNECT_BUSINESS_MCC") || "").trim() || "4214";
+const CONNECT_BUSINESS_PRODUCT_DESCRIPTION =
+  String(Deno.env.get("STRIPE_CONNECT_BUSINESS_PRODUCT_DESCRIPTION") || "").trim() ||
+  "Individual provider for peer-to-peer moving services on the Pikup platform.";
 
 const parseAllowedHttpsHosts = () => {
   const configured = String(
@@ -132,6 +141,12 @@ const resolveApiErrorPayload = (error: unknown) => {
   };
 };
 
+const buildConnectBusinessProfile = () => ({
+  url: CONNECT_BUSINESS_PROFILE_URL,
+  mcc: CONNECT_BUSINESS_MCC,
+  product_description: CONNECT_BUSINESS_PRODUCT_DESCRIPTION,
+});
+
 const ensureRequiredCapabilitiesRequested = async (accountId: string) => {
   const account = await stripe.accounts.retrieve(accountId);
   const transfersCapability = String(account.capabilities?.transfers || "").trim().toLowerCase();
@@ -141,17 +156,36 @@ const ensureRequiredCapabilitiesRequested = async (accountId: string) => {
   const isTransfersRequested = transfersCapability === "active" || transfersCapability === "pending";
   const isCardPaymentsRequested =
     cardPaymentsCapability === "active" || cardPaymentsCapability === "pending";
+  const accountBusinessProfile = account.business_profile || {};
+  const isStripeStillCollectingRequirements = !Boolean(account.details_submitted);
+  const hasExpectedBusinessProfile =
+    String(accountBusinessProfile.url || "").trim() === CONNECT_BUSINESS_PROFILE_URL &&
+    String(accountBusinessProfile.mcc || "").trim() === CONNECT_BUSINESS_MCC &&
+    String(accountBusinessProfile.product_description || "").trim() ===
+      CONNECT_BUSINESS_PRODUCT_DESCRIPTION;
 
-  if (isTransfersRequested && isCardPaymentsRequested) {
+  if (
+    isTransfersRequested &&
+    isCardPaymentsRequested &&
+    (!isStripeStillCollectingRequirements || hasExpectedBusinessProfile)
+  ) {
     return;
   }
 
-  await stripe.accounts.update(accountId, {
-    capabilities: {
+  const updatePayload: Stripe.AccountUpdateParams = {};
+
+  if (!isTransfersRequested || !isCardPaymentsRequested) {
+    updatePayload.capabilities = {
       transfers: { requested: true },
       card_payments: { requested: true },
-    },
-  });
+    };
+  }
+
+  if (isStripeStillCollectingRequirements && !hasExpectedBusinessProfile) {
+    updatePayload.business_profile = buildConnectBusinessProfile();
+  }
+
+  await stripe.accounts.update(accountId, updatePayload);
 };
 
 serve(async (req) => {
@@ -222,6 +256,8 @@ serve(async (req) => {
         type: "express",
         country: "US",
         email: driverRow?.email || user.email || undefined,
+        business_type: "individual",
+        business_profile: buildConnectBusinessProfile(),
         capabilities: {
           transfers: { requested: true },
           card_payments: { requested: true },

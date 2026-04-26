@@ -1,28 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Animated, AppState, Linking } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ONBOARDING_DRAFT_STORAGE_PREFIX } from "./DriverOnboardingScreen.constants";
-import { logger } from "../../services/logger";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Animated, AppState, Linking } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ONBOARDING_DRAFT_STORAGE_PREFIX } from './DriverOnboardingScreen.constants';
+import { logger } from '../../services/logger';
 
 const STATUS_POLL_INITIAL_INTERVAL_MS = 5000;
 const STATUS_POLL_MAX_INTERVAL_MS = 60000;
 
-const normalizeList = (value) => (
-  Array.isArray(value)
-    ? value.map((entry) => String(entry || "").trim()).filter(Boolean)
-    : []
-);
+const normalizeList = (value) =>
+  Array.isArray(value) ? value.map((entry) => String(entry || '').trim()).filter(Boolean) : [];
+
+const resolveProfileConnectAccountId = (profile) =>
+  String(
+    profile?.stripe_account_id ||
+      profile?.connectAccountId ||
+      profile?.metadata?.connectAccountId ||
+      ''
+  ).trim() || null;
 
 const resolveNormalizedStatus = (result) => {
-  const rawStatus = String(result?.status || "").trim().toLowerCase();
-  if (rawStatus === "verified") return "verified";
-  if (rawStatus === "under_review" || rawStatus === "review") return "under_review";
-  if (rawStatus === "action_required") return "action_required";
-  if (rawStatus === "missing_account") return "missing_account";
+  const rawStatus = String(result?.status || '')
+    .trim()
+    .toLowerCase();
+  if (rawStatus === 'verified') return 'verified';
+  if (rawStatus === 'under_review' || rawStatus === 'review') return 'under_review';
+  if (rawStatus === 'action_required') return 'action_required';
+  if (rawStatus === 'missing_account') return 'missing_account';
 
-  if (result?.canReceivePayments) return "verified";
-  if (result?.onboardingComplete) return "under_review";
-  return "action_required";
+  if (result?.canReceivePayments) return 'verified';
+  if (result?.onboardingComplete) return 'under_review';
+  return 'action_required';
 };
 
 const buildStatusDetails = (result, normalizedStatus) => ({
@@ -32,12 +39,12 @@ const buildStatusDetails = (result, normalizedStatus) => ({
   pastDue: normalizeList(result?.pastDue),
   eventuallyDue: normalizeList(result?.eventuallyDue),
   pendingVerification: normalizeList(result?.pendingVerification),
-  disabledReason: String(result?.disabledReason || "").trim() || null,
+  disabledReason: String(result?.disabledReason || '').trim() || null,
   checkedAt: new Date().toISOString(),
 });
 
 const createDefaultStatusDetails = () => ({
-  status: "checking",
+  status: 'checking',
   requirements: [],
   currentlyDue: [],
   pastDue: [],
@@ -46,6 +53,8 @@ const createDefaultStatusDetails = () => ({
   disabledReason: null,
   checkedAt: null,
 });
+
+const shouldKeepPollingForStatus = (status) => status === 'under_review' || status === 'checking';
 
 export default function useDriverOnboardingCompleteFlow({
   connectAccountId,
@@ -57,18 +66,20 @@ export default function useDriverOnboardingCompleteFlow({
   navigation,
 }) {
   const userId = currentUser?.uid || currentUser?.id;
-  const initialConnectAccountId = String(connectAccountId || "").trim() || null;
+  const initialConnectAccountId =
+    String(connectAccountId || resolveProfileConnectAccountId(currentUser) || '').trim() || null;
 
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [resolvedConnectAccountId, setResolvedConnectAccountId] = useState(initialConnectAccountId);
-  const [verificationStatus, setVerificationStatus] = useState("checking");
+  const [verificationStatus, setVerificationStatus] = useState('checking');
   const [statusDetails, setStatusDetails] = useState(createDefaultStatusDetails);
 
   const pollTimeoutRef = useRef(null);
   const pollIntervalMsRef = useRef(STATUS_POLL_INITIAL_INTERVAL_MS);
   const pulseLoopRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const checkVerificationStatusRef = useRef(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -82,17 +93,17 @@ export default function useDriverOnboardingCompleteFlow({
     }
   }, []);
 
-  const scheduleNextStatusCheck = useCallback((callback) => {
-    clearStatusPolling();
-    const delay = pollIntervalMsRef.current;
-    pollTimeoutRef.current = setTimeout(() => {
-      callback?.();
-    }, delay);
-    pollIntervalMsRef.current = Math.min(
-      Math.round(delay * 1.6),
-      STATUS_POLL_MAX_INTERVAL_MS
-    );
-  }, [clearStatusPolling]);
+  const scheduleNextStatusCheck = useCallback(
+    (callback) => {
+      clearStatusPolling();
+      const delay = pollIntervalMsRef.current;
+      pollTimeoutRef.current = setTimeout(() => {
+        callback?.();
+      }, delay);
+      pollIntervalMsRef.current = Math.min(Math.round(delay * 1.6), STATUS_POLL_MAX_INTERVAL_MS);
+    },
+    [clearStatusPolling]
+  );
 
   const startCheckmarkAnimation = useCallback(() => {
     Animated.spring(checkmarkAnim, {
@@ -103,74 +114,123 @@ export default function useDriverOnboardingCompleteFlow({
     }).start();
   }, [checkmarkAnim]);
 
-  const checkVerificationStatus = useCallback(async ({ foreground = false, resetBackoff = false } = {}) => {
-    if (resetBackoff) {
-      pollIntervalMsRef.current = STATUS_POLL_INITIAL_INTERVAL_MS;
+  const resolveConnectAccountId = useCallback(async () => {
+    const persistedId =
+      String(
+        resolvedConnectAccountId || resolveProfileConnectAccountId(currentUser) || ''
+      ).trim() || null;
+
+    if (persistedId) {
+      return persistedId;
     }
 
-    if (foreground) {
-      setIsRefreshingStatus(true);
+    if (typeof refreshProfile !== 'function') {
+      return null;
     }
-
-    clearStatusPolling();
 
     try {
-      const statusResult = await checkDriverOnboardingStatus?.(resolvedConnectAccountId);
-      if (!statusResult?.success) {
-        throw new Error(statusResult?.error || "Could not verify Stripe Connect status");
+      const refreshedProfile = await refreshProfile();
+      const refreshedAccountId = resolveProfileConnectAccountId(refreshedProfile);
+      if (refreshedAccountId) {
+        setResolvedConnectAccountId(refreshedAccountId);
+      }
+      return refreshedAccountId || null;
+    } catch (refreshError) {
+      logger.warn(
+        'DriverOnboardingCompleteFlow',
+        'Failed to refresh profile while resolving connect account',
+        refreshError
+      );
+      return null;
+    }
+  }, [currentUser, refreshProfile, resolvedConnectAccountId]);
+
+  const checkVerificationStatus = useCallback(
+    async ({ foreground = false, resetBackoff = false } = {}) => {
+      if (resetBackoff) {
+        pollIntervalMsRef.current = STATUS_POLL_INITIAL_INTERVAL_MS;
       }
 
-      const nextConnectAccountId =
-        String(
-          statusResult?.connectAccountId ||
-          statusResult?.accountId ||
-          resolvedConnectAccountId ||
-          ""
-        ).trim() || null;
+      if (foreground) {
+        setIsRefreshingStatus(true);
+      }
 
-      setResolvedConnectAccountId(nextConnectAccountId);
+      clearStatusPolling();
 
-      const normalizedStatus = resolveNormalizedStatus(statusResult);
-      const nextDetails = buildStatusDetails(statusResult, normalizedStatus);
+      try {
+        const accountIdForCheck = await resolveConnectAccountId();
+        const statusResult = await checkDriverOnboardingStatus?.(accountIdForCheck);
+        if (!statusResult?.success) {
+          throw new Error(statusResult?.error || 'Could not verify Stripe Connect status');
+        }
 
-      setStatusDetails(nextDetails);
-      setVerificationStatus(normalizedStatus);
+        const nextConnectAccountId =
+          String(
+            statusResult?.connectAccountId || statusResult?.accountId || accountIdForCheck || ''
+          ).trim() || null;
 
-      if (normalizedStatus === "verified" || statusResult.canReceivePayments) {
-        startCheckmarkAnimation();
+        setResolvedConnectAccountId(nextConnectAccountId);
+
+        const normalizedStatus = resolveNormalizedStatus(statusResult);
+        const nextDetails = buildStatusDetails(statusResult, normalizedStatus);
+
+        setStatusDetails(nextDetails);
+        setVerificationStatus(normalizedStatus);
+
+        if (typeof refreshProfile === 'function') {
+          void refreshProfile().catch((refreshError) => {
+            logger.warn(
+              'DriverOnboardingCompleteFlow',
+              'Failed to refresh profile after status check',
+              refreshError
+            );
+          });
+        }
+
+        if (normalizedStatus === 'verified' || statusResult.canReceivePayments) {
+          startCheckmarkAnimation();
+          clearStatusPolling();
+          return;
+        }
+
+        if (shouldKeepPollingForStatus(normalizedStatus)) {
+          scheduleNextStatusCheck(() => {
+            void checkVerificationStatus();
+          });
+          return;
+        }
+
         clearStatusPolling();
-        return;
-      }
-
-      if (normalizedStatus === "under_review") {
+      } catch (error) {
+        logger.error('DriverOnboardingCompleteFlow', 'Error checking verification status', error);
+        setVerificationStatus('error');
+        setStatusDetails((prev) => ({
+          ...prev,
+          status: 'error',
+          checkedAt: new Date().toISOString(),
+        }));
         scheduleNextStatusCheck(() => {
           void checkVerificationStatus();
         });
-        return;
+      } finally {
+        if (foreground) {
+          setIsRefreshingStatus(false);
+        }
       }
+    },
+    [
+      checkDriverOnboardingStatus,
+      clearStatusPolling,
+      refreshProfile,
+      resolveConnectAccountId,
+      scheduleNextStatusCheck,
+      startCheckmarkAnimation,
+    ]
+  );
 
-      clearStatusPolling();
-    } catch (error) {
-      logger.error("DriverOnboardingCompleteFlow", "Error checking verification status", error);
-      setVerificationStatus("error");
-      setStatusDetails((prev) => ({
-        ...prev,
-        status: "error",
-        checkedAt: new Date().toISOString(),
-      }));
-      clearStatusPolling();
-    } finally {
-      if (foreground) {
-        setIsRefreshingStatus(false);
-      }
-    }
-  }, [
-    checkDriverOnboardingStatus,
-    clearStatusPolling,
-    resolvedConnectAccountId,
-    scheduleNextStatusCheck,
-    startCheckmarkAnimation,
-  ]);
+  useEffect(() => {
+    checkVerificationStatusRef.current = checkVerificationStatus;
+  }, [checkVerificationStatus]);
 
   useEffect(() => {
     if (initialConnectAccountId) {
@@ -213,7 +273,7 @@ export default function useDriverOnboardingCompleteFlow({
 
   useEffect(() => {
     startAnimations();
-    void checkVerificationStatus({ foreground: true, resetBackoff: true });
+    void checkVerificationStatusRef.current?.({ foreground: true, resetBackoff: true });
 
     return () => {
       clearStatusPolling();
@@ -221,16 +281,15 @@ export default function useDriverOnboardingCompleteFlow({
         pulseLoopRef.current.stop();
       }
     };
-  }, [checkVerificationStatus, clearStatusPolling, startAnimations]);
+  }, [clearStatusPolling, startAnimations]);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
       const previousState = appStateRef.current;
       appStateRef.current = nextState;
 
       const hasReturnedToForeground =
-        (previousState === "background" || previousState === "inactive") &&
-        nextState === "active";
+        (previousState === 'background' || previousState === 'inactive') && nextState === 'active';
 
       if (hasReturnedToForeground) {
         void checkVerificationStatus({ foreground: true, resetBackoff: true });
@@ -247,12 +306,13 @@ export default function useDriverOnboardingCompleteFlow({
 
     try {
       if (!userId) {
-        throw new Error("User not found");
+        throw new Error('User not found');
       }
 
-      const latestStatus = await checkDriverOnboardingStatus?.(resolvedConnectAccountId);
+      const accountIdForCheck = await resolveConnectAccountId();
+      const latestStatus = await checkDriverOnboardingStatus?.(accountIdForCheck);
       if (!latestStatus?.success) {
-        throw new Error(latestStatus?.error || "Could not verify Stripe Connect status");
+        throw new Error(latestStatus?.error || 'Could not verify Stripe Connect status');
       }
 
       const latestNormalizedStatus = resolveNormalizedStatus(latestStatus);
@@ -260,37 +320,55 @@ export default function useDriverOnboardingCompleteFlow({
       setVerificationStatus(latestNormalizedStatus);
       setStatusDetails(latestStatusDetails);
 
-      if (latestNormalizedStatus !== "verified" || !latestStatus?.canReceivePayments) {
-        const requirementHint = latestStatusDetails.requirements.length > 0
-          ? `\n\nOutstanding requirements:\n${latestStatusDetails.requirements.slice(0, 3).join("\n")}`
-          : "";
-        const baseMessage = latestNormalizedStatus === "action_required"
-          ? "Stripe still needs additional account details. Please resume account setup."
-          : "Stripe is still processing your account. Try again in a moment.";
+      if (latestNormalizedStatus !== 'verified' || !latestStatus?.canReceivePayments) {
+        const requirementHint =
+          latestStatusDetails.requirements.length > 0
+            ? `\n\nOutstanding requirements:\n${latestStatusDetails.requirements.slice(0, 3).join('\n')}`
+            : '';
+        const baseMessage =
+          latestNormalizedStatus === 'action_required'
+            ? 'Stripe still needs additional account details. Please resume account setup.'
+            : 'Stripe is still processing your account. Try again in a moment.';
 
-        Alert.alert("Verification Incomplete", `${baseMessage}${requirementHint}`);
+        Alert.alert('Verification Incomplete', `${baseMessage}${requirementHint}`);
         return;
       }
 
-      await updateDriverPaymentProfile?.(userId, {
-        completedAt: new Date().toISOString(),
-        onboardingStep: null,
-        onboardingDraft: null,
-        onboardingLastSavedAt: null,
-      });
+      try {
+        await updateDriverPaymentProfile?.(userId, {
+          completedAt: new Date().toISOString(),
+          onboardingStep: null,
+          onboardingDraft: null,
+          onboardingLastSavedAt: null,
+        });
+      } catch (profileUpdateError) {
+        logger.warn(
+          'DriverOnboardingCompleteFlow',
+          'Unable to clear onboarding draft remotely; continuing with local completion',
+          profileUpdateError
+        );
+      }
 
       await AsyncStorage.removeItem(`${ONBOARDING_DRAFT_STORAGE_PREFIX}:${userId}`);
-      await refreshProfile?.();
+      try {
+        await refreshProfile?.();
+      } catch (refreshError) {
+        logger.warn(
+          'DriverOnboardingCompleteFlow',
+          'Unable to refresh profile after successful Stripe verification; continuing completion',
+          refreshError
+        );
+      }
 
       navigation.reset({
         index: 0,
-        routes: [{ name: "DriverTabs" }],
+        routes: [{ name: 'DriverTabs' }],
       });
     } catch (error) {
-      logger.error("DriverOnboardingCompleteFlow", "Error updating profile", error);
+      logger.error('DriverOnboardingCompleteFlow', 'Error updating profile', error);
       Alert.alert(
-        "Error",
-        `There was an issue completing your setup: ${error?.message || "Unknown error"}`
+        'Error',
+        `There was an issue completing your setup: ${error?.message || 'Unknown error'}`
       );
     } finally {
       setIsLoading(false);
@@ -299,30 +377,35 @@ export default function useDriverOnboardingCompleteFlow({
     checkDriverOnboardingStatus,
     navigation,
     refreshProfile,
-    resolvedConnectAccountId,
+    resolveConnectAccountId,
     updateDriverPaymentProfile,
     userId,
   ]);
 
   const handleResumeOnboarding = useCallback(async () => {
     try {
-      const existingAccountId = String(
-        resolvedConnectAccountId || connectAccountId || ""
-      ).trim();
+      const existingAccountId = String(resolvedConnectAccountId || connectAccountId || '').trim();
       if (!existingAccountId) {
-        throw new Error("Missing Stripe Connect account ID");
+        throw new Error('Missing Stripe Connect account ID');
       }
 
       const result = await getDriverOnboardingLink?.(existingAccountId);
       if (!result?.success || !result?.onboardingUrl) {
-        throw new Error(result?.error || "Unable to open onboarding link");
+        throw new Error(result?.error || 'Unable to open onboarding link');
       }
 
       await Linking.openURL(result.onboardingUrl);
+      setVerificationStatus('checking');
+      void checkVerificationStatus({ resetBackoff: true });
     } catch (error) {
-      Alert.alert("Onboarding Error", error?.message || "Could not reopen onboarding.");
+      Alert.alert('Onboarding Error', error?.message || 'Could not reopen onboarding.');
     }
-  }, [connectAccountId, getDriverOnboardingLink, resolvedConnectAccountId]);
+  }, [
+    checkVerificationStatus,
+    connectAccountId,
+    getDriverOnboardingLink,
+    resolvedConnectAccountId,
+  ]);
 
   const handleCheckAgain = useCallback(async () => {
     await checkVerificationStatus({ foreground: true, resetBackoff: true });
@@ -331,16 +414,16 @@ export default function useDriverOnboardingCompleteFlow({
   const handleGoHome = useCallback(() => {
     navigation.reset({
       index: 0,
-      routes: [{ name: "DriverTabs" }],
+      routes: [{ name: 'DriverTabs' }],
     });
   }, [navigation]);
 
   const handleViewEarnings = useCallback(() => {
-    navigation.navigate("DriverEarningsScreen");
+    navigation.navigate('DriverEarningsScreen');
   }, [navigation]);
 
   const handleSettings = useCallback(() => {
-    navigation.navigate("DriverPaymentSettingsScreen");
+    navigation.navigate('DriverPaymentSettingsScreen');
   }, [navigation]);
 
   return {

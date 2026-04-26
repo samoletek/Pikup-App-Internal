@@ -1,37 +1,27 @@
-import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Animated,
-  Easing,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useAuthIdentity, usePaymentActions } from "../../contexts/AuthContext";
-import ScreenHeader from "../../components/ScreenHeader";
-import AppButton from "../../components/ui/AppButton";
-import { colors, spacing } from "../../styles/theme";
-import styles from "./DriverOnboardingCompleteScreen.styles";
-import useDriverOnboardingCompleteFlow from "./useDriverOnboardingCompleteFlow";
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Animated, Easing } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAuthIdentity, usePaymentActions } from '../../contexts/AuthContext';
+import ScreenHeader from '../../components/ScreenHeader';
+import AppButton from '../../components/ui/AppButton';
+import { colors, spacing } from '../../styles/theme';
+import styles from './DriverOnboardingCompleteScreen.styles';
+import useDriverOnboardingCompleteFlow from './useDriverOnboardingCompleteFlow';
 
 const formatRequirementLabel = (requirement) =>
-  String(requirement || "")
+  String(requirement || '')
     .trim()
-    .replace(/[_.]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/[_.]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
 export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { currentUser, refreshProfile } = useAuthIdentity();
-  const {
-    updateDriverPaymentProfile,
-    checkDriverOnboardingStatus,
-    getDriverOnboardingLink,
-  } = usePaymentActions();
+  const { updateDriverPaymentProfile, checkDriverOnboardingStatus, getDriverOnboardingLink } =
+    usePaymentActions();
   const { connectAccountId } = route.params || {};
 
   const {
@@ -58,12 +48,13 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     refreshProfile,
     navigation,
   });
-  const isVerified = verificationStatus === "verified";
-  const isChecking = verificationStatus === "checking";
-  const isUnderReview = verificationStatus === "under_review";
+  const isVerified = verificationStatus === 'verified';
+  const isChecking = verificationStatus === 'checking';
+  const isUnderReview = verificationStatus === 'under_review';
   const isActionRequired =
-    verificationStatus === "action_required" || verificationStatus === "missing_account";
-  const isError = verificationStatus === "error";
+    verificationStatus === 'action_required' || verificationStatus === 'missing_account';
+  const isError = verificationStatus === 'error';
+  const isWaitingForStripe = isChecking || isUnderReview || isError;
   const statusCircleColor = isVerified
     ? colors.success
     : isActionRequired || isError
@@ -75,53 +66,53 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
       ? colors.secondaryLight
       : colors.warningLight;
   const primaryButtonTitle = isVerified
-    ? "Start Driving"
+    ? 'Complete'
     : isActionRequired
-      ? "Resume Account Setup"
-      : "Go Home";
+      ? 'Resume Account Setup'
+      : isRefreshingStatus
+        ? 'Checking...'
+        : 'Check Status';
   const actionableRequirements = Array.isArray(statusDetails?.requirements)
     ? statusDetails.requirements.slice(0, 4)
     : [];
-  const readableRequirements = actionableRequirements
-    .map(formatRequirementLabel)
-    .filter(Boolean);
-  const disabledReason = String(statusDetails?.disabledReason || "").trim();
+  const readableRequirements = actionableRequirements.map(formatRequirementLabel).filter(Boolean);
+  const disabledReason = String(statusDetails?.disabledReason || '').trim();
   const subtitleText = isVerified
-    ? "Your payout account is active. You can now go online and receive jobs."
+    ? 'Your payout account is active. You can now go online and receive jobs.'
     : isActionRequired
-      ? "Stripe still needs additional details before payouts can be enabled."
+      ? 'Stripe still needs additional details before payouts can be enabled.'
       : isError
-        ? "We could not refresh Stripe status. Please try again."
-        : "Stripe is still processing your account details. This can take a few moments.";
+        ? 'We could not refresh Stripe status. Please try again.'
+        : 'Stripe is still processing your account details. This can take a few moments.';
   const titleText = isVerified
-    ? "All Set Up"
+    ? 'All Set Up'
     : isActionRequired
-      ? "Action Needed"
+      ? 'Action Needed'
       : isError
-        ? "Status Check Failed"
+        ? 'Status Check Failed'
         : isUnderReview
-          ? "Setup Submitted"
-          : "Checking Setup";
+          ? 'Setup Submitted'
+          : 'Checking Setup';
   const currentStatusLabel = isRefreshingStatus
-    ? "Updating"
+    ? 'Updating'
     : isChecking
-      ? "Checking"
+      ? 'Checking'
       : isUnderReview
-        ? "Under Review"
+        ? 'Under Review'
         : isActionRequired
-          ? "Action Required"
+          ? 'Action Required'
           : isError
-            ? "Status Check Failed"
-            : "Verified";
+            ? 'Status Check Failed'
+            : 'Verified';
   const currentStatusIcon = isChecking
-    ? "sync-outline"
+    ? 'sync-outline'
     : isUnderReview
-      ? "time-outline"
+      ? 'time-outline'
       : isActionRequired
-        ? "alert-circle-outline"
+        ? 'alert-circle-outline'
         : isError
-          ? "cloud-offline-outline"
-          : "checkmark-circle";
+          ? 'cloud-offline-outline'
+          : 'checkmark-circle';
   const currentStatusIconColor = isVerified
     ? colors.success
     : isActionRequired || isError
@@ -135,7 +126,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
   const refreshSpinAnim = React.useRef(new Animated.Value(0)).current;
   const refreshIconRotation = refreshSpinAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
+    outputRange: ['0deg', '360deg'],
   });
 
   React.useEffect(() => {
@@ -220,11 +211,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
           <Animated.View
             style={isRefreshingStatus ? { transform: [{ rotate: refreshIconRotation }] } : null}
           >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color={currentStatusIconColor}
-            />
+            <Ionicons name="refresh-outline" size={18} color={currentStatusIconColor} />
           </Animated.View>
         </TouchableOpacity>
       </View>
@@ -243,15 +230,11 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
     return (
       <View style={styles.statusDetailsCard}>
         <Text style={styles.statusDetailsTitle}>Details</Text>
-        {disabledReason ? (
-          <Text style={styles.statusDetailsText}>
-            {disabledReason}
-          </Text>
-        ) : null}
+        {disabledReason ? <Text style={styles.statusDetailsText}>{disabledReason}</Text> : null}
         {readableRequirements.map((item) => (
           <View key={item} style={styles.statusRequirementRow}>
             <Ionicons
-              name={isActionRequired ? "alert-circle-outline" : "time-outline"}
+              name={isActionRequired ? 'alert-circle-outline' : 'time-outline'}
               size={14}
               color={isActionRequired ? colors.secondary : colors.warning}
             />
@@ -273,9 +256,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Track Your Earnings</Text>
-            <Text style={styles.stepSubtitle}>
-              Monitor your daily and weekly earnings
-            </Text>
+            <Text style={styles.stepSubtitle}>Monitor your daily and weekly earnings</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
         </TouchableOpacity>
@@ -286,9 +267,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Payment Settings</Text>
-            <Text style={styles.stepSubtitle}>
-              Manage your bank account and instant pay
-            </Text>
+            <Text style={styles.stepSubtitle}>Manage your bank account and instant pay</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.text.subtle} />
         </TouchableOpacity>
@@ -299,9 +278,7 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
           </View>
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Go Online</Text>
-            <Text style={styles.stepSubtitle}>
-              Start accepting delivery requests
-            </Text>
+            <Text style={styles.stepSubtitle}>Start accepting delivery requests</Text>
           </View>
           <View style={styles.comingSoonBadge}>
             <Text style={styles.comingSoonText}>Ready!</Text>
@@ -332,51 +309,51 @@ export default function DriverOnboardingCompleteScreen({ navigation, route }) {
             <Animated.View
               style={[
                 styles.successContent,
-              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+                { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
               ]}
             >
               <Text style={styles.congratsTitle}>{titleText}</Text>
-              <Text style={styles.congratsSubtitle}>
-                {subtitleText}
-              </Text>
+              <Text style={styles.congratsSubtitle}>{subtitleText}</Text>
             </Animated.View>
           </View>
 
           {renderVerificationStatus()}
           {renderStatusDetails()}
 
-          {verificationStatus === "verified" ? renderNextSteps() : null}
+          {verificationStatus === 'verified' ? renderNextSteps() : null}
         </View>
       </ScrollView>
 
       <View
-        style={[
-          styles.fixedBottomActions,
-          { paddingBottom: Math.max(insets.bottom, spacing.md) },
-        ]}
+        style={[styles.fixedBottomActions, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
       >
         <View style={styles.buttonSection}>
           <AppButton
-            title={isVerified && isLoading ? "Starting..." : primaryButtonTitle}
+            title={isVerified && isLoading ? 'Starting...' : primaryButtonTitle}
             onPress={
               isVerified
                 ? handleContinue
                 : isActionRequired
                   ? handleResumeOnboarding
-                  : handleGoHome
+                  : isWaitingForStripe
+                    ? handleCheckAgain
+                    : handleGoHome
             }
-            loading={isVerified && isLoading}
-            style={[
-              styles.primaryActionButton,
-              isVerified && styles.primaryActionButtonSuccess,
-            ]}
+            loading={
+              (isVerified && isLoading) || (!isVerified && !isActionRequired && isRefreshingStatus)
+            }
+            style={[styles.primaryActionButton, isVerified && styles.primaryActionButtonSuccess]}
             labelStyle={styles.primaryActionButtonText}
             leftIcon={
-              isVerified
-                ? <Ionicons name="car" size={16} color={colors.white} />
-                : isActionRequired
-                  ? <Ionicons name="refresh" size={16} color={colors.white} />
-                : <Ionicons name="home-outline" size={16} color={colors.white} />
+              isVerified ? (
+                <Ionicons name="car" size={16} color={colors.white} />
+              ) : isActionRequired ? (
+                <Ionicons name="refresh" size={16} color={colors.white} />
+              ) : isWaitingForStripe ? (
+                <Ionicons name="refresh" size={16} color={colors.white} />
+              ) : (
+                <Ionicons name="home-outline" size={16} color={colors.white} />
+              )
             }
           />
         </View>

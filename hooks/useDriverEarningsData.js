@@ -6,16 +6,17 @@ import {
   normalizeDriverPaymentState,
   shouldRefreshDriverPaymentStatus,
 } from '../services/payment/paymentState';
-import {
-  processTripsIntoChartData,
-} from '../screens/driver/earnings/earningsUtils';
+import { processTripsIntoChartData } from '../screens/driver/earnings/earningsUtils';
 
 const DEFAULT_STATS = {
   currentWeekTrips: 0,
   weeklyEarnings: 0,
   totalTrips: 0,
   totalEarnings: 0,
+  earnedBalance: 0,
   availableBalance: 0,
+  pendingBalance: 0,
+  pendingUntil: null,
   totalPayouts: 0,
   acceptanceRate: 0,
   weeklyMilestone: 15,
@@ -28,6 +29,7 @@ export default function useDriverEarningsData({
   getDriverStats,
   getDriverProfile,
   checkDriverOnboardingStatus,
+  getDriverPayoutAvailability,
 }) {
   const [weeklyData, setWeeklyData] = useState([]);
   const [driverTrips, setDriverTrips] = useState([]);
@@ -43,10 +45,11 @@ export default function useDriverEarningsData({
           setLoading(true);
         }
 
-        const [tripsResult, statsResult, profileResult] = await Promise.all([
+        const [tripsResult, statsResult, profileResult, availabilityResult] = await Promise.all([
           getDriverTrips?.(currentUserId),
           getDriverStats?.(currentUserId),
           getDriverProfile?.(currentUserId),
+          getDriverPayoutAvailability?.(currentUserId),
         ]);
         const trips = Array.isArray(tripsResult) ? tripsResult : [];
         const stats = statsResult || {};
@@ -72,7 +75,14 @@ export default function useDriverEarningsData({
           weeklyEarnings: Number(stats.weeklyEarnings || 0),
           totalTrips: Number(stats.totalTrips || 0),
           totalEarnings: Number(stats.totalEarnings || 0),
-          availableBalance: Number(stats.availableBalance || 0),
+          earnedBalance: Number(stats.availableBalance || 0),
+          availableBalance: availabilityResult?.success
+            ? Number(availabilityResult.availableNowAmount || 0)
+            : Number(stats.availableBalance || 0),
+          pendingBalance: availabilityResult?.success
+            ? Number(availabilityResult.pendingAmount || 0)
+            : 0,
+          pendingUntil: availabilityResult?.pendingUntil || null,
           totalPayouts: Number(stats.totalPayouts || 0),
           acceptanceRate: Number(stats.acceptanceRate || 0),
           weeklyMilestone: 15,
@@ -96,6 +106,7 @@ export default function useDriverEarningsData({
       checkDriverOnboardingStatus,
       currentUserId,
       getDriverProfile,
+      getDriverPayoutAvailability,
       getDriverStats,
       getDriverTrips,
       selectedPeriod,

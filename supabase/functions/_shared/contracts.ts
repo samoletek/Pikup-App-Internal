@@ -392,7 +392,33 @@ export type ProcessPayoutResponse = EdgePayload<{
   netAmount?: number | null
   grossAmount?: number | null
   destinationAccountId?: string | null
+  status?: string | null
+  availableOn?: string | null
+  sourceTransactionUsed?: boolean | null
   deduplicated?: boolean
+}>
+
+export type DriverPayoutAvailabilityRequest = {
+  driverId?: string | null
+}
+
+export type DriverPayoutAvailabilityResponse = EdgePayload<{
+  success: true
+  balanceAmount: number
+  availableNowAmount: number
+  pendingAmount: number
+  pendingUntil?: string | null
+  pendingUntilUnix?: number | null
+  sources?: Array<{
+    tripId: string
+    paymentIntentId: string
+    chargeId: string
+    amount: number
+    amountCents: number
+    status: "available" | "pending"
+    availableOn?: string | null
+    availableOnUnix?: number | null
+  }>
 }>
 
 export type PublicTripParticipantProfile = {

@@ -2,11 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Animated, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  useAuthIdentity,
-  useDriverActions,
-  usePaymentActions,
-} from '../../contexts/AuthContext';
+import { useAuthIdentity, useDriverActions, usePaymentActions } from '../../contexts/AuthContext';
 import CollapsibleMessagesHeader, {
   MESSAGES_TOP_BAR_HEIGHT,
 } from '../../components/messages/CollapsibleMessagesHeader';
@@ -28,41 +24,32 @@ export default function DriverEarningsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { currentUser } = useAuthIdentity();
   const { getDriverTrips, getDriverStats, getDriverProfile } = useDriverActions();
-  const { processInstantPayout, checkDriverOnboardingStatus } = usePaymentActions();
+  const { processInstantPayout, checkDriverOnboardingStatus, getDriverPayoutAvailability } =
+    usePaymentActions();
   const currentUserId = currentUser?.id || currentUser?.uid;
-  const {
-    scrollRef,
-    scrollY,
-    handleScrollEndDrag,
-    handleMomentumScrollEnd,
-  } = useCollapsibleTitleSnap({
-    collapseDistance: TITLE_COLLAPSE_DISTANCE,
-  });
+  const { scrollRef, scrollY, handleScrollEndDrag, handleMomentumScrollEnd } =
+    useCollapsibleTitleSnap({
+      collapseDistance: TITLE_COLLAPSE_DISTANCE,
+    });
 
   const [selectedPeriod, setSelectedPeriod] = useState('week');
 
-  const {
-    weeklyData,
-    driverTrips,
-    loading,
-    driverStats,
-    driverProfile,
-    loadDriverData,
-  } = useDriverEarningsData({
-    currentUserId,
-    selectedPeriod,
-    getDriverTrips,
-    getDriverStats,
-    getDriverProfile,
-    checkDriverOnboardingStatus,
-  });
+  const { weeklyData, driverTrips, loading, driverStats, driverProfile, loadDriverData } =
+    useDriverEarningsData({
+      currentUserId,
+      selectedPeriod,
+      getDriverTrips,
+      getDriverStats,
+      getDriverProfile,
+      checkDriverOnboardingStatus,
+      getDriverPayoutAvailability,
+    });
 
   const totalWeeklyEarnings = weeklyData.reduce((sum, day) => sum + day.earnings, 0);
   const totalWeeklyTrips = weeklyData.reduce((sum, day) => sum + day.trips, 0);
   const averagePerTrip = totalWeeklyTrips > 0 ? totalWeeklyEarnings / totalWeeklyTrips : 0;
 
-  const milestoneProgress =
-    (driverStats.currentWeekTrips / driverStats.weeklyMilestone) * 100;
+  const milestoneProgress = (driverStats.currentWeekTrips / driverStats.weeklyMilestone) * 100;
   const tripsRemaining = driverStats.weeklyMilestone - driverStats.currentWeekTrips;
 
   const recentTrips = getRecentTrips(driverTrips);
@@ -88,13 +75,16 @@ export default function DriverEarningsScreen({ navigation, route }) {
   const handleOpenRecentTrips = useCallback(() => {
     navigation.navigate('DriverRecentTripsScreen');
   }, [navigation]);
-  const handleOpenRecentTrip = useCallback((trip) => {
-    const request = trip?.request || null;
-    if (!request) {
-      return;
-    }
-    navigation.navigate('DriverRequestDetailsScreen', { request });
-  }, [navigation]);
+  const handleOpenRecentTrip = useCallback(
+    (trip) => {
+      const request = trip?.request || null;
+      if (!request) {
+        return;
+      }
+      navigation.navigate('DriverRequestDetailsScreen', { request });
+    },
+    [navigation]
+  );
 
   const rightContent = (
     <TouchableOpacity
@@ -128,10 +118,9 @@ export default function DriverEarningsScreen({ navigation, route }) {
           paddingHorizontal: spacing.base,
           paddingBottom: insets.bottom + 90,
         }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+          useNativeDriver: true,
+        })}
         onScrollEndDrag={handleScrollEndDrag}
         onMomentumScrollEnd={handleMomentumScrollEnd}
         scrollEventThrottle={16}
@@ -149,7 +138,9 @@ export default function DriverEarningsScreen({ navigation, route }) {
 
         <View style={styles.earningsCard}>
           <View style={styles.earningsHeader}>
-            <Text style={styles.earningsAmount}>${loading ? '---' : totalWeeklyEarnings.toFixed(2)}</Text>
+            <Text style={styles.earningsAmount}>
+              ${loading ? '---' : totalWeeklyEarnings.toFixed(2)}
+            </Text>
             <TouchableOpacity style={styles.earningsInfo} onPress={() => loadDriverData()}>
               <Ionicons
                 name={loading ? 'refresh' : 'information-circle-outline'}
@@ -210,8 +201,11 @@ export default function DriverEarningsScreen({ navigation, route }) {
             </TouchableOpacity>
           </View>
           <Text style={styles.payoutBalance}>
-            Available Balance: ${loading ? '---' : driverStats.availableBalance.toFixed(2)}
+            Available Now: ${loading ? '---' : driverStats.availableBalance.toFixed(2)}
           </Text>
+          {Number(driverStats.pendingBalance || 0) > 0 ? (
+            <Text style={styles.payoutNote}>On hold: ${driverStats.pendingBalance.toFixed(2)}</Text>
+          ) : null}
           <Text style={styles.payoutNote}>Auto-deposit monthly on the 25th (11:00 AM ET)</Text>
 
           <AppButton

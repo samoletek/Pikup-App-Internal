@@ -69,6 +69,58 @@ const resolveDriverOnboardingStatus = ({
   return "under_review";
 };
 
+const buildOnboardingMetadataPatch = ({
+  currentMeta,
+  accountId,
+  canReceivePayments,
+  onboardingComplete,
+  status,
+  requirements,
+  currentlyDue,
+  pastDue,
+  eventuallyDue,
+  pendingVerification,
+  disabledReason,
+  transfersCapability,
+  payoutsEnabled,
+  detailsSubmitted,
+  checkedAt,
+}: {
+  currentMeta: Record<string, unknown>;
+  accountId: string | null;
+  canReceivePayments: boolean;
+  onboardingComplete: boolean;
+  status: string;
+  requirements: string[];
+  currentlyDue: string[];
+  pastDue: string[];
+  eventuallyDue: string[];
+  pendingVerification: string[];
+  disabledReason: string | null;
+  transfersCapability: string | null;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  checkedAt: string;
+}) => ({
+  ...currentMeta,
+  connectAccountId: accountId,
+  canReceivePayments,
+  onboardingComplete,
+  onboardingStatus: status,
+  onboardingRequirements: requirements,
+  onboardingRequirementsByBucket: {
+    currentlyDue,
+    pastDue,
+    eventuallyDue,
+    pendingVerification,
+  },
+  onboardingDisabledReason: disabledReason,
+  transfersCapability,
+  payoutsEnabled,
+  detailsSubmitted,
+  onboardingLastCheckedAt: checkedAt,
+});
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -130,7 +182,42 @@ serve(async (req) => {
 
     const accountId = storedAccountId;
 
+    const checkedAt = new Date().toISOString();
+
     if (!accountId) {
+      const metadataPatch = buildOnboardingMetadataPatch({
+        currentMeta,
+        accountId: null,
+        canReceivePayments: false,
+        onboardingComplete: false,
+        status: "missing_account",
+        requirements: [],
+        currentlyDue: [],
+        pastDue: [],
+        eventuallyDue: [],
+        pendingVerification: [],
+        disabledReason: null,
+        transfersCapability: null,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        checkedAt,
+      });
+
+      const { error: updateMissingAccountError } = await adminClient
+        .from("drivers")
+        .update({
+          stripe_account_id: null,
+          onboarding_complete: false,
+          can_receive_payments: false,
+          metadata: metadataPatch,
+          updated_at: checkedAt,
+        })
+        .eq("id", driverId);
+
+      if (updateMissingAccountError) {
+        throw updateMissingAccountError;
+      }
+
       return jsonResponse({
         success: true,
         accountId: null,
@@ -175,7 +262,23 @@ serve(async (req) => {
       pendingVerification,
     });
 
-    const now = new Date().toISOString();
+    const metadataPatch = buildOnboardingMetadataPatch({
+      currentMeta,
+      accountId,
+      canReceivePayments,
+      onboardingComplete,
+      status,
+      requirements: blockingRequirements,
+      currentlyDue,
+      pastDue,
+      eventuallyDue,
+      pendingVerification,
+      disabledReason,
+      transfersCapability,
+      payoutsEnabled,
+      detailsSubmitted: onboardingComplete,
+      checkedAt,
+    });
 
     const { error: updateError } = await adminClient
       .from("drivers")
@@ -183,7 +286,8 @@ serve(async (req) => {
         stripe_account_id: accountId,
         onboarding_complete: onboardingComplete,
         can_receive_payments: canReceivePayments,
-        updated_at: now,
+        metadata: metadataPatch,
+        updated_at: checkedAt,
       })
       .eq("id", driverId);
 

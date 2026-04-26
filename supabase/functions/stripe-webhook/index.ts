@@ -126,11 +126,20 @@ const markDriverPayoutByTransferId = async (
     stripe_transfer_reversed_amount: Number(transfer.amount_reversed || 0) / 100,
     webhook_event_timestamp: new Date().toISOString(),
   }
+  const sources = Array.isArray(existingMetadata.sources) ? existingMetadata.sources : []
+  const sourceAvailableOnRaw = String(existingMetadata.source_available_on || "").trim()
+  const sourceAvailableOn = sourceAvailableOnRaw ? new Date(sourceAvailableOnRaw) : null
+  const sourceStillPending =
+    sources.length > 0 &&
+    sourceAvailableOn instanceof Date &&
+    !Number.isNaN(sourceAvailableOn.getTime()) &&
+    sourceAvailableOn.getTime() > Date.now()
+  const nextStatus = status === "processed" && sourceStillPending ? "pending" : status
 
   const { error } = await adminClient
     .from("driver_payouts")
     .update({
-      status,
+      status: nextStatus,
       metadata: nextMetadata,
       updated_at: new Date().toISOString(),
     })
@@ -412,6 +421,58 @@ const resolveDriverOnboardingStatus = ({
   return "under_review"
 }
 
+const buildOnboardingMetadataPatch = ({
+  currentMeta,
+  accountId,
+  canReceivePayments,
+  onboardingComplete,
+  status,
+  requirements,
+  currentlyDue,
+  pastDue,
+  eventuallyDue,
+  pendingVerification,
+  disabledReason,
+  transfersCapability,
+  payoutsEnabled,
+  detailsSubmitted,
+  checkedAt,
+}: {
+  currentMeta: Record<string, unknown>
+  accountId: string | null
+  canReceivePayments: boolean
+  onboardingComplete: boolean
+  status: string
+  requirements: string[]
+  currentlyDue: string[]
+  pastDue: string[]
+  eventuallyDue: string[]
+  pendingVerification: string[]
+  disabledReason: string | null
+  transfersCapability: string | null
+  payoutsEnabled: boolean
+  detailsSubmitted: boolean
+  checkedAt: string
+}) => ({
+  ...currentMeta,
+  connectAccountId: accountId,
+  canReceivePayments,
+  onboardingComplete,
+  onboardingStatus: status,
+  onboardingRequirements: requirements,
+  onboardingRequirementsByBucket: {
+    currentlyDue,
+    pastDue,
+    eventuallyDue,
+    pendingVerification,
+  },
+  onboardingDisabledReason: disabledReason,
+  transfersCapability,
+  payoutsEnabled,
+  detailsSubmitted,
+  onboardingLastCheckedAt: checkedAt,
+})
+
 const syncDriverOnboardingByAccount = async (
   adminClient: ReturnType<typeof createClient>,
   account: Stripe.Account,
@@ -456,7 +517,7 @@ const syncDriverOnboardingByAccount = async (
   const nowIso = new Date().toISOString()
   const { data: driverRows, error: driverFetchError } = await adminClient
     .from("drivers")
-    .select("id")
+    .select("id,metadata")
     .eq("stripe_account_id", accountId)
 
   if (driverFetchError) {
@@ -468,11 +529,32 @@ const syncDriverOnboardingByAccount = async (
   }
 
   for (const driverRow of driverRows) {
+    const existingMetadata = asRecord(driverRow.metadata)
+    const metadataPatch = buildOnboardingMetadataPatch({
+      currentMeta: existingMetadata,
+      accountId,
+      canReceivePayments,
+      onboardingComplete,
+      status,
+      requirements: blockingRequirements,
+      currentlyDue,
+      pastDue,
+      eventuallyDue,
+      pendingVerification,
+      disabledReason,
+      transfersCapability,
+      payoutsEnabled,
+      detailsSubmitted: onboardingComplete,
+      checkedAt: nowIso,
+    })
+
     const { error: updateError } = await adminClient
       .from("drivers")
       .update({
+        stripe_account_id: accountId,
         onboarding_complete: onboardingComplete,
         can_receive_payments: canReceivePayments,
+        metadata: metadataPatch,
         updated_at: nowIso,
       })
       .eq("id", String(driverRow.id || ""))

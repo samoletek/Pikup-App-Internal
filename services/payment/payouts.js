@@ -4,20 +4,19 @@ import { failureResult, successResult } from '../contracts/result';
 import { getDriverStats } from '../driverEarningsService';
 import {
   fetchCompletedDriverTrips,
+  invokeDriverPayoutAvailability,
   invokeProcessPayout,
 } from '../repositories/paymentRepository';
 import { resolveDriverPayoutAmount } from '../PricingService';
-import {
-  getDriverProfileRow,
-  periodStartIso,
-  toNumber,
-} from './common';
-import { updateDriverPaymentProfile } from './profile';
+import { getDriverProfileRow, periodStartIso, toNumber } from './common';
 
-const sanitizeIdempotencyToken = (value) => String(value || '')
-  .trim()
-  .replace(/[^a-zA-Z0-9:_-]/g, '')
-  .slice(0, 150);
+const sanitizeIdempotencyToken = (value) =>
+  String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9:_-]/g, '')
+    .slice(0, 150);
+
+const toMoney = (value) => `$${toNumber(value, 0).toFixed(2)}`;
 
 const resolvePayoutRequestOptions = (currentUserOrOptions, maybeOptions) => {
   if (maybeOptions && typeof maybeOptions === 'object') {
@@ -25,9 +24,7 @@ const resolvePayoutRequestOptions = (currentUserOrOptions, maybeOptions) => {
   }
 
   const hasAuthShape = Boolean(
-    currentUserOrOptions?.uid ||
-    currentUserOrOptions?.id ||
-    currentUserOrOptions?.email
+    currentUserOrOptions?.uid || currentUserOrOptions?.id || currentUserOrOptions?.email
   );
 
   if (!hasAuthShape && currentUserOrOptions && typeof currentUserOrOptions === 'object') {
@@ -35,6 +32,44 @@ const resolvePayoutRequestOptions = (currentUserOrOptions, maybeOptions) => {
   }
 
   return {};
+};
+
+const getEdgeFunctionErrorMessage = async (error, fallbackMessage) => {
+  const normalized = normalizeError(error, fallbackMessage);
+  const context = error?.context;
+
+  if (!context || typeof context.clone !== 'function') {
+    return normalized.message;
+  }
+
+  try {
+    const payload = await context.clone().json();
+    return payload?.error || payload?.message || normalized.message;
+  } catch (_jsonError) {
+    try {
+      const text = await context.clone().text();
+      return text || normalized.message;
+    } catch (_textError) {
+      return normalized.message;
+    }
+  }
+};
+
+const buildPendingFundsMessage = ({ pendingAmount = 0, pendingUntil = null } = {}) => {
+  const amount = Number(pendingAmount || 0);
+  if (pendingUntil) {
+    const date = new Date(pendingUntil);
+    const dateLabel = Number.isNaN(date.getTime())
+      ? pendingUntil
+      : date.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        });
+
+    return `No funds are available to withdraw right now. ${toMoney(amount)} is on Stripe hold until ${dateLabel}.`;
+  }
+
+  return `No funds are available to withdraw right now. ${toMoney(amount)} is still on Stripe hold.`;
 };
 
 /**
@@ -101,6 +136,57 @@ export const getDriverPayouts = async (driverId) => {
   }
 };
 
+export const getDriverPayoutAvailability = async (driverId) => {
+  try {
+    if (!driverId) {
+      return failureResult('Driver ID is required', null, {
+        balanceAmount: 0,
+        availableNowAmount: 0,
+        pendingAmount: 0,
+      });
+    }
+
+    const { data, error } = await invokeDriverPayoutAvailability({ driverId });
+
+    if (error) {
+      const errorMessage = await getEdgeFunctionErrorMessage(
+        error,
+        'Unable to load payout availability'
+      );
+      return failureResult(errorMessage, null, {
+        balanceAmount: 0,
+        availableNowAmount: 0,
+        pendingAmount: 0,
+      });
+    }
+
+    if (!data?.success) {
+      return failureResult(data?.error || 'Unable to load payout availability', null, {
+        balanceAmount: 0,
+        availableNowAmount: 0,
+        pendingAmount: 0,
+      });
+    }
+
+    return successResult({
+      balanceAmount: toNumber(data.balanceAmount, 0),
+      availableNowAmount: toNumber(data.availableNowAmount, 0),
+      pendingAmount: toNumber(data.pendingAmount, 0),
+      pendingUntil: data.pendingUntil || null,
+      pendingUntilUnix: data.pendingUntilUnix || null,
+      sources: Array.isArray(data.sources) ? data.sources : [],
+    });
+  } catch (error) {
+    const normalized = normalizeError(error, 'Unable to load payout availability');
+    logger.error('PaymentService', 'getDriverPayoutAvailability failed', normalized, error);
+    return failureResult(normalized.message, normalized.code || null, {
+      balanceAmount: 0,
+      availableNowAmount: 0,
+      pendingAmount: 0,
+    });
+  }
+};
+
 /**
  * Request instant payout.
  */
@@ -134,7 +220,23 @@ export const requestInstantPayout = async (
     const stats = await getDriverStats(driverId);
     const availableBalance = toNumber(stats?.availableBalance, 0);
     if (normalizedAmount > availableBalance) {
-      return failureResult(`Insufficient available balance. Available: $${availableBalance.toFixed(2)}`);
+      return failureResult(
+        `Insufficient available balance. Available: $${availableBalance.toFixed(2)}`
+      );
+    }
+
+    const availabilityResult = await getDriverPayoutAvailability(driverId);
+    if (availabilityResult?.success) {
+      const availableNow = toNumber(availabilityResult.availableNowAmount, 0);
+      if (normalizedAmount > availableNow) {
+        return failureResult(
+          buildPendingFundsMessage({
+            pendingAmount: availabilityResult.pendingAmount,
+            pendingUntil: availabilityResult.pendingUntil,
+          }),
+          'payout_funds_pending'
+        );
+      }
     }
 
     const payoutMode = 'instant';
@@ -142,13 +244,9 @@ export const requestInstantPayout = async (
     const transferGroup = `instant_payout:${driverId}:${normalizedAmountCents}`;
     const requestOptions = resolvePayoutRequestOptions(currentUserOrOptions, maybeOptions);
     const explicitIdempotencyKey = sanitizeIdempotencyToken(requestOptions?.idempotencyKey);
-    const idempotencyKey = explicitIdempotencyKey || [
-      'instant_payout',
-      driverId,
-      payoutMode,
-      normalizedAmountCents,
-      Date.now(),
-    ].join(':');
+    const idempotencyKey =
+      explicitIdempotencyKey ||
+      ['instant_payout', driverId, payoutMode, normalizedAmountCents, Date.now()].join(':');
 
     const { data, error } = await invokeProcessPayout({
       amount: Number(normalizedAmount.toFixed(2)),
@@ -160,9 +258,16 @@ export const requestInstantPayout = async (
     });
 
     if (error) {
-      const normalized = normalizeError(error, 'Failed to process instant payout');
+      const errorMessage = await getEdgeFunctionErrorMessage(
+        error,
+        'Failed to process instant payout'
+      );
+      const normalized = normalizeError(
+        { ...error, message: errorMessage },
+        'Failed to process instant payout'
+      );
       logger.error('PaymentService', 'requestInstantPayout failed', normalized, error);
-      return failureResult(normalized.message, normalized.code || null);
+      return failureResult(errorMessage, normalized.code || null);
     }
     if (!data?.success) {
       return failureResult(data?.error || 'Instant payout failed');
@@ -170,6 +275,8 @@ export const requestInstantPayout = async (
 
     const now = new Date().toISOString();
     const feeAmount = Number(Number(data?.feeAmount || 0).toFixed(2));
+    const payoutStatus = String(data?.status || 'processed').trim() || 'processed';
+    const availableOn = data?.availableOn || null;
     const netAmount = Number(
       Number.isFinite(Number(data?.netAmount))
         ? Number(data.netAmount)
@@ -182,26 +289,17 @@ export const requestInstantPayout = async (
       feeAmount,
       netAmount: Number(netAmount.toFixed(2)),
       createdAt: now,
-      status: 'processed',
+      status: payoutStatus,
+      availableOn,
       transferGroup,
       kind: payoutMode,
+      sourceTransactionUsed: Boolean(data?.sourceTransactionUsed),
     };
 
-    const currentPayouts = Array.isArray(metadata.payouts) ? metadata.payouts : [];
-    const totalPayouts = toNumber(stats?.totalPayouts, toNumber(metadata.totalPayouts, 0))
-      + payoutRecord.amount;
     const nextAvailableBalance = Math.max(
       0,
       Number((availableBalance - payoutRecord.amount).toFixed(2))
     );
-
-    await updateDriverPaymentProfile(driverId, {
-      payouts: [payoutRecord, ...currentPayouts].slice(0, 100),
-      totalPayouts: Number(totalPayouts.toFixed(2)),
-      availableBalance: nextAvailableBalance,
-      lastPayoutAt: now,
-      lastPayoutId: data.transferId,
-    });
 
     return successResult({
       transferId: data.transferId,
@@ -209,6 +307,9 @@ export const requestInstantPayout = async (
       availableBalance: nextAvailableBalance,
       feeAmount: payoutRecord.feeAmount,
       netAmount: payoutRecord.netAmount,
+      status: payoutStatus,
+      availableOn,
+      sourceTransactionUsed: Boolean(data?.sourceTransactionUsed),
     });
   } catch (error) {
     const normalized = normalizeError(error, 'Failed to process instant payout');

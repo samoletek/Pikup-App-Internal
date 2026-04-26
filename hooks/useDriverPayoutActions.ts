@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useDriverActions, usePaymentActions } from "../contexts/AuthContext";
+import { useMemo } from 'react';
+import { useDriverActions, usePaymentActions } from '../contexts/AuthContext';
 
 export const useDriverPayoutActions = () => {
   const driverActions = useDriverActions();
@@ -12,6 +12,7 @@ export const useDriverPayoutActions = () => {
       getDriverTrips: driverActions.getDriverTrips,
       requestInstantPayout: paymentActions.requestInstantPayout,
       getDriverEarningsHistory: paymentActions.getDriverEarningsHistory,
+      getDriverPayoutAvailability: paymentActions.getDriverPayoutAvailability,
       getDriverPayouts: paymentActions.getDriverPayouts,
       createDriverConnectAccount: paymentActions.createDriverConnectAccount,
       getDriverOnboardingLink: paymentActions.getDriverOnboardingLink,
@@ -24,6 +25,7 @@ export const useDriverPayoutActions = () => {
       driverActions.getDriverTrips,
       paymentActions.requestInstantPayout,
       paymentActions.getDriverEarningsHistory,
+      paymentActions.getDriverPayoutAvailability,
       paymentActions.getDriverPayouts,
       paymentActions.createDriverConnectAccount,
       paymentActions.getDriverOnboardingLink,

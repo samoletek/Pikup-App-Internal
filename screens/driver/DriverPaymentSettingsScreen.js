@@ -1,10 +1,5 @@
 import React from 'react';
-import {
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +20,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     getDriverProfile,
     getDriverStats,
     getDriverPayouts,
+    getDriverPayoutAvailability,
     requestInstantPayout,
     createDriverConnectAccount,
     getDriverOnboardingLink,
@@ -47,18 +43,26 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     payoutFeeEstimate,
     payoutNetEstimate,
     updatePayoutAmountInput,
+    getPayoutStatusLabel,
+    isPayoutPending,
     toMoney,
   } = useDriverPaymentSettingsData({
     createDriverConnectAccount,
     checkDriverOnboardingStatus,
     currentUser,
     getDriverOnboardingLink,
+    getDriverPayoutAvailability,
     getDriverPayouts,
     getDriverProfile,
     getDriverStats,
     requestInstantPayout,
     updateDriverPaymentProfile,
   });
+  const latestPendingPayout = Array.isArray(paymentData?.payouts)
+    ? paymentData.payouts.find((payout) => isPayoutPending(payout))
+    : null;
+  const hasFundsOnHold =
+    Number(paymentData?.availableBalance || 0) <= 0 && Number(paymentData?.pendingBalance || 0) > 0;
 
   if (loading) {
     return (
@@ -69,7 +73,11 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
           topInset={insets.top}
           showBack
         />
-        <ScreenState loading title="Loading payment settings" subtitle="Syncing Stripe account and payout data." />
+        <ScreenState
+          loading
+          title="Loading payment settings"
+          subtitle="Syncing Stripe account and payout data."
+        />
       </View>
     );
   }
@@ -93,15 +101,17 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.section}>
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            style={styles.heroCard}
-          >
+          <LinearGradient colors={[colors.primary, colors.primaryDark]} style={styles.heroCard}>
             <Text style={styles.heroLabel}>Weekly Earnings</Text>
             <Text style={styles.heroAmount}>{toMoney(paymentData?.weeklyTotal)}</Text>
             <Text style={styles.heroSubtext}>
-              Available: {toMoney(paymentData?.availableBalance)}
+              Available now: {toMoney(paymentData?.availableBalance)}
             </Text>
+            {Number(paymentData?.pendingBalance || 0) > 0 ? (
+              <Text style={styles.heroSubtext}>
+                On hold: {toMoney(paymentData?.pendingBalance)}
+              </Text>
+            ) : null}
             <Text style={styles.heroSubtext}>
               Total payouts: {toMoney(paymentData?.totalPayouts)}
             </Text>
@@ -143,11 +153,41 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payouts</Text>
           <View style={styles.card}>
-            <Text style={styles.metricLabel}>Available Balance</Text>
+            <Text style={styles.metricLabel}>Available to Withdraw</Text>
             <Text style={styles.metricValue}>{toMoney(paymentData?.availableBalance)}</Text>
+            {Number(paymentData?.earnedBalance || 0) >
+            Number(paymentData?.availableBalance || 0) ? (
+              <Text style={styles.earnedBalanceNote}>
+                Earned balance: {toMoney(paymentData?.earnedBalance)}
+              </Text>
+            ) : null}
+            {latestPendingPayout ? (
+              <Text style={styles.pendingPayoutNote}>
+                Stripe status: {getPayoutStatusLabel(latestPendingPayout)}
+              </Text>
+            ) : null}
+            {Number(paymentData?.pendingBalance || 0) > 0 ? (
+              <Text style={styles.pendingPayoutNote}>
+                {paymentData?.pendingUntil
+                  ? `On hold until ${new Date(paymentData.pendingUntil).toLocaleDateString(
+                      undefined,
+                      {
+                        month: 'short',
+                        day: 'numeric',
+                      }
+                    )}: ${toMoney(paymentData.pendingBalance)}`
+                  : `On Stripe hold: ${toMoney(paymentData.pendingBalance)}`}
+              </Text>
+            ) : null}
 
             <AppButton
-              title={processingPayout ? 'Processing...' : 'Withdraw All'}
+              title={
+                processingPayout
+                  ? 'Processing...'
+                  : hasFundsOnHold
+                    ? 'Funds On Hold'
+                    : 'Withdraw All'
+              }
               onPress={handleInstantPayoutAll}
               loading={processingPayout}
               disabled={processingPayout || Number(paymentData?.availableBalance || 0) <= 0}
@@ -183,7 +223,13 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             </View>
 
             <AppButton
-              title={processingPayout ? 'Processing...' : 'Withdraw Amount'}
+              title={
+                processingPayout
+                  ? 'Processing...'
+                  : hasFundsOnHold
+                    ? 'Funds On Hold'
+                    : 'Withdraw Amount'
+              }
               onPress={handleInstantPayoutAmount}
               loading={processingPayout}
               disabled={
@@ -196,7 +242,8 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             />
 
             <Text style={styles.noteText}>
-              Instant payout sends funds to your Stripe payout destination.
+              Only settled Stripe funds are available to withdraw. Card payments can stay on hold
+              until Stripe settlement.
             </Text>
           </View>
         </View>
@@ -242,11 +289,21 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
                       {new Date(payout.createdAt).toLocaleString()}
                     </Text>
                   </View>
-                  <Text style={styles.payoutStatus}>{payout.status || 'processed'}</Text>
+                  <Text
+                    style={[
+                      styles.payoutStatus,
+                      isPayoutPending(payout) && styles.payoutStatusPending,
+                    ]}
+                  >
+                    {getPayoutStatusLabel(payout)}
+                  </Text>
                 </View>
               ))
             ) : (
-              <ScreenState title="No payouts yet" subtitle="Your payout history will appear here." />
+              <ScreenState
+                title="No payouts yet"
+                subtitle="Your payout history will appear here."
+              />
             )}
           </View>
         </View>

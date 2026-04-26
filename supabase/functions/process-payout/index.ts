@@ -66,6 +66,9 @@ serve(async (req) => {
       netAmount: payoutResult.netAmount,
       grossAmount: payoutResult.grossAmount,
       destinationAccountId: payoutResult.destinationAccountId,
+      status: payoutResult.status,
+      availableOn: payoutResult.availableOn,
+      sourceTransactionUsed: payoutResult.sourceTransactionUsed,
       deduplicated: payoutResult.deduplicated,
     })
   } catch (error) {
