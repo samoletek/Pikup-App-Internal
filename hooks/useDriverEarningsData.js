@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { subscribeToDriverEarningsUpdates } from '../services/DriverService';
 import { logger } from '../services/logger';
 import {
@@ -22,6 +23,9 @@ const DEFAULT_STATS = {
   weeklyMilestone: 15,
 };
 
+const HOLD_REFRESH_GRACE_MS = 10 * 1000;
+const MAX_HOLD_REFRESH_DELAY_MS = 24 * 60 * 60 * 1000;
+
 export default function useDriverEarningsData({
   currentUserId,
   selectedPeriod,
@@ -37,6 +41,8 @@ export default function useDriverEarningsData({
   const [driverStats, setDriverStats] = useState(DEFAULT_STATS);
   const [driverProfile, setDriverProfile] = useState(() => normalizeDriverPaymentState({}));
   const loadDriverDataRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
+  const holdRefreshAttemptRef = useRef(null);
 
   const loadDriverData = useCallback(
     async (silent = false) => {
@@ -127,6 +133,61 @@ export default function useDriverEarningsData({
 
     void loadDriverData(false);
   }, [currentUserId, loadDriverData]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      const hasReturnedToForeground =
+        (previousState === 'inactive' || previousState === 'background') && nextState === 'active';
+
+      if (hasReturnedToForeground) {
+        loadDriverDataRef.current?.(true);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    const pendingUntil = driverStats.pendingUntil;
+    const pendingBalance = Number(driverStats.pendingBalance || 0);
+
+    if (!currentUserId || !pendingUntil || pendingBalance <= 0) {
+      holdRefreshAttemptRef.current = null;
+      return undefined;
+    }
+
+    const pendingUntilMs = new Date(pendingUntil).getTime();
+    if (Number.isNaN(pendingUntilMs)) {
+      return undefined;
+    }
+
+    const delayMs = pendingUntilMs - Date.now() + HOLD_REFRESH_GRACE_MS;
+    const refreshKey = `${pendingUntil}:${pendingBalance}`;
+
+    if (delayMs <= 0 && holdRefreshAttemptRef.current === refreshKey) {
+      return undefined;
+    }
+
+    const boundedDelayMs = delayMs <= 0 ? 1000 : Math.min(delayMs, MAX_HOLD_REFRESH_DELAY_MS);
+
+    const timer = setTimeout(() => {
+      holdRefreshAttemptRef.current = refreshKey;
+      loadDriverDataRef.current?.(true);
+    }, boundedDelayMs);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [currentUserId, driverStats.pendingBalance, driverStats.pendingUntil]);
 
   useEffect(() => {
     if (driverTrips.length === 0) {

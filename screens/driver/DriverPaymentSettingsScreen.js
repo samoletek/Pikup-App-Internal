@@ -45,6 +45,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     updatePayoutAmountInput,
     getPayoutStatusLabel,
     isPayoutPending,
+    formatPayoutDateTime,
     toMoney,
   } = useDriverPaymentSettingsData({
     createDriverConnectAccount,
@@ -63,6 +64,7 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
     : null;
   const hasFundsOnHold =
     Number(paymentData?.availableBalance || 0) <= 0 && Number(paymentData?.pendingBalance || 0) > 0;
+  const pendingUntilLabel = formatPayoutDateTime(paymentData?.pendingUntil);
 
   if (loading) {
     return (
@@ -109,7 +111,9 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             </Text>
             {Number(paymentData?.pendingBalance || 0) > 0 ? (
               <Text style={styles.heroSubtext}>
-                On hold: {toMoney(paymentData?.pendingBalance)}
+                {pendingUntilLabel
+                  ? `On hold until ${pendingUntilLabel}: ${toMoney(paymentData.pendingBalance)}`
+                  : `On hold: ${toMoney(paymentData?.pendingBalance)}`}
               </Text>
             ) : null}
             <Text style={styles.heroSubtext}>
@@ -168,14 +172,8 @@ export default function DriverPaymentSettingsScreen({ navigation }) {
             ) : null}
             {Number(paymentData?.pendingBalance || 0) > 0 ? (
               <Text style={styles.pendingPayoutNote}>
-                {paymentData?.pendingUntil
-                  ? `On hold until ${new Date(paymentData.pendingUntil).toLocaleDateString(
-                      undefined,
-                      {
-                        month: 'short',
-                        day: 'numeric',
-                      }
-                    )}: ${toMoney(paymentData.pendingBalance)}`
+                {pendingUntilLabel
+                  ? `On hold until ${pendingUntilLabel}: ${toMoney(paymentData.pendingBalance)}`
                   : `On Stripe hold: ${toMoney(paymentData.pendingBalance)}`}
               </Text>
             ) : null}

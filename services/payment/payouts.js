@@ -9,6 +9,7 @@ import {
 } from '../repositories/paymentRepository';
 import { resolveDriverPayoutAmount } from '../PricingService';
 import { getDriverProfileRow, periodStartIso, toNumber } from './common';
+import { formatPayoutDateTime } from './payoutAvailabilityFormatting';
 
 const sanitizeIdempotencyToken = (value) =>
   String(value || '')
@@ -58,13 +59,7 @@ const getEdgeFunctionErrorMessage = async (error, fallbackMessage) => {
 const buildPendingFundsMessage = ({ pendingAmount = 0, pendingUntil = null } = {}) => {
   const amount = Number(pendingAmount || 0);
   if (pendingUntil) {
-    const date = new Date(pendingUntil);
-    const dateLabel = Number.isNaN(date.getTime())
-      ? pendingUntil
-      : date.toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-        });
+    const dateLabel = formatPayoutDateTime(pendingUntil) || pendingUntil;
 
     return `No funds are available to withdraw right now. ${toMoney(amount)} is on Stripe hold until ${dateLabel}.`;
   }

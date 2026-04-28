@@ -5,21 +5,17 @@ import {
   normalizeDriverPaymentState,
   shouldRefreshDriverPaymentStatus,
 } from '../../../services/payment/paymentState';
+import {
+  formatPayoutDate,
+  formatPayoutDateTime,
+} from '../../../services/payment/payoutAvailabilityFormatting';
+
+const HOLD_REFRESH_GRACE_MS = 10 * 1000;
+const MAX_HOLD_REFRESH_DELAY_MS = 24 * 60 * 60 * 1000;
 
 const toMoney = (value) => {
   const amount = Number(value) || 0;
   return `$${amount.toFixed(2)}`;
-};
-
-const toDisplayDate = (value) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
 };
 
 const resolvePayoutAvailableOn = (payout = {}) => {
@@ -55,7 +51,7 @@ const isPayoutPending = (payout = {}) => String(payout.status || '').toLowerCase
 
 const getPayoutStatusLabel = (payout = {}) => {
   if (isPayoutPending(payout)) {
-    const dateLabel = toDisplayDate(resolvePayoutAvailableOn(payout));
+    const dateLabel = formatPayoutDateTime(resolvePayoutAvailableOn(payout));
     return dateLabel ? `Pending until ${dateLabel}` : 'Pending';
   }
 
@@ -73,7 +69,7 @@ const getPayoutHoldMessage = (paymentData = {}) => {
     return null;
   }
 
-  const dateLabel = toDisplayDate(paymentData?.pendingUntil);
+  const dateLabel = formatPayoutDateTime(paymentData?.pendingUntil);
   return dateLabel
     ? `${toMoney(pendingAmount)} is on Stripe hold until ${dateLabel}.`
     : `${toMoney(pendingAmount)} is still on Stripe hold.`;
@@ -116,6 +112,7 @@ export default function useDriverPaymentSettingsData({
   const payoutAttemptRef = useRef({ key: null, amountCents: null, createdAt: 0 });
   const appStateRef = useRef(AppState.currentState);
   const pendingStripeOnboardingReturnRef = useRef(false);
+  const holdRefreshAttemptRef = useRef(null);
 
   const resolvePayoutIdempotencyKey = useCallback(
     (grossAmount) => {
@@ -146,80 +143,91 @@ export default function useDriverPaymentSettingsData({
     payoutAttemptRef.current = { key: null, amountCents: null, createdAt: 0 };
   }, []);
 
-  const loadPaymentData = useCallback(async () => {
-    if (!currentUserId) {
-      setLoading(false);
-      setPaymentData(null);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const [profile, stats, payoutsResult, availabilityResult] = await Promise.all([
-        getDriverProfile?.(currentUserId),
-        getDriverStats?.(currentUserId),
-        getDriverPayouts?.(currentUserId),
-        getDriverPayoutAvailability?.(currentUserId),
-      ]);
-
-      let resolvedProfile = normalizeDriverPaymentState(profile || {});
-      if (
-        typeof checkDriverOnboardingStatus === 'function' &&
-        shouldRefreshDriverPaymentStatus(resolvedProfile)
-      ) {
-        const onboardingResult = await checkDriverOnboardingStatus(
-          resolvedProfile.connectAccountId
-        );
-        if (onboardingResult?.success) {
-          resolvedProfile = mergeDriverOnboardingStatus(resolvedProfile, onboardingResult);
+  const loadPaymentData = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!currentUserId) {
+        if (!silent) {
+          setLoading(false);
         }
+        setPaymentData(null);
+        return;
       }
 
-      const metadata = resolvedProfile.metadata || {};
-      const internalBalance = Number(stats?.availableBalance || 0);
-      const hasAvailability =
-        availabilityResult?.success &&
-        Number.isFinite(Number(availabilityResult.availableNowAmount));
-      const availableNow = hasAvailability
-        ? Number(availabilityResult.availableNowAmount || 0)
-        : internalBalance;
-      const pendingBalance = hasAvailability
-        ? Number(availabilityResult.pendingAmount || 0)
-        : Math.max(0, Number(stats?.totalEarnings || 0) - internalBalance);
+      if (!silent) {
+        setLoading(true);
+      }
+      try {
+        const [profile, stats, payoutsResult, availabilityResult] = await Promise.all([
+          getDriverProfile?.(currentUserId),
+          getDriverStats?.(currentUserId),
+          getDriverPayouts?.(currentUserId),
+          getDriverPayoutAvailability?.(currentUserId),
+        ]);
 
-      setPaymentData({
-        connectAccountId: resolvedProfile.connectAccountId,
-        onboardingComplete: resolvedProfile.onboardingComplete,
-        canReceivePayments: resolvedProfile.canReceivePayments,
-        onboardingStatus: resolvedProfile.onboardingStatus,
-        onboardingRequirements: resolvedProfile.onboardingRequirements,
-        disabledReason: resolvedProfile.disabledReason,
-        instantPay: metadata.instantPay !== false,
-        notificationsEnabled: metadata.notificationsEnabled !== false,
-        instantPayoutFeeBps: Number(metadata.instantPayoutFeeBps || 0),
-        instantPayoutFeeFlat: Number(metadata.instantPayoutFeeFlat || 0),
-        weeklyTotal: Number(stats?.weeklyEarnings || 0),
-        earnedBalance: internalBalance,
-        availableBalance: availableNow,
-        pendingBalance,
-        pendingUntil: availabilityResult?.pendingUntil || null,
-        totalPayouts: Number(stats?.totalPayouts || payoutsResult?.totalPayouts || 0),
-        payouts: Array.isArray(payoutsResult?.payouts) ? payoutsResult.payouts : [],
-      });
-    } catch (error) {
-      Alert.alert('Payment Settings', error?.message || 'Failed to load payment data.');
-      setPaymentData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    checkDriverOnboardingStatus,
-    currentUserId,
-    getDriverPayoutAvailability,
-    getDriverPayouts,
-    getDriverProfile,
-    getDriverStats,
-  ]);
+        let resolvedProfile = normalizeDriverPaymentState(profile || {});
+        if (
+          typeof checkDriverOnboardingStatus === 'function' &&
+          shouldRefreshDriverPaymentStatus(resolvedProfile)
+        ) {
+          const onboardingResult = await checkDriverOnboardingStatus(
+            resolvedProfile.connectAccountId
+          );
+          if (onboardingResult?.success) {
+            resolvedProfile = mergeDriverOnboardingStatus(resolvedProfile, onboardingResult);
+          }
+        }
+
+        const metadata = resolvedProfile.metadata || {};
+        const internalBalance = Number(stats?.availableBalance || 0);
+        const hasAvailability =
+          availabilityResult?.success &&
+          Number.isFinite(Number(availabilityResult.availableNowAmount));
+        const availableNow = hasAvailability
+          ? Number(availabilityResult.availableNowAmount || 0)
+          : internalBalance;
+        const pendingBalance = hasAvailability
+          ? Number(availabilityResult.pendingAmount || 0)
+          : Math.max(0, Number(stats?.totalEarnings || 0) - internalBalance);
+
+        setPaymentData({
+          connectAccountId: resolvedProfile.connectAccountId,
+          onboardingComplete: resolvedProfile.onboardingComplete,
+          canReceivePayments: resolvedProfile.canReceivePayments,
+          onboardingStatus: resolvedProfile.onboardingStatus,
+          onboardingRequirements: resolvedProfile.onboardingRequirements,
+          disabledReason: resolvedProfile.disabledReason,
+          instantPay: metadata.instantPay !== false,
+          notificationsEnabled: metadata.notificationsEnabled !== false,
+          instantPayoutFeeBps: Number(metadata.instantPayoutFeeBps || 0),
+          instantPayoutFeeFlat: Number(metadata.instantPayoutFeeFlat || 0),
+          weeklyTotal: Number(stats?.weeklyEarnings || 0),
+          earnedBalance: internalBalance,
+          availableBalance: availableNow,
+          pendingBalance,
+          pendingUntil: availabilityResult?.pendingUntil || null,
+          totalPayouts: Number(stats?.totalPayouts || payoutsResult?.totalPayouts || 0),
+          payouts: Array.isArray(payoutsResult?.payouts) ? payoutsResult.payouts : [],
+        });
+      } catch (error) {
+        if (!silent) {
+          Alert.alert('Payment Settings', error?.message || 'Failed to load payment data.');
+          setPaymentData(null);
+        }
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [
+      checkDriverOnboardingStatus,
+      currentUserId,
+      getDriverPayoutAvailability,
+      getDriverPayouts,
+      getDriverProfile,
+      getDriverStats,
+    ]
+  );
 
   useEffect(() => {
     void loadPaymentData();
@@ -233,9 +241,9 @@ export default function useDriverPaymentSettingsData({
       const hasReturnedToForeground =
         (previousState === 'inactive' || previousState === 'background') && nextState === 'active';
 
-      if (hasReturnedToForeground && pendingStripeOnboardingReturnRef.current) {
+      if (hasReturnedToForeground) {
         pendingStripeOnboardingReturnRef.current = false;
-        void loadPaymentData();
+        void loadPaymentData({ silent: true });
       }
     });
 
@@ -243,6 +251,39 @@ export default function useDriverPaymentSettingsData({
       subscription.remove();
     };
   }, [loadPaymentData]);
+
+  useEffect(() => {
+    const pendingUntil = paymentData?.pendingUntil;
+    const pendingBalance = Number(paymentData?.pendingBalance || 0);
+
+    if (!currentUserId || !pendingUntil || pendingBalance <= 0) {
+      holdRefreshAttemptRef.current = null;
+      return undefined;
+    }
+
+    const pendingUntilMs = new Date(pendingUntil).getTime();
+    if (Number.isNaN(pendingUntilMs)) {
+      return undefined;
+    }
+
+    const delayMs = pendingUntilMs - Date.now() + HOLD_REFRESH_GRACE_MS;
+    const refreshKey = `${pendingUntil}:${pendingBalance}`;
+
+    if (delayMs <= 0 && holdRefreshAttemptRef.current === refreshKey) {
+      return undefined;
+    }
+
+    const boundedDelayMs = delayMs <= 0 ? 1000 : Math.min(delayMs, MAX_HOLD_REFRESH_DELAY_MS);
+
+    const timer = setTimeout(() => {
+      holdRefreshAttemptRef.current = refreshKey;
+      void loadPaymentData({ silent: true });
+    }, boundedDelayMs);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [currentUserId, loadPaymentData, paymentData?.pendingBalance, paymentData?.pendingUntil]);
 
   const onboardingStatusText = useMemo(() => {
     if (!paymentData?.connectAccountId) return 'Not started';
@@ -402,7 +443,7 @@ export default function useDriverPaymentSettingsData({
                 }
                 const settledFee = Number(result?.feeAmount || 0);
                 const settledNet = Number(result?.netAmount || 0);
-                const availabilityLabel = toDisplayDate(result?.availableOn);
+                const availabilityLabel = formatPayoutDate(result?.availableOn);
                 const statusLine =
                   result?.status === 'pending' && availabilityLabel
                     ? `\nStripe may show this payout as pending until ${availabilityLabel}.`
@@ -466,6 +507,7 @@ export default function useDriverPaymentSettingsData({
     updatePayoutAmountInput,
     getPayoutStatusLabel,
     isPayoutPending,
+    formatPayoutDateTime,
     toMoney,
   };
 }

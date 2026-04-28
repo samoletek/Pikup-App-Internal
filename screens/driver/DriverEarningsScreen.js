@@ -16,6 +16,7 @@ import EarningsPeriodSelector from './earnings/EarningsPeriodSelector';
 import EarningsChart from './earnings/EarningsChart';
 import RecentTripsPreview from './earnings/RecentTripsPreview';
 import useDriverEarningsPayoutActions from './useDriverEarningsPayoutActions';
+import { formatPayoutDateTime } from '../../services/payment/payoutAvailabilityFormatting';
 
 const HEADER_ROW_HEIGHT = 56;
 const TITLE_COLLAPSE_DISTANCE = HEADER_ROW_HEIGHT;
@@ -72,6 +73,7 @@ export default function DriverEarningsScreen({ navigation, route }) {
   const chartTitle = selectedPeriod === 'month' ? 'Monthly Trip Activity' : 'Weekly Trip Activity';
   const showBack = route?.name === 'DriverEarningsScreen' && navigation.canGoBack();
   const headerHeight = insets.top + MESSAGES_TOP_BAR_HEIGHT;
+  const pendingUntilLabel = formatPayoutDateTime(driverStats.pendingUntil);
   const handleOpenRecentTrips = useCallback(() => {
     navigation.navigate('DriverRecentTripsScreen');
   }, [navigation]);
@@ -204,7 +206,11 @@ export default function DriverEarningsScreen({ navigation, route }) {
             Available Now: ${loading ? '---' : driverStats.availableBalance.toFixed(2)}
           </Text>
           {Number(driverStats.pendingBalance || 0) > 0 ? (
-            <Text style={styles.payoutNote}>On hold: ${driverStats.pendingBalance.toFixed(2)}</Text>
+            <Text style={styles.payoutNote}>
+              {pendingUntilLabel
+                ? `On hold until ${pendingUntilLabel}: $${driverStats.pendingBalance.toFixed(2)}`
+                : `On hold: $${driverStats.pendingBalance.toFixed(2)}`}
+            </Text>
           ) : null}
           <Text style={styles.payoutNote}>Auto-deposit monthly on the 25th (11:00 AM ET)</Text>
 

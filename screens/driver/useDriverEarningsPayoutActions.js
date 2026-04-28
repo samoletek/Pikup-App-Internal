@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { logger } from '../../services/logger';
+import { formatPayoutDate } from '../../services/payment/payoutAvailabilityFormatting';
 
 const PAYOUT_IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
 
@@ -8,17 +9,6 @@ const buildPayoutIdempotencyKey = ({ driverId, amountCents }) => {
   const normalizedDriverId = String(driverId || 'unknown').trim() || 'unknown';
   const randomToken = Math.random().toString(36).slice(2, 10);
   return `instant_payout:${normalizedDriverId}:${amountCents}:${Date.now()}:${randomToken}`;
-};
-
-const toDisplayDate = (value) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
 };
 
 const resolveInstantPayoutTitle = (driverProfile = {}, driverStats = {}) => {
@@ -159,7 +149,7 @@ export default function useDriverEarningsPayoutActions({
                     ? Number(result.netAmount)
                     : driverStats.availableBalance - feeAmount
                 );
-                const availabilityLabel = toDisplayDate(result?.availableOn);
+                const availabilityLabel = formatPayoutDate(result?.availableOn);
                 const statusLine =
                   result?.status === 'pending' && availabilityLabel
                     ? `\nStripe may show this payout as pending until ${availabilityLabel}.`
